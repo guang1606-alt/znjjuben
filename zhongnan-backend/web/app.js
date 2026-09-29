@@ -7651,6 +7651,72 @@
     if (!box.classList.contains('hidden')) loadAdmTodos();
   }
 
+  /* ---------- v2.186 工具优化弹窗铁律：UpdateBanner 全局组件 ----------
+   * 用户 2026-09-29 拍板铁律——「工具的每一次优化、调整、更新都要有弹窗」。
+   * 启动时拉 /api/updates/latest，与本地 zn_seen_version 比对：
+   *   · 不同版本 + 未勾「不再提示」→ 弹模态（标题 + body + 「我知道了」+ 「不再提示此版本」）
+   *   · 点「我知道了」→ 写 zn_seen_version = version，关闭弹窗
+   *   · 勾「不再提示」→ 写 zn_dont_show_${version} = '1'，关闭弹窗
+   * 复用 .modal-mask/.modal 基础样式；少量增强样式见 styles.css 末尾。
+   * 错误容忍：拉取失败/无 DOM 环境忽略，绝不阻断主应用启动。 */
+  function showUpdateBanner(ann) {
+    if (!ann || !ann.version) return;
+    const dontShow = LS.g(`zn_dont_show_${ann.version}`, null);
+    if (dontShow === '1') return; // 用户已勾「不再提示此版本」
+    const seen = LS.g('zn_seen_version', null);
+    if (seen === ann.version) return; // 已确认过此版本
+    // 移除可能存在的旧弹窗
+    document.querySelectorAll('.update-banner-mask').forEach((el) => el.remove());
+    const backdrop = document.createElement('div');
+    backdrop.className = 'modal-mask update-banner-mask';
+    backdrop.setAttribute('role', 'dialog');
+    backdrop.setAttribute('aria-modal', 'true');
+    const title = ann.titleZh || ann.titleEn || `v${ann.version}`;
+    const body = ann.bodyZh || ann.bodyEn || '';
+    const pinnedTag = ann.pinned ? `<span class="update-banner-pinned">${lang === 'en' ? 'Pinned' : '置顶'}</span> ` : '';
+    const versionTag = `<span class="update-banner-version">v${escapeHtml(ann.version)}</span>`;
+    backdrop.innerHTML = `<div class="modal update-banner">
+      <div class="update-banner-header">${pinnedTag}${versionTag}
+        <button type="button" class="update-banner-close" aria-label="关闭">×</button>
+      </div>
+      <div class="update-banner-title"></div>
+      <div class="update-banner-body"></div>
+      <label class="update-banner-mute"><input type="checkbox" class="update-banner-mute-input" /><span class="update-banner-mute-label"></span></label>
+      <div class="update-banner-actions">
+        <button type="button" class="btn-primary update-banner-ok"></button>
+      </div>
+    </div>`;
+    const close = () => { backdrop.remove(); document.removeEventListener('keydown', onKey, true); };
+    const onKey = (e) => { if (e.key === 'Escape') { e.stopPropagation(); close(); } };
+    backdrop.querySelector('.update-banner-close').onclick = close;
+    backdrop.querySelector('.update-banner-title').textContent = title;
+    backdrop.querySelector('.update-banner-body').textContent = body;
+    const muteLabel = backdrop.querySelector('.update-banner-mute-label');
+    if (muteLabel) muteLabel.textContent = (lang === 'en' ? 'Don\'t show this version again' : '不再提示此版本');
+    const okBtn = backdrop.querySelector('.update-banner-ok');
+    okBtn.textContent = (lang === 'en' ? 'Got it' : '我知道了');
+    okBtn.onclick = () => {
+      const mute = backdrop.querySelector('.update-banner-mute-input').checked;
+      LS.s('zn_seen_version', ann.version);
+      if (mute) LS.s(`zn_dont_show_${ann.version}`, '1');
+      close();
+      try { xnSay(lang === 'en' ? `Updated to v${ann.version}` : `已更新至 v${ann.version}`); } catch { /* xnSay 可能未初始化 */ }
+    };
+    backdrop.addEventListener('mousedown', (e) => { if (e.target === backdrop) close(); });
+    document.addEventListener('keydown', onKey, true);
+    document.body.appendChild(backdrop);
+  }
+  async function initUpdateBanner() {
+    try {
+      const res = await Api.request('/api/updates/latest');
+      if (!res.ok) return;
+      const data = await Api.jsonOrThrow(res);
+      if (data && data.announcement) showUpdateBanner(data.announcement);
+    } catch { /* 静默失败：弹窗不阻断主应用 */ }
+  }
+  // 延迟 1.5s 启动，避免与首屏渲染/鉴权抢资源
+  setTimeout(initUpdateBanner, 1500);
+
   /* ---------- 启动 ---------- */
   applyTheme(); applyFont(); applyLang(); renderAuthButton(); initHookConsole(); wireFormatSelector();
   if (Api.isAuthed()) loadMe();
