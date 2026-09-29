@@ -6,7 +6,7 @@
  *  · 纯函数 nextDailyDelay / nextWeeklyDelay 可离线对拍；定时器只负责按时调用。
  * 用环境变量 DISABLE_AUTO_SCHEDULER=1 可关闭（测试/本地调试）。
  */
-import { runDailyLearningCycle, runWeeklyModelAudit, AutoDeps } from './auto-learning';
+import { runDailyLearningCycle, runWeeklyModelAudit, runDailyModelReview, AutoDeps } from './auto-learning';
 
 export interface SchedOptions { dailyHour?: number; dailyMinute?: number; weeklyHour?: number; weeklyMinute?: number; now?: () => Date }
 /** 距下一个每日触发点的毫秒（默认 03:17） */
@@ -45,6 +45,9 @@ export function startAutoScheduler(prisma: any, deps: AutoDeps = {}, opts: Sched
         });
         if (gaps.length) console.log(`[auto-learn] 采集源缺口: ${gaps.join(' | ')}`);
       }
+      // v2.187：每日 API 选型体检——超管多久没联网核对价格/停服/新模型，落 MODEL_REVIEW 流水，后台亮灯
+      const rv = await runDailyModelReview(prisma, deps, 'scheduler');
+      console.log(`[model-review] ${rv.status.level} 距上次核对${rv.status.daysSinceReview}天${rv.skipped ? '(今日已记录)' : ''}`);
     } catch (e) { console.error('[auto-learn] 每日闭环失败', (e as Error).message); }
     if (!stopped) dailyTimer = setTimeout(dailyTask, nextDailyDelay(nowFn(), opts.dailyHour ?? 3, opts.dailyMinute ?? 17));
   };

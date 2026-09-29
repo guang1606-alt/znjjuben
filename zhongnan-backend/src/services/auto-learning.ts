@@ -13,6 +13,10 @@ import {
 } from '../engine/signal-sources';
 import { auditPortfolio, ModelAuditReport, AuditInput } from '../engine/model-audit';
 import type { BoardItem } from '../engine/context-personalization';
+import {
+  modelReviewStatus, reviewSummary, buildReviewText, calendarDayDiff,
+  ModelReviewStatus,
+} from '../config/model-review';
 
 export interface AutoDeps {
   collectBoards?: () => Promise<BoardItem[]>;
@@ -154,4 +158,53 @@ export async function runWeeklyModelAudit(prisma: any, input: AuditInput = {}, c
     data: { kind: 'WEEKLY_MODEL', summary: report.summary as unknown as object, text: report.text, createdById: createdById ?? null },
   }).catch(() => null);
   return { report, reportId: row?.id };
+}
+
+/* ===================== 每日 API 选型体检提醒（v2.187） ===================== */
+export const MODEL_REVIEW_KIND = 'MODEL_REVIEW';
+export const MODEL_REVIEW_ACK_KIND = 'MODEL_REVIEW_ACK';
+
+export interface DailyReviewResult { status: ModelReviewStatus; reportId?: string; skipped?: boolean }
+export interface AckReviewResult { status: ModelReviewStatus; ackId?: string }
+
+async function latestReport(prisma: any, kind: string): Promise<any | null> {
+  const rows = await prisma.learningReport.findMany({
+    where: { kind }, orderBy: { createdAt: 'desc' }, take: 1,
+  }).catch(() => [] as any[]);
+  return rows[0] ?? null;
+}
+
+/**
+ * 每日 API 选型体检：以最近一次超管 ACK（无则 catalog 基准日）计算状态并落一条 MODEL_REVIEW 流水。
+ * 同日幂等：今天已生成则只回状态、不重复落库。可被定时器/管理员手动重复触发。
+ */
+export async function runDailyModelReview(
+  prisma: any, _deps: AutoDeps = {}, createdById = 'scheduler', now: Date = new Date(),
+): Promise<DailyReviewResult> {
+  const ack = await latestReport(prisma, MODEL_REVIEW_ACK_KIND);
+  const status = modelReviewStatus(ack?.createdAt ? new Date(ack.createdAt) : null, now);
+  const last = await latestReport(prisma, MODEL_REVIEW_KIND);
+  if (last?.createdAt && calendarDayDiff(new Date(last.createdAt), now) === 0) {
+    return { status, skipped: true };
+  }
+  const row = await prisma.learningReport.create({
+    data: {
+      kind: MODEL_REVIEW_KIND, summary: reviewSummary(status) as unknown as object,
+      text: buildReviewText(status), createdById, createdAt: now,
+    },
+  }).catch(() => null);
+  return { status, reportId: row?.id };
+}
+
+/** 超管确认"今日已完成联网核对"：写 ACK 流水并立即返回归零后的新鲜状态 */
+export async function ackModelReview(prisma: any, createdById = 'admin', now: Date = new Date()): Promise<AckReviewResult> {
+  const row = await prisma.learningReport.create({
+    data: {
+      kind: MODEL_REVIEW_ACK_KIND,
+      summary: { ackAt: now.toISOString() } as unknown as object,
+      text: '超管确认已完成当日 API 型号/价格/停服公告人工核对，体检基准日前移至今日',
+      createdById, createdAt: now,
+    },
+  }).catch(() => null);
+  return { status: modelReviewStatus(now, now), ackId: row?.id };
 }
