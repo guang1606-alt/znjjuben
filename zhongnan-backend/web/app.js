@@ -2496,15 +2496,27 @@
     empty.classList.toggle('hidden', list.length > 0); feed.innerHTML = '';
     list.forEach((p) => {
       const c = document.createElement('div'); c.className = 'post-card';
+      const mine = Api.isAuthed() && p.userId === Api.getUser()?.id;
       c.innerHTML = `<h4>${escapeHtml(p.title)}</h4>
         <div class="pc-body">${escapeHtml(p.body)}</div>
         <div class="pc-foot"><span>${escapeHtml(p.user?.nickname || (lang==='en'?'Anonymous':'匿名编剧'))}</span>
         <span>${new Date(p.createdAt).toLocaleString()}</span><span class="spacer"></span>
+        ${mine ? `<button class="chip del-post" style="color:#c0392b">${lang==='en'?'Delete':'删除'}</button>` : ''}
         <button class="like-btn">♡ ${p.likes}</button></div>`;
-      c.querySelector('.like-btn').onclick = async () => {
+      const likeBtn = c.querySelector('.like-btn');
+      likeBtn.onclick = async () => {
         if (!Api.isAuthed()) { openAuth('login'); return; }
-        const r = await Api.request(`/api/community/posts/${p.id}/like`, { method: 'POST' });
-        if (r.ok) loadFeed(); else xnSay((await r.json().catch(() => ({}))).error || 'error');
+        const method = likeBtn.dataset.liked === '1' ? 'DELETE' : 'POST';
+        const r = await Api.request(`/api/community/posts/${p.id}/like`, { method });
+        if (r.ok) { const j = await r.json().catch(() => ({})); likeBtn.textContent = `♡ ${j.likes ?? p.likes}`; likeBtn.dataset.liked = method === 'POST' ? '1' : '0'; }
+        else xnSay((await r.json().catch(() => ({}))).error || 'error');
+      };
+      const delBtn = c.querySelector('.del-post');
+      if (delBtn) delBtn.onclick = async () => {
+        if (!confirm(lang==='en' ? 'Delete this post?' : '确定删除这条帖子吗？')) return;
+        const r = await Api.request(`/api/community/posts/${p.id}`, { method: 'DELETE' });
+        if (r.ok) { xnSay(lang==='en'?'Deleted':'已删除'); loadFeed(); }
+        else xnSay((await r.json().catch(() => ({}))).error || 'error');
       };
       feed.appendChild(c);
     });

@@ -261,6 +261,11 @@ function createMemoryPrisma() {
     async count({ where = {} } = {}) {
       return postLikes.filter((l) => Object.entries(where).every(([k, v]) => l[k] === v)).length;
     },
+    async delete({ where = {} } = {}) {
+      const idx = postLikes.findIndex((l) => Object.entries(where).every(([k, v]) => l[k] === v));
+      if (idx === -1) { const e = new Error('Record not found'); e.code = 'P2025'; throw e; }
+      return postLikes.splice(idx, 1)[0];
+    },
   };
   const post = {
     async create({ data }) { const p = { id: `post_${++seq}`, likes: 0, hidden: false, createdAt: new Date(), ...data }; posts.push(p); return p; },

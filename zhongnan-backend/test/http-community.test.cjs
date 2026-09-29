@@ -76,4 +76,29 @@ describe('交流广场 HTTP 闭环', { concurrency: 1 }, () => {
     const postRow = mem._posts.find((x) => x.id === p.id);
     assert.strictEqual(postRow.likes, 1, '帖子冗余计数字段不得被重复自增');
   });
+
+  // v2.201 取消点赞 + 删除自己帖子
+  it('取消点赞：DELETE 扣减计数，未点赞时幂等返回', async () => {
+    const p = await (await post('/api/community/posts', { section: 'review', title: 'D', body: 'dd' }, 'u1')).json();
+    await post(`/api/community/posts/${p.id}/like`, {}, 'u2');
+    const del = await fetch(base + `/api/community/posts/${p.id}/like`, { method: 'DELETE', headers: H('u2') });
+    assert.strictEqual(del.status, 200);
+    assert.strictEqual((await del.json()).likes, 0);
+    // 再次取消幂等
+    const del2 = await fetch(base + `/api/community/posts/${p.id}/like`, { method: 'DELETE', headers: H('u2') });
+    assert.strictEqual((await del2.json()).likes, 0);
+  });
+
+  it('删除帖子：本人可删（hidden），他人 403，列表不再出现', async () => {
+    const p = await (await post('/api/community/posts', { section: 'news', title: 'E', body: 'ee' }, 'u1')).json();
+    // 他人删除 403
+    const other = await fetch(base + `/api/community/posts/${p.id}`, { method: 'DELETE', headers: H('u2') });
+    assert.strictEqual(other.status, 403);
+    // 本人删除 200
+    const r = await fetch(base + `/api/community/posts/${p.id}`, { method: 'DELETE', headers: H('u1') });
+    assert.strictEqual(r.status, 200);
+    // 列表不再出现
+    const list = await (await fetch(base + '/api/community/posts?section=news')).json();
+    assert.ok(!list.some((x) => x.id === p.id));
+  });
 });

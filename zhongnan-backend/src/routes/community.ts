@@ -37,7 +37,7 @@ export function createCommunityRouter(prisma: PrismaLike | any) {
       where: { hidden: false, ...(SECTIONS.includes(section) ? { section } : {}) },
       orderBy: [{ likes: 'desc' }, { createdAt: 'desc' }],
       take: 50,
-      select: { id: true, section: true, title: true, body: true, likes: true, createdAt: true, user: { select: { nickname: true, avatarUrl: true } } },
+      select: { id: true, userId: true, section: true, title: true, body: true, likes: true, createdAt: true, user: { select: { nickname: true, avatarUrl: true } } },
     });
     res.json(list);
   });
@@ -67,6 +67,32 @@ export function createCommunityRouter(prisma: PrismaLike | any) {
       }
       throw e;
     }
+  });
+
+  // 取消点赞：删除 postLike 记录并扣减计数
+  communityRouter.delete('/posts/:id/like', authRequired, async (req: AuthRequest, res) => {
+    const userId = req.userId!;
+    const postId = req.params.id;
+    const r = await prisma.$transaction(async (tx: any) => {
+      const p = await tx.post.findUnique({ where: { id: postId } });
+      if (!p || p.hidden) return { gone: true, likes: 0 };
+      const existed = await tx.postLike.findFirst({ where: { userId, postId } });
+      if (!existed) return { gone: false, likes: await tx.postLike.count({ where: { postId } }) };
+      await tx.postLike.delete({ where: { id: existed.id } });
+      await tx.post.updateMany({ where: { id: postId, hidden: false }, data: { likes: { increment: -1 } } });
+      return { gone: false, likes: await tx.postLike.count({ where: { postId } }) };
+    });
+    if (r.gone) return res.status(404).json({ error: '帖子不存在' });
+    res.json({ ok: true, liked: false, likes: r.likes });
+  });
+
+  // 删除自己的帖子（软删除 hidden=true，列表自动过滤）
+  communityRouter.delete('/posts/:id', authRequired, async (req: AuthRequest, res) => {
+    const post = await prisma.post.findUnique({ where: { id: req.params.id } });
+    if (!post) return res.status(404).json({ error: '帖子不存在' });
+    if (post.userId !== req.userId) return res.status(403).json({ error: '只能删除自己的帖子' });
+    await prisma.post.update({ where: { id: post.id }, data: { hidden: true } });
+    res.json({ ok: true });
   });
 
   return communityRouter;
