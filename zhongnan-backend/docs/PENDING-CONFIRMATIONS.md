@@ -53,4 +53,10 @@
 - 分析：失败登录计数存 Redis，全量运行时受前置用例耗时影响，疑似撞上登录限流窗口导致个别请求未走到计数分支；非功能缺陷
 - 建议（可选）：密码策略测试前显式清限流键，或将 3 次失败登录的断言改为「计数 ≥2 且 ≤3」+ 单独校验递增逻辑；不阻塞业务
 - 更新（2026-09-30）：实测另一类诱因是**两个 pytest 进程并行**（多会话同机各跑各的）：真并发/行锁用例会互等 DB 锁甚至挂起十余分钟，期间 Redis 计数用例也会被拖入异常时序。已在养正 backend 加 `conftest.py` 会话级 flock 串行锁，后启动的测试自动排队；再观察 #10 是否复现，若仍复现再按上面的建议改断言
-- 更新（2026-09-30 晚）：代码核查确认登录路径**不存在独立限流器**，唯一计数键就是 `_fail_key`，且测试手机号本文件专用、fixture 前后都清键——并行互扰即为唯一实证诱因（flock 已根治）。同时按建议完成断言加固：两处错密循环逐次断言 HTTP 400 并带响应体，若再 flake 将直接显示是哪一次请求返回了非预期状态码（而非神秘的 2==3）。连跑 3 遍 13 条全过，转为观察项，无需用户操作
+- 更新（2026-09-30 晚）：代码核查确认登录路径**不存在独立限流器**，唯一计数键就是 `_fail_key`，且测试手机号本文件专用、fixture 前后都清键——并行互扰即为唯一实证诱因（flock 已根治）。同时按建议完成断言加固：两处错密循环逐次断言 HTTP 400 并带响应体，若再 flake 将直接显示是哪一次请求返回了非预期状态码（而非神秘的 2==3）。连跑 3 遍 13 条全过，转观察项，无需用户操作
+
+## 11.【中】养正 alembic 元数据与开发库仍有索引命名/表注释漂移（autogenerate 噪音）
+- 背景（2026-09-30 凌晨）：`alembic check` 曾报 14 个功能模块（community/workshop/socratic/dream/psychology/notification/open_platform/ai_literacy/anti_addiction/culture/growth_garden/special_edu/student_memory/student_warning）的整表「待删除」——根因是 `app/models/__init__.py` 漏导出，alembic env 只 import 了包。**已修复**（副作用 import 全模块，115 表全部注册），致命的误删表风险已消除；911 测试收集与定向回归通过，已提交
+- 剩余漂移（纯命名/注释，无结构差异）：约 40 对索引名不一致，DB 用手工短名（如 `ix_guild_members_guild`、`idx_wrong_student_review_s`），模型按 SQLAlchemy 默认名（`ix_guild_members_guild_id`）；另有 12 处表注释差异、`uq_users_single_super_admin` 差异
+- 建议方案（二选一，需拍板）：A. 以 DB 为准，在各模型 `Index(..., name=)` 显式写 DB 实际名（纯模型改动、不写迁移，约 20 文件机械改名）；B. 出一个「仅改名」迁移对齐到模型默认名（生产需短暂 CREATE INDEX CONCURRENTLY + DROP，谨慎）。**当前协作者正在动模型索引区域，建议先约定分工再做，避免冲突**
+- 在清零前：**任何人不要直接 autogenerate 迁移**（会混入 40 对噪音操作），新迁移继续手写
