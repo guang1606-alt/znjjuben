@@ -203,4 +203,21 @@ describe('v2.154 制作物料清单 JSON 端点 + 导出物料页', { concurrenc
     assert.strictEqual((text.match(/制作物料清单/g) || []).length, 1);
     assert.ok(text.indexOf('制作物料清单') < text.indexOf('第1集　第一集'), '物料页先于正文');
   });
+
+  // v2.197 单集导出：?ep=N 仅导出指定集，文件名带集号
+  it('单集导出：?ep=1 仅含第一集，文件名带集号，不存在的集 404', async () => {
+    const r = await get('p1', 'basic', 'BASIC', '?format=txt&ep=1');
+    assert.strictEqual(r.status, 200);
+    const text = await r.text();
+    assert.ok(text.includes('这婚我不结了'), '含第一集正文');
+    assert.ok(!text.includes('火苗腾起'), '不含第二集正文');
+    const disp = r.headers.get('content-disposition') || '';
+    assert.ok(/%E7%AC%AC1%E9%9B%86/.test(disp), '文件名含集号（第1集 UTF-8 编码）');
+    // 不存在的集
+    const miss = await get('p1', 'basic', 'BASIC', '?format=txt&ep=99');
+    assert.strictEqual(miss.status, 404);
+    // 非法 ep
+    const bad = await get('p1', 'basic', 'BASIC', '?format=txt&ep=abc');
+    assert.strictEqual(bad.status, 400);
+  });
 });

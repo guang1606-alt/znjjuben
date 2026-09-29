@@ -76,8 +76,18 @@ export function createExportRouter(prisma: PrismaLike | any) {
 
     const project = await prisma.project.findFirst({ where: { id: req.params.projectId, userId: req.userId! } });
     if (!project) return res.status(404).json({ error: '项目不存在或无权访问' });
-    const scripts = await prisma.script.findMany({ where: { projectId: project.id } });
+    let scripts = await prisma.script.findMany({ where: { projectId: project.id } });
     if (!scripts.length) return res.status(400).json({ error: '该项目还没有成稿分集，暂无可导出内容' });
+    // 单集导出：?ep=3 仅导出第 3 集（txt 免费，docx/pdf 仍走会员门控）
+    const epParam = req.query.ep as string | undefined;
+    let epOnly: number | null = null;
+    if (epParam) {
+      epOnly = parseInt(epParam, 10);
+      if (!Number.isFinite(epOnly)) return res.status(400).json({ error: 'ep 参数必须是数字' });
+      const filtered = scripts.filter((s: { epNo: number }) => s.epNo === epOnly);
+      if (!filtered.length) return res.status(404).json({ error: `第 ${epOnly} 集不存在` });
+      scripts = filtered;
+    }
 
     // v2.148 画风锚点：AIGC 项目从 project.bible 读取视觉画风编号，随分镜附录注入统一画风提示词
     const storedStyleId = (() => { try { const b = project.bible as { visualStyleId?: unknown } | null; return typeof b?.visualStyleId === 'string' ? b.visualStyleId : undefined; } catch { return undefined; } })();
@@ -98,7 +108,7 @@ export function createExportRouter(prisma: PrismaLike | any) {
     });
     res.setHeader('X-Estimated-Pages', String(manifest.pageCount));
     res.setHeader('X-Episode-Count', String(scripts.length));
-    const safeTitle = (project.title || '剧本').replace(/[\\/:*?"<>|]/g, '_');
+    const safeTitle = ((project.title || '剧本') + (epOnly ? `_第${epOnly}集` : '')).replace(/[\\/:*?"<>|]/g, '_');
 
     try {
       if (fmt === 'docx') {

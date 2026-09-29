@@ -6887,13 +6887,14 @@
     $('dlMenu').classList.toggle('hidden');
   };
   // 从后端导出带封面/大纲/人物小传/分集目录/页码的成稿文件；门控由服务端裁决
-  const downloadFromServer = async (fmt) => {
+  const downloadFromServer = async (fmt, epNo) => {
     if (!currentProjectId) { xnSay(lang === 'en' ? 'Generate a script first.' : '请先生成剧本再导出哦～'); return; }
     if (!Api.getUser()) { openAuth('login'); return; }
     const noWm = fmt !== 'txt' && $('dlNoWm') && !$('dlNoWm').classList.contains('hidden') && $('dlNoWm').checked ? '&noWatermark=1' : '';
+    const epQs = epNo ? `&ep=${encodeURIComponent(epNo)}` : '';
     $('dlMenu').classList.add('hidden');
     try {
-      const r = await Api.request(`/api/export/${currentProjectId}?format=${fmt}${noWm}`);
+      const r = await Api.request(`/api/export/${currentProjectId}?format=${fmt}${noWm}${epQs}`);
       if (!r.ok) {
         let msg = lang === 'en' ? 'Export failed.' : '导出失败';
         try { const j = await r.json(); msg = j.error || msg; if (j.needUpgrade) { switchView('vip'); } } catch {}
@@ -6912,6 +6913,18 @@
   document.querySelectorAll('#dlMenu [data-fmt]').forEach((b) => {
     b.onclick = () => { const fmt = b.dataset.fmt; if (fmt === 'txt') { $('dlMenu').classList.add('hidden'); downloadTxtLocal(); } else downloadFromServer(fmt); };
   });
+  // 单集导出：输入集号，复用 downloadFromServer 的 ep 参数
+  const dlEpBtn = $('dlEpBtn');
+  if (dlEpBtn) dlEpBtn.onclick = () => {
+    if (!currentProjectId) { xnSay(lang === 'en' ? 'Generate a script first.' : '请先生成剧本再导出哦～'); return; }
+    const latestEp = currentScripts.length ? currentScripts[currentScripts.length - 1].epNo : 1;
+    const input = prompt(lang === 'en' ? `Export which episode? (1-${latestEp})` : `导出第几集？（1-${latestEp}）`, String(latestEp));
+    if (!input) return;
+    const epNo = parseInt(input.trim(), 10);
+    if (!Number.isFinite(epNo) || epNo < 1) { xnSay(lang === 'en' ? 'Invalid episode number.' : '集号无效'); return; }
+    $('dlMenu').classList.add('hidden');
+    downloadFromServer('txt', epNo); // 单集默认 txt 免费；docx/pdf 走会员门控
+  };
   // v2.64 导演交付包预览：导出前先看情绪/钩子/兑现链/人物成长四页
   let dpPages = []; let dpActive = 0; let dpEpisodeCount = 0;
   const renderDpPage = () => {
