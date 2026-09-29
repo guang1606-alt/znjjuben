@@ -65,7 +65,8 @@ const pendingPath = path.join(ROOT, 'docs', 'PENDING-CONFIRMATIONS.md');
 const pending = fs.existsSync(pendingPath) ? fs.readFileSync(pendingPath, 'utf8') : '';
 
 /* ---------- 汇总报告 ---------- */
-const today = new Date().toISOString().slice(0, 10);
+// 按北京时间取日期：凌晨 0-8 点跑时报告归属"今天"而非 UTC 的"昨天"
+const today = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Shanghai' });
 const report = `# 每日仓库复盘 ${today}
 
 > 由 \`scripts/daily-review.cjs\` 自动生成（省 token 机制：看完本报告即可开工，无需重扫仓库）。

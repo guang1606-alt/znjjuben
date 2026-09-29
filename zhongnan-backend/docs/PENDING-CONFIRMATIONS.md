@@ -41,6 +41,7 @@
 - 现状：已移植 `scripts/daily-review.cjs` 到养正主仓库（适配 Python 后端 + TS 前端结构），每日产出 `docs/daily-review/YYYY-MM-DD.md`
 - 用法：`node scripts/daily-review.cjs`
 - 说明：待确认清单仍以本文件为单一事实源，养正报告自动回显
+- 自动化（2026-09-30 落地）：macOS launchd 任务 `com.yangzheng.daily-review` 每天 08:25 自动生成两仓库报告（plist：`~/Library/LaunchAgents/com.yangzheng.daily-review.plist`；日志：`~/Library/Logs/repo-daily-review.log`）；日期按北京时间归属。只生成不提交，开发会话中顺手 commit，避免机器自动提交误纳入他人在途改动；如希望连提交推送也全自动，告知后可加
 
 ## 9.【中】WorkshopEnrollment 缺唯一键导致并发报名重复
 - 现状：`workshop_service.enroll` 用 check-then-insert，但 `workshop_enrollments` 表无 `(student_id, course_id)` 唯一约束
