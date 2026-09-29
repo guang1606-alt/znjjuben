@@ -1580,7 +1580,7 @@
     list.forEach((p) => {
       const c = document.createElement('div'); c.className = 'work-card';
       c.innerHTML = `<h3>${escapeHtml(p.title)}</h3>
-        <div class="muted">${p.mode} · ${p.totalEps || 0} eps · ${new Date(p.createdAt).toLocaleString()}</div>
+        <div class="muted">${p.mode} · ${p.totalEps || 0} eps · ${PV().formatDateTime(p.createdAt, lang)}</div>
         <div class="work-badges"><span class="badge">${p.engineTier || 'STANDARD'}</span><span class="badge">${p.format || 'LIVE_ACTION'}</span></div>`;
       c.onclick = () => openProject(p);
       grid.appendChild(c);
@@ -1697,9 +1697,9 @@
       const cmpBtn = (fv, tv) => `<button class="btn-ghost ep-diff-btn" type="button" data-diff="${epNo}:${fv}:${tv}">${lang === 'en' ? `Compare v${fv} → v${tv}` : `对比 v${fv}→v${tv}`}</button>`;
       const hist = oldVers.length
         ? `<details class="ep-history"><summary>${lang === 'en' ? `Past versions (${oldVers.length})` : `历史版本（${oldVers.length}）`}</summary>${oldVers.map((v) =>
-            `<div class="ep-oldver"><span>v${v.version} · ${v.wordCount || 0} ${lang === 'en' ? 'chars' : '字'}</span>${cmpBtn(v.version, latest.version)}</div>`).join('')}</details>`
+            `<div class="ep-oldver"><span>${PV().formatVersion(v.version)} · ${v.wordCount || 0} ${lang === 'en' ? 'chars' : '字'}</span>${cmpBtn(v.version, latest.version)}</div>`).join('')}</details>`
         : '';
-      return `<div class="ep-item" data-ep="${epNo}"><h4>EP${epNo} · ${escapeHtml(latest.title || '')} <span class="muted">(v${latest.version} · ${latest.wordCount || 0} ${lang === 'en' ? 'chars' : '字'})</span>${oldVers.length ? cmpBtn(oldVers[oldVers.length - 1].version, latest.version) : ''}<button class="btn-ghost ep-listen-btn" type="button" data-listen-id="${latest.id}">🎧 ${lang === 'en' ? 'Listen' : '听剧本'}</button></h4>
+      return `<div class="ep-item" data-ep="${epNo}"><h4>EP${epNo} · ${escapeHtml(latest.title || '')} <span class="muted">(${PV().formatVersion(latest.version)} · ${latest.wordCount || 0} ${lang === 'en' ? 'chars' : '字'})</span>${oldVers.length ? cmpBtn(oldVers[oldVers.length - 1].version, latest.version) : ''}<button class="btn-ghost ep-listen-btn" type="button" data-listen-id="${latest.id}">🎧 ${lang === 'en' ? 'Listen' : '听剧本'}</button></h4>
         <div class="muted">${escapeHtml(latest.synopsis || '')}</div><pre>${escapeHtml(latest.content || '')}</pre>${hist}
         <div class="ep-diff hidden" data-diff-box="ep${epNo}"></div></div>`;
     }).join('');
@@ -4777,10 +4777,10 @@
     const sg = done.antiAi || {}, mk = done.market || {};
     const rows = [
       [lang === 'en' ? 'Anti-AI' : '去AI化', sg.antiAiScore ?? sg.score ?? '-'],
-      [lang === 'en' ? 'Market fit' : '市场匹配', mk.fit ?? '-'],
+      [lang === 'en' ? 'Market fit' : '市场匹配', PV().formatDisplayValue(mk.overall ?? mk.score ?? mk.fit)],
       [lang === 'en' ? 'Audience' : '受众精准', done.audience ?? '-'],
     ];
-    $('scoreGrid').innerHTML = rows.map(([k, v]) => `<div class="score-cell"><b>${v}</b><span>${k}</span></div>`).join('');
+    $('scoreGrid').innerHTML = rows.map(([k, v]) => `<div class="score-cell"><b>${escapeHtml(PV().formatDisplayValue(v))}</b><span>${k}</span></div>`).join('');
     $('sandboxTip').classList.toggle('hidden', !done.sandbox);
     if (done.sandbox) $('sandboxTip').textContent = t('sandboxTip');
     // 受限题材改写法建议（9·1《微短剧发展管理办法》对接，WARN 级不阻断创作）
@@ -5947,7 +5947,8 @@
         if (!v || typeof v !== 'object' || typeof v.score !== 'number' || v.score >= 100) return;
         if (!Array.isArray(v.hits) || !v.hits.length) return; // 创作能力引擎统一形态：score + hits[]；结构维度不混入此卡
         if (k === 'sceneSoftEnding' || k === 'showDontTell') return; // c211：专用卡接管（旧库残留的通用摘要行不重复渲染）
-        const msgs = [].concat(Array.isArray(v.issues) ? v.issues : []).concat(Array.isArray(v.advice) ? v.advice : []);
+        const msgs = [].concat(Array.isArray(v.issues) ? v.issues : []).concat(Array.isArray(v.advice) ? v.advice : [])
+          .map(PV().formatIssueText).filter(Boolean);
         const pair = QC_ENGINE_LABELS[k];
         const name = pair ? (lang === 'en' ? pair[1] : pair[0]) : humanizeEngineKey(k);
         const unrescued = typeof v.unrescuedCount === 'number' ? v.unrescuedCount : v.hits.filter((h) => !h.rescued).length;

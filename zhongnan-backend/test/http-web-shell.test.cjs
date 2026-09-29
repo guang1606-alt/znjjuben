@@ -55,6 +55,7 @@ describe('前端站点托管 + 项目创建端点', { concurrency: 1 }, () => {
     assert.strictEqual(p.mode, 'tags');
     assert.strictEqual(p.totalEps, 20);
     assert.deepStrictEqual(p.tags, ['逆袭', '都市']);
+    assert.ok(!Number.isNaN(new Date(p.createdAt).getTime()), '演示项目应模拟 Prisma 的 createdAt 默认值');
     const list = await (await fetch(base + '/api/generate/projects', { headers: { Authorization: `Bearer ${tok}` } })).json();
     assert.ok(list.some((x) => x.id === p.id));
   });
@@ -74,13 +75,14 @@ describe('项目剧本读取端点（作品库/结果正文，归属隔离）', 
     const H = { 'Content-Type': 'application/json', Authorization: `Bearer ${tok}` };
     const pr = await fetch(base + '/api/generate/projects', { method: 'POST', headers: H, body: JSON.stringify({ title: '可读剧', mode: 'tags' }) });
     const p = await pr.json();
-    await mem.script.create({ data: { projectId: p.id, epNo: 1, title: '第一集', synopsis: '梗概', content: '正文ABC', wordCount: 3, qcPassed: true, version: 1 } });
+    await mem.script.create({ data: { projectId: p.id, epNo: 1, title: '第一集', synopsis: '梗概', content: '正文ABC', wordCount: 3, qcPassed: true } });
     // 本人列表
     const mine = await fetch(base + `/api/generate/projects/${p.id}/scripts`, { headers: { Authorization: `Bearer ${tok}` } });
     assert.strictEqual(mine.status, 200);
     const eps = await mine.json();
     assert.strictEqual(eps.length, 1);
     assert.strictEqual(eps[0].content, '正文ABC');
+    assert.strictEqual(eps[0].version, 1, '演示脚本应模拟 Prisma 的 version 默认值');
     // 未登录
     const anon = await fetch(base + `/api/generate/projects/${p.id}/scripts`);
     assert.strictEqual(anon.status, 401);

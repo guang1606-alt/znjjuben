@@ -57,6 +57,7 @@ const demoUsers = [
   { id: 'demo_pro', phone: '13900000004', level: 'PRO', balance: 20000, isAdmin: false },
   // 2026-09-29 超管一人独大：演示管理员须用超管手机号硬标识（isAdmin 布尔已不再赋予后台权）
   { id: 'demo_admin', phone: '18891995171', level: 'PRO', balance: 99999, isAdmin: false },
+  { id: 'local_admin_15209291219', phone: '15209291219', level: 'PRO', balance: 99999, isAdmin: true },
 ];
 demoUsers.forEach(async (u) => {
   const seeded = mem._seedUser(u);
@@ -66,5 +67,6 @@ demoUsers.forEach(async (u) => {
 const port = Number(process.env.PORT) || 8099;
 app.listen(port, () => {
   console.log(`🎬 终南集 DEMO 模式: http://127.0.0.1:${port}（内存数据，重启清空）`);
-  console.log('演示账号：FREE 13900000001 / BASIC 13900000002 / ADVANCED 13900000003 / PRO 13900000004 / 超管 13900000000，密码均 demo123456');
+  console.log('演示账号：FREE 13900000001 / BASIC 13900000002 / ADVANCED 13900000003 / PRO 13900000004 / 超管 18891995171，密码均 demo123456');
+  console.log('本地管理员：15209291219，密码 demo123456');
 });

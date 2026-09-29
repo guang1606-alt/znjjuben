@@ -96,4 +96,30 @@ describe('前端创作进度状态机（游戏化进度/小南陪伴）', () => 
     // 英文彩蛋不含中文
     PV.waitTips(true).forEach((t) => assert.ok(!/[一-鿿]/.test(t), t));
   });
+
+  it('结构化指标优先显示分数，不泄漏 [object Object]', () => {
+    assert.strictEqual(PV.formatDisplayValue({ score: 86, level: 'good' }), '86');
+    assert.strictEqual(PV.formatDisplayValue({ cravingScore: 82, wantNext: '继续追更' }), '82');
+    assert.strictEqual(PV.formatDisplayValue({ label: '高匹配', reason: '题材契合' }), '高匹配');
+    assert.strictEqual(PV.formatDisplayValue({ platform: '抖音', audience: '都市女性' }), '抖音 / 都市女性');
+  });
+
+  it('结构化诊断问题展示证据与建议，不泄漏 [object Object]', () => {
+    const text = PV.formatIssueText({
+      type: 'no_cool_moment',
+      evidence: '本集没有形成有效爽点',
+      advice: '增加一次有行动结果的反杀',
+    });
+    assert.strictEqual(text, 'no_cool_moment: 本集没有形成有效爽点 → 增加一次有行动结果的反杀');
+    assert.ok(!text.includes('[object Object]'));
+  });
+
+  it('缺失或非法的日期与版本号使用稳定占位符', () => {
+    assert.strictEqual(PV.formatDateTime(null, 'zh'), '—');
+    assert.strictEqual(PV.formatDateTime(undefined, 'en'), '—');
+    assert.strictEqual(PV.formatDateTime('not-a-date', 'zh'), '—');
+    assert.strictEqual(PV.formatVersion(null), '—');
+    assert.strictEqual(PV.formatVersion(undefined), '—');
+    assert.strictEqual(PV.formatVersion(2), 'v2');
+  });
 });
