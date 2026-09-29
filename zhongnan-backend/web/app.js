@@ -1124,6 +1124,77 @@
     $('xnLine').textContent = line;
     const tipEl = $('xnTip');
     if (tip) { tipEl.textContent = tip; tipEl.classList.remove('hidden'); } else tipEl.classList.add('hidden');
+    znToast(line); // c201 用户反馈：小南台词区不够醒目，校验/扣费/错误提示容易被无视成"点了没反应"——顶部 toast 兜底可见性
+  }
+  /* ---------- c201 用户反馈修复：全局轻提示 / 模态输入 / 按钮小菜单 ----------
+   * 背景：多端（尤其微信内置浏览器/手机 WebView）下 window.prompt 被禁用或极不显眼，
+   * 原依赖 prompt 的功能（管理员调积分/重置密码/驳回原因）表现为"点了没动作"。
+   * 统一替换为自制模态；全局 toast 让所有 xnSay 提示可见。 */
+  function znToast(msg) {
+    try {
+      let host = document.getElementById('znToastHost');
+      if (!host) { host = document.createElement('div'); host.id = 'znToastHost'; document.body.appendChild(host); }
+      const el = document.createElement('div');
+      el.className = 'zn-toast';
+      el.textContent = String(msg || '');
+      host.appendChild(el);
+      requestAnimationFrame(() => el.classList.add('zn-toast-in'));
+      setTimeout(() => { el.classList.remove('zn-toast-in'); setTimeout(() => el.remove(), 320); }, 2800);
+      while (host.children.length > 3) host.firstChild.remove();
+    } catch { /* 无 DOM 环境忽略 */ }
+  }
+  window.znToast = znToast; // 供独立 view（room/branch 等）复用
+  // 模态输入框：替代 window.prompt。resolve(value|null)；Enter=确定，Esc=取消
+  function askText(label, def) {
+    return new Promise((resolve) => {
+      const backdrop = document.createElement('div');
+      backdrop.className = 'zn-ask-backdrop';
+      backdrop.innerHTML = `<div class="zn-ask" role="dialog" aria-modal="true">
+        <div class="zn-ask-label"></div>
+        <input class="zn-ask-input" type="text" />
+        <div class="zn-ask-btns"><button type="button" class="btn-ghost zn-ask-cancel"></button><button type="button" class="btn-primary zn-ask-ok"></button></div>
+      </div>`;
+      const done = (val) => { backdrop.remove(); document.removeEventListener('keydown', onKey, true); resolve(val); };
+      const onKey = (e) => {
+        if (e.key === 'Escape') { e.stopPropagation(); done(null); }
+        else if (e.key === 'Enter' && e.target && e.target.classList && e.target.classList.contains('zn-ask-input')) { e.preventDefault(); done(inp.value.trim()); }
+      };
+      document.addEventListener('keydown', onKey, true);
+      backdrop.addEventListener('mousedown', (e) => { if (e.target === backdrop) done(null); });
+      backdrop.querySelector('.zn-ask-label').textContent = label || '';
+      const inp = backdrop.querySelector('.zn-ask-input');
+      inp.value = def != null ? String(def) : '';
+      backdrop.querySelector('.zn-ask-ok').textContent = t('askOk');
+      backdrop.querySelector('.zn-ask-cancel').textContent = t('askCancel');
+      backdrop.querySelector('.zn-ask-ok').onclick = () => done(inp.value.trim());
+      backdrop.querySelector('.zn-ask-cancel').onclick = () => done(null);
+      document.body.appendChild(backdrop);
+      inp.focus(); inp.select();
+    });
+  }
+  // 按钮下方小菜单（主题/字号直接选择，替代"单击轮切"）：items=[{label,value,cur}]
+  function openMiniMenu(anchorBtn, items, onPick) {
+    document.querySelectorAll('.zn-mini-menu').forEach((m) => m.remove());
+    const menu = document.createElement('div');
+    menu.className = 'zn-mini-menu';
+    items.forEach((it) => {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.textContent = (it.cur ? '✓ ' : '') + it.label;
+      if (it.cur) b.classList.add('cur');
+      b.onclick = () => { menu.remove(); onPick(it.value); };
+      menu.appendChild(b);
+    });
+    document.body.appendChild(menu);
+    const r = anchorBtn.getBoundingClientRect();
+    menu.style.top = Math.round(r.bottom + 6 + window.scrollY) + 'px';
+    const mw = menu.offsetWidth || 140;
+    let left = r.right - mw; if (left < 8) left = Math.max(8, Math.round(r.left + window.scrollX));
+    menu.style.left = left + 'px';
+    setTimeout(() => {
+      const close = (e) => { if (!menu.contains(e.target)) { menu.remove(); document.removeEventListener('mousedown', close); } };
+      document.addEventListener('mousedown', close);
+    }, 0);
   }
   // 供零构建子视图（branch-view / teardown-view 等独立 IIFE）调用
   window.xnSay = xnSay;
@@ -1765,6 +1836,44 @@
     $('inGender').value = me.gender || ''; $('inPersonalized').checked = me.personalized !== false;
     refreshAdminNav(); renderModes(); loadCaps(); loadCastAssets(); loadPropAssets(); loadSceneAssets(); // v2.151/v2.159/v2.161 登录后预取角色/道具/场景资产清单
   }
+  /* ---------- c201 用户反馈：积分变动明细（每笔加/扣透明可查） ---------- */
+  function friendlyReason(reason) {
+    const r = String(reason || '');
+    if (r === 'FREEZE') return lang === 'en' ? 'Frozen for task' : '任务冻结';
+    if (r === 'CONSUME') return lang === 'en' ? 'Generation' : '生成扣费';
+    if (r === 'REFUND' || r.endsWith(':REFUND')) return lang === 'en' ? 'Refund' : '退回';
+    if (r.startsWith('ADMIN_ADJUST')) return lang === 'en' ? 'Admin adjust' : '后台调整';
+    return r;
+  }
+  let ledgerLoaded = false;
+  async function togglePointsLedger() {
+    const pane = $('pointsLedgerPane');
+    if (!pane) return;
+    const show = pane.classList.contains('hidden');
+    pane.classList.toggle('hidden', !show);
+    if (!show || (ledgerLoaded && pane.dataset.lang === lang)) return;
+    pane.innerHTML = `<div class="muted">${lang === 'en' ? 'Loading…' : '加载中…'}</div>`;
+    pane.dataset.lang = lang;
+    try {
+      const res = await Api.request('/api/auth/points/ledger');
+      const j = await Api.jsonOrThrow(res);
+      const rows = (j.items || []).map((it) => {
+        const isIn = it.direction === 'IN' || it.direction === 'UNFROZEN';
+        const frozen = it.direction === 'FROZEN';
+        const sign = frozen ? '' : (isIn ? '+' : '−');
+        const color = frozen ? 'opacity:.55' : (isIn ? 'color:var(--ok,#1d9e74)' : 'color:var(--danger,#d4473b)');
+        const time = it.createdAt ? new Date(it.createdAt).toLocaleString(lang === 'en' ? 'en-US' : 'zh-CN', { hour12: false }) : '';
+        const verb = frozen ? (lang === 'en' ? 'frozen' : '冻结') : (it.direction === 'CONSUME' ? (lang === 'en' ? 'spent' : '支出') : (lang === 'en' ? 'in' : '收入'));
+        return `<div class="points-ledger-row">
+          <div class="pl-main"><b style="${color}">${sign}${it.amount}</b><span class="muted">${verb}</span><span>${escapeHtml(friendlyReason(it.reason))}</span></div>
+          <div class="pl-sub muted">${time}${it.balanceAfter != null ? ` · ${t('ledgerBalance')} ${it.balanceAfter}` : ''}</div>
+        </div>`;
+      }).join('');
+      pane.innerHTML = rows || `<div class="muted">${t('ledgerEmpty')}</div>`;
+      ledgerLoaded = true;
+    } catch (e) { pane.innerHTML = `<div class="muted">${escapeHtml(e.message || 'error')}</div>`; }
+  }
+  $('pointsLedgerBtn').onclick = togglePointsLedger;
   // v2.71 显式画像下拉（与后端 profile-mapping 白名单一致；幂等，只填充一次）
   const PF_REGIONS = ['黑龙江','吉林','辽宁','北京','天津','陕西','甘肃','宁夏','青海','新疆','河南','河北','山西','内蒙古','山东','四川','重庆','湖南','湖北','上海','江苏','浙江','安徽','广东','广西','海南','福建','台湾','云南','贵州','江西','海外','其他'];
   const PF_AGES = [['u18','ageU18'],['18-24','age1824'],['25-30','age2530'],['31-40','age3140'],['41-50','age4150'],['over50','ageOver50']];
@@ -2336,7 +2445,8 @@
       if (r.ok) { xnSay(lang === 'en' ? 'Delisted' : '已下架'); $('mkMineBtn').click(); } else { xnSay((await r.json()).error || '失败'); }
     });
     $('mineBox').querySelectorAll('[data-relist]').forEach((b) => b.onclick = async () => {
-      const newPrice = prompt(lang === 'en' ? 'New price in yuan (leave empty to keep current):' : '输入新售价（元），留空保持原价：');
+      // c201：prompt → 自制模态（留空保持原价与原语义一致）
+      const newPrice = await askText(lang === 'en' ? 'New price in yuan (leave empty to keep current):' : '输入新售价（元），留空保持原价：', '');
       if (newPrice === null) return;
       const body = {};
       if (newPrice.trim()) { const yuan = Number(newPrice); if (!Number.isFinite(yuan) || yuan < 1) { xnSay(lang === 'en' ? 'Invalid price' : '价格不合法'); return; } body.priceFen = Math.round(yuan * 100); }
@@ -6798,8 +6908,11 @@
   $('xnFloat').onclick = () => xnSay(lang === 'en' ? 'Xiaonan here — tell me your idea.' : '小南在呢，说说你的创意吧～');
 
   /* ---------- 顶栏控件 ---------- */
-  $('themeBtn').onclick = () => { theme = THEMES[(THEMES.indexOf(theme) + 1) % THEMES.length]; LS.s('zn_theme', theme); applyTheme(); };
-  $('fontBtn').onclick = () => { font = FONTS[(FONTS.indexOf(font) + 1) % FONTS.length]; LS.s('zn_font', font); applyFont(); };
+  // c201 用户反馈：主题/字号由"单击轮切"改为"下拉直接选择"，不必连点盲切
+  const THEME_LABEL = { tech: '科技暗色', light: '浅色', dark: '深色', eye: '护眼', auto: '跟随系统' };
+  $('themeBtn').onclick = () => openMiniMenu($('themeBtn'), THEMES.map((k) => ({ value: k, label: (lang === 'en' ? { tech: 'Tech dark', light: 'Light', dark: 'Dark', eye: 'Sepia', auto: 'System' } : THEME_LABEL)[k] || k, cur: theme === k })), (v) => { theme = v; LS.s('zn_theme', v); applyTheme(); });
+  const FONT_LABEL = { sm: '小', md: '中', lg: '大', xl: '特大' };
+  $('fontBtn').onclick = () => openMiniMenu($('fontBtn'), FONTS.map((k) => ({ value: k, label: lang === 'en' ? ({ sm: 'Small', md: 'Medium', lg: 'Large', xl: 'X-Large' })[k] : FONT_LABEL[k], cur: font === k })), (v) => { font = v; LS.s('zn_font', v); applyFont(); });
   $('langBtn').onclick = () => { const nx = lang === 'zh' ? 'en' : 'zh'; LS.s('zn_lang', nx); applyLang(); };
 
   /* ---------- 工具 ---------- */
@@ -7055,10 +7168,11 @@
     $('admUserTable').querySelectorAll('tbody tr').forEach((tr) => {
       const uid = tr.getAttribute('data-uid');
       tr.querySelector('[data-act="level"]').onchange = (e) => admSetLevel(uid, e.target.value);
-      tr.querySelector('[data-act="points"]').onclick = () => {
+      tr.querySelector('[data-act="points"]').onclick = async () => {
         const delta = parseInt(tr.querySelector('[data-act="delta"]').value, 10);
         if (!delta) { xnSay(lang === 'en' ? 'Enter a non-zero number.' : '请输入非零积分变动'); return; }
-        const reason = window.prompt(lang === 'en' ? 'Reason (logged):' : '调整原因（记入流水）：', '后台调整');
+        // c201 用户反馈：window.prompt 在微信内置浏览器等环境被禁用 → 静默失败"无法调整积分"。改为自制模态，全端可用
+        const reason = await askText(lang === 'en' ? 'Reason (logged):' : '调整原因（记入流水）：', '后台调整');
         if (!reason) return;
         admApi('/users/' + uid + '/points', { method: 'POST', body: JSON.stringify({ delta, reason }) })
           .then(() => { xnSay(t('admOk')); loadAdmUsers(); }).catch((e) => xnSay(e.message));
@@ -7069,8 +7183,9 @@
         admApi('/users/' + uid + '/ban', { method: 'POST', body: JSON.stringify({ banned }) })
           .then(() => { xnSay(t('admOk')); loadAdmUsers(); }).catch((e) => xnSay(e.message));
       };
-      tr.querySelector('[data-act="resetpw"]').onclick = () => {
-        const np = window.prompt(lang === 'en' ? 'New password (6-64):' : '为该用户设置新密码（6-64 位）：');
+      tr.querySelector('[data-act="resetpw"]').onclick = async () => {
+        // c201：同上，prompt → 自制模态
+        const np = await askText(lang === 'en' ? 'New password (6-64):' : '为该用户设置新密码（6-64 位）：');
         if (!np) return;
         admApi('/users/' + uid + '/reset-password', { method: 'POST', body: JSON.stringify({ newPassword: np }) })
           .then(() => xnSay(t('admOk'))).catch((e) => xnSay(e.message));
@@ -7339,7 +7454,8 @@
       const id = b.closest('[data-kid]').getAttribute('data-kid'), act = b.getAttribute('data-kn');
       try {
         if (act === 'reject') {
-          const reason = window.prompt(lang === 'en' ? 'Reject reason:' : '驳回原因（可空）：', '');
+          // c201：prompt → 自制模态（微信内置浏览器等环境 prompt 被禁导致静默无动作）
+          const reason = await askText(lang === 'en' ? 'Reject reason:' : '驳回原因（可空）：', '');
           await admApi(`/knowledge/${id}/reject`, { method: 'POST', body: JSON.stringify({ reason: reason || '人工驳回' }) });
         } else { await admApi(`/knowledge/${id}/approve`, { method: 'POST' }); xnSay(lang === 'en' ? 'Synced to skills.' : '已吸收并同步到创作技能'); }
         loadAdmKnowledge();

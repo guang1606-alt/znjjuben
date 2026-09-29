@@ -26,7 +26,13 @@ function createMemoryPrisma() {
   };
   const ledgerEntry = {
     async findUnique({ where }) { return ledgers.find((l) => l.idempotencyKey === where.idempotencyKey) ?? null; },
-    async findMany({ where = {} } = {}) { return ledgers.filter((l) => Object.entries(where).every(([k, v]) => l[k] === v)); },
+    // c201：支持 orderBy:{id:'desc'} 与 take（积分流水明细接口需要），其他用法保持原行为
+    async findMany({ where = {}, orderBy, take } = {}) {
+      let rows = ledgers.filter((l) => Object.entries(where).every(([k, v]) => l[k] === v));
+      if (orderBy && orderBy.id === 'desc') rows = rows.slice().sort((a, b) => ((b.id > a.id) ? 1 : (b.id < a.id) ? -1 : 0));
+      if (take) rows = rows.slice(0, take);
+      return rows;
+    },
     async create({ data }) { const row = { id: ++seq, ...data }; ledgers.push(row); return row; },
   };
   const user = {

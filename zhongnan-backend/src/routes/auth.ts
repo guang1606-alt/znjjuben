@@ -90,6 +90,20 @@ export function createAuthRouter(prisma: PrismaLike | any) {
       benefits: MEMBERSHIP[u.level as MemberLevel] ?? null,
     });
   });
+  // c201 用户反馈修复：个人积分流水明细（每笔加/扣透明可查；只读本人，倒序，只暴露安全字段）
+  authRouter.get('/points/ledger', authRequired, async (req: AuthRequest, res) => {
+    const rows = await prisma.ledgerEntry.findMany({
+      where: { userId: req.userId! },
+      orderBy: { id: 'desc' },
+      take: 50,
+    });
+    res.json({
+      items: rows.map((r: any) => ({
+        direction: r.direction, bucket: r.bucket ?? null, amount: r.amount,
+        reason: r.reason ?? null, balanceAfter: r.balanceAfter ?? null, createdAt: r.createdAt ?? null,
+      })),
+    });
+  });
   // 修改笔名/昵称/简介（笔名会成为剧本水印；长度与字符合规校验，防注入与超长）
   const profileSchema = z.object({
     nickname: z.string().trim().min(1).max(24).optional(),

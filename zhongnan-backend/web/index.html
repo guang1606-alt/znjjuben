@@ -569,10 +569,11 @@
           <button class="btn-ghost" id="editProfileBtn" data-i="editProfile"></button>
         </div>
         <div class="profile-stats">
-          <div><b id="mePoints">0</b><span data-i="points"></span></div>
+          <div><b id="mePoints">0</b><span data-i="points"></span><button class="chip" id="pointsLedgerBtn" data-i="pointsLedger" style="font-size:.68rem;padding:1px 8px;margin-left:6px;vertical-align:2px"></button></div>
           <div><b id="meStorage">0 MB</b><span data-i="storage"></span></div>
           <div><b id="meInvite">—</b><span data-i="inviteCode"></span></div>
         </div>
+        <div id="pointsLedgerPane" class="points-ledger hidden" aria-label="points ledger"></div>
         <div class="profile-edit hidden" id="profileEdit">
           <div class="field"><label data-i="nickname"></label><input id="inNickname" maxlength="24" /></div>
           <div class="field"><label data-i="penName"></label><input id="inPen" maxlength="20" placeholder="中英文数字 _ · -" /></div>

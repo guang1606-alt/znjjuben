@@ -109,3 +109,24 @@ test('async 路由抛错被全局兜底为 500，而不是让请求永久挂起'
   assert.strictEqual(resp.status, 500);
   assert.strictEqual((await resp.json()).error, 'INTERNAL_ERROR');
 });
+
+// c201 用户反馈修复：个人积分流水明细（积分变动透明可查，只读本人最近 50 笔）
+test('c201 积分流水明细：返回本人最近流水（倒序、只含安全字段、未登录 401）', async () => {
+  const reg = await post('/api/auth/register', { phone: '13800004444', password: 'password123' });
+  assert.strictEqual(reg.status, 200);
+  const { accessToken, user } = await reg.json();
+  // 造 3 笔流水：本人 2 笔（进/出）+ 他人 1 笔（不应出现）
+  await mem.ledgerEntry.create({ data: { userId: user.id, direction: 'IN', bucket: 'BONUS', amount: 100, reason: 'REGISTER_GIFT', idempotencyKey: 'c201-k1', balanceAfter: 100 } });
+  await mem.ledgerEntry.create({ data: { userId: user.id, direction: 'OUT', bucket: 'GENERATE', amount: 5, reason: 'EPISODE_GEN', idempotencyKey: 'c201-k2', balanceAfter: 95 } });
+  await mem.ledgerEntry.create({ data: { userId: 'u_someone_else', direction: 'IN', bucket: 'BONUS', amount: 999, reason: 'X', idempotencyKey: 'c201-k3', balanceAfter: 999 } });
+  const r = await get('/api/auth/points/ledger', accessToken);
+  assert.strictEqual(r.status, 200);
+  const j = await r.json();
+  assert.ok(Array.isArray(j.items) && j.items.length === 2, `应只含本人 2 笔，实际 ${j.items && j.items.length}`);
+  assert.strictEqual(j.items[0].reason, 'EPISODE_GEN'); // 最新在前（倒序）
+  assert.strictEqual(j.items[0].balanceAfter, 95);
+  assert.strictEqual(j.items[0].direction, 'OUT');
+  assert.ok(!('userId' in j.items[0]) && !('idempotencyKey' in j.items[0]), '不得泄露内部字段');
+  const anon = await get('/api/auth/points/ledger');
+  assert.strictEqual(anon.status, 401);
+});
