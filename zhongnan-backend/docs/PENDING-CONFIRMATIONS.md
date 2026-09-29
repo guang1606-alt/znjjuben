@@ -19,7 +19,11 @@
 
 ## 4.【低】多人与省 token 协作约定（请过目，默认生效）
 1. 每日开工先跑 `node scripts/daily-review.cjs`（或直接看 `docs/daily-review/` 最新报告）——看完报告即掌握仓库全景，不重扫代码
-2. 测试默认单文件先行（`npm test test/xxx.test.cjs`），交付前才跑全量
+2. 测试默认单文件先行（`npm test test/xxx.test.cjs`；注意 `npm test` 本身已含 `test/`，追加文件名会变成全量双跑）
 3. 需要用户确认的事项一律登记本清单，开发中不打断；用户上手时统一处理
 4. 新会话先读最近一份 daily-review 报告 + 本清单，再动手，避免重复性探索
 5. 供应商等敏感配置只在超管后台/API 操作：密钥加密落库、不入 git、不下发前端
+
+## 5.【低】多人协作的 git 身份区分
+- 现状：本机所有提交作者均为 `123 <a123@yangguangdeMacBook-Pro.local>`（自动生成），多位协作者共用一台机器时无法从提交记录区分是谁做的
+- 建议：为每位协作者配置独立 `git config user.name/user.email`（或至少给本机配一个正式身份），每日复盘报告的"协作动态"才能按人统计
