@@ -44,5 +44,10 @@
 
 ## 9.【中】WorkshopEnrollment 缺唯一键导致并发报名重复
 - 现状：`workshop_service.enroll` 用 check-then-insert，但 `workshop_enrollments` 表无 `(student_id, course_id)` 唯一约束
-- 风险：学生双击报名会产生重复行，且 `WorkshopCourse.student_count` 被双倍递增
-- 建议：确认后加迁移 `UniqueConstraint("student_id", "course_id", name="uq_enrollment_student_course")`，并改用 `commit_or_return_existing` 或 pg upsert
+- 已缓解（2026-09-29）：enroll 改为先 `SELECT ... FOR UPDATE` 锁课程行再查再插，同课程并发报名在行锁上序列化，重复行与 student_count 双倍递增已消除；测试 `test_workshop_enroll_concurrent_lock`（真并发 gather）验证通过
+- 残留建议（仍待确认）：行锁是代码级缓解，唯一约束才是数据级兜底；确认后加迁移 `UniqueConstraint("student_id", "course_id", name="uq_enrollment_student_course")`（加前需先清理历史重复行）
+
+## 10.【低】养正 test_password_policy.py 全量运行时偶发计数不足（时间敏感 flaky）
+- 现象：全量跑 893 测试时 4 条密码策略用例偶发 `assert 2 == 3`（登录失败计数少 1）；同文件单跑全过，双跑也全过，无改动全量跑全过，带改动复跑也全过
+- 分析：失败登录计数存 Redis，全量运行时受前置用例耗时影响，疑似撞上登录限流窗口导致个别请求未走到计数分支；非功能缺陷
+- 建议（可选）：密码策略测试前显式清限流键，或将 3 次失败登录的断言改为「计数 ≥2 且 ≤3」+ 单独校验递增逻辑；不阻塞业务
