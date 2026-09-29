@@ -58,4 +58,32 @@ describe('项目管理：重命名 + 软删除', { concurrency: 1 }, () => {
     const r2 = await call('DELETE', '/projects/p2');
     assert.strictEqual(r2.status, 404);
   });
+
+  // v2.198 项目克隆
+  it('克隆：复制 bible/tags/mode/format，返回新项目，默认标题带"副本"', async () => {
+    mem._projects.delete('p1'); // 清理软删除的旧项目，避免触发 FREE 项目数限制（2）
+    mem._projects.set('psrc', { id: 'psrc', userId: UID, title: '源项目', mode: 'tags', format: 'LIVE_ACTION', tags: ['都市', '逆袭'], bible: { worldview: '现代' }, status: 'draft' });
+    const { status, j } = await call('POST', '/projects/psrc/clone');
+    assert.strictEqual(status, 200);
+    assert.strictEqual(j.title, '源项目 - 副本');
+    assert.strictEqual(j.mode, 'tags');
+    assert.strictEqual(j.format, 'LIVE_ACTION');
+    assert.deepStrictEqual(j.tags, ['都市', '逆袭']);
+    assert.strictEqual(j.clonedFrom, 'psrc');
+    // 新项目与源项目 id 不同
+    assert.notStrictEqual(j.id, 'psrc');
+  });
+
+  it('克隆：可指定新标题', async () => {
+    // 清理上一测试产生的克隆项目，避免 FREE 项目数限制（2）
+    for (const [k, v] of mem._projects) if (v.userId === UID && k !== 'psrc') mem._projects.delete(k);
+    const { status, j } = await call('POST', '/projects/psrc/clone', { title: '我的新本' });
+    assert.strictEqual(status, 200);
+    assert.strictEqual(j.title, '我的新本');
+  });
+
+  it('克隆：源项目不存在 404', async () => {
+    const r = await call('POST', '/projects/nonexistent/clone');
+    assert.strictEqual(r.status, 404);
+  });
 });

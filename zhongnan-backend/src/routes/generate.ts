@@ -1552,6 +1552,41 @@ generateRouter.delete('/projects/:id', authRequired, async (req: AuthRequest, re
   await prisma.project.update({ where: { id: project.id }, data: { status: 'deleted' } });
   res.json({ ok: true, id: project.id });
 });
+
+// v2.198 项目克隆：复制源项目的 bible/tags/mode/format 等创作骨架，开新项目（不复制成稿分集/消耗记录）
+generateRouter.post('/projects/:id/clone', authRequired, async (req: AuthRequest, res) => {
+  const src = await prisma.project.findFirst({ where: { id: req.params.id, userId: req.userId!, status: { not: 'deleted' } } });
+  if (!src) return res.status(404).json({ error: '源项目不存在' });
+  const newTitle = (req.body?.title || '').trim() || `${src.title} - 副本`;
+  if (newTitle.length > 80) return res.status(400).json({ error: '标题不超过 80 字' });
+  // 项目数量限制
+  const owner = await prisma.user.findUnique({ where: { id: req.userId! }, select: { level: true } });
+  const limit = activeProjectLimit(owner?.level);
+  const mine = await prisma.project.findMany({ where: { userId: req.userId! }, select: { status: true } });
+  const activeCount = mine.filter((x: any) => x.status !== 'archived').length;
+  if (activeCount >= limit) {
+    return res.status(403).json({ error: 'REACH_PROJECT_LIMIT', activeCount, limit, message: `当前会员最多同时进行 ${limit} 个剧本项目` });
+  }
+  // 分级备案沿用源项目判定（format/mode 不变）
+  const fmt = (src.format as string) || 'LIVE_ACTION';
+  const filing = classifyFiling({ specialTopic: (src as any).specialTopic ?? false, isAI: fmt === 'AIGC', investWan: (src as any).investWan });
+  // 仅复制创作骨架：bible/tags/mode/format/画风/镜头，不复制 scripts/tokens/feedback
+  const cloned = await prisma.project.create({
+    data: {
+      userId: req.userId!,
+      title: newTitle,
+      synopsis: (req.body?.synopsis as string) || src.synopsis || '',
+      mode: src.mode,
+      format: fmt,
+      tags: src.tags || [],
+      bible: src.bible || {},
+      status: 'active',
+      filing,
+    },
+    select: { id: true, title: true, mode: true, format: true, tags: true },
+  });
+  res.json({ ...cloned, clonedFrom: src.id });
+});
 // 某项目下全部剧本（仅本人可读全文；作品库点进去看分集）
 generateRouter.get('/projects/:id/scripts', authRequired, async (req: AuthRequest, res) => {
   const project = await prisma.project.findFirst({ where: { id: req.params.id, userId: req.userId! } });
