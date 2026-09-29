@@ -1,11 +1,24 @@
+# ===== 终南集协作仓库全局忽略（根级兜底，各子目录可叠加） =====
+# 依赖与构建产物
 node_modules/
 dist/
+.next/
+coverage/
+*.tsbuildinfo
+
+# 环境变量与密钥（.env.example 模板除外，模板必须入库供同事参考）
 .env
-*.log
+.env.*
+!.env.example
+
+# 部署与运行时目录（含生产密钥，严禁入库）
+.vefaas/
+.vefaas-deploy/
+.tmp/
+certs/
 logs/
 backups/
-certs/
-coverage/
-.next/
-*.tsbuildinfo
+
+# 系统与日志
+*.log
 .DS_Store
