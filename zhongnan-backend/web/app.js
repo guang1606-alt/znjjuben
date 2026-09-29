@@ -2393,7 +2393,7 @@
         <div class="v-section"><b>${lang === 'en' ? 'Sample' : '样章'}</b><div class="listing-sample">${escapeHtml(d.sample || (lang==='en'?'No sample':'暂无样章'))}</div></div>
         <div class="listing-foot" style="margin-top:12px"><span class="price-tag">${d.pricePoints} ${t('points')}</span>
           <button class="btn-primary" id="detailBuyBtn">${t('buy')}</button></div>`;
-      $('detailBuyBtn').onclick = () => { closeModal('detailModal'); buyListing(id); };
+      $('detailBuyBtn').onclick = () => { $('detailModal').classList.add('hidden'); buyListing(id); };
     } catch (e) { body.innerHTML = `<div class="muted">${escapeHtml(e.message)}</div>`; }
   }
   $('mkSort').onchange = loadListings;
@@ -2494,15 +2494,18 @@
   };
   async function buyListing(id) {
     if (!Api.isAuthed()) { openAuth('login'); return; }
+    const token = Api.getToken();
     try {
       const res = await Api.request(`/api/market/listings/${id}/buy`, { method: 'POST' });
       const d = await Api.jsonOrThrow(res);
+      if (Api.getToken() !== token) return;
       curPurchase = { id: d.purchaseId };
       $('fullTitle').textContent = lang === 'en' ? 'Full script unlocked' : '全本已解锁';
       $('fullText').textContent = d.fullText || '';
       $('fullNotice').textContent = (lang === 'en'
         ? `Spent ${d.spentPoints} credits, held in escrow. Refundable within ${d.refundableWithinHours}h; after confirming, funds settle to seller.`
         : `已支付 ${d.spentPoints} 积分，资金托管中。${d.refundableWithinHours} 小时内可退款；确认收货后货款结算给卖家。`);
+      $('fullConfirm').classList.remove('hidden'); $('fullRefund').classList.remove('hidden');
       openModal('fullModal'); xnSay(t('boughtOk'));
     } catch (e) { xnSay(e.message); }
   }
@@ -2515,14 +2518,19 @@
   }
   $('mkMineBtn').onclick = async () => {
     if (!Api.isAuthed()) { openAuth('login'); return; }
-    const [resMy, resDash] = await Promise.all([
-      Api.request('/api/market/my'),
-      Api.request('/api/market/seller-dashboard'),
-    ]);
-    const d = await Api.jsonOrThrow(resMy);
-    const dash = resDash.ok ? await resDash.json() : null;
+    const token = Api.getToken();
+    let d, dash;
+    try {
+      const [resMy, resDash] = await Promise.all([
+        Api.request('/api/market/my'),
+        Api.request('/api/market/seller-dashboard'),
+      ]);
+      d = await Api.jsonOrThrow(resMy);
+      dash = resDash.ok ? await resDash.json() : null;
+    } catch (e) { xnSay(e.message); return; }
+    if (Api.getToken() !== token) return;
     const row = (x, isBuy) => `<div class="deal-row"><span>#${x.id.slice(-5)} · ${x.pricePoints} ${t('points')} · ${t(x.status === 'ESCROW' ? 'escrow' : x.status === 'REFUNDED' ? 'refunded' : 'settled')}</span>
-      ${isBuy && x.status === 'ESCROW' ? `<span><button class="btn-ghost" data-confirm="${x.id}">${t('confirmReceive')}</button> <button class="btn-ghost" data-refund="${x.id}">${t('refund24')}</button></span>` : ''}</div>`;
+      ${isBuy && (x.status === 'ESCROW' || x.status === 'SETTLED') ? `<span><button class="btn-ghost" data-content="${x.id}">${lang === 'en' ? 'View script' : '查看剧本'}</button>${x.status === 'ESCROW' ? ` <button class="btn-ghost" data-confirm="${x.id}">${t('confirmReceive')}</button> <button class="btn-ghost" data-refund="${x.id}">${t('refund24')}</button>` : ''}</span>` : ''}</div>`;
     // v2.75 卖家工作台：统计卡 + 我的上架列表
     let dashHtml = '';
     if (dash && dash.stats) {
@@ -2564,6 +2572,24 @@
        <h4 style="margin-top:14px">${t('mySales')}</h4>${d.sales.length ? d.sales.map((x) => row(x, false)).join('') : `<div class="muted">${t('noDeal')}</div>`}`;
     $('mineBox').querySelectorAll('[data-confirm]').forEach((b) => b.onclick = async () => { await dealAction(`/api/market/purchases/${b.getAttribute('data-confirm')}/confirm`); $('mkMineBtn').click(); });
     $('mineBox').querySelectorAll('[data-refund]').forEach((b) => b.onclick = async () => { await dealAction(`/api/market/purchases/${b.getAttribute('data-refund')}/refund`); $('mkMineBtn').click(); });
+    $('mineBox').querySelectorAll('[data-content]').forEach((b) => b.onclick = async () => {
+      const id = b.getAttribute('data-content');
+      const session = Api.getToken();
+      try {
+        const d = await Api.jsonOrThrow(await Api.request(`/api/market/purchases/${id}/content`));
+        if (Api.getToken() !== session) return;
+        curPurchase = { id };
+        $('fullTitle').textContent = d.title || (lang === 'en' ? 'Purchased script' : '已购剧本');
+        $('fullText').textContent = d.fullText || '';
+        $('fullNotice').textContent = d.status === 'SETTLED'
+          ? (lang === 'en' ? 'Transaction completed.' : '交易已完成。')
+          : (lang === 'en' ? 'Funds are held in escrow. You can confirm receipt or request a refund within 24 hours.' : '资金托管中。可确认收货，或在购买后24小时内申请退款。');
+        $('fullConfirm').classList.toggle('hidden', d.status !== 'ESCROW');
+        $('fullRefund').classList.toggle('hidden', d.status !== 'ESCROW');
+        $('mineModal').classList.add('hidden');
+        openModal('fullModal');
+      } catch (e) { xnSay(e.message); }
+    });
     $('mineBox').querySelectorAll('[data-delist]').forEach((b) => b.onclick = async () => {
       if (!confirm(lang === 'en' ? 'Delist this script? It will be removed from the marketplace.' : '确认下架该剧本？下架后将从交易广场移除。')) return;
       const r = await Api.request(`/api/market/listings/${b.getAttribute('data-delist')}/delist`, { method: 'PATCH' });

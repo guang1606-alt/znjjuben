@@ -14,6 +14,7 @@ import { settlePurchase, withinRefund, ESCROW_WINDOW_MS } from '../lib/escrow';
 import { investorLens, investorOneLiner } from '../engine/investor-lens';
 import { buildScriptValue, type ScriptValueResult } from '../lib/script-value';
 import { normalizeBibleDoc } from '../lib/script-doc'; // v2.193 c193：timeline synopsis 同源归一（集市买家可见，防字符串形态首字符污染）
+import { latestScripts } from '../lib/latest-scripts';
 export { withinRefund, ESCROW_WINDOW_MS }; // 供测试复用
 
 type PrismaLike = typeof defaultPrisma;
@@ -43,11 +44,12 @@ export function createMarketRouter(prisma: PrismaLike | any) {
   async function computeValueForProject(project: any): Promise<{ card: ScriptValueResult; episodes: number } | null> {
     if (!project) return null;
     const scripts = await prisma.script.findMany({ where: { projectId: project.id }, orderBy: [{ epNo: 'asc' }, { version: 'asc' }] });
-    const contents = scripts.map((s: any) => s.content || '').filter((c: string) => c && c.trim());
+    const current = latestScripts<any>(scripts);
+    const contents = current.map((s: any) => s.content || '').filter((c: string) => c && c.trim());
     if (!contents.length) return null;
     const me = await prisma.user.findUnique({ where: { id: project.userId }, select: { penName: true } });
     const bible = (project as any).bible;
-    const synopsis = normalizeBibleDoc(bible).timeline[0] || scripts[0]?.synopsis || null; // v2.193 c193：字符串/数组双形态安全
+    const synopsis = normalizeBibleDoc(bible).timeline[0] || current[0]?.synopsis || null; // v2.193 c193：字符串/数组双形态安全
     const card = buildScriptValue({ title: project.title, penName: me?.penName ?? null, tags: project.tags ?? [], contents, synopsis });
     return { card, episodes: contents.length };
   }
@@ -79,6 +81,16 @@ export function createMarketRouter(prisma: PrismaLike | any) {
     }
     if (!script || !script.project) return null;
     return { script, scriptId: script.id };
+  }
+
+  async function purchasedContent(db: any, scriptId: string, title: string) {
+    const anchor = await db.script.findUnique({ where: { id: scriptId } });
+    if (!anchor) return null;
+    const scripts = latestScripts(await db.script.findMany({ where: { projectId: anchor.projectId }, orderBy: [{ epNo: 'asc' }, { version: 'desc' }] }));
+    const episodes = scripts.filter((s: any) => typeof s.content === 'string' && s.content.trim());
+    if (!episodes.length) return null;
+    return { title, episodes: episodes.map((s: any) => ({ epNo: s.epNo, title: s.title || `第${s.epNo}集`, content: s.content })),
+      fullText: episodes.map((s: any) => `第${s.epNo}集${s.title ? ` · ${s.title}` : ''}\n\n${s.content}`).join('\n\n──────────\n\n') };
   }
 
   /** 价格校验：≥1元(100分) 且为 10 分的整数倍（1积分=10分），避免分账/退款出现小数积分 */
@@ -203,7 +215,7 @@ export function createMarketRouter(prisma: PrismaLike | any) {
     const pricePoints = listing.priceFen / FEN_PER_POINT;
     const { commission, sellerGain } = splitTrade(pricePoints, listing.commissionPct);
     const idem = `buy:${buyerId}:${listing.id}`;
-    class BuyError extends Error { constructor(public kind: 'DUP' | 'GONE' | 'INSUFFICIENT') { super(kind); } }
+    class BuyError extends Error { constructor(public kind: 'DUP' | 'GONE' | 'INSUFFICIENT' | 'EMPTY') { super(kind); } }
     let purchase: any;
     try {
       purchase = await withBillingTransaction(prisma, buyerId, async (tx) => {
@@ -211,29 +223,42 @@ export function createMarketRouter(prisma: PrismaLike | any) {
         // 事务内复查重复购买（防两个并发请求同时穿过前置检查）
         const dup = await raw.purchase.findFirst({ where: { buyerId, listingId: listing.id } });
         if (dup) throw new BuyError('DUP');
-        // 条件抢占商品 ON_SHELF→ESCROW：并发买家只有一个 count===1
-        const grab = await raw.listing.updateMany({ where: { id: listing.id, status: 'ON_SHELF' }, data: { status: 'ESCROW' } });
-        if (grab.count === 0) throw new BuyError('GONE');
         if (await tx.ledgerExists(idem)) throw new BuyError('GONE'); // 同键已扣款但走到这里属异常，宁可取消
         await tx.lockAccount(buyerId);
         const acc = await tx.getAccount(buyerId);
         if (!acc || acc.balance < pricePoints) throw new BuyError('INSUFFICIENT');
+        const content = await purchasedContent(raw, listing.scriptId, listing.title);
+        if (!content) throw new BuyError('EMPTY');
+        // 条件抢占商品 ON_SHELF→ESCROW：并发买家只有一个 count===1
+        const grab = await raw.listing.updateMany({ where: { id: listing.id, status: 'ON_SHELF' }, data: { status: 'ESCROW' } });
+        if (grab.count === 0) throw new BuyError('GONE');
         await tx.updateAccount(buyerId, { balance: acc.balance - pricePoints });
         await tx.writeLedger({ userId: buyerId, direction: 'OUT', bucket: 'RECHARGE', amount: pricePoints, reason: 'BUY_HOLD', refType: 'listing', refId: listing.id, idempotencyKey: idem, balanceAfter: acc.balance - pricePoints });
         // 扣款与建单同事务：提交则两者同时生效，回滚则同时消失
-        return await raw.purchase.create({ data: { buyerId, sellerId: listing.sellerId, listingId: listing.id, pricePoints, commissionPoints: commission, sellerGainPoints: sellerGain, status: 'ESCROW' } });
+        return await raw.purchase.create({ data: { buyerId, sellerId: listing.sellerId, listingId: listing.id, pricePoints, commissionPoints: commission, sellerGainPoints: sellerGain, status: 'ESCROW', contentSnapshot: content } });
       });
     } catch (e) {
-      // 生产库事务已整体回滚；内存桩无回滚能力，这里补偿把抢占恢复上架（生产下该条件更新匹配0行，无副作用）
-      await prisma.listing.updateMany({ where: { id: listing.id, status: 'ESCROW' }, data: { status: 'ON_SHELF' } }).catch(() => {});
       const kind = (e as BuyError).kind;
       if (kind === 'INSUFFICIENT') return res.status(402).json({ error: '积分余额不足' });
+      if (kind === 'EMPTY') return res.status(409).json({ error: '该剧本暂无可交付的正文，请联系卖家' });
       if (kind === 'DUP') return res.status(409).json({ error: '你已购买过该剧本' });
       if (kind === 'GONE') return res.status(409).json({ error: '手慢了，剧本刚被买走' });
       return res.status(500).json({ error: '支付失败，已取消' });
     }
-    const script = await prisma.script.findUnique({ where: { id: listing.scriptId } });
-    res.json({ ok: true, purchaseId: purchase.id, escrow: true, spentPoints: pricePoints, refundableWithinHours: 24, fullText: script?.content ?? '' });
+    res.json({ ok: true, purchaseId: purchase.id, escrow: true, spentPoints: pricePoints, refundableWithinHours: 24, ...purchase.contentSnapshot });
+  });
+
+  marketRouter.get('/purchases/:id/content', authRequired, async (req: AuthRequest, res) => {
+    const purchase = await prisma.purchase.findUnique({ where: { id: req.params.id } });
+    if (!purchase || purchase.buyerId !== req.userId || !['ESCROW', 'SETTLED'].includes(purchase.status))
+      return res.status(404).json({ error: '订单不存在或无权查看' });
+    let content = purchase.contentSnapshot;
+    if (!content) {
+      const listing = await prisma.listing.findUnique({ where: { id: purchase.listingId } });
+      if (listing) content = await purchasedContent(prisma, listing.scriptId, listing.title);
+    }
+    if (!content) return res.status(404).json({ error: '剧本正文已不可用，请联系客服' });
+    res.json({ ok: true, status: purchase.status, ...content });
   });
 
   // ② 确认收货（或到期）→ 放款给卖家、平台抽佣
@@ -374,9 +399,10 @@ export function createMarketRouter(prisma: PrismaLike | any) {
 
   // 我的销售/购买
   marketRouter.get('/my', authRequired, async (req: AuthRequest, res) => {
+    const select = { id: true, listingId: true, pricePoints: true, status: true, createdAt: true };
     const [sales, buys] = await Promise.all([
-      prisma.purchase.findMany({ where: { sellerId: req.userId! }, orderBy: { createdAt: 'desc' }, take: 50 }),
-      prisma.purchase.findMany({ where: { buyerId: req.userId! }, orderBy: { createdAt: 'desc' }, take: 50 }),
+      prisma.purchase.findMany({ where: { sellerId: req.userId! }, orderBy: { createdAt: 'desc' }, take: 50, select }),
+      prisma.purchase.findMany({ where: { buyerId: req.userId! }, orderBy: { createdAt: 'desc' }, take: 50, select }),
     ]);
     res.json({ sales, buys });
   });

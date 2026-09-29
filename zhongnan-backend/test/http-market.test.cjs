@@ -25,7 +25,7 @@ const bal = (uid) => mem._accounts.get(uid).balance;
 
 async function seedScript(id, title) {
   await mem.project.create({ data: { id: `pj_${id}`, userId: 'seller', title } });
-  await mem.script.create({ data: { id, projectId: `pj_${id}`, title, content: `【${title}全本正文】第一集……第二集……` } });
+  await mem.script.create({ data: { id, projectId: `pj_${id}`, epNo: 1, version: 1, title, content: `【${title}全本正文】第一集……第二集……` } });
 }
 
 describe('剧本交易广场·担保交易状态机 HTTP 闭环', { concurrency: 1 }, () => {
@@ -113,6 +113,51 @@ describe('剧本交易广场·担保交易状态机 HTTP 闭环', { concurrency:
     const r = await post(`/listings/${lid}/buy`, {}, 'poor');
     assert.strictEqual(r.status, 402);
     assert.strictEqual(mem._listings.find((l) => l.id === lid).status, 'ON_SHELF');
+  });
+  it('多集仅交付各集最新版，改稿与确认后仍读取付款快照，且只有买家可查看', async () => {
+    await seedScript('s5', '多集交易');
+    await mem.script.create({ data: { projectId: 'pj_s5', epNo: 2, version: 1, title: '第二集旧稿', content: '第二集旧正文' } });
+    await mem.script.create({ data: { projectId: 'pj_s5', epNo: 1, version: 2, title: '第一集新稿', content: '第一集新正文' } });
+    await mem.script.create({ data: { projectId: 'pj_s5', epNo: 2, version: 2, title: '第二集新稿', content: '第二集新正文' } });
+    const lid = (await (await post('/listings', { projectId: 'pj_s5', priceFen: 1000 }, 'seller', 'PRO')).json()).id;
+    const bought = await post(`/listings/${lid}/buy`, {}, 'buyer');
+    assert.strictEqual(bought.status, 200);
+    const delivery = await bought.json();
+    assert.deepStrictEqual(delivery.episodes.map((ep) => ep.epNo), [1, 2]);
+    assert.match(delivery.fullText, /第一集新正文/);
+    assert.match(delivery.fullText, /第二集新正文/);
+    assert.doesNotMatch(delivery.fullText, /第二集旧正文|多集交易全本正文/);
+    const pid = delivery.purchaseId;
+    const contentPath = `/purchases/${pid}/content`;
+    assert.strictEqual((await fetch(base + M + contentPath)).status, 401);
+    assert.strictEqual((await fetch(base + M + contentPath, { headers: H('seller', 'PRO') })).status, 404);
+    assert.strictEqual((await fetch(base + M + contentPath, { headers: H('poor') })).status, 404);
+    await mem.script.create({ data: { projectId: 'pj_s5', epNo: 1, version: 3, content: '付款后改写的正文' } });
+    const inEscrow = await (await fetch(base + M + contentPath, { headers: H('buyer') })).json();
+    assert.strictEqual(inEscrow.status, 'ESCROW');
+    assert.strictEqual(inEscrow.fullText, delivery.fullText);
+    const sales = await (await fetch(base + M + '/my', { headers: H('seller', 'PRO') })).json();
+    const buys = await (await fetch(base + M + '/my', { headers: H('buyer') })).json();
+    for (const row of [...sales.sales, ...buys.buys]) {
+      assert.ok(!('contentSnapshot' in row) && !('fullText' in row));
+    }
+    assert.strictEqual((await post(`/purchases/${pid}/confirm`, {}, 'buyer')).status, 200);
+    const settled = await (await fetch(base + M + contentPath, { headers: H('buyer') })).json();
+    assert.strictEqual(settled.status, 'SETTLED');
+    assert.strictEqual(settled.fullText, delivery.fullText);
+  });
+  it('退款撤销正文访问，最新稿为空时不回退出售旧稿，空剧本不扣款', async () => {
+    const refunded = mem._purchases.find((p) => p.listingId === mem._listings.find((l) => l.scriptId === 's2').id);
+    assert.strictEqual((await fetch(base + M + `/purchases/${refunded.id}/content`, { headers: H('buyer') })).status, 404);
+    await seedScript('s6', '空稿');
+    await mem.script.create({ data: { projectId: 'pj_s6', epNo: 1, version: 2, content: '  ' } });
+    const lid = (await (await post('/listings', { scriptId: 's6', priceFen: 1000 }, 'seller', 'PRO')).json()).id;
+    const before = bal('buyer');
+    const r = await post(`/listings/${lid}/buy`, {}, 'buyer');
+    assert.strictEqual(r.status, 409);
+    assert.strictEqual(bal('buyer'), before);
+    assert.strictEqual(mem._listings.find((l) => l.id === lid).status, 'ON_SHELF');
+    assert.ok(!mem._purchases.some((p) => p.listingId === lid));
   });
 });
 
