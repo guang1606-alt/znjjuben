@@ -41,7 +41,7 @@
     document.documentElement.setAttribute('data-lang', lang);
     document.documentElement.setAttribute('lang', lang === 'en' ? 'en' : 'zh-CN');
     document.title = lang === 'en' ? 'ZhongnanJi · AGI Screenwriting Master' : '终南集 · 人工通用智能（AGI）编剧大师';
-    renderStaticText(); renderModes(); renderSelects(); renderAuthButton();
+    renderStaticText(); renderModes(); renderHome(); renderSelects(); renderAuthButton();
     // v2.188 初始化同步守卫：applyLang 期间 syncTagBench/syncModeBrief 不主动调 openWorkbench（避免 layer 自动展开覆盖 12 模式主页）
     _initSyncing = true;
     // 语言切换时同步标签工作台（维度下拉与已选标签的显示语言）
@@ -113,6 +113,96 @@
       };
       grid.appendChild(card);
     });
+  }
+  /* ---------- v2.190 清爽首页渲染 ---------- */
+  const HOME_QUICK_MODES = ['interview', 'adapt', 'tags', 'novel', 'interactive', 'hot'];
+  const HOME_TOOLS = [
+    { id: 'toolPitch', key: 'tbCardPitch', desc: 'tbCardPitchP', cost: 'tbCostPitch' },
+    { id: 'toolRead', key: 'tbCardRead', desc: 'tbCardReadP', cost: 'tbCostRead' },
+    { id: 'toolTeardown', key: 'tbCardTd', desc: 'tbCardTdP', cost: 'tbCostTd' },
+    { id: 'toolDiversity', key: 'tbCardDv', desc: 'tbCardDvP', cost: 'tbCostDv' },
+  ];
+  let _homeRendered = false;
+  function renderHome() {
+    const D = I18N.DICT[lang] || I18N.DICT.zh;
+    // 快捷创作模式（6 个常用）
+    const qg = $('homeQuickGrid');
+    if (qg) {
+      qg.innerHTML = '';
+      const RANK = { free: 0, basic: 1, advanced: 2, pro: 3, paid: 3 };
+      const myRank0 = RANK[String(meCache?.level || 'FREE').toLowerCase()] ?? 0;
+      const TIER_ZH = { basic: '基础', advanced: '高级', pro: '专业' };
+      I18N.MODES.filter((m) => HOME_QUICK_MODES.includes(m.id)).forEach((m) => {
+        const tierLocked = !m.soon && !m.lock && (RANK[m.free] ?? 0) > myRank0;
+        const card = document.createElement('button');
+        card.className = 'home-quick-card' + (tierLocked ? ' tier-lock' : '');
+        card.innerHTML = `<b>${escapeHtml(D.mode[m.id] || m.id)}</b><span>${escapeHtml(D.modeDesc[m.id] || '')}</span>` +
+          (tierLocked ? `<em class="home-go" style="opacity:1;color:var(--text-3)">${lang === 'en' ? `${m.free}+` : `需${TIER_ZH[m.free] || ''}会员`}</em>` : `<em class="home-go">${lang === 'en' ? 'Start →' : '开始 →'}</em>`);
+        card.onclick = () => {
+          if (tierLocked) {
+            xnSay(lang === 'en' ? `This mode needs ${m.free} membership.` : `该模式需${TIER_ZH[m.free] || '更高等级'}会员，已为你打开会员专区～`);
+            switchView('vip'); return;
+          }
+          switchView('studio');
+          selectedMode = m.id; if (m.id !== 'hit_lab') selectedTrack = 'signature_scene';
+          renderModes(); syncTagBench(); syncModeBrief();
+        };
+        qg.appendChild(card);
+      });
+    }
+    // 工具箱快捷入口（4 个）
+    const tg = $('homeToolGrid');
+    if (tg) {
+      tg.innerHTML = '';
+      HOME_TOOLS.forEach((tool) => {
+        const card = document.createElement('button');
+        card.className = 'home-tool-card';
+        card.innerHTML = `<h3>${escapeHtml(t(tool.key))}</h3><p>${escapeHtml(t(tool.desc))}</p><span class="tool-cost">${escapeHtml(t(tool.cost))}</span>`;
+        card.onclick = () => {
+          const orig = $(tool.id);
+          if (orig) orig.click(); // 复用 studio 工具卡的工作台打开逻辑
+        };
+        tg.appendChild(card);
+      });
+    }
+    // CTA 绑定（仅首次）
+    if (!_homeRendered) {
+      const startBtn = $('homeStartBtn');
+      if (startBtn) startBtn.onclick = () => switchView('studio');
+      const sampleBtn = $('homeSampleBtn');
+      if (sampleBtn) {
+        const studioSample = $('sampleEntryBtn');
+        sampleBtn.onclick = () => { if (studioSample) studioSample.click(); else openModal('sampleModal'); };
+      }
+      // "全部 12 种模式" 链接
+      document.querySelectorAll('[data-view-go]').forEach((b) => {
+        b.onclick = () => switchView(b.getAttribute('data-view-go'));
+      });
+      _homeRendered = true;
+    }
+    // 拉取最新动态
+    loadHomeUpdates();
+  }
+  async function loadHomeUpdates() {
+    const body = $('homeUpdatesBody'); if (!body) return;
+    try {
+      const r = await Api.request('/api/updates/latest');
+      if (!r.ok) { body.innerHTML = `<div class="muted">${escapeHtml(t('homeUpdatesEmpty'))}</div>`; return; }
+      const d = await Api.jsonOrThrow(r);
+      const a = d && d.announcement;
+      if (!a) { body.innerHTML = `<div class="muted">${escapeHtml(t('homeUpdatesEmpty'))}</div>`; return; }
+      const isEn = lang === 'en';
+      const title = (isEn && a.titleEn) ? a.titleEn : (a.titleZh || '');
+      const text = (isEn && a.bodyEn) ? a.bodyEn : (a.bodyZh || '');
+      const date = a.createdAt ? new Date(a.createdAt).toLocaleDateString(isEn ? 'en-US' : 'zh-CN') : '';
+      body.innerHTML = `<div class="home-update-item">
+        <span class="hu-title">${escapeHtml(title)}</span>
+        ${text ? `<span class="hu-body">${escapeHtml(String(text).slice(0, 240))}</span>` : ''}
+        ${date ? `<span class="hu-meta">${date}${a.version ? ' · v' + escapeHtml(a.version) : ''}</span>` : ''}
+      </div>`;
+    } catch {
+      body.innerHTML = `<div class="muted">${escapeHtml(t('homeUpdatesEmpty'))}</div>`;
+    }
   }
   /* ---------- X剧本成年分级问卷（v2.40；服务端 mature-gating 强校验，前端只做引导） ---------- */
   const X_REGIONS = [
@@ -1239,7 +1329,7 @@
   });
 
   /* ---------- 视图切换（v2.186 升级：fade+slide 过渡 + nav active 指示器）---------- */
-  const VIEWS = ['studio', 'works', 'vip', 'square', 'market', 'admin'];
+  const VIEWS = ['home', 'studio', 'works', 'vip', 'square', 'market', 'admin'];
   let _switchAnimToken = 0;
   function switchView(v) {
     if (!VIEWS.includes(v)) return;
@@ -1247,7 +1337,7 @@
     const sameView = cur && cur.getAttribute('data-view') === v;
     if (sameView) return;
     // 旧视图淡出（不阻塞 hidden 切换，过渡结束后清理）
-    const oldEl = document.querySelector('#view-studio, #view-works, #view-vip, #view-square, #view-market, #view-admin:not(.hidden)');
+    const oldEl = document.querySelector('#view-home, #view-studio, #view-works, #view-vip, #view-square, #view-market, #view-admin:not(.hidden)');
     VIEWS.forEach((x) => { const el = $('view-' + x); if (el) el.classList.toggle('hidden', x !== v); });
     // nav active 指示器（保留 on 类向后兼容，新加 active）
     document.querySelectorAll('.nav [data-view]').forEach((b) => {
@@ -1265,6 +1355,7 @@
       newEl.classList.add('view-in');
       setTimeout(() => { if (token === _switchAnimToken) newEl.classList.remove('view-in'); }, 360);
     }
+    if (v === 'home') renderHome();
     if (v === 'works') { loadMe(); loadWorks(); }
     if (v === 'vip') loadCatalog();
     if (v === 'square') loadFeed();

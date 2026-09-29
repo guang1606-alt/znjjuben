@@ -191,6 +191,94 @@ h1, h2, h3, h4 { font-weight: 700; }
 
 /* ================= 版面骨架 ================= */
 .wrap { max-width: 1180px; margin: 0 auto; padding: 26px 22px 90px; }
+
+/* ================= v2.190 清爽首页 ================= */
+.home-hero {
+  position: relative; padding: 56px 8px 40px; overflow: hidden;
+  border-radius: 24px; margin-bottom: 8px;
+}
+.home-hero-inner { position: relative; z-index: 1; max-width: 680px; }
+.home-eyebrow {
+  display: inline-block; font-size: .7rem; font-weight: 600; letter-spacing: .38em;
+  color: var(--gold); margin-bottom: 18px;
+}
+.home-title {
+  margin: 0 0 14px; font-family: var(--serif); font-size: 2.4rem; line-height: 1.26;
+  letter-spacing: .02em;
+}
+.home-title::after {
+  content: ""; display: block; width: 60px; height: 3px; margin-top: 18px; border-radius: 2px;
+  background: linear-gradient(90deg, var(--gold), color-mix(in srgb, var(--gold) 20%, transparent));
+}
+.home-sub { margin: 0; color: var(--text-2); font-size: 1rem; line-height: 1.7; max-width: 560px; }
+.home-cta-row { display: flex; gap: 12px; margin-top: 28px; flex-wrap: wrap; }
+.btn-lg { padding: 11px 26px; font-size: .98rem; border-radius: 12px; }
+.home-hero-watermark {
+  position: absolute; right: -10px; top: -30px; z-index: 0; pointer-events: none;
+  font-family: var(--serif); font-size: 200px; line-height: 1; font-weight: 700;
+  color: color-mix(in srgb, var(--accent) 7%, transparent); user-select: none;
+}
+.home-section { margin-top: 40px; }
+.home-section-head {
+  display: flex; align-items: baseline; gap: 14px; margin-bottom: 16px;
+}
+.home-section-head h2 {
+  margin: 0; font-family: var(--serif); font-size: 1.18rem; letter-spacing: .04em;
+}
+.home-section-head h2::before {
+  content: ""; display: inline-block; width: 7px; height: 7px; margin-right: 10px; vertical-align: 2px;
+  background: var(--gold); transform: rotate(45deg); border-radius: 1px;
+}
+.home-more { margin-left: auto; }
+.home-quick-grid {
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 14px;
+}
+.home-quick-card {
+  display: flex; flex-direction: column; gap: 6px; text-align: left; padding: 18px;
+  background: var(--panel); border: 1px solid color-mix(in srgb, var(--line) 80%, transparent);
+  border-radius: 16px; cursor: pointer; transition: transform .18s, box-shadow .18s, border-color .18s;
+}
+.home-quick-card:hover {
+  transform: translateY(-2px); border-color: color-mix(in srgb, var(--gold) 45%, var(--line));
+  box-shadow: 0 14px 30px -18px rgba(40, 32, 16, .28);
+}
+.home-quick-card b { font-size: 1rem; font-family: var(--serif); }
+.home-quick-card span { color: var(--text-2); font-size: .82rem; line-height: 1.5; min-height: 2.5em; }
+.home-quick-card .home-go {
+  margin-top: 4px; font-size: .78rem; color: var(--gold); opacity: 0; transition: opacity .18s;
+}
+.home-quick-card:hover .home-go { opacity: 1; }
+.home-tool-grid {
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 14px;
+}
+.home-tool-card {
+  display: flex; flex-direction: column; gap: 6px; padding: 16px 18px;
+  background: var(--panel); border: 1px solid color-mix(in srgb, var(--line) 80%, transparent);
+  border-radius: 16px; cursor: pointer; transition: transform .18s, box-shadow .18s, border-color .18s;
+}
+.home-tool-card:hover {
+  transform: translateY(-2px); border-color: color-mix(in srgb, var(--accent) 40%, var(--line));
+  box-shadow: 0 14px 30px -18px rgba(40, 32, 16, .22);
+}
+.home-tool-card h3 { margin: 0; font-size: .98rem; font-family: var(--serif); }
+.home-tool-card p { margin: 0; color: var(--text-2); font-size: .8rem; line-height: 1.55; }
+.home-tool-card .tool-cost {
+  margin-top: auto; padding-top: 8px; font-size: .74rem; color: var(--gold); font-weight: 600;
+}
+.home-updates-body {
+  background: var(--panel); border: 1px solid color-mix(in srgb, var(--line) 80%, transparent);
+  border-radius: 16px; padding: 18px 20px; min-height: 60px;
+}
+.home-update-item { display: flex; flex-direction: column; gap: 4px; padding: 10px 0; border-bottom: 1px dashed var(--line); }
+.home-update-item:last-child { border-bottom: none; }
+.home-update-item .hu-title { font-weight: 600; font-size: .92rem; }
+.home-update-item .hu-body { color: var(--text-2); font-size: .84rem; line-height: 1.6; white-space: pre-wrap; }
+.home-update-item .hu-meta { font-size: .74rem; color: var(--text-3); margin-top: 2px; }
+@media (max-width: 768px) {
+  .home-title { font-size: 1.7rem; }
+  .home-hero-watermark { font-size: 130px; }
+  .home-cta-row .btn-lg { flex: 1; }
+}
 .hero { position: relative; padding: 44px 4px 28px; }
 .hero::before {
   content: "ZHONGNAN · FILM ATELIER"; display: block; margin-bottom: 14px;

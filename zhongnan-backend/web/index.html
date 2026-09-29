@@ -10,7 +10,8 @@
   <header class="topbar">
     <div class="brand"><b id="brandName">终南集 · AGI编剧大师</b><span id="brandSlogan"></span></div>
     <nav class="nav">
-      <button class="on nav-item active" data-view="studio" data-i="zoneCreate"></button>
+      <button class="on nav-item active" data-view="home" data-i="home"></button>
+      <button class="nav-item" data-view="studio" data-i="zoneCreate"></button>
       <button class="nav-item" data-view="works" data-i="works"></button>
       <button class="nav-item" data-view="vip" data-i="vip"></button>
       <button class="nav-item" data-view="square" data-i="square"></button>
@@ -28,8 +29,47 @@
   </header>
 
   <main class="wrap">
+    <!-- v2.190 清爽首页：品牌主张 + 快捷创作入口 + 工具箱 + 最新动态 -->
+    <div id="view-home">
+      <section class="home-hero">
+        <div class="home-hero-inner">
+          <span class="home-eyebrow" data-i="homeEyebrow">ZHONGNAN · FILM ATELIER</span>
+          <h1 class="home-title" data-i="homeTitle">把一个灵感，交给一整支 AI 编剧团队</h1>
+          <p class="home-sub" data-i="homeSub">十大岗位智能体协同创作，分级把关、去 AI 化、贴合市场，进度全程可见。</p>
+          <div class="home-cta-row">
+            <button class="btn-primary btn-lg" id="homeStartBtn" data-i="start">开始创作</button>
+            <button class="btn-ghost btn-lg" id="homeSampleBtn" data-i="sampleEntry">📖 制式样例</button>
+          </div>
+        </div>
+        <div class="home-hero-watermark" aria-hidden="true">剧</div>
+      </section>
+
+      <section class="home-section">
+        <div class="home-section-head">
+          <h2 data-i="homeQuickTitle">快捷创作</h2>
+          <button class="chip home-more" data-view-go="studio" data-i="homeAllModes">全部 12 种模式 →</button>
+        </div>
+        <div class="home-quick-grid" id="homeQuickGrid"></div>
+      </section>
+
+      <section class="home-section">
+        <div class="home-section-head">
+          <h2 data-i="homeToolsTitle">创作工具箱</h2>
+          <span class="muted" data-i="homeToolsSub">像真实编剧团队一样开会、判断、围读改稿</span>
+        </div>
+        <div class="home-tool-grid" id="homeToolGrid"></div>
+      </section>
+
+      <section class="home-section home-updates" id="homeUpdates">
+        <div class="home-section-head">
+          <h2 data-i="homeUpdatesTitle">最新动态</h2>
+        </div>
+        <div id="homeUpdatesBody" class="home-updates-body"><div class="muted" data-i="homeUpdatesEmpty">暂无新动态</div></div>
+      </section>
+    </div>
+
     <!-- 创作视图 -->
-    <div id="view-studio">
+    <div id="view-studio" class="hidden">
       <section class="hero">
         <h1 id="heroTitle"></h1>
         <p id="heroSub"></p>

@@ -152,11 +152,12 @@ model User {
 }
 
 model AdminUser {
-  id           String   @id @default(cuid())
-  account      String   @unique
-  passwordHash String
-  role         String   @default("OP") // 财务/运营/审核/技术/超管，RBAC
-  createdAt    DateTime @default(now())
+  id            String         @id @default(cuid())
+  account       String         @unique
+  passwordHash  String
+  role          String         @default("OP") // 财务/运营/审核/技术/超管，RBAC
+  createdAt     DateTime       @default(now())
+  announcements Announcement[]
 }
 
 // 会员订阅记录（付费后写入，level+expireAt 由它派生）
@@ -503,6 +504,21 @@ model AuditLog {
   ip        String?
   createdAt DateTime @default(now())
   @@index([actorId, createdAt])
+}
+
+// v2.186 工具更新公告：超管发布，前端弹窗展示版本变更
+model Announcement {
+  id          String     @id @default(cuid())
+  version     String     @unique
+  titleZh     String
+  titleEn     String?
+  bodyZh      String
+  bodyEn      String?
+  pinned      Boolean    @default(false)
+  createdById String?
+  createdBy   AdminUser? @relation(fields: [createdById], references: [id])
+  createdAt   DateTime   @default(now())
+  @@index([createdAt])
 }
 
 // 后台学习窗口：上传的知识/技能/政策，经合规一致性校验后生效，可打包成技能包
