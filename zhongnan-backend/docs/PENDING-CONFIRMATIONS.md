@@ -61,3 +61,9 @@
 - 建议方案（二选一，需拍板）：A. 以 DB 为准，在各模型 `Index(..., name=)` 显式写 DB 实际名（纯模型改动、不写迁移，约 20 文件机械改名）；B. 出一个「仅改名」迁移对齐到模型默认名（生产需短暂 CREATE INDEX CONCURRENTLY + DROP，谨慎）。**当前协作者正在动模型索引区域，建议先约定分工再做，避免冲突**
 - 在清零前：**任何人不要直接 autogenerate 迁移**（会混入 40 对噪音操作），新迁移继续手写
 - 追加（2026-09-30 凌晨二轮）：新增 `tests/test_model_registration.py` 子进程守护测试——全新解释器只 `import app.models`（模拟 alembic env），表集合必须等于遍历 models 目录全量导入的集合，漏导出即红；正负向均已验证。另做了一次「外键无前导索引」元数据审计，约 35 处（community_*/workshop_*/ai_literacy_*/intervention_records 等高频表的 student_id/course_id/author_id 等），但其中大部分 DB 物理上有遗留索引（即上述命名漂移的同批对象），**待方案 A/B 拍板后随命名对齐一并复核**：物理上确缺的补索引迁移，物理上有的只对齐名称
+- 更新（2026-09-30 03:41）：协作者已提交 `96d6f3c`——采用方案 A 思路对齐（family.py 15 模型 21 列补 FK 声明、2 处 timezone、uq 唯一约束声明），并重写 `alembic/env.py` 钩子过滤注释哨兵噪声（368 条注释噪音清零）；`alembic check` 收敛至 2 条真实缺 FK（daily_checkins/farm_states 建表遗漏）。方案 B 的「仅改名迁移」是否仍需要，明早与协作者对齐 check 最新输出后定
+
+## 12.【高】迁移 0063 待确认执行：先删 farm_states 645 行孤儿数据再补 FK
+- 背景：协作者 `96d6f3c` 备好迁移 `backend/alembic/versions/0063_add_missing_student_fks.py`，给 daily_checkins / farm_states 补建表时遗漏的 student_id 外键
+- 风险点：farm_states 存在 **645 行孤儿数据**（student_id 在 users 表无对应行），加 FK 前迁移脚本会先删除这些行
+- 待确认：① 是否认可直接硬删 645 行（建议先 `alembic upgrade head` 前导出备份：`CREATE TABLE farm_states_orphan_bak AS SELECT * FROM farm_states WHERE student_id NOT IN (SELECT id FROM users)`）；② 确认后再执行迁移。**执行前不要跑 autogenerate**（#11 漂移未完全清零）
