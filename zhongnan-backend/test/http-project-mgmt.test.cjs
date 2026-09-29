@@ -86,4 +86,20 @@ describe('项目管理：重命名 + 软删除', { concurrency: 1 }, () => {
     const r = await call('POST', '/projects/nonexistent/clone');
     assert.strictEqual(r.status, 404);
   });
+
+  // v2.199 归档/取消归档
+  it('归档：status→archived，再传 archive:false 恢复为 active', async () => {
+    mem._projects.set('par', { id: 'par', userId: UID, title: '待归档', status: 'draft' });
+    const r1 = await call('POST', '/projects/par/archive');
+    assert.strictEqual(r1.status, 200);
+    assert.strictEqual(r1.j.status, 'archived');
+    const r2 = await call('POST', '/projects/par/archive', { archive: false });
+    assert.strictEqual(r2.status, 200);
+    assert.strictEqual(r2.j.status, 'active');
+  });
+
+  it('归档：不存在的项目 404', async () => {
+    const r = await call('POST', '/projects/nope/archive');
+    assert.strictEqual(r.status, 404);
+  });
 });

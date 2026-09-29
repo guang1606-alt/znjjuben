@@ -1545,6 +1545,15 @@ generateRouter.put('/projects/:id', authRequired, async (req: AuthRequest, res) 
   res.json({ id: updated.id, title: updated.title });
 });
 
+// v2.199 归档/取消归档：归档项目不占 active 额度，可随时恢复（不删数据）
+generateRouter.post('/projects/:id/archive', authRequired, async (req: AuthRequest, res) => {
+  const project = await prisma.project.findFirst({ where: { id: req.params.id, userId: req.userId!, status: { not: 'deleted' } } });
+  if (!project) return res.status(404).json({ error: '项目不存在' });
+  const toArchived = req.body?.archive !== false; // 默认归档；传 archive:false 则恢复
+  const updated = await prisma.project.update({ where: { id: project.id }, data: { status: toArchived ? 'archived' : 'active' } });
+  res.json({ id: updated.id, status: updated.status });
+});
+
 // 软删除项目（status=deleted，列表过滤；可后续加恢复端点）
 generateRouter.delete('/projects/:id', authRequired, async (req: AuthRequest, res) => {
   const project = await prisma.project.findFirst({ where: { id: req.params.id, userId: req.userId!, status: { not: 'deleted' } } });

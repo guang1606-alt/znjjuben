@@ -1714,6 +1714,7 @@
         <div class="work-actions">
           <button class="chip work-action-btn" data-act="rename">${lang === 'en' ? 'Rename' : '重命名'}</button>
           <button class="chip work-action-btn" data-act="clone">${lang === 'en' ? 'Clone' : '克隆'}</button>
+          <button class="chip work-action-btn" data-act="archive">${p.status === 'archived' ? (lang === 'en' ? 'Restore' : '恢复') : (lang === 'en' ? 'Archive' : '归档')}</button>
           <button class="chip work-action-btn danger" data-act="delete">${lang === 'en' ? 'Delete' : '删除'}</button>
         </div>`;
       c.onclick = () => openProject(p);
@@ -1739,6 +1740,14 @@
               xnSay(lang === 'en' ? 'Cloned. Open it to start a new draft.' : '克隆成功，打开新项目开始创作');
               loadWorks();
             } catch (err) { xnSay((err && err.message) || (lang === 'en' ? 'Clone failed.' : '克隆失败')); }
+          } else if (act === 'archive') {
+            const toArchive = p.status !== 'archived';
+            try {
+              const r = await Api.request(`/api/generate/projects/${p.id}/archive`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ archive: toArchive }) });
+              await Api.jsonOrThrow(r);
+              xnSay(toArchive ? (lang === 'en' ? 'Archived.' : '已归档') : (lang === 'en' ? 'Restored.' : '已恢复'));
+              loadWorks();
+            } catch (err) { xnSay((err && err.message) || (lang === 'en' ? 'Archive failed.' : '归档失败')); }
           } else if (act === 'delete') {
             if (!confirm(lang === 'en' ? `Delete "${p.title}"? This can be undone later.` : `确定删除"${p.title}"吗？（软删除，可恢复）`)) return;
             try {
