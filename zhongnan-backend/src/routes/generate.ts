@@ -1530,7 +1530,14 @@ generateRouter.post('/creation-strategy/recommend', authRequired, async (req: Au
 });
 // 我的项目列表（作品库）
 generateRouter.get('/projects', authRequired, async (req: AuthRequest, res) => {
-  const list = await prisma.project.findMany({ where: { userId: req.userId!, status: { not: 'deleted' } }, orderBy: { createdAt: 'desc' }, take: 200 });
+  const where: any = { userId: req.userId!, status: { not: 'deleted' } };
+  const q = (req.query.q as string | undefined)?.trim();
+  if (q) where.title = { contains: q, mode: 'insensitive' };
+  const status = req.query.status as string | undefined;
+  if (status && ['active', 'archived', 'draft'].includes(status)) where.status = status;
+  const mode = req.query.mode as string | undefined;
+  if (mode) where.mode = mode;
+  const list = await prisma.project.findMany({ where, orderBy: { createdAt: 'desc' }, take: 200 });
   res.json(list);
 });
 

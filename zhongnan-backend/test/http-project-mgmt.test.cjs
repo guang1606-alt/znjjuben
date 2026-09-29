@@ -102,4 +102,18 @@ describe('项目管理：重命名 + 软删除', { concurrency: 1 }, () => {
     const r = await call('POST', '/projects/nope/archive');
     assert.strictEqual(r.status, 404);
   });
+
+  // v2.200 项目列表搜索/筛选
+  it('搜索：?q=按标题模糊匹配，?status=archived 仅返归档', async () => {
+    mem._projects.set('pAlpha', { id: 'pAlpha', userId: UID, title: '阿尔法剧本', mode: 'tags', status: 'draft' });
+    mem._projects.set('pBeta', { id: 'pBeta', userId: UID, title: '贝塔故事', mode: 'tags', status: 'archived' });
+    const all = await call('GET', '/projects');
+    assert.ok(all.j.some((p) => p.title === '阿尔法剧本'));
+    assert.ok(all.j.some((p) => p.title === '贝塔故事'));
+    const byQ = await call('GET', '/projects?q=阿尔法');
+    assert.ok(byQ.j.every((p) => p.title.includes('阿尔法')));
+    assert.strictEqual(byQ.j.length, 1);
+    const archived = await call('GET', '/projects?status=archived');
+    assert.ok(archived.j.every((p) => p.status === 'archived'));
+  });
 });

@@ -73,7 +73,16 @@ function createMemoryPrisma() {
     async create({ data }) { const id = data.id || `p_${++seq}`; const p = { id, bible: null, status: 'draft', ...data }; projects.set(id, p); return p; },
     async update({ where, data }) { const p = projects.get(where.id); Object.assign(p, data); return p; },
     async findMany({ where = {}, orderBy, take } = {}) {
-      let r = [...projects.values()].filter((p) => (!where.userId || p.userId === where.userId) && (!where.status || p.status !== where.status.not));
+      let r = [...projects.values()].filter((p) => {
+        if (where.userId && p.userId !== where.userId) return false;
+        if (where.status) {
+          if (where.status.not && p.status === where.status.not) return false;
+          if (typeof where.status === 'string' && p.status !== where.status) return false;
+        }
+        if (where.title?.contains && !String(p.title ?? '').includes(where.title.contains)) return false;
+        if (where.mode && p.mode !== where.mode) return false;
+        return true;
+      });
       const ob = Array.isArray(orderBy) ? orderBy : (orderBy ? [orderBy] : [{ createdAt: 'desc' }]);
       r.sort((a, b) => { for (const o of ob) { const k = Object.keys(o)[0]; const dir = o[k] === 'asc' ? 1 : -1; const av = a[k] ?? 0, bv = b[k] ?? 0; if (av < bv) return -1 * dir; if (av > bv) return 1 * dir; } return 0; });
       return typeof take === 'number' ? r.slice(0, take) : r;

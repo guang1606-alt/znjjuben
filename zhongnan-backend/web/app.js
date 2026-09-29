@@ -1700,8 +1700,15 @@
   /* ---------- 作品库 ---------- */
   async function loadWorks() {
     const grid = $('worksGrid'), empty = $('worksEmpty'); grid.innerHTML = '';
+    const ws = $('worksSearch');
+    if (ws && !ws._bound) {
+      ws._bound = true;
+      let t;
+      ws.addEventListener('input', () => { clearTimeout(t); t = setTimeout(loadWorks, 250); });
+    }
     if (!Api.isAuthed()) { empty.textContent = t('needLogin'); empty.classList.remove('hidden'); $('worksCount').textContent = ''; return; }
-    const res = await Api.request('/api/generate/projects');
+    const q = ($('worksSearch')?.value || '').trim();
+    const res = await Api.request('/api/generate/projects' + (q ? `?q=${encodeURIComponent(q)}` : ''));
     const list = await Api.jsonOrThrow(res);
     $('worksCount').textContent = t('worksCount', { n: list.length });
     empty.classList.toggle('hidden', list.length > 0);
