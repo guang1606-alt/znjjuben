@@ -1,6 +1,7 @@
 const { describe, it } = require('node:test');
 const assert = require('node:assert');
 const mp = require('../dist/lib/model-proxy.js');
+mp.__setProviderSource(async () => ({ providers: [], routing: {} })); // v2.194 隔离真实DB供应商池，防测试打真机
 const { runEpisode } = require('../dist/agents/pipeline.js');
 const { EngineTier } = require('../dist/config/pricing.js');
 const S = require('../dist/engine/sample-script.js');

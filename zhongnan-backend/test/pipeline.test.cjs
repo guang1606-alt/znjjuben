@@ -2,6 +2,7 @@ const test = require('node:test');
 const assert = require('node:assert');
 const { runEpisode } = require('../dist/agents/pipeline.js');
 const { extractJson } = require('../dist/lib/model-proxy.js');
+require('../dist/lib/model-proxy.js').__setProviderSource(async () => ({ providers: [], routing: {} })); // v2.194 隔离真实DB供应商池，防测试打真机
 const { EngineTier } = require('../dist/config/pricing.js');
 
 function emptyBible() {

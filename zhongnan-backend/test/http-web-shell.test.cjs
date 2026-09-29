@@ -1,5 +1,6 @@
 const { describe, it, before, after } = require('node:test');
 const assert = require('node:assert');
+require('../dist/lib/model-proxy.js').__setProviderSource(async () => ({ providers: [], routing: {} })); // v2.194 隔离真实DB供应商池，防测试打真机
 process.env.JWT_ACCESS_SECRET = 'web-secret';
 process.env.JWT_REFRESH_SECRET = 'web-refresh';
 const { createApp } = require('../dist/server/app.js');

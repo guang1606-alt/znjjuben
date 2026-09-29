@@ -1,5 +1,6 @@
 const test = require('node:test');
 const assert = require('node:assert');
+require('../dist/lib/model-proxy.js').__setProviderSource(async () => ({ providers: [], routing: {} })); // v2.194 隔离真实DB供应商池，防测试打真机
 const H = require('../dist/engine/hook-system.js');
 
 test('微钩子9型齐全，开场/集尾/场/微四层都有库', () => {

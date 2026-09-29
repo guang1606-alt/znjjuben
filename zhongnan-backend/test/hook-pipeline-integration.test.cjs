@@ -1,5 +1,6 @@
 const test = require('node:test');
 const assert = require('node:assert');
+require('../dist/lib/model-proxy.js').__setProviderSource(async () => ({ providers: [], routing: {} })); // v2.194 隔离真实DB供应商池，防测试打真机
 const {
   runEpisode, normalizeCuePref, buildEpisodeHookDirective,
 } = require('../dist/agents/pipeline.js');

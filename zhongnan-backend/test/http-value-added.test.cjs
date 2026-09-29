@@ -4,6 +4,7 @@ process.env.JWT_ACCESS_SECRET = 'va-secret';
 process.env.JWT_REFRESH_SECRET = 'va-refresh';
 // 不配置任何图片/文本密钥：文本走沙盘兜底，图片 callImage 无密钥必抛 IMAGE_NOT_CONFIGURED（用于验证失败退款）
 delete process.env.IMAGE_API_KEY; delete process.env.OPENAI_API_KEY;
+require('../dist/lib/model-proxy.js').__setProviderSource(async () => ({ providers: [], routing: {} })); // v2.194 隔离真实DB供应商池，防测试打真机
 const { createApp } = require('../dist/server/app.js');
 const { createValueAddedRouter } = require('../dist/routes/value-added.js');
 const { signAccess } = require('../dist/lib/auth.js');

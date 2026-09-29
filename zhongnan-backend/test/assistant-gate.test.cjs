@@ -2,6 +2,7 @@ const test = require('node:test');
 const assert = require('node:assert');
 const G = require('../dist/config/assistant-capability.js');
 const B = require('../dist/lib/blackbox.js');
+require('../dist/lib/model-proxy.js').__setProviderSource(async () => ({ providers: [], routing: {} })); // v2.194 隔离真实DB供应商池，防测试打真机
 
 test('v2.54 小南能力闸门：免费/基础/高级/专业逐级解锁，低等级拿不到高阶能力', () => {
   assert.strictEqual(G.assistantGate('FREE', 'guide').allowed, true);

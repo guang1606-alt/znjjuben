@@ -7,6 +7,8 @@ const { createGenerateRouter } = require('../dist/routes/generate.js');
 const { signAccess } = require('../dist/lib/auth.js');
 const { createMemoryPrisma } = require('./helpers/memory-prisma.cjs');
 const P = require('../dist/config/pricing.js');
+// v2.194 隔离真实 DB 供应商配置（DB 已有 13 个真实供应商），测试走沙盘，不打真机 API
+require('../dist/lib/model-proxy.js').__setProviderSource(async () => ({ providers: [], routing: {} }));
 
 const mem = createMemoryPrisma();
 const app = createApp({ generate: createGenerateRouter(mem) });

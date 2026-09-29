@@ -7,6 +7,7 @@ const test = require('node:test');
 const assert = require('node:assert');
 const P = require('../dist/config/pricing.js');
 const C = require('../dist/config/model-catalog.js');
+require('../dist/lib/model-proxy.js').__setProviderSource(async () => ({ providers: [], routing: {} })); // v2.194 隔离真实DB供应商池，防测试打真机
 const { MemberLevel: LV, EngineTier: TIER, EP_PRICE, VALUE_ADDED, MEMBERSHIP, ENGINE, INVITE, X_SCRIPT, FEN_PER_POINT } = P;
 
 test('【总账1】启动自检 assertNoLoss 必须零错误（引擎+增值全部≥成本×2）', () => {

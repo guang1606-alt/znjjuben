@@ -6,6 +6,7 @@
  */
 const test = require('node:test');
 const assert = require('node:assert');
+require('../dist/lib/model-proxy.js').__setProviderSource(async () => ({ providers: [], routing: {} })); // v2.194 隔离真实DB供应商池，防测试打真机
 const { runEpisode } = require('../dist/agents/pipeline.js');
 const { ROLE_DIRECTIVE, ROLE_DIRECTIVE_EN } = require('../dist/engine/playbook.js');
 const { EngineTier } = require('../dist/config/pricing.js');
