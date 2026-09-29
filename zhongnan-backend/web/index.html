@@ -721,6 +721,19 @@
               <textarea id="fbContent" rows="6" maxlength="5000" data-ph="fbContentPh"></textarea>
               <div class="fb-counter"><span id="fbCount">0</span>/5000</div>
             </div>
+            <!-- v2.189 反馈附图：最多3张、单张≤2MB、png/jpeg/webp，前端压缩后 base64 上传 -->
+            <div class="field">
+              <label data-i="fbImagesLabel"></label>
+              <div class="fb-img-upload">
+                <label class="fb-img-add" for="fbImgInput">
+                  <span class="fb-img-plus">+</span>
+                  <span data-i="fbImagesAdd"></span>
+                </label>
+                <input type="file" id="fbImgInput" accept="image/png,image/jpeg,image/webp" multiple hidden />
+                <div class="fb-img-grid" id="fbImgGrid"></div>
+              </div>
+              <div class="fb-img-hint muted" data-i="fbImagesHint"></div>
+            </div>
             <div class="field">
               <label data-i="fbContactLabel"></label>
               <input id="fbContact" type="text" maxlength="100" data-ph="fbContactPh" />
@@ -1076,6 +1089,7 @@
             <option value="BUG">BUG</option><option value="SUGGESTION" data-i="admFbSuggest"></option>
           </select>
           <button class="btn-ghost" id="fbReload" data-i="reload"></button>
+          <button class="btn-ghost" id="fbExportBtn" data-i="admFbExport"></button>
           <span class="spacer"></span>
           <button class="btn-ghost" id="fbTodoBtn" data-i="admFbTodoView"></button>
           <select id="fbTodoSort" class="mini-select">

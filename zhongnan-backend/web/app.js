@@ -2027,8 +2027,73 @@
     const entryBtn = $('feedbackEntryBtn');
     if (!entryBtn || !$('feedbackModal')) return;
     let fbType = 'SUGGESTION';
+    // v2.189 反馈附图：base64 data URL 数组（前端压缩后存入，提交时随 body 发送）
+    let fbImages = [];
+    const FB_IMG_MAX = 3, FB_IMG_MAX_BYTES = 2 * 1024 * 1024;
 
     const esc = (s) => (typeof escapeHtml === 'function' ? escapeHtml(String(s == null ? '' : s)) : String(s == null ? '' : s));
+
+    // 把图片压到 ≤2MB 并输出 data URL；超限自动降质量/尺寸，不合法 MIME 直接 reject
+    function compressImage(file) {
+      return new Promise((resolve, reject) => {
+        if (!/^image\/(png|jpeg|webp)$/.test(file.type)) return reject(new Error(lang === 'en' ? 'Only png/jpeg/webp' : '仅支持 png/jpeg/webp'));
+        if (file.size > 10 * 1024 * 1024) return reject(new Error(lang === 'en' ? 'Image too large (>10MB)' : '图片过大（>10MB）'));
+        const reader = new FileReader();
+        reader.onload = () => {
+          const img = new Image();
+          img.onload = () => {
+            let { width, height } = img;
+            const maxDim = 1600;
+            if (width > maxDim || height > maxDim) {
+              const r = Math.min(maxDim / width, maxDim / height);
+              width = Math.round(width * r); height = Math.round(height * r);
+            }
+            const canvas = document.createElement('canvas');
+            canvas.width = width; canvas.height = height;
+            const ctx = canvas.getContext('2d');
+            ctx.drawImage(img, 0, 0, width, height);
+            // 优先 webp/jpeg 压缩，质量从 0.85 逐级降到 0.4 直到 ≤2MB；png 不压（保留透明）
+            const tryEncode = (mime, q) => new Promise((res) => {
+              canvas.toBlob((b) => res(b), mime, q);
+            });
+            (async () => {
+              let blob = await tryEncode(file.type === 'image/png' ? 'image/png' : 'image/jpeg', 0.85);
+              if (blob && blob.size > FB_IMG_MAX_BYTES) {
+                for (const q of [0.7, 0.55, 0.4]) {
+                  blob = await tryEncode('image/jpeg', q);
+                  if (!blob || blob.size <= FB_IMG_MAX_BYTES) break;
+                }
+              }
+              if (!blob) return reject(new Error(lang === 'en' ? 'Encode failed' : '编码失败'));
+              if (blob.size > FB_IMG_MAX_BYTES) return reject(new Error(lang === 'en' ? 'Still too large after compress' : '压缩后仍超过 2MB'));
+              const r2 = new FileReader();
+              r2.onload = () => resolve(r2.result);
+              r2.onerror = () => reject(new Error('read failed'));
+              r2.readAsDataURL(blob);
+            })();
+          };
+          img.onerror = () => reject(new Error(lang === 'en' ? 'Invalid image' : '图片无效'));
+          img.src = reader.result;
+        };
+        reader.onerror = () => reject(new Error('read failed'));
+        reader.readAsDataURL(file);
+      });
+    }
+
+    function renderFbImgGrid() {
+      const grid = $('fbImgGrid');
+      grid.innerHTML = fbImages.map((src, i) => `
+        <div class="fb-img-thumb">
+          <img src="${esc(src)}" alt="preview ${i + 1}" />
+          <button type="button" class="fb-img-del" data-idx="${i}" aria-label="remove">×</button>
+        </div>`).join('');
+      grid.querySelectorAll('.fb-img-del').forEach((b) => {
+        b.onclick = () => { fbImages.splice(Number(b.getAttribute('data-idx')), 1); renderFbImgGrid(); };
+      });
+      // 达到上限隐藏添加按钮
+      const addBtn = document.querySelector('.fb-img-add');
+      if (addBtn) addBtn.style.display = fbImages.length >= FB_IMG_MAX ? 'none' : '';
+    }
 
     const showPane = (which) => {
       const submit = which === 'submit';
@@ -2074,6 +2139,9 @@
           const reply = f.reply
             ? `<div class="fb-reply"><div class="fb-reply-h">${esc(t('fbReplyTitle'))}</div><div class="fb-reply-b">${esc(f.reply)}</div></div>`
             : '';
+          const imgs = Array.isArray(f.images) && f.images.length
+            ? `<div class="fb-img-row">${f.images.map((s) => `<img src="${esc(s)}" class="fb-img-thumb-mini" alt="" />`).join('')}</div>`
+            : '';
           return `<div class="fb-card">
             <div class="fb-card-h">
               <span class="fb-badge ${isBug ? 'fb-bug' : 'fb-sug'}">${esc(isBug ? t('fbBadgeBug') : t('fbBadgeSug'))}</span>
@@ -2083,6 +2151,7 @@
               <span class="fb-time">${esc(time)}</span>
             </div>
             <div class="fb-content">${esc(f.content)}</div>
+            ${imgs}
             ${reply}
           </div>`;
         }).join('');
@@ -2114,6 +2183,7 @@
           content,
           contact: $('fbContact').value.trim() || undefined,
           meta,
+          images: fbImages.length ? fbImages : undefined,
         };
         const r = await Api.request('/api/feedback', { method: 'POST', body: JSON.stringify(body) });
         const data = await Api.jsonOrThrow(r);
@@ -2123,6 +2193,8 @@
         $('fbCount').textContent = '0';
         $('fbContact').value = '';
         $('fbUrgent').checked = false;
+        fbImages = []; renderFbImgGrid();
+        $('fbImgInput').value = '';
         // 类型选择复位为建议，避免上次报 Bug 的选择残留到下一次提交
         fbType = 'SUGGESTION';
         $('fbTypeRow').querySelectorAll('.fb-type').forEach((x) => x.classList.toggle('active', x.getAttribute('data-type') === 'SUGGESTION'));
@@ -2147,6 +2219,20 @@
     });
     $('fbContent').addEventListener('input', () => { $('fbCount').textContent = String($('fbContent').value.length); });
     $('fbSubmitBtn').onclick = submitFeedback;
+    // v2.189 附图上传：多选逐个压缩，超限/格式错用 xnSay 提示，不阻断已选成功的图片
+    $('fbImgInput').addEventListener('change', async (e) => {
+      const files = Array.from(e.target.files || []);
+      for (const f of files) {
+        if (fbImages.length >= FB_IMG_MAX) { xnSay(lang === 'en' ? `Max ${FB_IMG_MAX} images` : `最多 ${FB_IMG_MAX} 张图片`); break; }
+        try {
+          const dataUrl = await compressImage(f);
+          fbImages.push(dataUrl);
+        } catch (err) { xnSay(err.message || String(err)); }
+      }
+      renderFbImgGrid();
+      e.target.value = '';
+    });
+    renderFbImgGrid();
   })();
   /* ---------- v2.185.14 c194 制式样例馆（/api/generate/sample-script 此前前端零调用） ----------
      新用户 0 积分即可查看通过格式闸门的达标剧本；双制式 LIVE/AIGC，随界面语言取中英文稿，缓存避免重复请求。 */
@@ -7047,6 +7133,23 @@
     toggleKnKind();
     // 反馈处置
     $('fbReload').onclick = loadAdmFeedback;
+    // v2.189 导出反馈总表：带当前筛选条件，触发浏览器下载 JSON（含附图 base64，可投喂 TRAE）
+    $('fbExportBtn').onclick = async () => {
+      const status = $('fbStatus').value, type = $('fbType').value;
+      const q = new URLSearchParams(); if (status) q.set('status', status); if (type) q.set('type', type);
+      try {
+        const r = await Api.request('/api/feedback/admin/export' + (q.toString() ? '?' + q.toString() : ''));
+        if (!r.ok) { const e = await r.json().catch(() => ({})); throw new Error(e.error || `HTTP ${r.status}`); }
+        const blob = await r.blob();
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `feedback-${new Date().toISOString().slice(0, 10)}.json`;
+        document.body.appendChild(a); a.click(); a.remove();
+        URL.revokeObjectURL(url);
+        xnSay(lang === 'en' ? 'Exported' : '已导出');
+      } catch (e) { xnSay(e.message || String(e)); }
+    };
     $('fbStatus').onchange = loadAdmFeedback;
     $('fbType').onchange = loadAdmFeedback;
     $('fbTodoBtn').onclick = toggleTodoView;
@@ -7638,6 +7741,9 @@
     try { list = await fbAdm('/admin/list' + (q.toString() ? '?' + q.toString() : '')); } catch (e) { xnSay(e.message); return; }
     $('admFbList').innerHTML = list.map((f) => {
       const u = f.user || {};
+      const imgs = Array.isArray(f.images) && f.images.length
+        ? `<div class="fb-img-row">${f.images.map((s) => `<img src="${escapeHtml(s)}" class="fb-img-thumb-mini" alt="" />`).join('')}</div>`
+        : '';
       return `<div class="fb-card" data-fid="${f.id}">
         <div class="fb-head">
           <b>${escapeHtml(f.ticketNo || f.id)}</b>
@@ -7649,6 +7755,7 @@
           <span class="muted">${new Date(f.createdAt).toLocaleString()}</span>
         </div>
         <div class="fb-body">${escapeHtml(f.content)}</div>
+        ${imgs}
         ${f.reply ? `<div class="fb-reply">${lang === 'en' ? 'Xiaonan reply: ' : '小南回复：'}${escapeHtml(f.reply)}</div>` : ''}
         <div class="fb-preview hidden" data-role="preview"></div>
         <div class="fb-acts">

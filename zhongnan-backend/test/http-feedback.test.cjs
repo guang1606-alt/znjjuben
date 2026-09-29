@@ -117,4 +117,60 @@ describe('反馈/Bug 三态处置闭环', { concurrency: 1 }, () => {
     const miss = await post('/api/feedback/admin/nope/action', 'admin1', 'PRO', { action: 'todo' });
     assert.strictEqual(miss.status, 404);
   });
+
+  // —— v2.189 反馈图片上传 + 后台导出总表 ——
+  const png1x1 = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAAC0lEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==';
+
+  it('用户提交带图片的反馈成功，后台 list 可见 images 数组', async () => {
+    const r = await post('/api/feedback/', 'u_norm', 'BASIC', { type: 'BUG', content: '按钮错位，附图', images: [png1x1] });
+    assert.strictEqual(r.status, 200);
+    const list = await get('/api/feedback/admin/list', 'admin1', 'PRO');
+    const fb = list.json.find((x) => x.ticketNo === r.json.ticketNo);
+    assert.ok(Array.isArray(fb.images));
+    assert.strictEqual(fb.images.length, 1);
+    assert.ok(fb.images[0].startsWith('data:image/png;base64,'));
+  });
+
+  it('图片超过 3 张返回 400', async () => {
+    const r = await post('/api/feedback/', 'u_norm', 'BASIC', { type: 'SUGGESTION', content: '多图', images: [png1x1, png1x1, png1x1, png1x1] });
+    assert.strictEqual(r.status, 400);
+  });
+
+  it('非图片 MIME（如 text/html）返回 400', async () => {
+    const bad = 'data:text/html;base64,' + Buffer.from('<script>alert(1)</script>').toString('base64');
+    const r = await post('/api/feedback/', 'u_norm', 'BASIC', { type: 'SUGGESTION', content: 'x', images: [bad] });
+    assert.strictEqual(r.status, 400);
+  });
+
+  it('单张图片超过 2MB 返回 400', async () => {
+    // base64 膨胀比 4/3，2MB 原图上限对应 base64 约 2.67MB；用 3MB 确保超限
+    const huge = 'data:image/png;base64,' + 'A'.repeat(3 * 1024 * 1024);
+    const r = await post('/api/feedback/', 'u_norm', 'BASIC', { type: 'SUGGESTION', content: 'x', images: [huge] });
+    assert.strictEqual(r.status, 400);
+  });
+
+  it('后台导出 JSON 总表（含 images），需超管权限', async () => {
+    // 先确保至少有一条带图工单
+    await post('/api/feedback/', 'u_pro', 'PRO', { type: 'SUGGESTION', content: '导出测试', images: [png1x1] });
+    // 普通用户 403
+    const forb = await get('/api/feedback/admin/export', 'u_norm', 'BASIC');
+    assert.strictEqual(forb.status, 403);
+    // 超管 200，Content-Disposition 含 attachment
+    const exp = await fetch(base + '/api/feedback/admin/export', { headers: auth('admin1', 'PRO') });
+    assert.strictEqual(exp.status, 200);
+    assert.ok(/attachment/.test(exp.headers.get('content-disposition') || ''));
+    const data = await exp.json();
+    assert.ok(Array.isArray(data));
+    assert.ok(data.length >= 1);
+    const withImg = data.find((x) => x.content === '导出测试');
+    assert.ok(withImg);
+    assert.ok(Array.isArray(withImg.images));
+  });
+
+  it('后台导出支持按 status/type 过滤', async () => {
+    await post('/api/feedback/', 'u_norm', 'BASIC', { type: 'BUG', content: '过滤测试bug' });
+    const bugOnly = await fetch(base + '/api/feedback/admin/export?type=BUG', { headers: auth('admin1', 'PRO') });
+    const arr = await bugOnly.json();
+    assert.ok(arr.every((x) => x.type === 'BUG'));
+  });
 });

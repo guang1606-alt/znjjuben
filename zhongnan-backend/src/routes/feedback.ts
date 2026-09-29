@@ -11,12 +11,18 @@ type PrismaLike = typeof defaultPrisma;
 
 export function createFeedbackRouter(prisma: PrismaLike | any) {
   const feedbackRouter = asyncRouter();
+  const IMAGE_MAX_BYTES = 2 * 1024 * 1024; // 单张原图上限 2MB（base64 后约 2.67MB）
+  const IMAGE_MAX_COUNT = 3;
+  const imageSchema = z.string()
+    .refine((s) => s.length <= Math.ceil(IMAGE_MAX_BYTES * 4 / 3), `单张图片不能超过 ${IMAGE_MAX_BYTES / 1024 / 1024}MB`)
+    .refine((s) => /^data:image\/(png|jpeg|webp);base64,/.test(s), '仅支持 png / jpeg / webp 图片');
   const schema = z.object({
     type: z.enum(['SUGGESTION', 'BUG']),
     urgent: z.boolean().optional(),
     content: z.string().min(1, '内容不能为空').max(5000),
     contact: z.string().max(100).optional(),
     meta: z.unknown().optional(), // 自动采集：页面/浏览器/版本/脱敏用户ID
+    images: z.array(imageSchema).max(IMAGE_MAX_COUNT, `最多上传 ${IMAGE_MAX_COUNT} 张图片`).optional(),
   });
 
   const requireAdmin = createRequireAdmin(prisma, '仅管理员可操作反馈后台');
@@ -32,6 +38,7 @@ export function createFeedbackRouter(prisma: PrismaLike | any) {
         userId: req.userId!, type: p.data.type, urgent: !!p.data.urgent,
         content: p.data.content, contact: p.data.contact,
         meta: (p.data.meta ?? {}) as object, ticketNo,
+        images: p.data.images ?? null,
       },
     });
     res.json({ ok: true, ticketNo, message: '已收到，工单编号请留存' });
@@ -55,6 +62,22 @@ export function createFeedbackRouter(prisma: PrismaLike | any) {
       where, include: { user: { select: { penName: true, level: true, phone: true } } },
       orderBy: [{ urgent: 'desc' }, { createdAt: 'desc' }],
     });
+    res.json(list);
+  });
+
+  /** 管理员：导出全量工单 JSON（含附图 base64），供投喂 TRAE 做优化分析；可按 status/type 过滤 */
+  feedbackRouter.get('/admin/export', authRequired, requireAdmin, requireSuperAdmin, async (req: any, res) => {
+    const where: Record<string, unknown> = {};
+    const { status, type } = req.query as { status?: string; type?: string };
+    if (status) where.status = status;
+    if (type) where.type = type;
+    const list = await prisma.feedback.findMany({
+      where, include: { user: { select: { penName: true, level: true, phone: true } } },
+      orderBy: [{ urgent: 'desc' }, { createdAt: 'desc' }],
+    });
+    const stamp = new Date().toISOString().slice(0, 10);
+    res.setHeader('Content-Type', 'application/json; charset=utf-8');
+    res.setHeader('Content-Disposition', `attachment; filename="feedback-${stamp}.json"`);
     res.json(list);
   });
 

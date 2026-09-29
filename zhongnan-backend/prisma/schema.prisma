@@ -440,6 +440,7 @@ model Feedback {
   content    String
   contact    String?
   meta       Json?        // 自动采集:页面/浏览器/版本/用户ID脱敏
+  images     Json?        // 反馈附图：base64 data URL 数组（最多3张、单张≤2MB、png/jpeg/webp）
   ticketNo   String       @unique
   status     TicketStatus @default(PENDING)
   reply      String?
