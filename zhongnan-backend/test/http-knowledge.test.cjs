@@ -14,7 +14,8 @@ const server = app.listen(0);
 before(() => new Promise((res) => server.once('listening', () => { base = `http://127.0.0.1:${server.address().port}`; res(); })));
 after(async () => { server.closeAllConnections?.(); await new Promise((r) => server.close(r)); await require('../dist/lib/prisma.js').prisma.$disconnect().catch(() => {}); });
 
-mem._seedUser({ id: 'admin', isAdmin: true, role: 'ADMIN' });
+mem._seedUser({ id: 'admin', phone: '18891995171', isAdmin: false });
+mem._seedUser({ id: 'subadm', phone: '13000000012', level: 'PRO', isAdmin: true }); // 副管：标记在、无后台权
 mem._seedUser({ id: 'op' });
 const K = '/api/admin/knowledge';
 const H = (uid) => ({ 'Content-Type': 'application/json', Authorization: `Bearer ${signAccess({ sub: uid, level: 'PRO' })}` });
@@ -30,6 +31,9 @@ describe('后台学习窗口 HTTP 闭环', { concurrency: 1 }, () => {
     assert.strictEqual(r0.status, 401);
     const r1 = await post('/', upload(), 'op');
     assert.strictEqual(r1.status, 403);
+    const r2 = await post('/', upload(), 'subadm');
+    assert.strictEqual(r2.status, 403, '副管理员不再可进知识库后台');
+    assert.strictEqual((await r2.json()).needSuperAdmin, true);
   });
   it('管理员上传合规知识 → PENDING 待审核', async () => {
     const r = await post('/', upload(), 'admin');

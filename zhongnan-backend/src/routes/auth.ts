@@ -7,7 +7,7 @@ import { withBillingTransaction } from '../lib/prisma-tx';
 import { INVITE, MEMBERSHIP, MemberLevel } from '../config/pricing';
 import { authRequired } from '../middleware/auth';
 import type { AuthRequest } from '../middleware/auth';
-import { isAdminUser, SUPER_ADMIN_PHONE } from '../middleware/admin';
+import { isAdminUser, isSuperAdminUser, SUPER_ADMIN_PHONE } from '../middleware/admin';
 import { AGE_BAND_IDS, GENDERS, PROFILE_REGIONS } from '../lib/profile-mapping';
 
 /** 工厂化：生产用默认 prisma 单例，测试可注入内存桩（HTTP 层端到端，不依赖真实数据库） */
@@ -83,8 +83,10 @@ export function createAuthRouter(prisma: PrismaLike | any) {
       personalized: (u as any).personalized !== false,
       avatarUrl: u.avatarUrl ?? null, level: u.level, levelExpireAt: u.levelExpireAt ?? null,
       engineTier: u.engineTier, inviteCode: u.inviteCode, isPartner: u.isPartner, extraStorageBytes: u.extraStorageBytes ?? 0,
-      isAdmin: isAdminUser(u),
+      isAdmin: isAdminUser(u), // 管理员身份标记（含主账号与历史副管理员；2026-09-29 起不代表后台权力）
       isSuperAdmin: u.phone === SUPER_ADMIN_PHONE, // c199 前端据此显示/隐藏「开设账号」入口（副管理员不可见）
+      // 2026-09-29「超管一人独大」：前端后台入口/管理按钮统一以此为准；isAdmin 仅身份展示用
+      canAdmin: isSuperAdminUser(u),
       points: { balance: acct?.balance ?? 0, frozen: acct?.frozen ?? 0 },
       storageUsedBytes: (used && used._sum && used._sum.bytes) || 0,
       benefits: MEMBERSHIP[u.level as MemberLevel] ?? null,

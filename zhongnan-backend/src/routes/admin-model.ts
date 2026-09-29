@@ -5,7 +5,7 @@
  */
 import { asyncRouter } from '../lib/async-router';
 import { authRequired, AuthRequest } from '../middleware/auth';
-import { createRequireAdmin } from '../middleware/admin';
+import { createRequireAdmin, requireSuperAdmin } from '../middleware/admin';
 import { prisma } from '../lib/prisma';
 import { maskedConfig, saveConfig, ModelConfigData, maskedProvidersConfig, saveProvider, deleteProvider, saveRouting, loadProviders, loadRouting } from '../lib/model-config';
 import {
@@ -20,7 +20,8 @@ import { renderApiDirectoryDocx } from '../lib/api-directory-docx';
 import { orderedStages, validateOrder } from '../agents/pipeline-order';
 import { MemberLevel } from '../config/pricing';
 import { z } from 'zod';
-import { runWeeklyModelAudit } from '../services/auto-learning';
+import { runWeeklyModelAudit, runDailyModelReview, ackModelReview, MODEL_REVIEW_KIND, MODEL_REVIEW_ACK_KIND } from '../services/auto-learning';
+import { modelReviewStatus } from '../config/model-review';
 import { AuditInput } from '../engine/model-audit';
 
 export function createAdminModelRouter(prisma: any) {
@@ -28,7 +29,7 @@ export function createAdminModelRouter(prisma: any) {
   const requireAdmin = createRequireAdmin(prisma, '仅超级管理员可配置模型密钥');
 
   // 读取（脱敏：只回 hasKey / keyMask，不回明文）
-  adminModelRouter.get('/', authRequired, requireAdmin, async (_req, res) => {
+  adminModelRouter.get('/', authRequired, requireAdmin, requireSuperAdmin, async (_req, res) => {
     try {
       res.json(await maskedConfig(prisma));
     } catch (e) {
@@ -37,7 +38,7 @@ export function createAdminModelRouter(prisma: any) {
   });
 
   // 保存（加密落库；空串或含 • 的脱敏值视为未修改，保留原 key）
-  adminModelRouter.put('/', authRequired, requireAdmin, async (req: AuthRequest, res) => {
+  adminModelRouter.put('/', authRequired, requireAdmin, requireSuperAdmin, async (req: AuthRequest, res) => {
     try {
       const body = req.body as Partial<ModelConfigData>;
       if (!body || typeof body !== 'object') return res.status(400).json({ error: '参数缺失' });
@@ -56,7 +57,7 @@ export function createAdminModelRouter(prisma: any) {
   });
 
   // 每周 API 全面盘点（也可被定时任务调用）：体检/铁底/异构/代际/价格，留存报告
-  adminModelRouter.post('/portfolio/audit', authRequired, requireAdmin, async (req: AuthRequest, res) => {
+  adminModelRouter.post('/portfolio/audit', authRequired, requireAdmin, requireSuperAdmin, async (req: AuthRequest, res) => {
     try {
       const input = (req.body ?? {}) as AuditInput;
       const { report, reportId } = await runWeeklyModelAudit(prisma, input, req.userId || 'admin');
@@ -67,11 +68,52 @@ export function createAdminModelRouter(prisma: any) {
   });
 
   // 最近一次每周盘点报告
-  adminModelRouter.get('/portfolio/audit-report', authRequired, requireAdmin, async (_req, res) => {
+  adminModelRouter.get('/portfolio/audit-report', authRequired, requireAdmin, requireSuperAdmin, async (_req, res) => {
     const rows = await prisma.learningReport.findMany({
       where: { kind: 'WEEKLY_MODEL' }, orderBy: { createdAt: 'desc' }, take: 1,
     }).catch(() => []);
     res.json({ latest: rows[0] ?? null });
+  });
+
+  /* ---------- v2.187 每日 API 选型体检：超管多久没联网核对，后台亮灯 ---------- */
+  const findLatestReport = async (kind: string) => {
+    const rows = await prisma.learningReport.findMany({
+      where: { kind }, orderBy: { createdAt: 'desc' }, take: 1,
+    }).catch(() => [] as any[]);
+    return rows[0] ?? null;
+  };
+
+  // 实时体检状态（打开后台即见，不等凌晨快照）+ 最近提醒/核对时间
+  adminModelRouter.get('/portfolio/review', authRequired, requireAdmin, requireSuperAdmin, async (_req, res) => {
+    try {
+      const [ack, latest] = await Promise.all([
+        findLatestReport(MODEL_REVIEW_ACK_KIND), findLatestReport(MODEL_REVIEW_KIND),
+      ]);
+      const status = modelReviewStatus(ack?.createdAt ? new Date(ack.createdAt) : null, new Date());
+      res.json({ status, lastAckAt: ack?.createdAt ?? null, lastReviewAt: latest?.createdAt ?? null });
+    } catch (e) {
+      res.status(500).json({ error: (e as Error).message });
+    }
+  });
+
+  // 手动补跑一次每日体检（定时任务同日幂等，此处同样只落一条）
+  adminModelRouter.post('/portfolio/review/run', authRequired, requireAdmin, requireSuperAdmin, async (req: AuthRequest, res) => {
+    try {
+      const r = await runDailyModelReview(prisma, {}, req.userId || 'admin');
+      res.json({ ok: true, ...r });
+    } catch (e) {
+      res.status(500).json({ error: (e as Error).message });
+    }
+  });
+
+  // 超管确认"今日已核对价格/停服/新模型" → 基准日前移，提醒归零
+  adminModelRouter.post('/portfolio/review/ack', authRequired, requireAdmin, requireSuperAdmin, async (req: AuthRequest, res) => {
+    try {
+      const r = await ackModelReview(prisma, req.userId || 'admin');
+      res.json({ ok: true, ...r });
+    } catch (e) {
+      res.status(500).json({ error: (e as Error).message });
+    }
   });
 
   /* ---------- v2.41 多供应商池 + 九岗路由 + 组合全景 ---------- */
@@ -89,12 +131,12 @@ export function createAdminModelRouter(prisma: any) {
   });
 
   // 供应商池（脱敏）+ 当前路由
-  adminModelRouter.get('/providers', authRequired, requireAdmin, async (_req, res) => {
+  adminModelRouter.get('/providers', authRequired, requireAdmin, requireSuperAdmin, async (_req, res) => {
     res.json(await maskedProvidersConfig(prisma));
   });
 
   // 新增/更新单个供应商；目录型号可免填 baseUrl（自动补 catalog 默认端点）
-  adminModelRouter.put('/providers', authRequired, requireAdmin, async (req: AuthRequest, res) => {
+  adminModelRouter.put('/providers', authRequired, requireAdmin, requireSuperAdmin, async (req: AuthRequest, res) => {
     const parsed = providerSchema.safeParse(req.body);
     if (!parsed.success) return res.status(400).json({ error: 'PROVIDER_INVALID ' + parsed.error.issues.map((i) => i.message).join('；') });
     const d = parsed.data;
@@ -114,13 +156,13 @@ export function createAdminModelRouter(prisma: any) {
     }
   });
 
-  adminModelRouter.delete('/providers/:id', authRequired, requireAdmin, async (req: AuthRequest, res) => {
+  adminModelRouter.delete('/providers/:id', authRequired, requireAdmin, requireSuperAdmin, async (req: AuthRequest, res) => {
     await deleteProvider(String(req.params.id), req.userId || 'admin', prisma);
     res.json({ ok: true, masked: await maskedProvidersConfig(prisma) });
   });
 
   // 九岗路由（悬空 id 服务端自动丢弃）
-  adminModelRouter.put('/routing', authRequired, requireAdmin, async (req: AuthRequest, res) => {
+  adminModelRouter.put('/routing', authRequired, requireAdmin, requireSuperAdmin, async (req: AuthRequest, res) => {
     const body = (req.body ?? {}) as Record<string, unknown>;
     const routing: Partial<Record<RoleId, string>> = {};
     for (const role of ALL_ROLE_IDS) if (typeof body[role] === 'string') routing[role] = body[role] as string;
@@ -132,7 +174,7 @@ export function createAdminModelRouter(prisma: any) {
    * 组合全景（只读）：岗位顺序自检、每岗首选/备选、三档成本与×2铁底、图片模型端口、当前自定义路由体检、口径FAQ
    * 这是“是不是全球最优组合/baseUrl是否必填/单价谁填/赚不赚钱”的唯一权威视图
    */
-  adminModelRouter.get('/portfolio', authRequired, requireAdmin, async (_req, res) => {
+  adminModelRouter.get('/portfolio', authRequired, requireAdmin, requireSuperAdmin, async (_req, res) => {
     const tiers = buildTiers().map((t) => ({ id: t.id, name: t.name, costFen: t.costFen, desc: t.desc, picks: t.picks }));
     const levels = [MemberLevel.FREE, MemberLevel.BASIC, MemberLevel.ADVANCED, MemberLevel.PRO];
     const floorChecks = levels.flatMap((lv) => (['economy', 'standard', 'flagship'] as const)
@@ -164,7 +206,7 @@ export function createAdminModelRouter(prisma: any) {
 
 
   // v2.53 全量 API 清单（功能→API→官方申请链接），仅超管可见
-  adminModelRouter.get('/api-directory', authRequired, requireAdmin, async (_req, res) => {
+  adminModelRouter.get('/api-directory', authRequired, requireAdmin, requireSuperAdmin, async (_req, res) => {
     const catalog = [...TEXT_MODELS, ...IMAGE_MODELS].map((m) => ({ id: m.id, modality: m.modality }));
     const coverage = directoryCoverage(catalog);
     // 岗位→三档首选/替补，附厂商申请入口
@@ -183,7 +225,7 @@ export function createAdminModelRouter(prisma: any) {
 
 
   // v2.54 API 清单设计版 docx 下载（封面/预留填写位/签署位，仅超管）
-  adminModelRouter.get('/api-directory/docx', authRequired, requireAdmin, async (_req, res) => {
+  adminModelRouter.get('/api-directory/docx', authRequired, requireAdmin, requireSuperAdmin, async (_req, res) => {
     try {
       const buf = await renderApiDirectoryDocx(pkgVersion());
       res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document');

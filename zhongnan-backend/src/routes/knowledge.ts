@@ -2,7 +2,7 @@ import { asyncRouter } from '../lib/async-router';
 import { z } from 'zod';
 import { prisma as defaultPrisma } from '../lib/prisma';
 import { authRequired, AuthRequest } from '../middleware/auth';
-import { createRequireAdmin } from '../middleware/admin';
+import { createRequireAdmin, requireSuperAdmin } from '../middleware/admin';
 import { reconcileKnowledge } from '../lib/knowledge-dedup';
 import {
   runSelfLearning, pruneKnowledge, buildLearningReport, classifyCategory,
@@ -43,7 +43,7 @@ export function createKnowledgeRouter(prisma: PrismaLike | any) {
   const requireAdmin = createRequireAdmin(prisma, '仅管理员可进入学习窗口后台');
 
   /** 上传一条知识/技能/政策，自动分类与合规预检，进入待审核队列 */
-  knowledgeRouter.post('/', authRequired, requireAdmin, async (req: AuthRequest, res) => {
+  knowledgeRouter.post('/', authRequired, requireAdmin, requireSuperAdmin, async (req: AuthRequest, res) => {
     const p = uploadSchema.safeParse(req.body);
     if (!p.success) return res.status(400).json({ error: p.error.issues[0].message });
     const category = (p.data.category ?? 'plot') as string;
@@ -72,7 +72,7 @@ export function createKnowledgeRouter(prisma: PrismaLike | any) {
   });
 
   /** 学习队列：按状态/分类筛选 */
-  knowledgeRouter.get('/', authRequired, requireAdmin, async (req: AuthRequest, res) => {
+  knowledgeRouter.get('/', authRequired, requireAdmin, requireSuperAdmin, async (req: AuthRequest, res) => {
     const status = String(req.query.status ?? '');
     const list = await prisma.knowledgeItem.findMany({
       where: { ...(status ? { status } : {}) },
@@ -83,7 +83,7 @@ export function createKnowledgeRouter(prisma: PrismaLike | any) {
   });
 
   /** 审核通过 → 生效（同步到对应岗位智能体，生产发事件触发技能转化） */
-  knowledgeRouter.post('/:id/approve', authRequired, requireAdmin, async (req, res) => {
+  knowledgeRouter.post('/:id/approve', authRequired, requireAdmin, requireSuperAdmin, async (req, res) => {
     const item = await prisma.knowledgeItem.update({
       where: { id: req.params.id }, data: { status: 'APPROVED', conflictNote: null, approvedAt: new Date() },
     }).catch(() => null);
@@ -92,7 +92,7 @@ export function createKnowledgeRouter(prisma: PrismaLike | any) {
   });
 
   /** 驳回（相悖/质量差），不生效 */
-  knowledgeRouter.post('/:id/reject', authRequired, requireAdmin, async (req, res) => {
+  knowledgeRouter.post('/:id/reject', authRequired, requireAdmin, requireSuperAdmin, async (req, res) => {
     await prisma.knowledgeItem.update({
       where: { id: req.params.id },
       data: { status: 'REJECTED', conflictNote: String(req.body?.reason ?? '人工驳回') },
@@ -118,7 +118,7 @@ export function createKnowledgeRouter(prisma: PrismaLike | any) {
     staleDays: z.number().int().min(30).max(3650).optional(),
     blockedByPolicy: z.array(z.string().max(40)).max(200).optional(),
   });
-  knowledgeRouter.post('/self-learn/run', authRequired, requireAdmin, async (req: AuthRequest, res) => {
+  knowledgeRouter.post('/self-learn/run', authRequired, requireAdmin, requireSuperAdmin, async (req: AuthRequest, res) => {
     const parsed = selfLearnSchema.safeParse(req.body);
     if (!parsed.success) return res.status(400).json({ error: parsed.error.issues[0].message });
     const signals: LearnSignal[] = (parsed.data.signals ?? []) as LearnSignal[];
@@ -153,7 +153,7 @@ export function createKnowledgeRouter(prisma: PrismaLike | any) {
   });
 
   /** 知识库快照报告（仅管理员）：来源/状态/分类分布、自主学习贡献、待审积压 */
-  knowledgeRouter.get('/self-learn/report', authRequired, requireAdmin, async (_req, res) => {
+  knowledgeRouter.get('/self-learn/report', authRequired, requireAdmin, requireSuperAdmin, async (_req, res) => {
     const all = await prisma.knowledgeItem.findMany().catch(() => [] as any[]);
     const byStatus: Record<string, number> = {}; const byCategory: Record<string, number> = {}; const bySource: Record<string, number> = {};
     all.forEach((i: any) => {
@@ -173,7 +173,7 @@ export function createKnowledgeRouter(prisma: PrismaLike | any) {
    * 立即跑一次“完整自主学习闭环”（仅管理员；与每日定时任务同一套逻辑）：
    * 自动采集站内高分剧本（榜单/政策采集器在服务注入时启用）→ 跨轮去重 → 学习决策 → 自主淘汰 → 留存报告。
    */
-  knowledgeRouter.post('/self-learn/run-auto', authRequired, requireAdmin, async (req: AuthRequest, res) => {
+  knowledgeRouter.post('/self-learn/run-auto', authRequired, requireAdmin, requireSuperAdmin, async (req: AuthRequest, res) => {
     try {
       const result = await runDailyLearningCycle(prisma, {}, req.userId || 'admin');
       res.json({ ok: true, ...result, reportText: result.report.text });
@@ -183,7 +183,7 @@ export function createKnowledgeRouter(prisma: PrismaLike | any) {
   });
 
   /** 自主学习 / API盘点 历史报告（仅管理员，kind 可选 DAILY_LEARN/WEEKLY_MODEL） */
-  knowledgeRouter.get('/self-learn/reports', authRequired, requireAdmin, async (req, res) => {
+  knowledgeRouter.get('/self-learn/reports', authRequired, requireAdmin, requireSuperAdmin, async (req, res) => {
     const kind = typeof req.query.kind === 'string' ? req.query.kind : undefined;
     const rows = await prisma.learningReport.findMany({
       where: kind ? { kind } : {}, orderBy: { createdAt: 'desc' }, take: 50,
@@ -192,7 +192,7 @@ export function createKnowledgeRouter(prisma: PrismaLike | any) {
   });
 
   /** 手动归档（自主淘汰的人工入口，可恢复） */
-  knowledgeRouter.post('/:id/archive', authRequired, requireAdmin, async (req, res) => {
+  knowledgeRouter.post('/:id/archive', authRequired, requireAdmin, requireSuperAdmin, async (req, res) => {
     const item = await prisma.knowledgeItem.update({
       where: { id: req.params.id }, data: { status: 'ARCHIVED', pruneReason: String(req.body?.reason ?? '管理员手动归档'), archivedAt: new Date() },
     }).catch(() => null);
@@ -200,7 +200,7 @@ export function createKnowledgeRouter(prisma: PrismaLike | any) {
     res.json({ ok: true });
   });
   /** 恢复归档知识（重新进入待审，不直接生效，安全） */
-  knowledgeRouter.post('/:id/restore', authRequired, requireAdmin, async (req, res) => {
+  knowledgeRouter.post('/:id/restore', authRequired, requireAdmin, requireSuperAdmin, async (req, res) => {
     const item = await prisma.knowledgeItem.update({
       where: { id: req.params.id }, data: { status: 'PENDING', pruneReason: null, archivedAt: null },
     }).catch(() => null);
@@ -212,7 +212,7 @@ export function createKnowledgeRouter(prisma: PrismaLike | any) {
    * 技能包打包下载：把全部已生效知识 + 当前创作技能，导出为版本化 JSON 包。
    * 生产可在此压缩为 zip（含 SKILL.md/知识库/变更日志）。
    */
-  knowledgeRouter.get('/skill-package', authRequired, requireAdmin, async (_req, res) => {
+  knowledgeRouter.get('/skill-package', authRequired, requireAdmin, requireSuperAdmin, async (_req, res) => {
     const items = await prisma.knowledgeItem.findMany({ where: { status: 'APPROVED' }, orderBy: { createdAt: 'asc' } });
     const byCategory: Record<string, number> = {};
     items.forEach((i: any) => { byCategory[i.category] = (byCategory[i.category] ?? 0) + 1; });
@@ -238,7 +238,7 @@ export function createKnowledgeRouter(prisma: PrismaLike | any) {
   });
 
   /** v2.19 仅下载内置创作技能包（不含后台知识条目，便于跨窗口/跨项目复用） */
-  knowledgeRouter.get('/builtin-skill-pack', authRequired, requireAdmin, async (_req, res) => {
+  knowledgeRouter.get('/builtin-skill-pack', authRequired, requireAdmin, requireSuperAdmin, async (_req, res) => {
     const version = appVersion();
     const builtin = buildBuiltinSkillPack(version);
     const audit = auditSkillPack(builtin);
@@ -248,7 +248,7 @@ export function createKnowledgeRouter(prisma: PrismaLike | any) {
   });
 
   /** v2.19 标准 SKILL.md 下载（可直接放进任意 Skill 目录被其他窗口加载调用） */
-  knowledgeRouter.get('/builtin-skill-md', authRequired, requireAdmin, async (_req, res) => {
+  knowledgeRouter.get('/builtin-skill-md', authRequired, requireAdmin, requireSuperAdmin, async (_req, res) => {
     const version = appVersion();
     const md = buildSkillMarkdown(buildBuiltinSkillPack(version));
     res.setHeader('Content-Type', 'text/markdown; charset=utf-8');
@@ -257,7 +257,7 @@ export function createKnowledgeRouter(prisma: PrismaLike | any) {
   });
 
   /** v2.19 标准技能目录文件映射（SKILL.md + references/*），落盘即为完整 Skill */
-  knowledgeRouter.get('/builtin-skill-bundle', authRequired, requireAdmin, async (_req, res) => {
+  knowledgeRouter.get('/builtin-skill-bundle', authRequired, requireAdmin, requireSuperAdmin, async (_req, res) => {
     const version = appVersion();
     const pack = buildBuiltinSkillPack(version);
     res.json({ skillName: SKILL_NAME, version, skillAudit: auditSkillPack(pack), files: buildSkillBundle(pack) });

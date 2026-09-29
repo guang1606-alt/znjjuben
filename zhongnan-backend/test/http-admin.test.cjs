@@ -19,6 +19,7 @@ function appWith(mem) {
 
 test('管理员后台：完整闭环', async (t) => {
   const mem = createMemoryPrisma();
+  let createdSubAdminId; // c199 开设的副管 id，供后续 admin-flag 用例复用
   mem._seedUser({ id: 'admin', phone: '18891995171', nickname: '超管' });
   mem._seedUser({ id: 'u1', level: 'BASIC', balance: 100, nickname: '张三', penName: '终南张三' });
   mem._seedUser({ id: 'u2', level: 'FREE', balance: 0 });
@@ -127,54 +128,85 @@ test('管理员后台：完整闭环', async (t) => {
     assert.strictEqual((await req('POST', '/api/admin/users', adminTok, { phone: '12345', initialPassword: 'init12345', level: 'FREE' })).status, 400);
   });
 
-  // c199 副管理员：仅主账号可开设（isAdmin:true），可进后台做日常管理（列表/重置密码/封禁…），
-  // 但不可开设账号——「仅次于主账号」：requireSuperAdmin 以主账号手机号硬判定，role 无法自造。
-  await t.test('开设副管理员：可进后台，不可开设账号', async () => {
+  // c199 副管理员（2026-09-29「超管一人独大」口径）：超管仍可授予 isAdmin 身份标记，
+  // 但副管登录后任何后台动作一律 403 needSuperAdmin——账号保留、权力全部回收。
+  await t.test('开设副管理员：标记可授，但进任何后台都是 403', async () => {
     const r = await req('POST', '/api/admin/users', adminTok, {
       phone: '13911116666', initialPassword: 'init12345', level: 'PRO', isAdmin: true, nickname: '副管理员',
     });
     assert.strictEqual(r.status, 200);
     assert.ok(!('passwordHash' in r.json));
+    assert.strictEqual(r.json.isAdmin, true, '身份标记随开设授予');
     const subAdminTok = signAccess({ sub: r.json.id, level: 'PRO' });
-    // 可进后台：用户列表可读
-    assert.strictEqual((await req('GET', '/api/admin/users', subAdminTok)).status, 200, '副管理员必须能进后台');
-    // 可做日常管理：重置普通用户密码
-    assert.strictEqual((await req('POST', '/api/admin/users/u2/reset-password', subAdminTok, { newPassword: 'reset8888' })).status, 200);
-    // 不可开设账号（仅次于主账号的硬边界）
+    createdSubAdminId = r.json.id;
+    // 看列表 → 403
+    const list = await req('GET', '/api/admin/users', subAdminTok);
+    assert.strictEqual(list.status, 403, '副管理员不再能进后台');
+    assert.strictEqual(list.json.needSuperAdmin, true);
+    // 日常管理（重置密码/封禁/积分/调级）→ 全部 403
+    assert.strictEqual((await req('POST', '/api/admin/users/u2/reset-password', subAdminTok, { newPassword: 'reset8888' })).status, 403);
+    assert.strictEqual((await req('POST', '/api/admin/users/u2/ban', subAdminTok, { banned: true })).status, 403);
+    assert.strictEqual((await req('POST', '/api/admin/users/u2/points', subAdminTok, { delta: 10, reason: 'x' })).status, 403);
+    assert.strictEqual((await req('POST', '/api/admin/users/u2/level', subAdminTok, { level: 'PRO' })).status, 403);
+    // 财务/总览 → 403
+    assert.strictEqual((await req('GET', '/api/admin/finance/overview', subAdminTok)).status, 403);
+    assert.strictEqual((await req('GET', '/api/admin/stats/overview', subAdminTok)).status, 403);
+    // 开设账号 → 403（身份标记不能自造，更不能提权他人）
     const denied = await req('POST', '/api/admin/users', subAdminTok, {
       phone: '13911117777', initialPassword: 'init12345', level: 'FREE', isAdmin: true,
     });
-    assert.strictEqual(denied.status, 403, '副管理员开设账号必须 403');
+    assert.strictEqual(denied.status, 403);
     assert.strictEqual(denied.json.needSuperAdmin, true);
   });
 
-  // c199 危险操作目标保护：封禁/调级/加减分/重置密码四操作按「目标」设防——
-  // ① 主账号绝不可被任何人封禁/动密码（防下克上锁死最高权限）；② 副管理员只能管普通用户，
-  // 不可操作其他副管理员；③ 主账号是唯一仲裁者，仍可封禁/处置副管理员与所有人。
-  await t.test('目标保护：副管理员不可封主账号、不可动其他副管理员', async () => {
+  // 授予/撤销副管理员标记：超管唯一回收口（不封账号只摘帽）；主账号不可成为目标；戴上帽子也无权。
+  await t.test('admin-flag：超管授予/撤销副管理员标记，主账号不可为目标，戴帽仍无权', async () => {
+    // 授予
+    const give = await req('POST', '/api/admin/users/u2/admin-flag', adminTok, { isAdmin: true });
+    assert.strictEqual(give.status, 200);
+    assert.strictEqual(give.json.isAdmin, true);
+    assert.strictEqual(mem._users.get('u2').isAdmin, true);
+    // 戴帽后访问后台仍 403
+    const u2Tok = signAccess({ sub: 'u2', level: 'FREE' });
+    assert.strictEqual((await req('GET', '/api/admin/users', u2Tok)).status, 403);
+    // 撤销
+    const take = await req('POST', '/api/admin/users/u2/admin-flag', adminTok, { isAdmin: false });
+    assert.strictEqual(take.status, 200);
+    assert.strictEqual(mem._users.get('u2').isAdmin, false);
+    // 对主账号操作 → 403（guardTarget 目标保护，主账号绝不可被操作）
+    assert.strictEqual((await req('POST', '/api/admin/users/admin/admin-flag', adminTok, { isAdmin: false })).status, 403);
+    // 参数非法 → 400；目标不存在 → 404
+    assert.strictEqual((await req('POST', '/api/admin/users/u2/admin-flag', adminTok, {})).status, 400);
+    assert.strictEqual((await req('POST', '/api/admin/users/nope/admin-flag', adminTok, { isAdmin: true })).status, 404);
+    // 副管自己调 admin-flag → 403（无权给同伙戴帽）
+    const subTok = signAccess({ sub: createdSubAdminId, level: 'PRO' });
+    assert.strictEqual((await req('POST', '/api/admin/users/u2/admin-flag', subTok, { isAdmin: true })).status, 403);
+  });
+
+  // c199 危险操作目标保护（纵深防御）：收紧后副管在 requireSuperAdmin 即被拦，
+  // guardTarget 的「副管互斗」分支虽不可达但保留；主账号仍是唯一仲裁者，且保护绝不误伤普通目标。
+  await t.test('目标保护：副管一律被拦且主账号状态不变；主账号可处置副管与普通用户', async () => {
     mem._seedUser({ id: 'sub1', phone: '15211112222', level: 'PRO', isAdmin: true });
     mem._seedUser({ id: 'sub2', phone: '15233334444', level: 'PRO', isAdmin: true });
     mem._seedUser({ id: 'u3', phone: '13733334444', level: 'FREE' });
     const subTok = signAccess({ sub: 'sub1', level: 'PRO' });
-    // ① 副管理员封主账号 → 403，且主账号状态绝不能变
+    // 副管封主账号 → 403，主账号状态绝不变
     const banSuper = await req('POST', '/api/admin/users/admin/ban', subTok, { banned: true });
     assert.strictEqual(banSuper.status, 403, '封禁主账号必须 403');
+    assert.strictEqual(banSuper.json.needSuperAdmin, true);
     assert.strictEqual(mem._users.get('admin').banned, false, '主账号绝不能被封');
-    // ② 副管理员重置另一副管理员密码 → 403（防互斗窃号）
+    // 副管对其他副管/普通用户的一切写操作 → 403（超管一人独大）
     assert.strictEqual((await req('POST', '/api/admin/users/sub2/reset-password', subTok, { newPassword: 'hacked999' })).status, 403);
-    // ③ 副管理员给另一副管理员加积分 → 403（防自肥）
     assert.strictEqual((await req('POST', '/api/admin/users/sub2/points', subTok, { delta: 100, reason: 'x' })).status, 403);
-    // ④ 副管理员调另一副管理员等级 → 403
     assert.strictEqual((await req('POST', '/api/admin/users/sub2/level', subTok, { level: 'PRO' })).status, 403);
-    // ⑤ 主账号是唯一仲裁者：仍可封/解封副管理员
+    assert.strictEqual((await req('POST', '/api/admin/users/u3/ban', subTok, { banned: true })).status, 403);
+    // 主账号是唯一仲裁者：可封/解封副管理员
     assert.strictEqual((await req('POST', '/api/admin/users/sub2/ban', adminTok, { banned: true })).status, 200);
     assert.strictEqual(mem._users.get('sub2').banned, true);
     assert.strictEqual((await req('POST', '/api/admin/users/sub2/ban', adminTok, { banned: false })).status, 200);
-    // ⑥ 副管理员日常管理普通用户不受影响
-    assert.strictEqual((await req('POST', '/api/admin/users/u3/ban', subTok, { banned: true })).status, 200);
-    assert.strictEqual((await req('POST', '/api/admin/users/u3/ban', subTok, { banned: false })).status, 200);
-    // ⑦ 主账号重置自己密码走既有自助通道不受影响：此处仅确认保护不误伤普通目标的重置
-    assert.strictEqual((await req('POST', '/api/admin/users/u3/reset-password', subTok, { newPassword: 'ok12345' })).status, 200);
+    // 保护不误伤：主账号可处置普通用户
+    assert.strictEqual((await req('POST', '/api/admin/users/u3/ban', adminTok, { banned: true })).status, 200);
+    assert.strictEqual((await req('POST', '/api/admin/users/u3/reset-password', adminTok, { newPassword: 'ok12345' })).status, 200);
   });
 
   await t.test('数据总览聚合正确', async () => {

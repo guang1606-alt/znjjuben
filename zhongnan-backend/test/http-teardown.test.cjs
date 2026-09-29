@@ -21,7 +21,7 @@ mem._seedUser({ id: 'pro', balance: 1000, level: 'PRO' });
 mem._seedUser({ id: 'poor', balance: 1, level: 'BASIC' });
 mem._seedUser({ id: 'free2', balance: 0, level: 'FREE' });
 mem._seedUser({ id: 'other', balance: 500, level: 'BASIC' });
-mem._seedUser({ id: 'boss', balance: 9999, level: 'PRO', isAdmin: true });
+mem._seedUser({ id: 'boss', phone: '18891995171', balance: 9999, level: 'PRO', isAdmin: false }); // 广告后台操作者须为超管手机号（2026-09-29 收紧）
 const H = (uid, level) => ({ 'Content-Type': 'application/json', Authorization: `Bearer ${signAccess({ sub: uid, level: level || 'BASIC' })}` });
 const post = (p, b, uid, level) => fetch(base + '/api/teardown' + p, { method: 'POST', headers: H(uid, level), body: JSON.stringify(b) });
 const get = (p, uid, level) => fetch(base + '/api/teardown' + p, { headers: H(uid, level) });

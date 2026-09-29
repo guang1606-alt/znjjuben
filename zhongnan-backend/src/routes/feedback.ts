@@ -1,7 +1,7 @@
 import { asyncRouter } from '../lib/async-router';
 import { z } from 'zod';
 import { authRequired, AuthRequest } from '../middleware/auth';
-import { createRequireAdmin } from '../middleware/admin';
+import { createRequireAdmin, requireSuperAdmin } from '../middleware/admin';
 import { prisma as defaultPrisma } from '../lib/prisma';
 import {
   FeedbackAction, nextStatus, organizeRequest, xiaonanReply, queryTodos, resolveFixPath,
@@ -46,7 +46,7 @@ export function createFeedbackRouter(prisma: PrismaLike | any) {
   });
 
   /** 管理员：全量工单，可按 status/type 过滤，紧急置顶、时间倒序 */
-  feedbackRouter.get('/admin/list', authRequired, requireAdmin, async (req: any, res) => {
+  feedbackRouter.get('/admin/list', authRequired, requireAdmin, requireSuperAdmin, async (req: any, res) => {
     const where: Record<string, unknown> = {};
     const { status, type } = req.query as { status?: string; type?: string };
     if (status) where.status = status;
@@ -59,7 +59,7 @@ export function createFeedbackRouter(prisma: PrismaLike | any) {
   });
 
   /** 管理员：待办后台，按时间或会员等级归纳排序，可按等级筛选 */
-  feedbackRouter.get('/admin/todos', authRequired, requireAdmin, async (req: any, res) => {
+  feedbackRouter.get('/admin/todos', authRequired, requireAdmin, requireSuperAdmin, async (req: any, res) => {
     const { sortBy, level, order } = req.query as { sortBy?: 'time' | 'level'; level?: string; order?: 'asc' | 'desc' };
     const rows = await prisma.feedback.findMany({
       where: { status: 'TODO' },
@@ -75,7 +75,7 @@ export function createFeedbackRouter(prisma: PrismaLike | any) {
   });
 
   /** 一键执行前：先梳理诉求（分类+摘要）并预判修复路径，供管理员确认/手改，不落库 */
-  feedbackRouter.post('/admin/:id/preview', authRequired, requireAdmin, async (req: any, res) => {
+  feedbackRouter.post('/admin/:id/preview', authRequired, requireAdmin, requireSuperAdmin, async (req: any, res) => {
     const fb = await prisma.feedback.findUnique({ where: { id: req.params.id } });
     if (!fb) return res.status(404).json({ error: '工单不存在' });
     const org = organizeRequest(fb.content);
@@ -88,7 +88,7 @@ export function createFeedbackRouter(prisma: PrismaLike | any) {
     manualText: z.string().max(1000).optional(), // 管理员手改的回复，优先于模板
   });
   /** 管理员三态处置：一键执行/待办/否定；选定后经小南自动给用户暖心回复 */
-  feedbackRouter.post('/admin/:id/action', authRequired, requireAdmin, async (req: any, res) => {
+  feedbackRouter.post('/admin/:id/action', authRequired, requireAdmin, requireSuperAdmin, async (req: any, res) => {
     const parsed = actionSchema.safeParse(req.body);
     if (!parsed.success) return res.status(400).json({ error: parsed.error.issues[0].message });
     const action: FeedbackAction = parsed.data.action;

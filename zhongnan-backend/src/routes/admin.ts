@@ -35,9 +35,13 @@ function publicUser(u: any, balance?: number, projectCount?: number) {
 export function createAdminRouter(prisma: PrismaLike | any) {
   const r = asyncRouter();
   const requireAdmin = createRequireAdmin(prisma, '仅超级管理员可访问管理后台');
-  const admin = [authRequired, requireAdmin] as any;
+  // 2026-09-29「超管一人独大」：所有后台路由在管理员身份之上再加手机号硬判定，
+  // 副管理员（isAdmin=true）一律 403；账号保留但无任何后台权力。
+  const admin = [authRequired, requireAdmin, requireSuperAdmin] as any;
 
-  // c199 危险操作目标保护（封禁/调级/加减分/重置密码四操作统一挂载）：
+  // c199 危险操作目标保护（封禁/调级/加减分/重置密码/admin-flag 统一挂载）。
+  // 2026-09-29「超管一人独大」后所有操作者必为超管，②已不可达，整组守卫保留作纵深防御——
+  // 未来若恢复分级（摘掉部分路由的 requireSuperAdmin），目标保护立即重新生效：
   // ① 主账号绝不可成为目标——防任何账号（含副管理员）下克上封禁/重置最高权限者；
   // ② 副管理员（操作者非主账号）不可操作其他副管理员——只能管普通用户，防互斗窃号/自肥调级；
   // ③ 主账号是唯一仲裁者，可处置包括副管理员在内的所有人。
@@ -91,8 +95,8 @@ export function createAdminRouter(prisma: PrismaLike | any) {
 
   // c198 开设账号（仅超管主账号）：预设初始密码 + 任意权限档（FREE..ENTERPRISE），子账号即开即登录。
   // 层级铁律：不接受 role 等未知提权字段（zod 默认剥离，未在 schema 声明即丢弃）。
-  // c199 唯一显式提权口 isAdmin（副管理员）：仅主账号本人可调本接口（requireSuperAdmin 手机号硬判定），
-  // 副管理员可进后台做日常管理，但同样被 requireSuperAdmin 挡在开设账号之外——「仅次于主账号」。
+  // c199 显式提权口 isAdmin（副管理员身份标记）：仅主账号本人可调本接口授予；
+  // 2026-09-29 起副管理员默认不享有任何后台权力（超管一人独大），仅保留身份标记供未来分级。
   const createSchema = z.object({
     phone: z.string().regex(/^1[3-9]\d{9}$/, '手机号格式不正确'),
     initialPassword: z.string().min(8, '初始密码至少8位').max(64),
@@ -100,7 +104,7 @@ export function createAdminRouter(prisma: PrismaLike | any) {
     nickname: z.string().trim().min(1).max(24).optional(),
     isAdmin: z.boolean().optional(),
   });
-  r.post('/users', ...admin, requireSuperAdmin, async (req: AuthRequest, res) => {
+  r.post('/users', ...admin, async (req: AuthRequest, res) => {
     const p = createSchema.safeParse(req.body);
     if (!p.success) return res.status(400).json({ error: p.error.issues[0]?.message ?? '参数不合法' });
     const { phone, initialPassword, level, nickname, isAdmin } = p.data;
@@ -164,6 +168,17 @@ export function createAdminRouter(prisma: PrismaLike | any) {
     const expireAt = p.data.days ? new Date(Date.now() + p.data.days * 864e5) : null;
     await prisma.user.update({ where: { id: u.id }, data: { level: p.data.level as any, levelExpireAt: expireAt } });
     res.json({ ok: true, level: p.data.level, levelExpireAt: expireAt });
+  });
+
+  // 授予 / 撤销副管理员身份标记（仅超管；guardTarget 已挡主账号与越权操作其他管理员）。
+  // 用途：超管一人独大口径下的唯一回收口——不封禁账号，只摘掉/戴上管理员帽；默认戴了也无后台权。
+  const adminFlagSchema = z.object({ isAdmin: z.boolean() });
+  r.post('/users/:id/admin-flag', ...admin, guardTarget, async (req: AuthRequest, res) => {
+    const p = adminFlagSchema.safeParse(req.body);
+    if (!p.success) return res.status(400).json({ error: 'isAdmin 须为布尔值' });
+    const u = (req as any)._targetUser;
+    await prisma.user.update({ where: { id: u.id }, data: { isAdmin: p.data.isAdmin } });
+    res.json({ ok: true, userId: u.id, isAdmin: p.data.isAdmin });
   });
 
   // 增减积分（正=补发，负=扣减；走计费事务、写流水、余额不得为负），全程可追溯

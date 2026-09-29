@@ -18,7 +18,8 @@ after(async () => {
   await require('../dist/lib/prisma.js').prisma.$disconnect().catch(() => {});
 });
 
-mem._seedUser({ id: 'admin1', level: 'PRO', isAdmin: true });
+mem._seedUser({ id: 'admin1', phone: '18891995171', level: 'PRO', isAdmin: false });
+mem._seedUser({ id: 'subadm', phone: '13000000009', level: 'PRO', isAdmin: true }); // 副管理员：身份标记仍在，但 2026-09-29 起后台 403
 mem._seedUser({ id: 'u_norm', level: 'BASIC' });
 
 const H = (uid, level) => ({ Authorization: `Bearer ${signAccess({ sub: uid, level })}`, 'Content-Type': 'application/json' });
@@ -94,6 +95,60 @@ describe('每周API盘点 HTTP（仅管理员）', { concurrency: 1 }, () => {
     const g = await get(M + '/portfolio/audit-report', 'admin1', 'PRO');
     assert.strictEqual(g.s, 200);
     assert.ok(g.j.latest && g.j.latest.kind === 'WEEKLY_MODEL');
+  });
+});
+
+describe('2026-09-29 超管一人独大：副管理员模型后台一律 403', { concurrency: 1 }, () => {
+  const M = '/api/admin/model';
+  it('副管 GET 模型配置 403 needSuperAdmin', async () => {
+    const { s, j } = await get(M + '/', 'subadm', 'PRO');
+    assert.strictEqual(s, 403);
+    assert.strictEqual(j.needSuperAdmin, true);
+  });
+  it('副管 GET 组合全景 403', async () => {
+    assert.strictEqual((await get(M + '/portfolio', 'subadm', 'PRO')).s, 403);
+  });
+  it('副管 POST 每日体检 ACK 403（高危留痕动作）', async () => {
+    const r = await fetch(base + M + '/portfolio/review/ack', { method: 'POST', headers: H('subadm', 'PRO'), body: '{}' });
+    assert.strictEqual(r.status, 403);
+  });
+});
+
+describe('v2.187 每日API选型体检 HTTP（仅管理员）', { concurrency: 1 }, () => {
+  const M = '/api/admin/model';
+  it('普通用户查看体检 403', async () => {
+    const r = await fetch(base + M + '/portfolio/review', { headers: H('u_norm', 'BASIC') });
+    assert.strictEqual(r.status, 403);
+  });
+  it('超管查看：无 ACK 时以 2026-08-01 基准日亮 overdue，附清单与厂商链接', async () => {
+    const { s, j } = await get(M + '/portfolio/review', 'admin1', 'PRO');
+    assert.strictEqual(s, 200);
+    assert.strictEqual(j.status.baseDate, '2026-08-01');
+    assert.ok(j.status.daysSinceReview >= 14, '距基准日已逾 14 天');
+    assert.strictEqual(j.status.level, 'overdue');
+    assert.ok(j.status.checklist.length >= 5);
+    assert.ok(j.status.vendors.length >= 8);
+  });
+  it('超管 ACK 后状态归零 fresh、checkedToday；同日 run 首次落库、再次 skipped 幂等', async () => {
+    const ack = await fetch(base + M + '/portfolio/review/ack', { method: 'POST', headers: H('admin1', 'PRO'), body: '{}' });
+    assert.strictEqual(ack.status, 200);
+    const aj = await ack.json();
+    assert.strictEqual(aj.ok, true);
+    assert.strictEqual(aj.status.level, 'fresh');
+    assert.strictEqual(aj.status.checkedToday, true);
+
+    const g = await get(M + '/portfolio/review', 'admin1', 'PRO');
+    assert.strictEqual(g.j.status.level, 'fresh');
+    assert.ok(g.j.lastAckAt);
+
+    const run1 = await fetch(base + M + '/portfolio/review/run', { method: 'POST', headers: H('admin1', 'PRO'), body: '{}' });
+    assert.strictEqual(run1.status, 200);
+    const r1 = await run1.json();
+    assert.ok(r1.reportId, '当天首次手动补跑应落库');
+
+    const run2 = await fetch(base + M + '/portfolio/review/run', { method: 'POST', headers: H('admin1', 'PRO'), body: '{}' });
+    const r2 = await run2.json();
+    assert.strictEqual(r2.skipped, true, '同日重复补跑必须幂等');
   });
 });
 

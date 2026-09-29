@@ -20,7 +20,8 @@ after(async () => {
   await require('../dist/lib/prisma.js').prisma.$disconnect().catch(() => {});
 });
 
-mem._seedUser({ id: 'adm', level: 'PRO', isAdmin: true });
+mem._seedUser({ id: 'adm', phone: '18891995171', level: 'PRO', isAdmin: false });
+mem._seedUser({ id: 'subadm', phone: '13000000010', level: 'PRO', isAdmin: true }); // 副管：标记在、无后台权
 mem._seedUser({ id: 'norm', level: 'BASIC' });
 const H = (uid, level) => ({ Authorization: `Bearer ${signAccess({ sub: uid, level })}`, 'Content-Type': 'application/json' });
 const jget = async (p, uid, lv) => { const r = await fetch(base + p, { headers: H(uid, lv) }); return { s: r.status, j: await r.json().catch(() => null) }; };
@@ -31,9 +32,12 @@ async function postBody(uid, title, body) {
 }
 
 describe('超管合规规则库管理（串行）', { concurrency: 1 }, () => {
-  it('未登录 401 / 普通用户 403', async () => {
+  it('未登录 401 / 普通用户 403 / 副管理员 403(needSuperAdmin)', async () => {
     assert.strictEqual((await jget('/api/admin/safety/rules')).s, 401);
     assert.strictEqual((await jget('/api/admin/safety/rules', 'norm', 'BASIC')).s, 403);
+    const sub = await jget('/api/admin/safety/rules', 'subadm', 'PRO');
+    assert.strictEqual(sub.s, 403);
+    assert.strictEqual(sub.j.needSuperAdmin, true, '副管理员不再可管理合规规则库');
   });
 
   it('超管初始列表：默认规则齐全、计数正确、全部 builtin', async () => {

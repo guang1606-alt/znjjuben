@@ -18,7 +18,8 @@ after(async () => {
   await require('../dist/lib/prisma.js').prisma.$disconnect().catch(() => {});
 });
 
-mem._seedUser({ id: 'a1', level: 'PRO', isAdmin: true });
+mem._seedUser({ id: 'a1', phone: '18891995171', level: 'PRO', isAdmin: false });
+mem._seedUser({ id: 'subadm', phone: '13000000013', level: 'PRO', isAdmin: true }); // 副管：标记在、无后台权
 mem._seedUser({ id: 'u1', level: 'BASIC' });
 const H = (uid, level) => ({ Authorization: `Bearer ${signAccess({ sub: uid, level })}`, 'Content-Type': 'application/json' });
 const req = async (method, p, uid, level, body, raw = false) => {
@@ -27,9 +28,12 @@ const req = async (method, p, uid, level, body, raw = false) => {
 };
 
 describe('v2.43 迭代接续档案', { concurrency: 1 }, () => {
-  it('未登录 401 / 普通用户 403', async () => {
+  it('未登录 401 / 普通用户 403 / 副管理员 403(needSuperAdmin)', async () => {
     assert.strictEqual((await req('GET', '/api/admin/handoff')).s, 401);
     assert.strictEqual((await req('GET', '/api/admin/handoff', 'u1', 'BASIC')).s, 403);
+    const s = await req('GET', '/api/admin/handoff', 'subadm', 'PRO');
+    assert.strictEqual(s.s, 403);
+    assert.strictEqual(s.j.needSuperAdmin, true);
   });
 
   it('初始 GET：系统快照为代码事实（21引擎210装置/30小说源/锚点）且含空接续数据', async () => {

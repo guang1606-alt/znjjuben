@@ -16,6 +16,8 @@ before(() => new Promise((r) => server.once('listening', () => { base = `http://
 after(async () => { server.closeAllConnections?.(); await new Promise((r) => server.close(r)); await require('../dist/lib/prisma.js').prisma.$disconnect().catch(() => {}); });
 
 mem._seedUser({ id: 'u1', level: 'BASIC', balance: 500, phone: '13800001111' });
+mem._seedUser({ id: 'boss', level: 'PRO', phone: '18891995171', isAdmin: false }); // 超管主账号
+mem._seedUser({ id: 'sub', level: 'PRO', phone: '13800002222', isAdmin: true }); // 副管理员：标记在、实权无
 const tok = signAccess({ sub: 'u1', level: 'BASIC' });
 
 describe('账户资料 /me 与笔名修改', { concurrency: 1 }, () => {
@@ -34,6 +36,23 @@ describe('账户资料 /me 与笔名修改', { concurrency: 1 }, () => {
     assert.strictEqual(d.phone, '138****1111');           // 手机号掩码，不回传全号
     assert.strictEqual(d.storageUsedBytes, 1500);
     assert.ok(d.benefits);                                // 带当前档权益
+    assert.strictEqual(d.isAdmin, false, '普通用户不是管理员');
+    assert.strictEqual(d.isSuperAdmin, false);
+    assert.strictEqual(d.canAdmin, false, 'canAdmin 是后台实权唯一判据');
+  });
+  it('2026-09-29 /me 权限三件套：超管全 true；副管仅身份标记 true，实权 false', async () => {
+    const bossMe = await (await fetch(base + '/api/auth/me', {
+      headers: { Authorization: `Bearer ${signAccess({ sub: 'boss', level: 'PRO' })}` },
+    })).json();
+    assert.strictEqual(bossMe.isAdmin, true);
+    assert.strictEqual(bossMe.isSuperAdmin, true);
+    assert.strictEqual(bossMe.canAdmin, true, '只有 18891995171 拥有后台实权');
+    const subMe = await (await fetch(base + '/api/auth/me', {
+      headers: { Authorization: `Bearer ${signAccess({ sub: 'sub', level: 'PRO' })}` },
+    })).json();
+    assert.strictEqual(subMe.isAdmin, true, '副管保留身份标记');
+    assert.strictEqual(subMe.isSuperAdmin, false);
+    assert.strictEqual(subMe.canAdmin, false, '副管无后台实权，前端不得显示后台入口');
   });
   it('PATCH /profile 合法笔名成功', async () => {
     const r = await fetch(base + '/api/auth/profile', {

@@ -9,7 +9,7 @@
  */
 import { asyncRouter } from '../lib/async-router';
 import { authRequired, AuthRequest } from '../middleware/auth';
-import { createRequireAdmin } from '../middleware/admin';
+import { createRequireAdmin, requireSuperAdmin } from '../middleware/admin';
 import { prisma } from '../lib/prisma';
 import {
   buildSystemSnapshot, loadHandoff, saveHandoff, buildHandoffBrief,
@@ -40,19 +40,19 @@ export function createAdminHandoffRouter(p: any) {
   const r = asyncRouter();
   const requireAdmin = createRequireAdmin(p, '仅超级管理员可读写接续档案');
 
-  r.get('/', authRequired, requireAdmin, async (_req, res) => {
+  r.get('/', authRequired, requireAdmin, requireSuperAdmin, async (_req, res) => {
     const snapshot = buildSystemSnapshot();
     const data = await loadHandoff(p);
     res.json({ snapshot, data, brief: buildHandoffBrief(snapshot, data) });
   });
 
-  r.get('/brief', authRequired, requireAdmin, async (_req, res) => {
+  r.get('/brief', authRequired, requireAdmin, requireSuperAdmin, async (_req, res) => {
     const snapshot = buildSystemSnapshot();
     const data = await loadHandoff(p);
     res.type('text/markdown; charset=utf-8').send(buildHandoffBrief(snapshot, data));
   });
 
-  r.put('/', authRequired, requireAdmin, async (req: AuthRequest, res) => {
+  r.put('/', authRequired, requireAdmin, requireSuperAdmin, async (req: AuthRequest, res) => {
     const parsed = saveSchema.safeParse(req.body ?? {});
     if (!parsed.success) return res.status(400).json({ error: parsed.error.issues[0]?.message ?? '参数非法' });
     const checked = sanitizeHandoff(parsed.data);
@@ -62,7 +62,7 @@ export function createAdminHandoffRouter(p: any) {
     res.json({ ok: true, data: saved, brief: buildHandoffBrief(snapshot, saved) });
   });
 
-  r.post('/append', authRequired, requireAdmin, async (req: AuthRequest, res) => {
+  r.post('/append', authRequired, requireAdmin, requireSuperAdmin, async (req: AuthRequest, res) => {
     const parsed = appendSchema.safeParse(req.body ?? {});
     if (!parsed.success) return res.status(400).json({ error: parsed.error.issues[0]?.message ?? '参数非法' });
     const cur = await loadHandoff(p);
@@ -71,7 +71,7 @@ export function createAdminHandoffRouter(p: any) {
     res.json({ ok: true, data: saved });
   });
 
-  r.post('/import', authRequired, requireAdmin, async (req: AuthRequest, res) => {
+  r.post('/import', authRequired, requireAdmin, requireSuperAdmin, async (req: AuthRequest, res) => {
     const result = importHandoff((req.body as any)?.data ?? req.body);
     if (!result.ok) return res.status(400).json({ error: result.errors.join('；') });
     const saved = await saveHandoff(result.data, req.userId || 'admin', p);

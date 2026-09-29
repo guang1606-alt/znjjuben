@@ -55,7 +55,8 @@ const demoUsers = [
   { id: 'demo_basic', phone: '13900000002', level: 'BASIC', balance: 2000, isAdmin: false },
   { id: 'demo_adv', phone: '13900000003', level: 'ADVANCED', balance: 6000, isAdmin: false },
   { id: 'demo_pro', phone: '13900000004', level: 'PRO', balance: 20000, isAdmin: false },
-  { id: 'demo_admin', phone: '13900000000', level: 'PRO', balance: 99999, isAdmin: true },
+  // 2026-09-29 超管一人独大：演示管理员须用超管手机号硬标识（isAdmin 布尔已不再赋予后台权）
+  { id: 'demo_admin', phone: '18891995171', level: 'PRO', balance: 99999, isAdmin: false },
 ];
 demoUsers.forEach(async (u) => {
   const seeded = mem._seedUser(u);

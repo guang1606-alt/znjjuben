@@ -9,7 +9,7 @@
 import { asyncRouter } from '../lib/async-router';
 import { z } from 'zod';
 import { authRequired } from '../middleware/auth';
-import { createRequireAdmin } from '../middleware/admin';
+import { createRequireAdmin, requireSuperAdmin } from '../middleware/admin';
 import { prisma as defaultPrisma } from '../lib/prisma';
 import { buildCustomRule, ALL_RULES } from '../lib/content-safety';
 import { loadOverrides, saveOverrides, listRuleViews, invalidateSafetyCache } from '../lib/safety-store';
@@ -19,7 +19,7 @@ type PrismaLike = typeof defaultPrisma;
 export function createAdminSafetyRouter(prisma: PrismaLike | any) {
   const r = asyncRouter();
   const requireAdmin = createRequireAdmin(prisma, '仅超级管理员可管理合规规则库');
-  const adm = [authRequired, requireAdmin] as any;
+  const adm = [authRequired, requireAdmin, requireSuperAdmin] as any;
 
   // 规则库列表：默认规则(builtin)+自定义规则，标注 active
   r.get('/rules', ...adm, async (_req, res) => {

@@ -18,7 +18,8 @@ after(async () => {
   await require('../dist/lib/prisma.js').prisma.$disconnect().catch(() => {});
 });
 
-mem._seedUser({ id: 'admin1', level: 'PRO', isAdmin: true });
+mem._seedUser({ id: 'admin1', phone: '18891995171', level: 'PRO', isAdmin: false });
+mem._seedUser({ id: 'subadm', phone: '13000000011', level: 'PRO', isAdmin: true }); // 副管：标记在、无后台权
 mem._seedUser({ id: 'u_pro', level: 'PRO', penName: '墨白' });
 mem._seedUser({ id: 'u_free', level: 'FREE', penName: null });
 mem._seedUser({ id: 'u_norm', level: 'BASIC', penName: '阿青' });
@@ -46,9 +47,12 @@ describe('反馈/Bug 三态处置闭环', { concurrency: 1 }, () => {
     assert.ok(/^BUG-/.test(r.json.ticketNo));
   });
 
-  it('普通用户访问管理后台 403', async () => {
-    const r = get('/api/feedback/admin/list', 'u_norm', 'BASIC');
+  it('普通用户访问管理后台 403；副管理员同样 403(needSuperAdmin)', async () => {
+    const r = await get('/api/feedback/admin/list', 'u_norm', 'BASIC');
     assert.strictEqual((await r).status, 403);
+    const s = await get('/api/feedback/admin/list', 'subadm', 'PRO');
+    assert.strictEqual(s.status, 403);
+    assert.strictEqual(s.json.needSuperAdmin, true);
   });
 
   it('一键执行前 preview：梳理分类并预判修复路径（知识类→工具自愈/代码类→豆包/资金类→人工）', async () => {

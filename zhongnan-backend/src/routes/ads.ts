@@ -7,7 +7,7 @@
 import { asyncRouter } from '../lib/async-router';
 import { z } from 'zod';
 import { authRequired, AuthRequest } from '../middleware/auth';
-import { createRequireAdmin } from '../middleware/admin';
+import { createRequireAdmin, requireSuperAdmin } from '../middleware/admin';
 import { prisma as defaultPrisma } from '../lib/prisma';
 
 type PrismaLike = typeof defaultPrisma;
@@ -22,7 +22,7 @@ export const AD_SLOTS = [
 export function createAdsRouter(prisma: PrismaLike | any) {
   const router = asyncRouter();
   const requireAdmin = createRequireAdmin(prisma, '仅超级管理员可管理广告位');
-  const admin = [authRequired, requireAdmin] as any;
+  const admin = [authRequired, requireAdmin, requireSuperAdmin] as any;
 
   // 生效广告（公开）
   router.get('/', async (req, res) => {

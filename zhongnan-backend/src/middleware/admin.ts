@@ -1,20 +1,32 @@
 /**
- * 统一管理员鉴权（v1.46 抽取，消除 admin-model / feedback / knowledge 三处重复实现，口径唯一）。
- * 命中三选一即为管理员：① 超管主账号手机号 18891995171；② role === 'ADMIN'（子账号/角色体系）；③ isAdmin === true。
- * 必须挂在 authRequired 之后（依赖 req.userId）。
+ * 统一管理员鉴权（v1.46 抽取，口径唯一；2026-09-29 收紧为「超管一人独大」）。
  *
- * c198 名实不符修正：旧码 SUPER_ADMIN_PHONE 误存了初始密码字符串 'yxgnono0726'（连手机号正则都
- * 过不了，永远无法命中）。主账号 = 手机号 18891995171 / 初始密码 yxgnono0726（密码由
- * lib/super-admin.ts 启动引导落库，绝不入库明文、绝不下发）。
- * 主账号唯一且权限最高：开设账号等账号生命周期操作走 requireSuperAdmin（仅手机号命中，
- * role==='ADMIN' 的后台子账号也无权开设新账号——「其他账号的权限都在主账号之下」）。
+ * 身份模型（两套独立机制，会员等级 level 与管理权限无关——PRO 只是最高会员档）：
+ *  · 超级管理员（主账号）：手机号 18891995171 硬判定，全库唯一，拥有全部后台权力；
+ *  · 副管理员：isAdmin === true（仅主账号能授予/撤销），是「身份标记」，默认不享有任何后台权力。
+ *
+ * 授权口径（产品主人 2026-09-29 拍板：超管一人独大）：
+ *  所有 /api/admin/* 路由统一挂 [authRequired, requireAdmin, requireSuperAdmin]——
+ *  副管理员（含历史已授予账号）访问一律 403 needSuperAdmin；账号本身保留、可正常使用产品。
+ *  未来若要恢复分级，把指定路由末尾的 requireSuperAdmin 摘掉即可（机关保留、默认全锁）。
+ *
+ * 历史修正：
+ *  c198 名实不符：旧码 SUPER_ADMIN_PHONE 误存初始密码字符串，已修正为手机号；
+ *  2026-09-29 删除 role==='ADMIN' 放行条件——schema 从无 role 字段（仅内存桩有），
+ *  该死条件造成测试/生产行为分叉，按「白名单硬标识、不信任易污染字段」原则移除。
  */
 import { AuthRequest } from './auth';
 
 export const SUPER_ADMIN_PHONE = '18891995171';
 
-export function isAdminUser(u: { phone?: string | null; role?: string | null; isAdmin?: boolean | null } | null | undefined): boolean {
-  return !!u && (u.phone === SUPER_ADMIN_PHONE || (u as any).role === 'ADMIN' || (u as any).isAdmin === true);
+/** 是否具备「管理员身份标记」（注意：身份标记 ≠ 后台权力，后台权力见 isSuperAdmin） */
+export function isAdminUser(u: { phone?: string | null; isAdmin?: boolean | null } | null | undefined): boolean {
+  return !!u && (u.phone === SUPER_ADMIN_PHONE || u.isAdmin === true);
+}
+
+/** 是否唯一最高权限账号（手机号硬判定，杜绝任何字段提权） */
+export function isSuperAdminUser(u: { phone?: string | null } | null | undefined): boolean {
+  return !!u && u.phone === SUPER_ADMIN_PHONE;
 }
 
 /**
@@ -23,12 +35,12 @@ export function isAdminUser(u: { phone?: string | null; role?: string | null; is
  */
 export function requireSuperAdmin(req: AuthRequest, res: any, next: any) {
   const u = (req as any).adminUser;
-  if (!u || u.phone !== SUPER_ADMIN_PHONE) return res.status(403).json({ error: '仅超管主账号可执行此操作', needSuperAdmin: true });
+  if (!isSuperAdminUser(u)) return res.status(403).json({ error: '仅超级管理员主账号可执行此操作', needSuperAdmin: true });
   next();
 }
 
 /** 工厂：注入 prisma（便于内存桩测试），返回 express 中间件 */
-export function createRequireAdmin(prisma: any, denyMsg = '仅管理员可访问后台') {
+export function createRequireAdmin(prisma: any, denyMsg = '仅超级管理员主账号可访问后台') {
   return async function requireAdmin(req: AuthRequest, res: any, next: any) {
     try {
       if (!req.userId) return res.status(401).json({ error: '请先登录' });
