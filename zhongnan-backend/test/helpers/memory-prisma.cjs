@@ -386,6 +386,22 @@ function createMemoryPrisma() {
   };
   const knowledgeItem = crud(knowledgeItems, 'ki', { status: 'PENDING', conflictNote: null });
   const learningReport = crud(learningReports, 'lr', {});
+  // v2.186 工具优化弹窗铁律：announcement 模型，承载"每次改动+上传仓库即向用户弹公告"的契约
+  // 字段：id/version(唯一)/titleZh/titleEn/bodyZh/bodyEn/pinned(bool)/createdAt/createdById
+  // 唯一约束：同 version 拒绝重复创建——create 内查重后抛 P2002（与 postLike 行为对齐）
+  const announcements = [];
+  const announcementCrud = crud(announcements, 'an', { pinned: false, titleEn: null, bodyEn: null });
+  const announcement = {
+    ...announcementCrud,
+    async create({ data }) {
+      if (announcements.some((a) => a.version === data.version)) {
+        const e = new Error('Unique constraint failed on Announcement.version');
+        e.code = 'P2002'; e.meta = { target: ['version'] };
+        throw e;
+      }
+      return announcementCrud.create({ data });
+    },
+  };
   const listing = crud(listings, 'ls', { status: 'ON_SHELF', sample: '' });
   const purchase = crud(purchases, 'pu', { status: 'ESCROW' });
   const roomMessage = crud(roomMessages, 'rm', {});
@@ -437,14 +453,14 @@ function createMemoryPrisma() {
   };
   // 行锁 SELECT ... FOR UPDATE 在内存实现里为空操作（单线程测试无并发竞争）
   const $queryRaw = async () => [];
-  const tx = { user, invitation, pointsAccount, storageObject, ledgerEntry, project, script, generationTask, modelCallLog, feedback, order, payment, membership, post, postLike, poster, pkBattle, knowledgeItem, learningReport, modelConfig, safetyConfig, listing, purchase, writersRoom, roomMessage, teardownRecord, advert, characterAsset, propAsset, sceneAsset, matureConsent, interviewSession, $queryRaw };
+  const tx = { user, invitation, pointsAccount, storageObject, ledgerEntry, project, script, generationTask, modelCallLog, feedback, order, payment, membership, post, postLike, poster, pkBattle, knowledgeItem, learningReport, announcement, modelConfig, safetyConfig, listing, purchase, writersRoom, roomMessage, teardownRecord, advert, characterAsset, propAsset, sceneAsset, matureConsent, interviewSession, $queryRaw };
   return {
     user, invitation, pointsAccount, ledgerEntry, project, script, generationTask, modelCallLog, feedback,
-    order, payment, membership, post, postLike, poster, pkBattle, knowledgeItem, learningReport, modelConfig, safetyConfig, listing, purchase, storageObject, writersRoom, roomMessage, teardownRecord, advert, characterAsset, propAsset, sceneAsset, matureConsent, interviewSession,
+    order, payment, membership, post, postLike, poster, pkBattle, knowledgeItem, learningReport, announcement, modelConfig, safetyConfig, listing, purchase, storageObject, writersRoom, roomMessage, teardownRecord, advert, characterAsset, propAsset, sceneAsset, matureConsent, interviewSession,
     async $transaction(fn) { return fn(tx); },
     _users: users, _accounts: accounts, _projects: projects, _scripts: scripts, _tasks: tasks, _ledgers: ledgers,
     _orders: orders, _payments: payments, _memberships: memberships, _posts: posts, _postLikes: postLikes, _posters: posters, _pkBattles: pkBattles,
-    _knowledgeItems: knowledgeItems, _listings: listings, _purchases: purchases, _writersRooms: writersRooms, _roomMessages: roomMessages, _teardownRecords: teardownRecords, _adverts: adverts, _consents: consents, _interviewSessions: interviewSessions, _characterAssets: characterAssets, _propAssets: propAssets, _sceneAssets: sceneAssets,
+    _knowledgeItems: knowledgeItems, _listings: listings, _purchases: purchases, _writersRooms: writersRooms, _roomMessages: roomMessages, _teardownRecords: teardownRecords, _adverts: adverts, _consents: consents, _interviewSessions: interviewSessions, _characterAssets: characterAssets, _propAssets: propAssets, _sceneAssets: sceneAssets, _announcements: announcements,
     _setBanned(phone, banned) { const u = byPhone.get(phone); if (u) u.banned = banned; },
     /** 测试便捷：直接造一个指定等级/积分余额的用户 */
     _seedUser({ id, level = 'FREE', balance = 0, phone, penName = null, role = 'OP', isAdmin = false, nickname = null, avatarUrl = null, bio = null, region = null, ageBand = null, gender = null, personalized = true } = {}) {

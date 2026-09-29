@@ -25,13 +25,14 @@ import { tagsRouter as defaultTags } from '../routes/tags';
 import { craftRouter as defaultCraft } from '../routes/craft';
 import { novelSourcesRouter as defaultNovels } from '../routes/novel-sources';
 import { adminHandoffRouter as defaultAdminHandoff } from '../routes/admin-handoff';
+import { updatesRouter as defaultUpdates } from '../routes/updates';
 import { bannedGuard } from '../middleware/auth';
 import { settleDueEscrows } from '../lib/escrow';
 import { prisma as defaultPrisma } from '../lib/prisma';
 
 export interface AppRouters {
   auth?: Router; generate?: Router; va?: Router; order?: Router; feedback?: Router;
-  knowledge?: Router; market?: Router; community?: Router; export?: Router; adminModel?: Router; adminSafety?: Router; admin?: Router; room?: Router; teardown?: Router; ads?: Router; tags?: Router; craft?: Router; novels?: Router; adminHandoff?: Router; interview?: Router;
+  knowledge?: Router; market?: Router; community?: Router; export?: Router; adminModel?: Router; adminSafety?: Router; admin?: Router; room?: Router; teardown?: Router; ads?: Router; tags?: Router; craft?: Router; novels?: Router; adminHandoff?: Router; interview?: Router; updates?: Router;
 }
 
 export interface AppDeps {
@@ -66,6 +67,7 @@ export function createApp(routers: AppRouters = {}, preErrorRouter?: Router | Ro
   app.use('/api/craft', routers.craft ?? defaultCraft);
   app.use('/api/novels', routers.novels ?? defaultNovels);
   app.use('/api/admin/handoff', routers.adminHandoff ?? defaultAdminHandoff);
+  app.use('/api', routers.updates ?? defaultUpdates);
   // 扩展挂载位：位于统一错误中间件之前，保证其 async 抛错也能被 JSON 兜底（测试/后续模块复用）
   if (preErrorRouter) (Array.isArray(preErrorRouter) ? preErrorRouter : [preErrorRouter]).forEach((r) => app.use(r));
   // 内部定时任务入口：云定时器周期性调用，CONFIG_SECRET 鉴权
