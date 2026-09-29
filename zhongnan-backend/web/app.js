@@ -159,8 +159,8 @@
         card.className = 'home-tool-card';
         card.innerHTML = `<h3>${escapeHtml(t(tool.key))}</h3><p>${escapeHtml(t(tool.desc))}</p><span class="tool-cost">${escapeHtml(t(tool.cost))}</span>`;
         card.onclick = () => {
-          const orig = $(tool.id);
-          if (orig) orig.click(); // 复用 studio 工具卡的工作台打开逻辑
+          const panel = ({ toolPitch: 'roomPanel', toolRead: 'roomPanel', toolTeardown: 'teardownPanel', toolDiversity: 'diversityPanel', toolBranch: 'branchPanel' })[tool.id];
+          if (panel) openWorkbench(panel);
         };
         tg.appendChild(card);
       });
@@ -1329,7 +1329,7 @@
   });
 
   /* ---------- 视图切换（v2.186 升级：fade+slide 过渡 + nav active 指示器）---------- */
-  const VIEWS = ['home', 'studio', 'works', 'vip', 'square', 'market', 'admin'];
+  const VIEWS = ['home', 'studio', 'toolbox', 'works', 'vip', 'square', 'market', 'admin'];
   let _switchAnimToken = 0;
   function switchView(v) {
     if (!VIEWS.includes(v)) return;
@@ -1337,9 +1337,10 @@
     const sameView = cur && cur.getAttribute('data-view') === v;
     if (sameView) return;
     // 旧视图淡出（不阻塞 hidden 切换，过渡结束后清理）
-    const oldEl = document.querySelector('#view-home, #view-studio, #view-works, #view-vip, #view-square, #view-market, #view-admin:not(.hidden)');
+    const oldEl = document.querySelector('#view-home, #view-studio, #view-toolbox, #view-works, #view-vip, #view-square, #view-market, #view-admin:not(.hidden)');
     VIEWS.forEach((x) => { const el = $('view-' + x); if (el) el.classList.toggle('hidden', x !== v); });
     // nav active 指示器（保留 on 类向后兼容，新加 active）
+    document.querySelectorAll('.nav .nav-item').forEach((b) => b.classList.remove('active', 'on'));
     document.querySelectorAll('.nav [data-view]').forEach((b) => {
       const on = b.getAttribute('data-view') === v;
       b.classList.toggle('on', on);
@@ -1418,6 +1419,14 @@
     });
   }
   document.querySelectorAll('.nav [data-view]').forEach((b) => b.onclick = () => switchView(b.getAttribute('data-view')));
+  // v2.191 编剧室/递招/素材库 等独立模块：直接打开对应工作台面板
+  document.querySelectorAll('.nav [data-open]').forEach((b) => b.onclick = () => {
+    const id = b.getAttribute('data-open'); if (!id) return;
+    // 切换 nav active 态（data-open 按钮无 data-view，手动标记）
+    document.querySelectorAll('.nav .nav-item').forEach((n) => n.classList.remove('active', 'on'));
+    b.classList.add('active', 'on');
+    openWorkbench(id);
+  });
   document.querySelectorAll('.nav [data-nav]').forEach((b) => b.onclick = () => xnSay(lang === 'en' ? 'That area is being built.' : '该板块正在建设中，敬请期待～'));
 
   /* v2.186 创作辅助台 chip toggle → v2.188 改为打开工作台独立板块（不再同页折叠） */
@@ -1446,7 +1455,7 @@
     branchPanel:      { zh: '互动分支可视化编辑器',     en: 'Branch Editor' },
     branchBriefPanel: { zh: '互动分支 · 分支简报',     en: 'Branch Brief' },
     diversityPanel:   { zh: '多版本去重体检',           en: 'Diversity Audit' },
-    roomPanel:        { zh: '编剧室 · 创作工具箱',      en: 'Writers Room' },
+    roomPanel:        { zh: '编剧室',                 en: 'Writers’ Room' },
     teardownPanel:    { zh: '拆爆款工作台',             en: 'Teardown' },
     interviewPanel:   { zh: '采访式创作',               en: 'Interview' },
     brandPanel:       { zh: '剧情软广 · 品牌简报',      en: 'Branded Skit' },

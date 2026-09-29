@@ -598,8 +598,8 @@
     renderReadModes();
     setupReadPicker(); // c202：围读 tab 注入“从我的作品选一集”入口
     document.addEventListener('zn-lang', rerender);
-    $('toolPitch').onclick = () => openPanel('pitch');
-    $('toolRead').onclick = () => openPanel('read');
+    const tp = $('toolPitch'); if (tp) tp.onclick = () => openPanel('pitch');
+    const tr = $('toolRead'); if (tr) tr.onclick = () => openPanel('read');
     $('roomClose').onclick = () => $('roomPanel').classList.add('hidden');
     $('roomHistoryBtn').onclick = toggleHistory;
     document.querySelectorAll('.room-tab').forEach((b) => b.onclick = () => switchTab(b.dataset.rtab));
