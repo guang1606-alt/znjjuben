@@ -1837,13 +1837,44 @@
     refreshAdminNav(); renderModes(); loadCaps(); loadCastAssets(); loadPropAssets(); loadSceneAssets(); // v2.151/v2.159/v2.161 登录后预取角色/道具/场景资产清单
   }
   /* ---------- c201 用户反馈：积分变动明细（每笔加/扣透明可查） ---------- */
+  // c201 复盘补全：积分流水 reason 友好名——与后端 billing/escrow/order/market/admin 实际写入的 reason 全量对齐，
+  // 含 18 个增值服务短名（权威长名见 pricing.ts VALUE_ADDED.desc，流水取短名避免撑爆面板）；未知码原样兜底，绝不吞信息。
+  const LEDGER_REASON_ZH = {
+    FREEZE: '任务冻结', CONSUME: '生成扣费', REFUND: '退回',
+    RECHARGE: '充值', BUY_HOLD: '购剧托管', SCRIPT_SALE: '售剧收入', INVITE_REGISTER: '邀请奖励',
+    SCRIPT_EP_ECONOMY: '经济引擎加集', POSTER_STANDARD: '标准海报', POSTER_FLAGSHIP: '精品海报',
+    SHARE_POSTER: '分享海报', PK_BATTLE: '剧本PK', XIAONAN_DEEP: '小南深度共创',
+    EVAL_REPORT: '市场价值评估', AI_POLISH: 'AI精修去AI化', STORYBOARD: '分镜转换',
+    COPYRIGHT: '版权存证', STORAGE_10G: '存储扩容', LISTEN_SCRIPT: '听剧本',
+    PITCH_MEETING: '选题会', TABLE_READ: '剧本围读', TEARDOWN_ANALYZE: '拆爆款·拆解',
+    TEARDOWN_OUTLINE: '拆爆款·大纲', TARGETED_FIX: '针对性改写', INTERVIEW_TURN: '采访追问',
+  };
+  const LEDGER_REASON_EN = {
+    FREEZE: 'Frozen for task', CONSUME: 'Generation', REFUND: 'Refund',
+    RECHARGE: 'Recharge', BUY_HOLD: 'Purchase held', SCRIPT_SALE: 'Script sale', INVITE_REGISTER: 'Invite reward',
+    SCRIPT_EP_ECONOMY: 'Extra episode', POSTER_STANDARD: 'Standard poster', POSTER_FLAGSHIP: 'Premium poster',
+    SHARE_POSTER: 'Share poster', PK_BATTLE: 'Script PK', XIAONAN_DEEP: 'Deep co-creation',
+    EVAL_REPORT: 'Value report', AI_POLISH: 'AI polish', STORYBOARD: 'Storyboard',
+    COPYRIGHT: 'Copyright', STORAGE_10G: 'Storage +10G', LISTEN_SCRIPT: 'Listen TTS',
+    PITCH_MEETING: 'Pitch meeting', TABLE_READ: 'Table read', TEARDOWN_ANALYZE: 'Hit teardown',
+    TEARDOWN_OUTLINE: 'Adapt outline', TARGETED_FIX: 'Targeted rewrite', INTERVIEW_TURN: 'Interview turn',
+  };
   function friendlyReason(reason) {
     const r = String(reason || '');
-    if (r === 'FREEZE') return lang === 'en' ? 'Frozen for task' : '任务冻结';
-    if (r === 'CONSUME') return lang === 'en' ? 'Generation' : '生成扣费';
-    if (r === 'REFUND' || r.endsWith(':REFUND')) return lang === 'en' ? 'Refund' : '退回';
-    if (r.startsWith('ADMIN_ADJUST')) return lang === 'en' ? 'Admin adjust' : '后台调整';
-    return r;
+    const isEn = lang === 'en';
+    const map = isEn ? LEDGER_REASON_EN : LEDGER_REASON_ZH;
+    if (r.startsWith('ADMIN_ADJUST')) {
+      const base = isEn ? 'Admin adjust' : '后台调整';
+      // 管理端默认原因就是「后台调整」，同名不重复追加；仅展示自定义原因
+      const detail = r.slice('ADMIN_ADJUST:'.length).trim();
+      return (!detail || detail === '后台调整' || detail === base) ? base : `${base} · ${detail}`;
+    }
+    if (r.endsWith(':REFUND')) {
+      const base = r.slice(0, -':REFUND'.length);
+      const label = map[base] || base;
+      return isEn ? `${label} refund` : `${label} · 退回`;
+    }
+    return map[r] || r;
   }
   let ledgerLoaded = false;
   async function togglePointsLedger() {
@@ -1859,11 +1890,19 @@
       const j = await Api.jsonOrThrow(res);
       const rows = (j.items || []).map((it) => {
         const isIn = it.direction === 'IN' || it.direction === 'UNFROZEN';
-        const frozen = it.direction === 'FROZEN';
-        const sign = frozen ? '' : (isIn ? '+' : '−');
-        const color = frozen ? 'opacity:.55' : (isIn ? 'color:var(--ok,#1d9e74)' : 'color:var(--danger,#d4473b)');
+        const isFrozen = it.direction === 'FROZEN';
+        // CONSUME 是「冻结额结算实扣」（billing.settle 只减 frozen 不动 balance）：余额在冻结行已减过，
+        // 本行不再显示减号，否则两行连看像被扣两次；真实余额减少只有 FROZEN 与增值/托管类 OUT。
+        const isSettle = it.reason === 'CONSUME';
+        const sign = (isIn || isSettle) ? (isIn ? '+' : '') : '−';
+        const color = isFrozen ? 'color:var(--gold-deep,#a0710a)'
+          : isSettle ? 'color:var(--muted,#8a8a8a)'
+          : isIn ? 'color:var(--ok,#1d9e74)' : 'color:var(--danger,#d4473b)';
         const time = it.createdAt ? new Date(it.createdAt).toLocaleString(lang === 'en' ? 'en-US' : 'zh-CN', { hour12: false }) : '';
-        const verb = frozen ? (lang === 'en' ? 'frozen' : '冻结') : (it.direction === 'CONSUME' ? (lang === 'en' ? 'spent' : '支出') : (lang === 'en' ? 'in' : '收入'));
+        const verb = isFrozen ? (lang === 'en' ? 'frozen' : '冻结')
+          : isSettle ? (lang === 'en' ? 'settled' : '结算')
+          : isIn ? (lang === 'en' ? 'in' : '收入')
+          : (lang === 'en' ? 'spent' : '支出');
         return `<div class="points-ledger-row">
           <div class="pl-main"><b style="${color}">${sign}${it.amount}</b><span class="muted">${verb}</span><span>${escapeHtml(friendlyReason(it.reason))}</span></div>
           <div class="pl-sub muted">${time}${it.balanceAfter != null ? ` · ${t('ledgerBalance')} ${it.balanceAfter}` : ''}</div>
