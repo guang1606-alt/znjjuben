@@ -510,6 +510,10 @@ textarea { background: var(--panel); color: var(--text); border: 1px solid var(-
 .work-card h3{margin:0;font-family:var(--serif);font-size:15.5px;letter-spacing:.03em}
 .work-card .muted{font-size:12px;color:var(--text-2)}
 .work-badges{display:flex;gap:6px;flex-wrap:wrap}
+.work-actions{display:flex;gap:6px;margin-top:4px}
+.work-action-btn{font-size:12px;padding:3px 10px;border-radius:7px;cursor:pointer}
+.work-action-btn.danger{background:color-mix(in srgb,var(--cinnabar) 12%,var(--panel));color:var(--cinnabar)}
+.work-action-btn:hover{filter:brightness(1.1)}
 .ep-item{border:1px solid var(--line);border-radius:12px;padding:13px 15px;margin-bottom:10px;background:var(--panel-2)}
 .ep-item h4{margin:0 0 6px;font-size:14px;font-family:var(--serif)}
 .ep-item pre{white-space:pre-wrap;word-break:break-word;font-family:inherit;font-size:13.5px;line-height:1.7;margin:8px 0 0;color:var(--text)}

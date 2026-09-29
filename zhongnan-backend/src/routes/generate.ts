@@ -1530,8 +1530,27 @@ generateRouter.post('/creation-strategy/recommend', authRequired, async (req: Au
 });
 // 我的项目列表（作品库）
 generateRouter.get('/projects', authRequired, async (req: AuthRequest, res) => {
-  const list = await prisma.project.findMany({ where: { userId: req.userId! }, orderBy: { createdAt: 'desc' }, take: 200 });
+  const list = await prisma.project.findMany({ where: { userId: req.userId!, status: { not: 'deleted' } }, orderBy: { createdAt: 'desc' }, take: 200 });
   res.json(list);
+});
+
+// 重命名项目（仅本人）
+generateRouter.put('/projects/:id', authRequired, async (req: AuthRequest, res) => {
+  const title = (req.body?.title || '').trim();
+  if (!title) return res.status(400).json({ error: '标题不能为空' });
+  if (title.length > 80) return res.status(400).json({ error: '标题不超过 80 字' });
+  const project = await prisma.project.findFirst({ where: { id: req.params.id, userId: req.userId!, status: { not: 'deleted' } } });
+  if (!project) return res.status(404).json({ error: '项目不存在' });
+  const updated = await prisma.project.update({ where: { id: project.id }, data: { title } });
+  res.json({ id: updated.id, title: updated.title });
+});
+
+// 软删除项目（status=deleted，列表过滤；可后续加恢复端点）
+generateRouter.delete('/projects/:id', authRequired, async (req: AuthRequest, res) => {
+  const project = await prisma.project.findFirst({ where: { id: req.params.id, userId: req.userId!, status: { not: 'deleted' } } });
+  if (!project) return res.status(404).json({ error: '项目不存在' });
+  await prisma.project.update({ where: { id: project.id }, data: { status: 'deleted' } });
+  res.json({ ok: true, id: project.id });
 });
 // 某项目下全部剧本（仅本人可读全文；作品库点进去看分集）
 generateRouter.get('/projects/:id/scripts', authRequired, async (req: AuthRequest, res) => {

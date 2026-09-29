@@ -1710,8 +1710,36 @@
       const c = document.createElement('div'); c.className = 'work-card';
       c.innerHTML = `<h3>${escapeHtml(p.title)}</h3>
         <div class="muted">${p.mode} · ${p.totalEps || 0} eps · ${new Date(p.createdAt).toLocaleString()}</div>
-        <div class="work-badges"><span class="badge">${p.engineTier || 'STANDARD'}</span><span class="badge">${p.format || 'LIVE_ACTION'}</span></div>`;
+        <div class="work-badges"><span class="badge">${p.engineTier || 'STANDARD'}</span><span class="badge">${p.format || 'LIVE_ACTION'}</span></div>
+        <div class="work-actions">
+          <button class="chip work-action-btn" data-act="rename">${lang === 'en' ? 'Rename' : '重命名'}</button>
+          <button class="chip work-action-btn danger" data-act="delete">${lang === 'en' ? 'Delete' : '删除'}</button>
+        </div>`;
       c.onclick = () => openProject(p);
+      c.querySelectorAll('.work-action-btn').forEach((btn) => {
+        btn.onclick = async (e) => {
+          e.stopPropagation();
+          const act = btn.getAttribute('data-act');
+          if (act === 'rename') {
+            const newTitle = (prompt(lang === 'en' ? 'New title:' : '输入新标题：', p.title) || '').trim();
+            if (!newTitle || newTitle === p.title) return;
+            try {
+              const r = await Api.request(`/api/generate/projects/${p.id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ title: newTitle }) });
+              await Api.jsonOrThrow(r);
+              xnSay(lang === 'en' ? 'Renamed.' : '已重命名');
+              loadWorks();
+            } catch (err) { xnSay((err && err.message) || (lang === 'en' ? 'Rename failed.' : '重命名失败')); }
+          } else if (act === 'delete') {
+            if (!confirm(lang === 'en' ? `Delete "${p.title}"? This can be undone later.` : `确定删除"${p.title}"吗？（软删除，可恢复）`)) return;
+            try {
+              const r = await Api.request(`/api/generate/projects/${p.id}`, { method: 'DELETE' });
+              await Api.jsonOrThrow(r);
+              xnSay(lang === 'en' ? 'Deleted.' : '已删除');
+              loadWorks();
+            } catch (err) { xnSay((err && err.message) || (lang === 'en' ? 'Delete failed.' : '删除失败')); }
+          }
+        };
+      });
       grid.appendChild(c);
     });
   }

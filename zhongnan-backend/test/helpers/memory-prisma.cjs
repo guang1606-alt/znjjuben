@@ -65,13 +65,15 @@ function createMemoryPrisma() {
   const invitation = { async create({ data }) { const row = { id: ++seq, ...data }; invitations.push(row); return row; } };
   const project = {
     async findFirst({ where }) {
-      for (const p of projects.values()) if ((!where.id || p.id === where.id) && (!where.userId || p.userId === where.userId)) return p;
+      for (const p of projects.values()) {
+        if ((!where.id || p.id === where.id) && (!where.userId || p.userId === where.userId) && (!where.status || p.status !== where.status.not)) return p;
+      }
       return null;
     },
-    async create({ data }) { const id = data.id || `p_${++seq}`; const p = { id, bible: null, ...data }; projects.set(id, p); return p; },
+    async create({ data }) { const id = data.id || `p_${++seq}`; const p = { id, bible: null, status: 'draft', ...data }; projects.set(id, p); return p; },
     async update({ where, data }) { const p = projects.get(where.id); Object.assign(p, data); return p; },
     async findMany({ where = {}, orderBy, take } = {}) {
-      let r = [...projects.values()].filter((p) => !where.userId || p.userId === where.userId);
+      let r = [...projects.values()].filter((p) => (!where.userId || p.userId === where.userId) && (!where.status || p.status !== where.status.not));
       const ob = Array.isArray(orderBy) ? orderBy : (orderBy ? [orderBy] : [{ createdAt: 'desc' }]);
       r.sort((a, b) => { for (const o of ob) { const k = Object.keys(o)[0]; const dir = o[k] === 'asc' ? 1 : -1; const av = a[k] ?? 0, bv = b[k] ?? 0; if (av < bv) return -1 * dir; if (av > bv) return 1 * dir; } return 0; });
       return typeof take === 'number' ? r.slice(0, take) : r;
