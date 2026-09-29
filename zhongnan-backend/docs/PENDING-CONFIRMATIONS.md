@@ -60,3 +60,4 @@
 - 剩余漂移（纯命名/注释，无结构差异）：约 40 对索引名不一致，DB 用手工短名（如 `ix_guild_members_guild`、`idx_wrong_student_review_s`），模型按 SQLAlchemy 默认名（`ix_guild_members_guild_id`）；另有 12 处表注释差异、`uq_users_single_super_admin` 差异
 - 建议方案（二选一，需拍板）：A. 以 DB 为准，在各模型 `Index(..., name=)` 显式写 DB 实际名（纯模型改动、不写迁移，约 20 文件机械改名）；B. 出一个「仅改名」迁移对齐到模型默认名（生产需短暂 CREATE INDEX CONCURRENTLY + DROP，谨慎）。**当前协作者正在动模型索引区域，建议先约定分工再做，避免冲突**
 - 在清零前：**任何人不要直接 autogenerate 迁移**（会混入 40 对噪音操作），新迁移继续手写
+- 追加（2026-09-30 凌晨二轮）：新增 `tests/test_model_registration.py` 子进程守护测试——全新解释器只 `import app.models`（模拟 alembic env），表集合必须等于遍历 models 目录全量导入的集合，漏导出即红；正负向均已验证。另做了一次「外键无前导索引」元数据审计，约 35 处（community_*/workshop_*/ai_literacy_*/intervention_records 等高频表的 student_id/course_id/author_id 等），但其中大部分 DB 物理上有遗留索引（即上述命名漂移的同批对象），**待方案 A/B 拍板后随命名对齐一并复核**：物理上确缺的补索引迁移，物理上有的只对齐名称
