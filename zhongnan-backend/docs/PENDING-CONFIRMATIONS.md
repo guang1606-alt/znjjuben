@@ -37,7 +37,7 @@
 - 操作：运营到各平台官方入口核验对接方式后，在该文件填入 `detail` 并写 `verifiedAt`（ISO 时间）；前端自动切换为"已核验"徽章
 - 说明：投稿渠道匹配功能已上线（v2.195），即使联系方式未核验，题材适配推荐也可用
 
-## 8.【中】养正主仓库（cultivating-integrity）缺每日复盘机制
-- 现状：zhongnan 仓库已有 `scripts/daily-review.cjs` 自动产出 `docs/daily-review/YYYY-MM-DD.md`；养正主仓库无此机制，多人协作时无法每日自动全景扫描
-- 建议：确认是否要把同一套 daily-review 脚本移植到养正主仓库（后端 Python + 前端 TS，需适配扫描规则），或仅在 zhongnan 侧维护跨仓库清单
-- 今日已同步：养正 `dd743e0`（virtue 调度幂等化 + 前端类型修复 + idempotent_commit 核心入库 + 并发竞态测试）
+## 8.【已完成】养正主仓库每日复盘机制
+- 现状：已移植 `scripts/daily-review.cjs` 到养正主仓库（适配 Python 后端 + TS 前端结构），每日产出 `docs/daily-review/YYYY-MM-DD.md`
+- 用法：`node scripts/daily-review.cjs`
+- 说明：待确认清单仍以本文件为单一事实源，养正报告自动回显
