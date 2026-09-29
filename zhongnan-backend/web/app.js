@@ -1224,6 +1224,9 @@
     try {
       let host = document.getElementById('znToastHost');
       if (!host) { host = document.createElement('div'); host.id = 'znToastHost'; document.body.appendChild(host); }
+      // v2.191 toast 顶部让开 topbar（导航可能换行）
+      const tb = document.querySelector('.topbar');
+      host.style.top = (tb ? Math.ceil(tb.getBoundingClientRect().bottom) : 14) + 8 + 'px';
       const el = document.createElement('div');
       el.className = 'zn-toast';
       el.textContent = String(msg || '');
@@ -1516,6 +1519,8 @@
     layer.dataset.current = id;
     layer.classList.remove('hidden');
     layer.setAttribute('aria-hidden', 'false');
+    // v2.191 动态顶部留白：必须在移除 hidden 后调用（_syncTopbarOffset 内有 !hidden 守卫）
+    _syncTopbarOffset();
     // 标题
     const t = WORKBENCH_TITLES[id] || {};
     const titleEl = $('workbenchTitle');
@@ -1532,6 +1537,23 @@
     document.addEventListener('keydown', _workbenchEsc);
     if (body) body.scrollTop = 0;
   }
+  // v2.191 顶部留白统一同步：topbar 换行后高度不定，同步更新 workbench / toast / 模态框的顶部偏移，
+  // 避免 topbar 浮岛压住返回键、toast 压在导航上、高模态框顶部被挡
+  function _syncTopbarOffset() {
+    const tb = document.querySelector('.topbar');
+    const tbBottom = tb ? tb.getBoundingClientRect().bottom : 78;
+    const pad = Math.max(78, Math.ceil(tbBottom) + 16) + 'px';
+    // 工作台
+    const wl = $('workbenchLayer');
+    if (wl && !wl.classList.contains('hidden')) wl.style.paddingTop = pad;
+    // Toast 通知
+    const host = document.getElementById('znToastHost');
+    if (host) host.style.top = Math.ceil(tbBottom) + 8 + 'px';
+    // 模态框：高模态框顶部需让开 topbar
+    document.querySelectorAll('.modal-mask').forEach((m) => { m.style.paddingTop = pad; });
+  }
+  window.addEventListener('resize', _syncTopbarOffset);
+  document.addEventListener('zn-lang', _syncTopbarOffset);
   function _hideWorkbenchLayer() {
     const layer = $('workbenchLayer'); if (!layer) return;
     layer.classList.add('view-out');
@@ -1574,8 +1596,8 @@
     const b = $(id); if (b) b.addEventListener('click', closeWorkbench);
   });
   // 首次 DOM 就绪后初始化（含静态转移）
-  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', _initWorkbenchLayer);
-  else _initWorkbenchLayer();
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', () => { _initWorkbenchLayer(); _syncTopbarOffset(); });
+  else { _initWorkbenchLayer(); _syncTopbarOffset(); }
 
   /* v2.54 全局快速跳转 ⌘/Ctrl+K：不找功能，搜一下就到 */
   (function wireQuickSwitcher() {
