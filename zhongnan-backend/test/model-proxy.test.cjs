@@ -21,16 +21,20 @@ test('extractJson 容错：代码块包裹/前后杂质/数组/非法返回null'
 test('未配置密钥：进入沙盘模式，零成本、sandbox标记', async () => {
   delete process.env.MODEL_TEXT_ECONOMY_KEY;
   delete process.env.REQUIRE_REAL_MODEL;
+  MP.__setProviderSource(async () => ({ providers: [], routing: {} }));
   const r = await MP.callText(P.EngineTier.ECONOMY, 'writer', 'hi');
   assert.strictEqual(r.sandbox, true);
   assert.strictEqual(r.costFen, 0);
+  MP.__setProviderSource(null);
 });
 
-test('REQUIRE_REAL_MODEL=true 且无密钥：拒绝“假装创作”并抛错', async () => {
+test('REQUIRE_REAL_MODEL=true 且无密钥：拒绝"假装创作"并抛错', async () => {
   delete process.env.MODEL_TEXT_ECONOMY_KEY;
   process.env.REQUIRE_REAL_MODEL = 'true';
+  MP.__setProviderSource(async () => ({ providers: [], routing: {} }));
   await assert.rejects(() => MP.callText(P.EngineTier.ECONOMY, 'writer', 'hi'), /MODEL_NOT_CONFIGURED/);
   delete process.env.REQUIRE_REAL_MODEL;
+  MP.__setProviderSource(null);
 });
 
 test('真实调用按 usage 与档位单价精确核算成本（经济档 1M入+0.5M出=180分）', async () => {
@@ -129,6 +133,7 @@ test('429/5xx 瞬态错误：同模型指数退避重试，成功即不触发故
   MP.__resetModelHealth();
   process.env.MODEL_TEXT_ECONOMY_KEY = 'sk-test';
   process.env.MODEL_GATEWAY_BASE_URL = 'https://primary.local/v1';
+  MP.__setProviderSource(async () => ({ providers: [], routing: {} }));
   const urls = [];
   let calls = 0;
   MP.__setHttpTransport(async (url) => { urls.push(url); calls += 1; return calls <= 2 ? badResp(429) : okResp('OK'); });

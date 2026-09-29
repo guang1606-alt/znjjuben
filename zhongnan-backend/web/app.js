@@ -16,6 +16,13 @@
   };
   const LEVEL_ZH = { FREE: '免费', BASIC: '基础', ADVANCED: '高级', PRO: '专业' };
   const LEVEL_EN = { FREE: 'Free', BASIC: 'Basic', ADVANCED: 'Advanced', PRO: 'Pro' };
+  // v2.193 身份标签：超管/副管理员优先显示身份，普通用户显示会员档（避免超管登录显示"专业版"的名实不符）
+  function userRoleLabel(u) {
+    if (!u) return '';
+    if (u.isSuperAdmin) return lang === 'en' ? 'Super Admin' : '超级管理员';
+    if (u.isAdmin) return lang === 'en' ? 'Admin' : '管理员';
+    return (lang === 'en' ? LEVEL_EN : LEVEL_ZH)[u.level] || u.level || '';
+  }
   let lang = 'zh';
 
   /* ---------- 持久化偏好 ---------- */
@@ -1654,7 +1661,7 @@
     const btn = $('loginBtn'); if (!btn || !window.Api) return;
     const u = Api.getUser();
     if (u) {
-      const lv = (lang === 'en' ? LEVEL_EN : LEVEL_ZH)[u.level] || u.level || '';
+      const lv = userRoleLabel(u);
       btn.textContent = lv + ' · ' + t('logout');
       btn.onclick = () => { Api.auth.logout(); meCache = null; capsCache = null; refreshAdminNav(); renderAuthButton(); renderModes(); refreshListenBtn(); xnSay(lang === 'en' ? 'Signed out.' : '已退出登录'); };
     } else {
@@ -1943,7 +1950,7 @@
     if (!Api.isAuthed()) { card.style.display = 'none'; return; }
     card.style.display = '';
     const res = await Api.request('/api/auth/me'); const me = await Api.jsonOrThrow(res); meCache = me;
-    const lv = (lang === 'en' ? LEVEL_EN : LEVEL_ZH)[me.level] || me.level;
+    const lv = userRoleLabel(me);
     $('meAvatar').textContent = (me.penName || me.nickname || '编').slice(0, 1);
     $('meNickname').textContent = me.nickname || (lang === 'en' ? 'New writer' : '编剧新人');
     $('meLevel').textContent = lv;

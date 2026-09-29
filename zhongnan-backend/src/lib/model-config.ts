@@ -5,8 +5,10 @@
 import { prisma } from './prisma';
 import { encrypt, decrypt, maskKey } from './crypto';
 import type { EngineTier } from '../config/pricing';
+import { findModel } from '../config/model-catalog';
 import {
   ProviderEntry, RoleId, upsertProvider, removeProvider, maskProviders, mergeMaskedKey,
+  resolveProviderBaseUrl,
 } from './model-config-policy';
 
 export interface ProviderCfg { baseUrl?: string; apiKey?: string; model?: string }
@@ -130,7 +132,10 @@ export async function maskedConfig(p: any = prisma) {
 /** 读取供应商池（服务端内部用，含明文 key，仅后端调用） */
 export async function loadProviders(p: any = prisma): Promise<ProviderEntry[]> {
   const d = await loadConfig(p);
-  return (d.providers ?? []).map((x) => ({ ...emptySafe(), ...x }));
+  return (d.providers ?? []).map((x) => {
+    const base = resolveProviderBaseUrl(x, x.catalogId ? findModel(x.catalogId)?.defaultBaseUrl : undefined);
+    return { ...emptySafe(), ...x, baseUrl: base };
+  });
 }
 function emptySafe(): ProviderEntry {
   return { id: '', name: '', modality: 'text', baseUrl: '', apiKey: '', model: '', inYuanPerMTok: 0, outYuanPerMTok: 0, enabled: true };

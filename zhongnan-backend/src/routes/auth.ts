@@ -46,7 +46,7 @@ export function createAuthRouter(prisma: PrismaLike | any) {
         grantBonus(t, inviter.id, INVITE.BOTH_REWARD_POINTS, 'INVITE_REGISTER', `invreg:${inviter.id}:${user.id}`));
     }
     const payload = { sub: user.id, level: user.level };
-    res.json({ accessToken: signAccess(payload), refreshToken: signRefresh(payload), user: { id: user.id, level: user.level } });
+    res.json({ accessToken: signAccess(payload), refreshToken: signRefresh(payload), user: { id: user.id, level: user.level, isAdmin: isAdminUser(user), isSuperAdmin: isSuperAdminUser(user) } });
   });
   const loginSchema = z.object({ phone: z.string(), password: z.string() });
   authRouter.post('/login', async (req, res) => {
@@ -57,7 +57,7 @@ export function createAuthRouter(prisma: PrismaLike | any) {
       return res.status(401).json({ error: '手机号或密码错误' }); // 不区分“用户不存在/密码错”，防枚举
     if (user.banned) return res.status(403).json({ error: '账号已封禁' });
     const payload = { sub: user.id, level: user.level };
-    res.json({ accessToken: signAccess(payload), refreshToken: signRefresh(payload), user: { id: user.id, level: user.level } });
+    res.json({ accessToken: signAccess(payload), refreshToken: signRefresh(payload), user: { id: user.id, level: user.level, isAdmin: isAdminUser(user), isSuperAdmin: isSuperAdminUser(user) } });
   });
   authRouter.post('/refresh', async (req, res) => {
     try {
