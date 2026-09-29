@@ -1,0 +1,45 @@
+# ============ 版本控制 / 密钥 / 日志（绝不打包） ============
+.git
+.gitignore
+.env
+.env.*
+*.log
+logs
+npm-debug.log*
+
+# ============ 本地/PM2/Windows 专用，与云端运行无关 ============
+ecosystem.config.cjs
+启动演示(Windows双击).bat
+
+# ============ 测试 / 文档 / 运维脚本（server 运行不引用） ============
+test
+docs
+coverage
+scripts
+
+# ============ 开发期依赖（云端运行编译产物 dist，不需要这些） ============
+# Prisma CLI（建表已完成，运行时不依赖 CLI）
+node_modules/prisma
+# @prisma/engines 内仅保留包元数据，删除各平台引擎二进制；
+# 运行时实际使用 node_modules/.prisma/client 内生成的 debian-openssl-3.0.x 引擎
+node_modules/@prisma/engines/schema-engine-*
+node_modules/@prisma/engines/libquery_engine-*
+# TypeScript 编译器与类型定义
+node_modules/typescript
+node_modules/ts-node-dev
+node_modules/@types
+
+# ============ 原生模块：只保留 veFaaS 所需的 linux-x64 ============
+# argon2 运行时按平台选用 prebuilds，native-node20 为 linux-x64 glibc
+node_modules/argon2/prebuilds/darwin-x64
+node_modules/argon2/prebuilds/darwin-arm64
+node_modules/argon2/prebuilds/linux-arm64
+node_modules/argon2/prebuilds/win32-x64
+node_modules/argon2/prebuilds/freebsd-x64
+# fsevents 是 macOS 专属可选依赖，Linux 下不会加载
+node_modules/fsevents
+
+# ============ 杂项 ============
+.DS_Store
+*.tsbuildinfo
+.vefaas

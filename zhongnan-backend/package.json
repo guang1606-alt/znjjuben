@@ -1,0 +1,44 @@
+{
+  "name": "zhongnan-screenwriting-backend",
+  "version": "2.185.43",
+  "description": "终南编剧AI - 后端服务（认证/会员/积分账本/创作编排/模型黑盒代理/订单支付/反馈工单）",
+  "main": "dist/index.js",
+  "scripts": {
+    "dev": "ts-node-dev --respawn --transpile-only src/index.ts",
+    "build": "tsc -p tsconfig.json",
+    "start": "node dist/index.js",
+    "demo": "tsc -p tsconfig.json && node scripts/start-demo.cjs",
+    "demo:only": "node scripts/start-demo.cjs",
+    "typecheck": "tsc --noEmit",
+    "test": "node scripts/run-tests.cjs test/",
+    "prisma:generate": "prisma generate",
+    "prisma:migrate": "prisma migrate dev",
+    "db:push": "prisma db push",
+    "health": "node scripts/healthcheck.cjs",
+    "backup": "bash scripts/backup-db.sh",
+    "cost:report": "node scripts/cost-report.cjs",
+    "deploy": "bash scripts/deploy.sh"
+  },
+  "dependencies": {
+    "@prisma/client": "^5.22.0",
+    "argon2": "^0.41.1",
+    "cors": "^2.8.5",
+    "docx": "^9.7.1",
+    "dotenv": "^16.4.5",
+    "express": "^4.21.1",
+    "jsonwebtoken": "^9.0.2",
+    "p-queue": "^8.0.1",
+    "pdfkit": "^0.20.1",
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "@types/cors": "^2.8.17",
+    "@types/express": "^4.17.21",
+    "@types/jsonwebtoken": "^9.0.7",
+    "@types/node": "^22.9.0",
+    "@types/pdfkit": "^0.17.6",
+    "prisma": "^5.22.0",
+    "ts-node-dev": "^2.0.0",
+    "typescript": "^5.6.3"
+  }
+}

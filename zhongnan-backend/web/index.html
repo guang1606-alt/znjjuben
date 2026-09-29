@@ -1,0 +1,1172 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="tech" data-font="md" data-lang="zh">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>终南集 · 人工通用智能（AGI）编剧大师</title>
+  <link rel="stylesheet" href="./styles.css" />
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand"><b id="brandName">终南集 · AGI编剧大师</b><span id="brandSlogan"></span></div>
+    <nav class="nav">
+      <button class="on nav-item active" data-view="studio" data-i="zoneCreate"></button>
+      <button class="nav-item" data-view="works" data-i="works"></button>
+      <button class="nav-item" data-view="vip" data-i="vip"></button>
+      <button class="nav-item" data-view="square" data-i="square"></button>
+      <button class="nav-item" data-view="market" data-i="market"></button>
+      <button data-view="admin" class="admin-only hidden nav-item" data-i="adminZone"></button>
+    </nav>
+    <div class="spacer"></div>
+    <div class="ctl">
+      <button class="chip" id="langBtn" title="中文 / English">中 / EN</button>
+      <button class="chip" id="themeBtn" data-i="theme"></button>
+      <button class="chip" id="fontBtn" data-i="font"></button>
+      <button class="chip" id="feedbackEntryBtn" data-i="feedbackEntry"></button>
+      <button class="btn-primary" id="loginBtn" data-i="login"></button>
+    </div>
+  </header>
+
+  <main class="wrap">
+    <!-- 创作视图 -->
+    <div id="view-studio">
+      <section class="hero">
+        <h1 id="heroTitle"></h1>
+        <p id="heroSub"></p>
+      </section>
+
+      <div class="ad-roll hidden" id="adRoll" aria-label="公告与合作位"></div>
+
+      <!-- v2.186 创作辅助台 chip 行：默认折叠 craftBench/novelSrcBench，按需展开，减少视觉啰嗦 -->
+      <div class="bench-chips" role="navigation" aria-label="创作辅助台">
+        <button class="chip bench-toggle" data-bench="craftBench" data-i="craftTitle">小南递招 · 方法卡与钩子</button>
+        <button class="chip bench-toggle" data-bench="novelSrcBench" data-i="novelSrcTitle">免费合法小说素材库 · 多语言</button>
+      </div>
+
+      <div class="section-title"><span class="eyebrow" data-i="modesEyebrow">MODES</span><h2 data-i="modesTitle"></h2><small data-i="modeTip"></small><button class="chip" id="sampleEntryBtn" data-i="sampleEntry" style="margin-left:auto"></button></div>
+      <div class="grid" id="modeGrid"></div>
+
+      <!-- 标签创建模式：智能标签工作台（3.3 标签创建 + 随机标签确认页） -->
+      <section class="panel tag-bench hidden" id="tagBench">
+        <div class="tag-bench-head">
+          <h3 data-i="tagBenchTitle">智能标签工作台</h3>
+          <div class="tag-bench-actions">
+            <button class="btn-primary" id="tagRandomBtn" data-i="tagRandom">🎲 智能随机一组</button>
+            <button class="chip" id="tagRecommendBtn" data-i="tagRecommend">🧩 补齐维度</button>
+            <button class="chip" id="tagRerollBtn" data-i="tagReroll">换一批</button>
+            <button class="chip" id="tagClearBtn" data-i="tagClear">清空</button>
+          </div>
+        </div>
+        <div class="tag-search-row">
+          <input id="tagSearch" type="search" autocomplete="off" data-ph="tagSearchPh" placeholder="搜索标签，如 穿书 / 文旅 / 复仇" />
+          <select id="tagDim"></select>
+        </div>
+        <div class="tag-pool" id="tagPool"></div>
+        <div class="tag-chosen-head"><span data-i="tagChosen">已选标签（确认后据此出本，可点 × 移除）</span><span id="tagCount"></span></div>
+        <div class="tag-chosen" id="tagChosen"></div>
+        <div class="field"><label data-i="tagIdeaLabel">补充一句话创意（选填，让方向更具体）</label>
+          <input id="tagIdea" type="text" maxlength="80" data-ph="tagIdeaPh" placeholder="例：被顶替名额的女医生回乡逆袭" /></div>
+        <div class="tag-why hidden" id="tagWhy"></div>
+        <div class="tag-report" id="tagReport"></div>
+        <div class="tag-board-status muted" id="tagBoardStatus"></div>
+      </section>
+      <!-- 小南递招：叙事方法卡 + 钩子体系（系统默认推荐，用户可增删，选中自动注入出本创意） -->
+      <section class="panel craft-bench hidden" id="craftBench">
+        <div class="craft-head">
+          <h3 data-i="craftTitle">小南递招 · 方法卡与钩子</h3>
+          <span class="muted" data-i="craftFree">免费 · 43张方法卡 / 10类钩子</span>
+          <span class="spacer"></span>
+          <button class="btn-primary" id="craftGoBtn" data-i="craftGo">按当前创意递招</button>
+        </div>
+        <div class="muted craft-sub" data-i="craftSub">系统先按题材给默认钩子组合与最贴的方法，你可点 × 移除、用下拉增选钩子；选中的手法会自动写进出本创意，让多岗位协同更聚焦。</div>
+        <div class="craft-loading hidden" id="craftLoading"></div>
+        <div class="craft-block">
+          <div class="craft-block-head"><b data-i="craftHooks">选用钩子</b>
+            <select id="craftHookAdd"><option value="" data-i="craftAddHook">＋ 从全部钩子添加</option></select></div>
+          <div class="tag-chosen" id="craftHooks"></div>
+        </div>
+        <div class="craft-block">
+          <div class="craft-block-head"><b data-i="craftCards">推荐方法卡（点卡片选用/取消，展开看公式与步骤）</b></div>
+          <div class="craft-cards" id="craftCards"></div>
+        </div>
+        <div class="craft-foot">
+          <span id="craftPicked"></span>
+          <button class="chip" id="craftCopyBtn" data-i="craftCopy">复制手法</button>
+        </div>
+      </section>
+
+      <!-- 免费合法小说素材库（服务小说改编：多语言公版/正版免费来源，绝不做盗版导航） -->
+      <section class="panel novel-src-bench hidden" id="novelSrcBench">
+        <div class="craft-head">
+          <h3 data-i="novelSrcTitle">免费合法小说素材库 · 多语言</h3>
+          <span class="muted" data-i="novelSrcSub2">公版可改编 · 正版免费仅阅读</span>
+          <span class="spacer"></span>
+          <input id="novelSrcSearch" type="search" class="novel-src-search" data-ph="novelSrcSearchPh" placeholder="搜来源，如 青空 / Gutenberg" />
+        </div>
+        <div class="muted craft-sub" data-i="novelSrcSub">只收录公版书、作者CC授权、平台正版免费区三类干净来源；绿色「可改编」标签的公版作品可直接用于改编，其余仅可阅读、改编须另行取得授权。本工具不托管任何书籍内容，点击跳转原站。</div>
+        <div class="novel-src-filters">
+          <div class="novel-lang-row" id="novelLangRow"></div>
+          <label class="novel-adapt-toggle"><input type="checkbox" id="novelAdaptOnly" /> <span data-i="novelAdaptOnly">只看可直接改编（公版）</span></label>
+        </div>
+        <div class="novel-src-grid" id="novelSrcGrid"></div>
+      </section>
+
+      <div class="section-title"><span class="eyebrow gold" data-i="tbEyebrow">TOOLBOX</span><h2 data-i="tbSection">编剧室 · 创作工具箱</h2><small data-i="tbSectionSub">像真实编剧团队一样开会、判断、围读改稿</small></div>
+      <div class="grid tool-grid">
+        <div class="mode-card tool-card" id="toolPitch">
+          <h3 data-i="tbCardPitch">选题会</h3>
+          <p data-i="tbCardPitchP">和小南开创作会：市场/故事/制作/观众四席位评估“人物关系·冲突空间·拍摄难度”，给立项/缓议/否决决议</p>
+          <span class="tool-cost" data-i="tbCostPitch">20 积分/轮</span>
+        </div>
+        <div class="mode-card tool-card" id="toolRead">
+          <h3 data-i="tbCardRead">剧本围读</h3>
+          <p data-i="tbCardReadP">责编/导演/制片/观众逐立场挑问题，形成修改清单；支持我+小南、用户+用户、我+别人的小南、小南+小南自动围读</p>
+          <span class="tool-cost" data-i="tbCostRead">30 积分/次围读</span>
+        </div>
+        <div class="mode-card tool-card" id="toolTeardown">
+          <h3 data-i="tbCardTd">拆爆款</h3>
+          <p data-i="tbCardTdP">粘贴爆款剧本/字幕或链接，拆出“为什么好、为什么爆、可取技法”，提炼多标签与改编方向、大纲，确认即进入改编创作</p>
+          <span class="tool-cost" data-i="tbCostTd">拆解30·大纲20积分</span>
+        </div>
+        <div class="mode-card tool-card" id="toolDiversity">
+          <h3 data-i="tbCardDv">多版本去重体检</h3>
+          <p data-i="tbCardDvP">同一创意出多版时，写前领正交差异化种子（主角原型×冲突×反转×基调），写后两两比对，揪出“换汤不换药”的伪多版本并给改法</p>
+          <span class="tool-cost" data-i="tbCostDv">免费 · 反同质化</span>
+        </div>
+        <div class="mode-card tool-card" id="toolBranch">
+          <h3 data-i="tbCardBr">互动分支校验/起稿</h3>
+          <p data-i="tbCardBrP">互动短剧专用：一键生成主/坏/隐藏多结局合法骨架；粘贴分支图自动查死胡同、伪选择、自环、死循环、悬空连线与概率权重</p>
+          <span class="tool-cost" data-i="tbCostBr">免费 · 本地校验</span>
+        </div>
+      </div>
+
+      <!-- 互动短剧分支面板（v1.82，PRD 3.5） -->
+      <section class="panel hidden" id="branchPanel">
+        <div class="room-tabs">
+          <b style="align-self:center" data-i="tbBrTitle">互动分支可视化编辑器</b>
+          <span class="spacer" style="flex:1"></span>
+          <label class="muted" style="align-self:center"><span data-i="tbBrCp">选择点</span>
+            <select id="brCp" style="margin-left:4px"><option>1</option><option selected>2</option><option>3</option><option>4</option><option>5</option><option>6</option></select>
+          </label>
+          <button class="chip" id="brSkelBtn" data-i="tbBrSkel">生成合法骨架</button>
+          <button class="chip" id="brAddScene" data-i="tbBrAddScene">＋剧情</button>
+          <button class="chip" id="brAddChoice" data-i="tbBrAddChoice">＋选择点</button>
+          <button class="chip" id="brAddEnding" data-i="tbBrAddEnd">＋结局</button>
+          <button class="btn-primary" id="brValidateBtn" data-i="tbBrValidate">校验</button>
+          <button class="room-close" id="brClose" data-i="tbCollapse">收起</button>
+        </div>
+        <div class="muted" style="margin:6px 0 8px" data-i="tbBrHint">拖拽节点移动位置；点选节点后在右侧检查器改名、连线、改类型或删除。结构操作自动校验，纯本地不耗积分。</div>
+        <div class="br-body">
+          <div class="br-canvas" id="brCanvas"><svg id="brEdges" class="br-edges"></svg><div id="brNodes"></div>
+            <div class="br-empty" id="brEmpty" data-i="tbBrEmpty">还没有节点，点「生成合法骨架」快速起稿，或用上方按钮从零搭建。</div>
+          </div>
+          <aside class="br-inspector" id="brInspector">
+            <div class="muted" data-i="tbBrInsEmpty">未选中节点</div>
+          </aside>
+        </div>
+        <details style="margin-top:8px">
+          <summary class="muted" style="cursor:pointer" data-i="tbBrJson">JSON 视图（可粘贴导入 / 复制导出）</summary>
+          <textarea id="brGraph" rows="7" style="width:100%;font-family:monospace;font-size:12.5px;margin-top:6px" placeholder='{"start":"start","nodes":{...}}'></textarea>
+          <div style="margin-top:4px">
+            <button class="chip" id="brImport" data-i="tbBrImport">从JSON导入</button>
+            <button class="chip" id="brCopy" data-i="tbBrCopy">复制JSON</button>
+          </div>
+        </details>
+        <div id="brResult"></div>
+      </section>
+
+      <!-- 多版本反同质化面板（v1.77，PRD 2.1.1） -->
+      <section class="panel hidden" id="diversityPanel">
+        <div class="room-tabs">
+          <b style="align-self:center" data-i="tbDvTitle">多版本去重体检</b>
+          <span class="spacer" style="flex:1"></span>
+          <button class="chip" id="dvAddBtn" data-i="tbDvAdd">＋ 加一版</button>
+          <button class="chip" id="dvSeedBtn" data-i="tbDvSeed">写前·领正交种子</button>
+          <button class="btn-primary" id="dvAuditBtn" data-i="tbDvAudit">写后·开始体检</button>
+          <button class="room-close" id="dvClose" data-i="tbCollapse">收起</button>
+        </div>
+        <div class="muted" style="margin:6px 0 10px" data-i="tbDvHint">把同一创意的 2–6 个版本分别填入；主角原型、冲突/走向标签用顿号或逗号分隔。体检只在本地比对，不耗积分。</div>
+        <div id="dvRows"></div>
+        <div id="dvResult"></div>
+      </section>
+
+      <section class="panel hidden" id="roomPanel">
+        <div class="room-tabs">
+          <button class="room-tab on" data-rtab="pitch" data-i="tbTabPitch">选题会</button>
+          <button class="room-tab" data-rtab="read" data-i="tbTabRead">剧本围读</button>
+          <button class="chip" id="roomHistoryBtn" data-i="tbRoomHistory" style="margin-left:auto">🕘 我的编剧室</button>
+          <button class="room-close" id="roomClose" data-i="tbCollapse">收起</button>
+        </div>
+
+        <!-- c196 我的编剧室历史（付费选题会/围读可追溯：点击恢复消息流、决议与围读结论，继续发言） -->
+        <div class="hidden" id="roomHistoryBox" style="margin:10px 0"></div>
+
+        <!-- 选题会 -->
+        <div id="rtab-pitch">
+          <div class="field"><label data-i="tbPitchIdeaL">一句话创意（谁、遇到什么麻烦、准备怎么反击）</label>
+            <textarea id="pitchIdea" rows="3" data-ph="tbPitchIdeaPh" placeholder="例：被辞退的女厨师想要夺回自己创办的餐厅，前合伙人处处打压，她暗中布局"></textarea></div>
+          <div class="configbar" style="padding:0;border:0">
+            <div class="field"><label data-i="tbPitchAudL">目标受众(选填)</label><input id="pitchAud" data-ph="tbPitchAudPh" placeholder="25-40岁女性" /></div>
+            <div class="field"><label data-i="tbPitchMedL">载体(选填)</label><input id="pitchMed" data-ph="tbPitchMedPh" placeholder="真人/AI仿真人/漫剧" /></div>
+            <div class="field" style="align-self:flex-end"><button class="btn-primary" id="pitchOpenBtn" data-i="tbPitchOpen">开始选题会（20积分）</button></div>
+          </div>
+          <div class="room-stream" id="pitchStream"></div>
+          <div class="hidden" id="pitchMore">
+            <div class="configbar" style="padding:0;border:0">
+              <div class="field"><label data-i="tbPitchRelL">人物关系</label><input id="pitchRel" data-ph="tbPitchRelPh" placeholder="师徒反目/合伙人对立" /></div>
+              <div class="field"><label data-i="tbPitchConfL">冲突空间(几层/兑付什么)</label><input id="pitchConf" /></div>
+              <div class="field"><label data-i="tbPitchSceneL">场景与制作</label><input id="pitchScene" /></div>
+              <div class="field"><label data-i="tbPitchEpsL">计划集数</label><input id="pitchEps" type="number" min="1" max="300" /></div>
+            </div>
+            <div class="row-actions">
+              <input id="pitchSay" data-ph="tbPitchSayPh" placeholder="继续向会上补充想法…" style="flex:1" />
+              <button class="btn-ghost" id="pitchSayBtn" data-i="tbPitchSayBtn">补充发言(20积分)</button>
+              <button class="btn-primary" id="pitchDecideBtn" data-i="tbPitchDecide">形成选题决议(20积分)</button>
+            </div>
+          </div>
+          <div class="notice hidden" id="pitchVerdict"></div>
+        </div>
+
+        <!-- 剧本围读 -->
+        <div id="rtab-read" class="hidden">
+          <div class="field"><label data-i="tbReadModeL">围读参与模式</label>
+            <div class="read-modes" id="readModePick"></div></div>
+          <div class="configbar" style="padding:0;border:0">
+            <div class="field"><label data-i="tbReadFormatL">制式</label><select id="readFormat"><option value="LIVE" data-i="tbReadFmtLive">真人实拍(单集800-1000字)</option><option value="AIGC" data-i="tbReadFmtAigc">AIGC制作(1200-1500字)</option></select></div>
+            <div class="field" style="align-self:flex-end"><button class="btn-primary" id="readOpenBtn" data-i="tbReadOpen">建立围读室(免费)</button></div>
+          </div>
+          <div class="field"><label data-i="tbReadScriptL">粘贴要围读的剧本/单集文本</label><textarea id="readScript" rows="5" data-ph="tbReadScriptPh" placeholder="把剧本正文贴在这里，围读会从开头、动机、节奏、台词AI腔、场景成本逐立场挑问题"></textarea></div>
+          <div class="notice hidden" id="readRoomInfo"></div>
+          <div class="room-stream hidden" id="readStream"></div>
+          <div class="hidden" id="readMore">
+            <div class="row-actions">
+              <input id="readJoinCode" data-ph="tbReadJoinPh" placeholder="输入邀请码加入他人围读室" style="width:160px" />
+              <button class="btn-ghost" id="readJoinBtn" data-i="tbReadJoinBtn">凭码加入</button>
+              <input id="readSay" data-ph="tbReadSayPh" placeholder="我的围读发言…" style="flex:1" />
+              <button class="btn-ghost" id="readSayBtn" data-i="tbReadSayBtn">发言</button>
+              <button class="btn-primary" id="readAiBtn" data-i="tbReadAi">开始AI围读（30积分）</button>
+            </div>
+            <div class="notice hidden" id="readActions"></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- 拆爆款工作台 -->
+      <section class="panel hidden" id="teardownPanel">
+        <div class="room-tabs">
+          <b style="font-size:16px" data-i="tbTdTitle">拆爆款工作台</b>
+          <button class="room-close" id="teardownClose" data-i="tbCollapse">收起</button>
+        </div>
+        <div class="notice" data-i="tbTdNotice">把爆款“为什么爆”拆成可复用的方法：粘贴剧本正文/视频字幕（链接受平台保护时请粘贴文案），拆解后勾选标签、选改编方向，确认大纲即可一键进入改编创作。</div>
+        <div class="field"><label data-i="tbTdSrcL">来源类型</label>
+          <select id="tdSource">
+            <option value="text" data-i="tbTdSrcText">剧本文字</option>
+            <option value="drama_url" data-i="tbTdSrcDrama">短剧链接</option>
+            <option value="video_url" data-i="tbTdSrcVideo">视频链接</option>
+          </select></div>
+        <div class="field"><label data-i="tbTdUrlL">原始链接（选填，仅记录来源）</label><input id="tdUrl" placeholder="https://…" /></div>
+        <div class="field"><label data-i="tbTdTextL">爆款正文 / 字幕文案（至少80字）</label>
+          <textarea id="tdText" rows="7" data-ph="tbTdTextPh" placeholder="粘贴剧本正文，或视频口播/字幕全文…"></textarea></div>
+        <div class="row-actions">
+          <button class="btn-primary" id="tdAnalyzeBtn" data-i="tbTdAnalyze">开始拆解（按会员等级计费）</button>
+          <span class="muted" id="tdCostTip" data-i="tbTdCostTip">基础30积分 / 高级24 / 专业18</span>
+          <button class="chip" id="tdHistoryBtn" data-i="tbTdHistory" style="margin-left:auto">🕘 我的拆解记录</button>
+        </div>
+
+        <!-- c195 历史拆解记录（积分产物可追溯：点击恢复报告/大纲，继续改编或转项目） -->
+        <div class="hidden" id="tdHistoryBox" style="margin:12px 0"></div>
+
+        <div class="hidden" id="tdResult">
+          <h4 style="margin:14px 0 6px" data-i="tbTdBoom">为什么好 · 为什么爆</h4>
+          <div id="tdBoom"></div>
+          <h4 style="margin:14px 0 6px" data-i="tbTdTech">可取技法（已同步进创作技能）</h4>
+          <div id="tdTech"></div>
+          <div class="field" style="margin-top:12px"><label data-i="tbTdTagsL">勾选要保留的标签（可增删，决定改编基因）</label>
+            <div class="tagpick" id="tdTags"></div></div>
+          <div class="field"><label data-i="tbTdDirsL">改编方向（只借底层逻辑，不抄表达）</label><div class="read-modes" id="tdDirs"></div></div>
+          <div class="row-actions">
+            <button class="btn-primary" id="tdOutlineBtn" data-i="tbTdOutline">生成改编大纲（基础20/高级16/专业12积分）</button>
+          </div>
+          <div class="hidden" id="tdOutlineBox"></div>
+        </div>
+      </section>
+
+      <!-- 非标签模式的内联创意输入（替代阻断式 prompt，按模式自适应提示，移动端友好） -->
+      <section class="panel hidden" id="modeBriefPanel">
+        <div class="field" style="margin:0">
+          <label id="modeBriefLabel">故事创意</label>
+          <div class="track-switch hidden" id="hitLabTracks" style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px"></div>
+          <textarea id="modeBrief" rows="4" placeholder=""></textarea>
+          <div class="brief-upload hidden" id="briefUpload">
+            <input type="file" id="briefFile" accept=".txt,.md,.markdown,.docx,.epub,.pdf">
+            <span id="briefUploadStatus" class="muted"></span>
+          </div>
+          <div class="muted" id="modeBriefTip"></div>
+        </div>
+      </section>
+
+      <!-- v2.92 采访式创作会话：一轮一问 + 四维记忆空间，产出结构化创意简报 -->
+      <section class="panel hidden" id="interviewPanel">
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap">
+          <h3 style="margin:0">🎙️ <span id="ivHeading">采访式创作 · 小南来采访你</span></h3>
+          <span class="muted" id="ivStatus"></span>
+        </div>
+        <div id="ivTranscript" style="display:flex;flex-direction:column;gap:8px;max-height:300px;overflow:auto;margin:10px 0;padding:2px"></div>
+        <div id="ivGaps" class="muted" style="margin-bottom:8px"></div>
+        <div style="display:flex;gap:8px;align-items:flex-start;flex-wrap:wrap">
+          <textarea id="ivAnswer" rows="2" style="flex:1;min-width:220px"></textarea>
+          <button class="btn-primary" id="ivSendBtn">回答并继续</button>
+        </div>
+        <div style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap;align-items:center">
+          <button class="btn-ghost" id="ivStartBtn">🎬 开始采访（5积分/轮）</button>
+          <button class="btn-primary hidden" id="ivBriefBtn">📋 生成创意简报并回填（免费）</button>
+          <span class="muted" id="ivTip"></span>
+        </div>
+      </section>
+
+      <!-- v2.93 剧情软广·结构化品牌简报：品牌要素确定性采集，广告词生成前预检 -->
+      <section class="panel hidden" id="brandPanel">
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap">
+          <h3 style="margin:0">🛍️ <span id="bbHeading">剧情软广 · 品牌简报</span></h3>
+          <span class="muted" id="bbStatus"></span>
+        </div>
+        <div class="muted" id="bbTip" style="margin:6px 0 10px"></div>
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px">
+          <div class="field" style="margin:0"><label id="bbLBrand"></label><input id="bbBrand" maxlength="40" /></div>
+          <div class="field" style="margin:0"><label id="bbLProduct"></label><input id="bbProduct" maxlength="60" /></div>
+          <div class="field" style="margin:0;grid-column:1/-1"><label id="bbLSelling"></label><input id="bbSelling" maxlength="120" /></div>
+          <div class="field" style="margin:0"><label id="bbLAudience"></label><input id="bbAudience" maxlength="60" /></div>
+          <div class="field" style="margin:0"><label id="bbLSymbol"></label><input id="bbSymbol" maxlength="60" /></div>
+          <div class="field" style="margin:0"><label id="bbLCta"></label><input id="bbCta" maxlength="60" /></div>
+          <div class="field" style="margin:0;grid-column:1/-1"><label id="bbLShell"></label><input id="bbShell" maxlength="200" /></div>
+          <div class="field" style="margin:0"><label id="bbLSoft"></label><select id="bbSoft"><option value="subtle"></option><option value="balanced" selected></option><option value="direct"></option></select></div>
+        </div>
+        <div id="bbError" style="color:#c0392b;margin-top:8px;display:none;font-size:13px"></div>
+      </section>
+
+      <!-- v2.94 热点追更·结构化热点简报：四借法确定性采集 + 侵权/舆情风险预检 -->
+      <section class="panel hidden" id="trendPanel">
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap">
+          <h3 style="margin:0">🔥 <span id="tbHeading">热点追更 · 热点简报</span></h3>
+          <span class="muted" id="tbStatus"></span>
+        </div>
+        <div class="muted" id="tbTip" style="margin:6px 0 10px"></div>
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px">
+          <div class="field" style="margin:0;grid-column:1/-1"><label id="tbLName"></label><input id="tbName" maxlength="60" /></div>
+          <div class="field" style="margin:0"><label id="tbLKind"></label><select id="tbKind"><option value="social" selected></option><option value="film"></option><option value="festival"></option><option value="industry"></option></select></div>
+          <div class="field" style="margin:0"><label id="tbLApproach"></label><select id="tbApproach"><option value="persona_spin"></option><option value="setting_remix"></option><option value="formula_clone" selected></option><option value="reversal"></option></select></div>
+          <div class="field" style="margin:0;grid-column:1/-1"><label id="tbLHeat"></label><textarea id="tbHeat" rows="2" maxlength="200" style="width:100%"></textarea></div>
+          <div class="field" style="margin:0;grid-column:1/-1"><label id="tbLAngle"></label><textarea id="tbAngle" rows="2" maxlength="200" style="width:100%"></textarea></div>
+          <div class="field" style="margin:0;grid-column:1/-1"><label id="tbLAvoid"></label><input id="tbAvoid" maxlength="200" /></div>
+        </div>
+        <div id="tbError" style="color:#c0392b;margin-top:8px;display:none;font-size:13px"></div>
+      </section>
+
+      <!-- v2.95 互动分支·结构化分支简报：分支规格确定性采集 + 闭环预检（v2.188 修复重复 ID：原 branchPanel → branchBriefPanel） -->
+      <section class="panel hidden" id="branchBriefPanel">
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap">
+          <h3 style="margin:0">🎲 <span id="brHeading">互动分支 · 分支简报</span></h3>
+          <span class="muted" id="brStatus"></span>
+        </div>
+        <div class="muted" id="brTip" style="margin:6px 0 10px"></div>
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px">
+          <div class="field" style="margin:0;grid-column:1/-1"><label id="brLMain"></label><textarea id="brMain" rows="2" maxlength="200" style="width:100%"></textarea></div>
+          <div class="field" style="margin:0;grid-column:1/-1"><label id="brLChoice"></label><textarea id="brChoice" rows="2" maxlength="200" style="width:100%"></textarea></div>
+          <div class="field" style="margin:0"><label id="brLMainN"></label><input id="brMainN" type="number" min="1" max="3" value="1" /></div>
+          <div class="field" style="margin:0"><label id="brLHiddenN"></label><input id="brHiddenN" type="number" min="0" max="2" value="1" /></div>
+          <div class="field" style="margin:0"><label id="brLBadN"></label><input id="brBadN" type="number" min="0" max="2" value="1" /></div>
+          <div class="field" style="margin:0"><label id="brLStyle"></label><select id="brStyle"><option value="consequence" selected></option><option value="relationship"></option><option value="moral"></option><option value="mystery"></option></select></div>
+          <div class="field" style="margin:0"><label id="brLStakes"></label><select id="brStakes"><option value="low"></option><option value="medium" selected></option><option value="high"></option></select></div>
+          <div class="field" style="margin:0;grid-column:1/-1"><label id="brLCustom"></label><input id="brCustom" maxlength="200" /></div>
+        </div>
+        <div id="brError" style="color:#c0392b;margin-top:8px;display:none;font-size:13px"></div>
+      </section>
+
+      <!-- v2.96 原作/小说/名场面原文：adapt/novel/hit_lab 模式启用 n-gram 重合度侵权检测 -->
+      <section class="panel hidden" id="sourceTextPanel">
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap">
+          <h3 style="margin:0">📜 <span id="stHeading">原作/原文参考</span></h3>
+          <span class="muted" id="stStatus"></span>
+        </div>
+        <div class="muted" id="stTip" style="margin:6px 0 10px"></div>
+        <div class="field" style="margin:0">
+          <label id="stLLabel"></label>
+          <textarea id="sourceText" rows="5" maxlength="50000" style="width:100%;font-size:13px;line-height:1.6" placeholder=""></textarea>
+        </div>
+        <div class="muted" style="margin-top:6px;font-size:12px" id="stHint"></div>
+      </section>
+
+      <section class="configbar">
+        <div class="field"><label data-i="episodes"></label><input id="episodes" type="number" min="1" max="300" value="20" /></div>
+        <div class="field"><label data-i="platform"></label><select id="platform"></select></div>
+        <div class="field"><label data-i="outLang"></label><select id="outLang"></select></div>
+        <div class="field"><label data-i="engine"></label><select id="engine"></select></div>
+        <div class="field"><label data-i="scriptFormatSel">剧本制式</label><select id="scriptFormatSel"><option value="LIVE_ACTION" data-i="fmtLive">真人实拍本(800-1000字/集)</option><option value="AIGC" data-i="fmtAigc">Z-AIGC流畅制作本(给AI制作流水线)</option></select></div>
+        <div class="field hidden" id="aigcDurField"><label data-i="aigcDur">成片时长/集</label><select id="aigcDuration"><option value="1" data-i="dur1">约1分钟(1200-1500字)</option><option value="2" selected data-i="dur2">约2分钟(2400-3000字·推荐)</option><option value="3" data-i="dur3">约3分钟(3600-4500字)</option></select></div>
+        <div class="field hidden" id="aigcStyleField"><label data-i="aigcStyle">视觉画风(AIGC)</label><select id="aigcVisualStyle"><option value="">默认(不锁定画风)</option></select></div>
+        <div class="field hidden" id="aigcCameraField"><label data-i="aigcCamera">镜头语言(AIGC)</label><select id="aigcCameraLanguage"><option value="">默认(不锁定镜头语言)</option></select></div>
+        <div class="field" id="castAssetField"><label data-i="castAssetSel">角色资产(跨剧人设·可选)</label><select id="castAssetSelect" multiple size="3" style="min-width:200px"><option value="" data-i="castAssetNone">不引用(自由创作)</option></select><div class="muted" style="font-size:11px" data-i="castAssetHint">⌘/Ctrl+点选可多选</div><button class="btn-ghost" id="castLibBtn" style="margin-top:6px" data-i="castLibBtn">角色资产库</button></div>
+        <div class="field" id="propAssetField"><label data-i="propAssetSel">道具资产(跨剧信物·可选)</label><select id="propAssetSelect" multiple size="3" style="min-width:200px"><option value="" data-i="propAssetNone">不引用(自由创作)</option></select><div class="muted" style="font-size:11px" data-i="propAssetHint">⌘/Ctrl+点选可多选</div><button class="btn-ghost" id="propLibBtn" style="margin-top:6px" data-i="propLibBtn">道具资产库</button></div>
+        <div class="field" id="sceneAssetField"><label data-i="sceneAssetSel">场景资产(跨剧舞台·可选)</label><select id="sceneAssetSelect" multiple size="3" style="min-width:200px"><option value="" data-i="sceneAssetNone">不引用(自由创作)</option></select><div class="muted" style="font-size:11px" data-i="sceneAssetHint">⌘/Ctrl+点选可多选</div><button class="btn-ghost" id="sceneLibBtn" style="margin-top:6px" data-i="sceneLibBtn">场景资产库</button></div>
+        <div class="field"><label data-i="investWan">预估投资额(万·选填,用于备案分类)</label><input id="investWan" type="number" min="0" max="100000" step="1" placeholder="不填按三类" /></div>
+        <div class="field" style="align-self:flex-end"><label class="chk-line"><input type="checkbox" id="specialTopic" /> <span data-i="specialTopic">特殊题材(政治/军事/民族宗教等)</span></label></div>
+        <button class="btn-ghost" id="smartDefaultBtn" data-i="smartDefaultBtn">✨ 看看系统替你默认了什么</button>
+        <button class="btn-primary" id="genBtn" data-i="gen"></button>
+      </section>
+
+      <!-- 钩子编排（v1.83，导演钩子体系：用户选项 vs 系统默认，默认折叠不增负担） -->
+      <div class="hook-console">
+        <button type="button" class="chip" id="hookToggle">🎣 <span id="hookToggleText">钩子编排：系统智能·均衡</span> ▾</button>
+        <div class="hook-panel hidden" id="hookPanel">
+          <div class="hook-row"><b id="hookModeLbl">编排方式</b>
+            <label><input type="radio" name="hookMode" value="auto" checked /> <span data-hm="auto">系统智能(默认)</span></label>
+            <label><input type="radio" name="hookMode" value="hybrid" /> <span data-hm="hybrid">混合(我选的优先)</span></label>
+            <label><input type="radio" name="hookMode" value="manual" /> <span data-hm="manual">我来指定</span></label>
+          </div>
+          <div class="hook-row"><b id="hookStrLbl">钩子密度</b>
+            <label><input type="radio" name="hookStr" value="relax" /> <span data-hs="relax">舒缓留白</span></label>
+            <label><input type="radio" name="hookStr" value="balanced" checked /> <span data-hs="balanced">均衡(推荐)</span></label>
+            <label><input type="radio" name="hookStr" value="tight" /> <span data-hs="tight">强钩高密度</span></label>
+          </div>
+          <div class="muted" id="hookPickHint" style="margin:2px 0 4px">点选你偏好的钩子与反转/爽点/情绪节拍（可多选，不选则系统智能排布；再点取消）：</div>
+          <div id="hookPickers"></div>
+        </div>
+      </div>
+
+      <section class="panel hidden" id="taskQueuePanel">
+        <div class="task-queue" id="taskQueue"></div>
+      </section>
+
+      <section class="panel hidden" id="progressPanel">
+        <div class="pmeta"><span id="stageLabel" class="milestone"></span><span id="pctText">0%</span></div>
+        <div class="pbar"><i id="pbarFill"></i></div>
+        <div class="pmeta"><span id="milestoneText"></span><span id="pointsText"></span></div>
+        <div class="timeline" id="timeline"></div>
+        <div class="role-strip" id="roleStrip"></div>
+        <div class="staff-log" id="staffLog"></div>
+        <div class="xn">
+          <div class="xn-avatar">🐼</div>
+          <div class="xn-bubble">
+            <div id="xnLine">小南：准备开工～</div>
+            <div class="xn-tip hidden" id="xnTip"></div>
+            <div class="wait-tip" id="waitTip"></div>
+          </div>
+        </div>
+        <div class="notice warn hidden" id="refundTip" data-i="refundTip"></div>
+      </section>
+
+      <section class="panel hidden" id="resultPanel">
+        <div class="section-title" style="margin-top:0"><h2 data-i="scoreTitle"></h2></div>
+        <div class="score-grid" id="scoreGrid"></div>
+        <div class="diag-panel hidden" id="diagPanel">
+          <div class="diag-head">
+            <div class="diag-total"><b id="diagTotal">—</b><span id="diagLevel"></span><small id="diagSub"></small></div>
+            <div class="diag-actions">
+              <button class="chip" id="diagRefreshBtn" data-i="diagRefresh"></button>
+              <button class="chip" id="diagCopyBtn" data-i="diagCopy"></button>
+            </div>
+          </div>
+          <div class="diag-bars" id="diagBars"></div>
+          <div class="diag-fixes" id="diagFixes"></div>
+          <div class="notice hidden" id="diagNote"></div>
+        </div>
+        <div class="wave-panel hidden" id="wavePanel">
+          <div class="wave-head">
+            <b id="waveTitle"></b>
+            <small id="waveSub"></small>
+          </div>
+          <div class="wave-svg-wrap" id="waveSvg"></div>
+          <div class="wave-advice hidden" id="waveAdvice"></div>
+          <div class="wave-legend" id="waveLegend"></div>
+        </div>
+        <div class="investor-panel hidden" id="investorPanel">
+          <div class="investor-head">
+            <b data-i="invTitle">资方视角 · 投稿前体检</b>
+            <span class="muted" data-i="invFree">免费 · 本地评估</span>
+            <span class="spacer"></span>
+            <button class="chip" id="invRefreshBtn" data-i="invRefresh">重新评估</button>
+          </div>
+          <div class="investor-verdict" id="invVerdict"></div>
+          <div class="diag-bars" id="invBars"></div>
+          <div class="investor-veto hidden" id="invVeto"></div>
+          <div class="investor-tips" id="invTips"></div>
+          <details class="investor-questions"><summary data-i="invQ">资方/出品方一定会问的问题（点开自检）</summary><div id="invQList"></div></details>
+          <div class="notice" id="invPremise"></div>
+        </div>
+        <div class="notice warn hidden" id="sandboxTip" data-i="sandboxTip"></div>
+        <div class="notice warn hidden" id="complianceTip"></div>
+        <div class="notice hidden" id="aiLabelTip" style="border-left:3px solid var(--accent,#6c8cff)"></div>
+        <div class="notice hidden" id="filingTip" style="border-left:3px solid #4caf85"></div>
+        <div class="notice warn hidden" id="postScanTip"></div>
+        <div class="notice warn hidden" id="modeGateTip" style="border-left:3px solid #e0a030"></div>
+        <div class="notice hidden" id="craftLintTip" style="border-left:3px solid #2e7d32;font-size:13px"></div>
+        <div class="notice hidden" id="craftDepthTip" style="border-left:3px solid #1565c0;font-size:13px"></div>
+        <div class="notice hidden" id="trackTip" style="border-left:3px solid #ef6c00;font-size:13px"></div>
+        <div class="notice hidden" id="titlePitchTip" style="border-left:3px solid #c62828;font-size:13px"></div>
+        <div class="notice hidden" id="epThreeQTip" style="border-left:3px solid #00838f;font-size:13px"></div>
+        <div class="notice hidden" id="openingCheckTip" style="border-left:3px solid #6a1b9a;font-size:13px"></div>
+        <div class="notice hidden" id="scorecardTip" style="border-left:3px solid #283593;font-size:13px"></div>
+        <div class="notice hidden" id="genresTip" style="border-left:3px solid #2e6512;font-size:13px"></div>
+        <div class="notice hidden" id="investorTip" style="border-left:3px solid #bf360c;font-size:13px"></div>
+        <div class="notice hidden" id="aigcBeatTip" style="border-left:3px solid #4527a0;font-size:13px"></div>
+        <div class="notice hidden" id="foreshadowTip" style="border-left:3px solid #5d4037;font-size:13px"></div>
+        <div class="notice hidden" id="arcTrackTip" style="border-left:3px solid #00695c;font-size:13px"></div>
+        <div class="notice hidden" id="hitTeardownTip" style="border-left:3px solid #6a1b9a;font-size:13px"></div>
+        <div class="aigc-dash hidden" id="aigcDash"></div>
+        <div class="section-title"><h2 id="scriptTitle">剧本正文</h2></div>
+        <div class="script-text" id="scriptText"></div>
+        <div class="row-actions">
+          <button class="btn-ghost" data-i="copy" id="copyBtn"></button>
+          <button class="btn-ghost" data-i="share" id="shareBtn"></button>
+          <button class="btn-ghost" id="pkBtn" data-i="pkBtn">⚔️ 剧本PK（20积分）</button>
+          <button class="btn-ghost" id="valueCardBtn" data-i="valueCardBtn">💎 价值证书</button>
+          <button class="btn-ghost" data-i="listenBtn" id="listenBtn">🎧 听剧本</button>
+          <span class="dl-wrap">
+            <button class="btn-ghost" data-i="download" id="dlBtn"></button>
+            <div class="dl-menu hidden" id="dlMenu">
+              <button data-fmt="txt" data-i="dlTxt" id="dlTxt"></button>
+              <button data-fmt="docx" data-i="dlDocx" id="dlDocx"></button>
+              <button data-fmt="pdf" data-i="dlPdf" id="dlPdf"></button>
+              <button id="dlMat" data-i="dlMat"></button>
+              <label class="dl-nowm hidden" id="dlNoWmWrap"><input type="checkbox" id="dlNoWm" /><span data-i="dlNoWm"></span></label>
+              <div class="dl-hint" id="dlShotHint" data-i="dlShotHint">Z-AIGC 制作本：高级会员导出自动附「逐镜分镜附录」（景别/运镜/光影/画面/台词/声音），可直接喂入 AI 视频流水线</div>
+              <button class="dl-preview" id="dpBtn" data-i="dpBtn">预览导演交付包（情绪/钩子/兑现链/人物成长）</button>
+            </div>
+          </span>
+          <button class="btn-ghost" data-i="retry" id="retryBtn"></button>
+        </div>
+      </section>
+
+      <section class="panel hidden" id="failPanel">
+        <div class="notice err" id="failText"></div>
+        <div class="row-actions"><button class="btn-primary" data-i="retry" id="failRetry"></button></div>
+      </section>
+    </div>
+
+    <!-- v2.188 工作台独立板块：全屏覆盖层。初始化时把 16 个工作台 panel 从 #view-studio 转移进来，事件绑定不丢 -->
+    <div id="workbenchLayer" class="workbench-layer hidden" aria-hidden="true">
+      <div class="workbench-shell">
+        <header class="workbench-head">
+          <button class="workbench-back" id="workbenchBack" aria-label="返回">← <span data-i="back">返回</span></button>
+          <h2 id="workbenchTitle"></h2>
+          <span class="spacer"></span>
+          <div id="workbenchActions"><button class="btn-primary hidden" id="workbenchGenBtn" data-i="gen"></button></div>
+        </header>
+        <div class="workbench-body" id="workbenchBody"></div>
+      </div>
+    </div>
+
+    <!-- 作品库视图（含个人资料卡） -->
+    <div id="view-works" class="hidden">
+      <section class="panel profile-card" id="profileCard">
+        <div class="profile-head">
+          <div class="avatar" id="meAvatar">编</div>
+          <div class="profile-meta">
+            <div class="profile-name"><b id="meNickname">—</b><span class="badge" id="meLevel"></span></div>
+            <div class="muted" id="mePen"></div>
+            <div class="muted" id="meBio"></div>
+          </div>
+          <button class="btn-ghost" id="editProfileBtn" data-i="editProfile"></button>
+        </div>
+        <div class="profile-stats">
+          <div><b id="mePoints">0</b><span data-i="points"></span></div>
+          <div><b id="meStorage">0 MB</b><span data-i="storage"></span></div>
+          <div><b id="meInvite">—</b><span data-i="inviteCode"></span></div>
+        </div>
+        <div class="profile-edit hidden" id="profileEdit">
+          <div class="field"><label data-i="nickname"></label><input id="inNickname" maxlength="24" /></div>
+          <div class="field"><label data-i="penName"></label><input id="inPen" maxlength="20" placeholder="中英文数字 _ · -" /></div>
+          <div class="field"><label data-i="bio"></label><input id="inBio" maxlength="300" /></div>
+          <div class="field field-row3">
+            <div><label data-i="pfRegion"></label><select id="inRegion"></select></div>
+            <div><label data-i="pfAge"></label><select id="inAgeBand"></select></div>
+            <div><label data-i="pfGender"></label><select id="inGender"></select></div>
+          </div>
+          <label class="pf-toggle"><input type="checkbox" id="inPersonalized" checked /> <span data-i="pfPersonalized"></span></label>
+          <button class="btn-primary" id="saveProfileBtn" data-i="save"></button>
+        </div>
+      </section>
+      <div class="section-title"><h2 data-i="works"></h2><small id="worksCount"></small></div>
+      <div class="grid" id="worksGrid"></div>
+      <div class="notice hidden" id="worksEmpty"></div>
+      <section class="panel hidden" id="worksDetail">
+        <div class="section-title" style="margin-top:0"><h2 id="worksDetailTitle"></h2></div>
+        <div id="epsList"></div>
+      </section>
+    </div>
+
+    <!-- 会员充值视图 -->
+    <div id="view-vip" class="hidden">
+      <div class="section-title"><h2 data-i="vipTitle"></h2><small data-i="vipSub"></small></div>
+      <div class="grid plans-grid" id="plansGrid"></div>
+      <div class="notice">会员等级决定同时可进行的剧本项目数：免费 2 个 · 基础 10 个 · 高级 30 个 · 专业 100 个；等级越高，拆爆款/围读/选题会等 AI 共创消耗积分越低（高级 8 折、专业 6 折），引擎组合也更强。</div>
+      <div class="section-title"><h2 data-i="pointsPack"></h2></div>
+      <div class="grid" id="skuGrid"></div>
+      <div class="notice" id="payNote" data-i="payNote"></div>
+    </div>
+
+    <!-- 交流广场视图 -->
+    <div id="view-square" class="hidden">
+      <div class="section-title"><h2 data-i="square"></h2><small data-i="squareSub"></small></div>
+      <div class="tabs" id="sqTabs"></div>
+      <section class="panel" id="sqPostBox">
+        <div class="field"><label data-i="postTitle"></label><input id="sqTitle" maxlength="100" /></div>
+        <div class="field"><label data-i="postBody"></label><textarea id="sqBody" rows="3" maxlength="5000"></textarea></div>
+        <button class="btn-primary" id="sqSubmit" data-i="postSubmit"></button>
+      </section>
+      <div id="sqFeed" class="feed"></div>
+      <div class="notice hidden" id="sqEmpty" data-i="sqEmpty"></div>
+    </div>
+
+    <!-- 剧本交易广场视图 -->
+    <div id="view-market" class="hidden">
+      <div class="section-title">
+        <h2 data-i="market"></h2><small data-i="marketSub"></small>
+        <span class="spacer"></span>
+        <select id="mkSort" class="mini-select">
+          <option value="new" data-i="sortNew"></option>
+          <option value="price_asc" data-i="sortPrice"></option>
+        </select>
+        <button class="btn-ghost" id="mkListBtn" data-i="mkList"></button>
+        <button class="btn-ghost" id="mkMineBtn" data-i="mkMine"></button>
+      </div>
+      <!-- v2.74 榜单 Tab -->
+      <div class="board-tabs" id="mkBoardTabs">
+        <button class="board-tab active" data-board="all" data-i="boardAll"></button>
+        <button class="board-tab" data-board="hot" data-i="boardHot"></button>
+        <button class="board-tab" data-board="new" data-i="boardNew"></button>
+        <button class="board-tab" data-board="rating" data-i="boardRating"></button>
+      </div>
+      <div class="grid listings-grid" id="mkGrid"></div>
+      <div class="notice hidden" id="mkEmpty" data-i="mkEmpty"></div>
+
+      <!-- v2.152 角色资产库管理面板：列表/体检/编辑/删除 -->
+      <div class="modal-mask hidden" id="castLibModal">
+        <div class="modal modal-wide">
+          <button class="modal-x" data-close="castLibModal">×</button>
+          <h3 data-i="castLibTitle">角色资产库</h3>
+          <!-- v2.167 资产看板入口：跨族热度榜 + 空壳补全优先级 -->
+          <button type="button" class="adm-btn" data-open-dash="cast" style="margin:6px 0 8px;padding:6px 12px;font-size:13px" data-i="dashOpenBtn">📊 资产看板（跨族热度/补全优先级）</button>
+          <!-- v2.163 资产库检索：跨剧按关键词搜资产 -->
+          <input id="castLibSearch" type="search" class="adm-input" data-ph="libSearchPh" placeholder="搜角色/人设/声音/台词/锚点/标签" style="width:100%;margin:8px 0 10px" />
+          <div id="castLibConflicts"></div>
+          <div id="castLibGrid"></div>
+          <div id="castLibEmpty" class="notice hidden"></div>
+          <div id="castLibEdit" class="hidden" style="margin-top:10px"></div>
+        </div>
+      </div>
+      <!-- v2.159 道具资产库管理面板：列表/体检/编辑/删除 -->
+      <div class="modal-mask hidden" id="propLibModal">
+        <div class="modal modal-wide">
+          <button class="modal-x" data-close="propLibModal">×</button>
+          <h3 data-i="propLibTitle">道具资产库</h3>
+          <!-- v2.167 资产看板入口：跨族热度榜 + 空壳补全优先级 -->
+          <button type="button" class="adm-btn" data-open-dash="prop" style="margin:6px 0 8px;padding:6px 12px;font-size:13px" data-i="dashOpenBtn">📊 资产看板（跨族热度/补全优先级）</button>
+          <!-- v2.163 资产库检索：跨剧按关键词搜资产 -->
+          <input id="propLibSearch" type="search" class="adm-input" data-ph="libSearchPh" placeholder="搜道具/含义/禁忌/锚点/标签" style="width:100%;margin:8px 0 10px" />
+          <div id="propLibConflicts"></div>
+          <div id="propLibGrid"></div>
+          <div id="propLibEmpty" class="notice hidden"></div>
+          <div id="propLibEdit" class="hidden" style="margin-top:10px"></div>
+        </div>
+      </div>
+      <!-- v2.161 场景资产库管理面板：列表/体检/编辑/删除 -->
+      <div class="modal-mask hidden" id="sceneLibModal">
+        <div class="modal modal-wide">
+          <button class="modal-x" data-close="sceneLibModal">×</button>
+          <h3 data-i="sceneLibTitle">场景资产库</h3>
+          <!-- v2.167 资产看板入口：跨族热度榜 + 空壳补全优先级 -->
+          <button type="button" class="adm-btn" data-open-dash="scene" style="margin:6px 0 8px;padding:6px 12px;font-size:13px" data-i="dashOpenBtn">📊 资产看板（跨族热度/补全优先级）</button>
+          <!-- v2.163 资产库检索：跨剧按关键词搜资产 -->
+          <input id="sceneLibSearch" type="search" class="adm-input" data-ph="libSearchPh" placeholder="搜场景/功能/氛围/锚点/标签" style="width:100%;margin:8px 0 10px" />
+          <div id="sceneLibConflicts"></div>
+          <div id="sceneLibGrid"></div>
+          <div id="sceneLibEmpty" class="notice hidden"></div>
+          <div id="sceneLibEdit" class="hidden" style="margin-top:10px"></div>
+        </div>
+      </div>
+      <!-- v2.167 资产看板：跨族热度榜 + 空壳补全优先级队列（L3 运营决策面，三族共用入口） -->
+      <div class="modal-mask hidden" id="assetDashboardModal">
+        <div class="modal modal-wide">
+          <button class="modal-x" data-close="assetDashboardModal">×</button>
+          <h3 data-i="dashTitle">资产看板</h3>
+          <div id="dashBody"><div class="muted">加载中…</div></div>
+        </div>
+      </div>
+      <!-- 挂卖弹窗 -->
+      <!-- v2.185.14 c194 用户反馈中心：提交建议/Bug + 我的工单进度 + 小南暖心回复（后端 /api/feedback 全套此前仅管理员端接线） -->
+      <div class="modal-mask hidden" id="feedbackModal">
+        <div class="modal modal-wide">
+          <button class="modal-x" data-close="feedbackModal">×</button>
+          <h3 data-i="fbTitle"></h3>
+          <div class="fb-tabs">
+            <button class="fb-tab active" id="fbTabSubmit" data-i="fbTabSubmit"></button>
+            <button class="fb-tab" id="fbTabMine" data-i="fbTabMine"></button>
+          </div>
+          <!-- 提交反馈 -->
+          <div id="fbSubmitPane">
+            <div class="field">
+              <label data-i="fbTypeLabel"></label>
+              <div class="fb-type-row" id="fbTypeRow">
+                <button type="button" class="fb-type active" data-type="SUGGESTION" data-i="fbTypeSug"></button>
+                <button type="button" class="fb-type" data-type="BUG" data-i="fbTypeBug"></button>
+              </div>
+            </div>
+            <div class="field" id="fbUrgentField">
+              <label class="fb-check"><input type="checkbox" id="fbUrgent" /> <span data-i="fbUrgent"></span></label>
+            </div>
+            <div class="field">
+              <label data-i="fbContentLabel"></label>
+              <textarea id="fbContent" rows="6" maxlength="5000" data-ph="fbContentPh"></textarea>
+              <div class="fb-counter"><span id="fbCount">0</span>/5000</div>
+            </div>
+            <div class="field">
+              <label data-i="fbContactLabel"></label>
+              <input id="fbContact" type="text" maxlength="100" data-ph="fbContactPh" />
+            </div>
+            <div class="notice" data-i="fbPromise"></div>
+            <button class="btn-primary" id="fbSubmitBtn" data-i="fbSubmitBtn"></button>
+          </div>
+          <!-- 我的工单 -->
+          <div id="fbMinePane" class="hidden">
+            <div id="fbMineList" class="fb-mine-list"></div>
+          </div>
+        </div>
+      </div>
+      <!-- v2.185.14 c194 制式样例馆：新用户 0 积分查看通过格式闸门的达标剧本长什么样（LIVE/AIGC 双制式） -->
+      <div class="modal-mask hidden" id="sampleModal">
+        <div class="modal modal-wide">
+          <button class="modal-x" data-close="sampleModal">×</button>
+          <h3 data-i="sampleTitle"></h3>
+          <div class="fb-tabs">
+            <button class="fb-tab active" id="smpTabLive" data-i="smpLive"></button>
+            <button class="fb-tab" id="smpTabAigc" data-i="smpAigc"></button>
+            <button class="btn-ghost" id="smpCopy" data-i="copy" style="margin-left:auto"></button>
+          </div>
+          <div class="notice" data-i="smpNote"></div>
+          <pre class="full-text" id="smpText" style="max-height:58vh"></pre>
+        </div>
+      </div>
+      <div class="modal-mask hidden" id="listModal">
+        <div class="modal">
+          <button class="modal-x" data-close="listModal">×</button>
+          <h3 data-i="mkList"></h3>
+          <div class="field"><label data-i="pickScript"></label><select id="listScript"></select></div>
+          <div class="list-value hidden" id="listValue"></div>
+          <div class="field"><label data-i="listPrice"></label><input id="listPrice" type="number" min="1" step="1" placeholder="¥ ≥1" /></div>
+          <div class="field"><label data-i="listSample"></label><textarea id="listSample" rows="3" maxlength="600"></textarea></div>
+          <div class="notice" data-i="listRule"></div>
+          <button class="btn-primary" id="listSubmit" data-i="save"></button>
+        </div>
+      </div>
+      <!-- 购买后全本弹窗 -->
+      <div class="modal-mask hidden" id="fullModal">
+        <div class="modal modal-wide">
+          <button class="modal-x" data-close="fullModal">×</button>
+          <h3 id="fullTitle"></h3>
+          <div class="notice" id="fullNotice"></div>
+          <pre class="full-text" id="fullText"></pre>
+          <div class="row-actions">
+            <button class="btn-ghost" id="fullCopy" data-i="copy"></button>
+            <button class="btn-ghost" id="fullConfirm" data-i="confirmReceive"></button>
+            <button class="btn-ghost" id="fullRefund" data-i="refund24"></button>
+          </div>
+        </div>
+      </div>
+      <!-- v2.73 买家详情弹窗：价值证书维度+样章+价格，先看再买 -->
+      <div class="modal-mask hidden" id="detailModal">
+        <div class="modal modal-wide">
+          <button class="modal-x" data-close="detailModal">×</button>
+          <div id="detailBody"></div>
+        </div>
+      </div>
+      <!-- 听剧本弹窗（高级会员及以上） -->
+      <div class="modal-mask hidden" id="listenModal">
+        <div class="modal modal-wide">
+          <button class="modal-x" data-close="listenModal">×</button>
+          <h3 id="listenTitle">🎧 听剧本</h3>
+          <div class="listen-meta" id="listenMeta"></div>
+          <div class="notice" id="listenNote"></div>
+          <div class="notice hidden" id="listenTtsTip"></div>
+          <!-- c208 整剧连播：集导航 + 自动连播开关（单集时整条隐藏）；续听进度条按记录动态出现 -->
+          <div class="listen-series hidden" id="listenSeriesBar">
+            <button class="btn-ghost listen-ep-step" id="listenEpPrev" type="button" data-i="listenEpPrev">⏮ 上一集</button>
+            <select id="listenEpSelect" aria-label="episodes"></select>
+            <button class="btn-ghost listen-ep-step" id="listenEpNext" type="button" data-i="listenEpNext">下一集 ⏭</button>
+            <label class="listen-auto" for="listenAuto"><input type="checkbox" id="listenAuto" checked><span data-i="listenAuto">自动连播</span></label>
+          </div>
+          <div class="listen-resume hidden" id="listenResumeBar"></div>
+          <!-- c206 多角色有声播放器：浏览器原生语音合成，零模型零扣费；不支持时整条隐藏、保留复制稿 -->
+          <div class="listen-player hidden" id="listenPlayer">
+            <button class="btn-ghost listen-step" id="listenPrev" type="button" data-i="listenPrev">⏮ 上一段</button>
+            <button class="btn-primary listen-pp" id="listenPlay" type="button">▶ 播放</button>
+            <button class="btn-ghost listen-step" id="listenNext" type="button" data-i="listenNext">下一段 ⏭</button>
+            <button class="btn-ghost" id="listenStop" type="button" data-i="listenStop">■ 停止</button>
+            <label class="listen-rate" for="listenRate"><span data-i="listenRateLabel">语速</span>
+              <select id="listenRate">
+                <option value="0.8">0.8×</option>
+                <option value="1" selected>1.0×</option>
+                <option value="1.25">1.25×</option>
+                <option value="1.5">1.5×</option>
+              </select>
+            </label>
+            <span class="listen-progress" id="listenProgress"></span>
+          </div>
+          <div class="listen-segments" id="listenSegments"></div>
+          <div class="row-actions">
+            <button class="btn-ghost" id="listenCopy" data-i="listenCopy">复制整篇朗读稿</button>
+            <button class="btn-ghost" data-close="listenModal">关闭</button>
+          </div>
+        </div>
+      </div>
+      <!-- v2.64 导演交付包预览弹窗 -->
+      <div class="modal-mask hidden" id="dpModal">
+        <div class="modal modal-wide">
+          <button class="modal-x" data-close="dpModal">×</button>
+          <h3 id="dpTitle">导演交付包预览</h3>
+          <div class="dp-tabs" id="dpTabs"></div>
+          <div class="dp-summary" id="dpSummary"></div>
+          <div class="dp-body" id="dpBody"></div>
+          <div class="row-actions">
+            <button class="btn-ghost" data-dp-fmt="txt" data-i="dlTxt">TXT</button>
+            <button class="btn-ghost" data-dp-fmt="docx" data-i="dlDocx">DOCX</button>
+            <button class="btn-ghost" data-dp-fmt="pdf" data-i="dlPdf">PDF</button>
+            <button class="btn-ghost" id="dpCopy" data-i="dpCopy">复制当前页</button>
+            <button class="btn-ghost" data-close="dpModal">关闭</button>
+          </div>
+        </div>
+      </div>
+      <!-- v2.154 制作物料清单 弹窗 -->
+      <div class="modal-mask hidden" id="matModal">
+        <div class="modal modal-wide">
+          <button class="modal-x" data-close="matModal">×</button>
+          <h3 id="matTitle">制作物料清单</h3>
+          <div class="dp-summary" id="matSummary"></div>
+          <div class="dp-body" id="matBody"></div>
+          <div class="row-actions">
+            <button class="btn-ghost" id="matCopy" data-i="matCopy">复制全部</button>
+            <button class="btn-ghost" data-close="matModal" data-i="cancel">关闭</button>
+          </div>
+        </div>
+      </div>
+      <!-- v2.67 剧本PK 弹窗 -->
+      <div class="modal-mask hidden" id="pkModal">
+        <div class="modal modal-wide">
+          <button class="modal-x" data-close="pkModal">×</button>
+          <h3 data-i="pkTitle">⚔️ 剧本PK</h3>
+          <div class="pk-setup" id="pkSetup">
+            <p class="muted" data-i="pkSetupHint">选择对手：用你另一个项目对阵，或直接挑战平台标杆本。PK 消耗 20 积分，结果仅作游戏化参考。</p>
+            <div class="pk-opponents" id="pkOpponents"></div>
+            <div class="row-actions">
+              <button class="btn-primary" id="pkStartBtn" data-i="pkStart">开始PK</button>
+              <button class="btn-ghost" id="pkBoardBtn" data-i="pkBoard">🏆 战力榜</button>
+              <button class="btn-ghost" data-close="pkModal" data-i="cancel">取消</button>
+            </div>
+          </div>
+          <div class="pk-board hidden" id="pkBoard">
+            <div class="pk-mine-card" id="pkMineCard"></div>
+            <div class="pk-board-season" id="pkBoardSeason"></div>
+            <ol class="pk-toplist" id="pkTopList"></ol>
+            <div class="row-actions">
+              <button class="btn-primary" id="pkBoardBackBtn" data-i="pkBoardBack">返回PK</button>
+              <button class="btn-ghost" data-close="pkModal" data-i="close">关闭</button>
+            </div>
+          </div>
+          <div class="pk-result hidden" id="pkResult">
+            <div class="pk-scoreboard">
+              <div class="pk-side" id="pkSideA"><div class="pk-name" id="pkNameA"></div><div class="pk-total" id="pkTotalA"></div></div>
+              <div class="pk-vs">VS</div>
+              <div class="pk-side" id="pkSideB"><div class="pk-name" id="pkNameB"></div><div class="pk-total" id="pkTotalB"></div></div>
+            </div>
+            <div class="pk-winner" id="pkWinner"></div>
+            <div class="pk-mine-strip hidden" id="pkMineStrip"></div>
+            <div class="pk-bars" id="pkBars"></div>
+            <div class="xn-bubble pk-comment" id="pkComment"></div>
+            <div class="row-actions">
+              <button class="btn-ghost" id="pkAgainBtn" data-i="pkAgain">再来一局</button>
+              <button class="btn-ghost" id="pkResultBoardBtn" data-i="pkBoard">🏆 战力榜</button>
+              <button class="btn-ghost" data-close="pkModal" data-i="close">关闭</button>
+            </div>
+          </div>
+          <div class="pk-loading hidden" id="pkLoading"><span class="pbar"><i style="width:100%"></i></span><p data-i="pkLoading">小南正在当裁判…</p></div>
+        </div>
+      </div>
+      <!-- v2.69 剧本价值证书弹窗 -->
+      <div class="modal-mask hidden" id="valueModal">
+        <div class="modal modal-wide">
+          <button class="modal-x" data-close="valueModal">×</button>
+          <h3 data-i="valueTitle">💎 剧本价值证书</h3>
+          <div id="valueBody"><p class="muted" data-i="valueLoading">正在评估剧本价值…</p></div>
+          <div class="row-actions hidden" id="valueActions">
+            <button class="btn-primary" id="valueShareCopyBtn" data-i="valueCopyShare">一键复制分享文案</button>
+            <button class="btn-ghost" id="valuePosterBtn" data-i="valueHdPoster">生成高清证书海报（39积分）</button>
+            <button class="btn-ghost" data-close="valueModal" data-i="close">关闭</button>
+          </div>
+        </div>
+      </div>
+      <!-- v2.70 立项前智能默认预览弹窗 -->
+      <div class="modal-mask hidden" id="smartModal">
+        <div class="modal modal-wide">
+          <button class="modal-x" data-close="smartModal">×</button>
+          <h3 data-i="smartTitle">✨ 系统智能默认（生成前可改）</h3>
+          <div id="smartBody"><p class="muted" data-i="smartLoading">小南正在结合时令、热趋势和你的偏好整理默认方案…</p></div>
+          <div class="row-actions">
+            <button class="btn-primary" data-close="smartModal" data-i="smartGotIt">就按这个来</button>
+          </div>
+        </div>
+      </div>
+      <!-- 我的交易弹窗 -->
+      <div class="modal-mask hidden" id="mineModal">
+        <div class="modal modal-wide">
+          <button class="modal-x" data-close="mineModal">×</button>
+          <h3 data-i="mkMine"></h3>
+          <div id="mineBox"></div>
+        </div>
+      </div>
+      <!-- X剧本成年分级问卷与免责授权（v2.40 前端接线，后端 mature-gating 强校验） -->
+      <div class="modal-mask hidden" id="xMatureModal">
+        <div class="modal modal-wide">
+          <button class="modal-x" data-close="xMatureModal">×</button>
+          <h3 id="xMatureTitle"></h3>
+          <div class="notice" id="xMatureBoundary"></div>
+          <div class="field"><label id="xAgeLb"></label><input id="xMatureAge" type="number" min="18" max="120" placeholder="18+" /></div>
+          <div class="field"><label id="xRegionLb"></label><select id="xMatureRegion"></select></div>
+          <div class="x-consent-list">
+            <label class="x-consent"><input type="checkbox" id="xCkPurpose" /><span id="xckPurpose"></span></label>
+            <label class="x-consent"><input type="checkbox" id="xCkMinor" /><span id="xckMinor"></span></label>
+            <label class="x-consent"><input type="checkbox" id="xCkBoundary" /><span id="xckBoundary"></span></label>
+            <label class="x-consent"><input type="checkbox" id="xCkLegal" /><span id="xckLegal"></span></label>
+          </div>
+          <div class="notice hidden" id="xMatureStatus"></div>
+          <div class="row-actions">
+            <button class="btn-primary" id="xMatureSubmit"></button>
+            <button class="btn-ghost hidden" id="xMatureBuy"></button>
+            <button class="btn-ghost hidden" id="xMatureEnter"></button>
+            <button class="btn-ghost hidden" id="xMatureRevoke"></button>
+          </div>
+        </div>
+      </div>
+    </div>
+    <!-- 管理后台视图（仅超级管理员可见入口） -->
+    <div id="view-admin" class="hidden">
+      <div class="section-title"><h2 data-i="adminZone"></h2><small data-i="adminSub"></small></div>
+      <div class="tabs" id="admTabs"></div>
+      <section class="panel" id="admUsersPane">
+        <div class="adm-toolbar">
+          <input id="admUserQ" class="adm-input" data-ph="admSearchPh" placeholder="手机号 / 昵称 / 笔名" />
+          <button class="btn-primary" id="admUserSearch" data-i="admSearch"></button>
+        </div>
+        <details id="admCreateBox" class="adm-create hidden" open>
+          <summary data-i="admCreateTitle">开设账号</summary>
+          <div class="adm-toolbar">
+            <input id="admCreatePhone" class="adm-input" data-ph="admCreatePhonePh" placeholder="手机号（11 位）" />
+            <input id="admCreatePw" class="adm-input" data-ph="admCreatePwPh" placeholder="初始密码（至少 8 位）" />
+            <input id="admCreateNick" class="adm-input" data-ph="admCreateNickPh" placeholder="昵称（选填）" />
+            <select id="admCreateLevel" class="adm-input"></select>
+            <label class="adm-create-admin"><input type="checkbox" id="admCreateIsAdmin" /><span data-i="admCreateAdmin">设为副管理员</span></label>
+            <button class="btn-primary" id="admCreateBtn" data-i="admCreateBtn">开设账号</button>
+          </div>
+          <div class="muted" data-i="admCreateHint"></div>
+        </details>
+        <div class="table-wrap"><table class="adm-table" id="admUserTable"></table></div>
+        <div class="muted" id="admUserPager"></div>
+      </section>
+      <section class="panel hidden" id="admStatsPane">
+        <div class="stat-cards" id="admStatCards"></div>
+      </section>
+      <section class="panel hidden" id="admFinancePane">
+        <div class="stat-cards" id="admFinanceCards"></div>
+        <div class="table-wrap"><table class="adm-table" id="admKindTable"></table></div>
+      </section>
+      <section class="panel hidden" id="admPostsPane">
+        <div class="adm-toolbar">
+          <select id="admPostFilter" class="mini-select">
+            <option value="all" data-i="admPostAll"></option>
+            <option value="visible" data-i="admPostVisible"></option>
+            <option value="hidden" data-i="admPostHidden"></option>
+          </select>
+          <button class="btn-ghost" id="admPostReload" data-i="reload"></button>
+        </div>
+        <div id="admPostList" class="feed"></div>
+      </section>
+      <!-- 模型与能力配置：文本三档 + 图片两档，密钥脱敏回显、加密落库 -->
+      <section class="panel hidden" id="admModelsPane">
+        <div class="adm-toolbar">
+          <span class="muted" id="admModelUpdated"></span><span class="spacer"></span>
+          <button class="btn-ghost" id="admModelReload" data-i="reload"></button>
+          <button class="btn-primary" id="admModelSave" data-i="admModelSave"></button>
+        </div>
+        <div class="notice" data-i="admModelNote"></div>
+        <div id="admModelWrap"></div>
+        <h4 style="margin-top:18px">组合全景与岗位顺序（v2.41）</h4>
+        <div class="adm-toolbar"><span class="muted" id="admPfSummary"></span><span class="spacer"></span><button class="btn-ghost" id="admPfReload">刷新组合全景</button></div>
+        <div id="admPortfolio"></div>
+        <h4 style="margin-top:18px">多供应商池与九岗路由（C端黑盒，仅此处可见）</h4>
+        <div class="adm-grid2">
+          <div class="subpanel">
+            <div class="field"><label>供应商名称</label><input id="pvName" maxlength="60" placeholder="如：火山-成稿主力" /></div>
+            <div class="field"><label>模态</label><select id="pvModality" class="mini-select"><option value="text">文本 text</option><option value="image">图片 image</option><option value="video">视频 video</option></select></div>
+            <div class="field"><label>目录型号（选中自动带端点/单价，可改）</label><select id="pvCatalog" class="mini-select"></select></div>
+            <div class="field"><label>模型名</label><input id="pvModel" placeholder="如 doubao-seed-2-pro / gpt-image-1" /></div>
+            <div class="field"><label>BaseUrl（目录型号可留空，自建/中转必填）</label><input id="pvBase" placeholder="https://…/v1" /></div>
+            <div class="field"><label>API Key（加密落库，回显脱敏）</label><input id="pvKey" type="password" autocomplete="new-password" /></div>
+            <div class="adm-toolbar">
+              <label>输入价 <input id="pvIn" type="number" min="0" step="0.1" style="width:90px" /> 元/百万tok</label>
+              <label>输出价 <input id="pvOut" type="number" min="0" step="0.1" style="width:90px" /> 元/百万tok</label>
+              <label><input id="pvEnabled" type="checkbox" checked /> 启用</label>
+            </div>
+            <button class="btn-primary" id="pvSave">新增/保存供应商</button>
+            <div id="pvList" style="margin-top:10px"></div>
+          </div>
+          <div class="subpanel">
+            <div class="field"><label>九岗 → 供应商路由（留空=回退引擎档位组合）</label></div>
+            <div id="routeList"></div>
+            <button class="btn-primary" id="routeSave">保存岗位路由</button>
+          </div>
+        </div>
+      </section>
+      <!-- 学习窗口：上传知识/技能/政策，合规与去重预检，审核后同步技能，可打包下载 -->
+      <section class="panel hidden" id="admKnowledgePane">
+        <div class="adm-grid2">
+          <div class="subpanel">
+            <h4 data-i="admKnowUpload"></h4>
+            <div class="field"><label data-i="admKnowKind"></label>
+              <select id="knKind" class="mini-select">
+                <option value="TEXT">TEXT</option><option value="URL">URL</option>
+                <option value="VIDEO">VIDEO</option><option value="FILE">FILE</option>
+              </select></div>
+            <div class="field"><label data-i="admKnowTitle"></label><input id="knTitle" maxlength="200" /></div>
+            <div class="field"><label data-i="admKnowCat"></label><select id="knCategory" class="mini-select"></select></div>
+            <div class="field kn-url hidden"><label data-i="admKnowUrl"></label><input id="knUrl" placeholder="https://" /></div>
+            <div class="field kn-file hidden"><label data-i="admKnowFile"></label><input id="knFile" type="file" /></div>
+            <div class="field"><label data-i="admKnowContent"></label><textarea id="knContent" rows="6"></textarea></div>
+            <button class="btn-primary" id="knSubmit" data-i="admKnowSubmit"></button>
+          </div>
+          <div class="subpanel">
+            <div class="adm-toolbar">
+              <select id="knFilter" class="mini-select">
+                <option value="" data-i="admPostAll"></option>
+                <option value="PENDING">PENDING</option><option value="APPROVED">APPROVED</option><option value="REJECTED">REJECTED</option>
+              </select>
+              <button class="btn-ghost" id="knReload" data-i="reload"></button>
+              <span class="spacer"></span>
+              <button class="btn-primary" id="knRunAuto">自主学习一轮</button>
+              <button class="btn-primary" id="knRunAudit">每周API盘点</button>
+              <button class="btn-ghost" id="knReports">学习/盘点报告</button>
+              <button class="btn-ghost" id="knDownload" data-i="admKnowPkg"></button>
+              <button class="btn-ghost" id="knDownloadMd" data-i="admSkillMd"></button>
+              <button class="btn-ghost" id="knDownloadBundle" data-i="admSkillBundle"></button>
+            </div>
+            <div id="admAutoBox" class="auto-report hidden"></div>
+            <div id="admKnowList" class="feed"></div>
+          </div>
+        </div>
+      </section>
+      <!-- 反馈/Bug 处置：梳理诉求、预判修复路径、三态处置并经小南暖心回复 -->
+      <section class="panel hidden" id="admFeedbackPane">
+        <div class="adm-toolbar">
+          <select id="fbStatus" class="mini-select">
+            <option value="" data-i="admPostAll"></option>
+            <option value="PENDING">PENDING</option><option value="EXECUTING">EXECUTING</option>
+            <option value="TODO">TODO</option><option value="REJECTED">REJECTED</option>
+          </select>
+          <select id="fbType" class="mini-select">
+            <option value="" data-i="admFbAllType"></option>
+            <option value="BUG">BUG</option><option value="SUGGESTION" data-i="admFbSuggest"></option>
+          </select>
+          <button class="btn-ghost" id="fbReload" data-i="reload"></button>
+          <span class="spacer"></span>
+          <button class="btn-ghost" id="fbTodoBtn" data-i="admFbTodoView"></button>
+          <select id="fbTodoSort" class="mini-select">
+            <option value="time" data-i="admFbSortTime"></option>
+            <option value="level" data-i="admFbSortLevel"></option>
+          </select>
+        </div>
+        <div id="admTodoList" class="feed hidden"></div>
+        <div id="admFbList" class="feed"></div>
+      </section>
+      </section>
+      <section class="panel hidden" id="admSafetyPane">
+        <div class="adm-toolbar" style="flex-wrap:wrap;gap:8px">
+          <select id="sfSeverity" class="mini-select"><option value="BLOCK">BLOCK 硬拦截</option><option value="WARN">WARN 预警</option></select>
+          <input id="sfLabel" class="mini-input" maxlength="40" placeholder="规则名称(如:新型违规词)" style="min-width:130px"/>
+          <input id="sfPatterns" class="mini-input" maxlength="300" placeholder="命中词,逗号分隔,至少2字" style="min-width:180px"/>
+          <input id="sfAdvice" class="mini-input" maxlength="300" placeholder="修改建议(可选)" style="min-width:180px"/>
+          <button class="btn-primary" id="sfAdd">新增规则</button>
+          <span class="spacer"></span>
+          <button class="btn-ghost" id="sfReset">恢复默认</button>
+          <button class="btn-ghost" id="sfReload" data-i="reload"></button>
+        </div>
+        <div class="muted" id="sfCounts" style="margin:6px 0;font-size:12px"></div>
+        <div class="adm-table-wrap"><table class="adm-table">
+          <thead><tr><th>级别</th><th>名称/类别</th><th>命中词</th><th>来源</th><th>状态</th><th>操作</th></tr></thead>
+          <tbody id="sfTbody"></tbody>
+        </table></div>
+      </section>
+
+      <!-- v2.43 迭代接续档案：换窗口/换AI 不丢活 -->
+      <section class="panel hidden" id="admHandoffPane">
+        <div class="adm-toolbar" style="flex-wrap:wrap;gap:8px">
+          <b>迭代接续档案</b>
+          <span class="spacer"></span>
+          <button class="btn-ghost" id="hdReload">刷新快照</button>
+          <button class="btn-ghost" id="hdCopy">复制接续口令</button>
+          <button class="btn-ghost" id="hdDownload">下载口令 .md</button>
+          <label class="btn-ghost" style="cursor:pointer">导入档案<input id="hdImport" type="file" accept="application/json,.json" hidden/></label>
+          <button class="btn-primary" id="hdSave">保存脉络</button>
+        </div>
+        <div class="notice" id="hdSnapshot" style="margin:8px 0"></div>
+        <div class="grid two" style="gap:12px">
+          <div class="subpanel">
+            <div class="field"><label>最近一次交付（简明）</label><textarea id="hdLast" rows="3" maxlength="4000" placeholder="如：v2.42 免费小说源扩至30个/11语种，946全绿"></textarea></div>
+            <div class="field"><label>顺延 Backlog（每行一条）</label><textarea id="hdBacklog" rows="7" placeholder="一行一个未完成任务"></textarea></div>
+            <div class="field"><label>待用户拍板（每行一条）</label><textarea id="hdQuestions" rows="4"></textarea></div>
+          </div>
+          <div class="subpanel">
+            <div class="field"><label>下一轮计划</label><textarea id="hdNext" rows="4"></textarea></div>
+            <div class="field"><label>其他备注</label><textarea id="hdNotes" rows="4"></textarea></div>
+            <div class="field"><label>追加迭代日志（保存时一并写入；版本号相同自动覆盖）</label>
+              <div style="display:flex;gap:6px"><input id="hdLogVer" class="mini-input" maxlength="20" placeholder="版本 v2.43" style="max-width:110px"/><input id="hdLogSum" class="mini-input" maxlength="2000" placeholder="本版做了什么（一句话）"/><button class="btn-ghost" id="hdAppend">追加</button></div>
+            </div>
+            <div class="field"><label>接续口令预览（新对话窗口整段粘贴即可继续）</label><textarea id="hdBrief" rows="10" readonly style="font-family:monospace;font-size:12px"></textarea></div>
+          </div>
+        </div>
+      </section>
+    </div>
+  </main>
+  <!-- 登录/注册模态 -->
+  <div class="modal-mask hidden" id="authModal">
+    <div class="modal">
+      <button class="modal-x" id="authClose">×</button>
+      <div class="auth-tabs">
+        <button class="on" id="tabLogin" data-i="login"></button>
+        <button id="tabRegister"></button>
+      </div>
+      <div class="field"><label>手机号</label><input id="authPhone" inputmode="numeric" placeholder="11 位手机号" maxlength="11" /></div>
+      <div class="field"><label>密码</label><input id="authPwd" type="password" placeholder="至少 8 位" /></div>
+      <div class="field hidden" id="inviteWrap"><label>邀请码（选填）</label><input id="authInvite" maxlength="20" /></div>
+      <div class="notice err hidden" id="authErr"></div>
+      <button class="btn-primary" id="authSubmit" style="width:100%;margin-top:12px"></button>
+    </div>
+  </div>
+
+  <button class="xn-float" id="xnFloat" title="小南">🐼</button>
+
+  <footer class="site-footer" id="siteFooter">
+    <span data-i="footerLine">终南集 · 人工通用智能（AGI）编剧大师 —— 终南映画自研大模型与 AGI 体系化提示词应用工程 · 出品方：陕西终南映画人工智能科技有限公司 · 商务联系：18629152777</span>
+  </footer>
+
+  <script src="./i18n.js"></script>
+  <script src="./progress-view.js"></script>
+  <script src="./api.js"></script>
+  <script src="./app.js"></script>
+  <script src="./room-view.js"></script>
+  <script src="./teardown-view.js"></script>
+  <script src="./diversity-view.js"></script>
+  <script src="./branch-view.js"></script>
+  <script src="./ad-roll.js"></script>
+  <script src="./pointer-fx.js"></script>
+  <!-- v2.186 全局反馈层：toast + skeleton + view-stack 容器 -->
+  <div class="toast-stack" id="toastStack" aria-live="polite" aria-atomic="true"></div>
+</body>
+</html>

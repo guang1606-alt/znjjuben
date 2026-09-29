@@ -1,0 +1,656 @@
+// 终南编剧AI 后端数据模型 PostgreSQL
+// 设计要点：
+// 1) 积分不用“余额字段直接加减”，用 账户 + 复式流水(LedgerEntry)，任何变动都有凭证、可对账、可回滚
+// 2) 赠送积分与充值积分分桶、90天有效期、FIFO 核销，保证“送积分不赔钱”
+// 3) 模型密钥只存服务端，用户侧只见引擎档位(黑盒)
+// 4) 每次模型调用写 ModelCallLog，实时核算毛利，低于阈值熔断
+
+generator client {
+  provider      = "prisma-client-js"
+  // native：本机开发（macOS）；veFaaS native-node20 实测为 debian-openssl-1.1.x，同时保留 3.0.x 兼容
+  binaryTargets = ["native", "debian-openssl-1.1.x", "debian-openssl-3.0.x"]
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ============ 枚举 ============
+enum MemberLevel {
+  FREE
+  BASIC
+  ADVANCED
+  PRO
+  ENTERPRISE
+}
+
+enum EngineTier {
+  ECONOMY
+  STANDARD
+  FLAGSHIP
+}
+
+// 真人实拍 / AIGC制作
+enum ScriptFormat {
+  LIVE_ACTION
+  AIGC
+}
+
+// 入账/出账/冻结/解冻
+enum LedgerDirection {
+  IN
+  OUT
+  FROZEN
+  UNFROZEN
+}
+
+// 充值/赠送/分销佣金(分桶,有效期不同)
+enum LedgerBucket {
+  RECHARGE
+  BONUS
+  COMMISSION
+}
+
+enum OrderStatus {
+  PENDING
+  PAID
+  DELIVERED
+  REFUNDED
+  CLOSED
+}
+
+// 会员/集数包/积分/增值/海报/PK/小南
+enum OrderKind {
+  MEMBER
+  PACKAGE
+  POINTS
+  VALUE_ADDED
+  POSTER
+  PK
+  XIAONAN
+}
+
+enum TaskStatus {
+  QUEUED
+  RUNNING
+  DONE
+  FAILED
+  CANCELED
+}
+
+enum FeedbackType {
+  SUGGESTION
+  BUG
+}
+
+enum TicketStatus {
+  PENDING
+  PROCESSING
+  SOLVED
+  EXECUTING   // 管理员“一键执行”：已梳理诉求并安排处理
+  TODO        // 管理员“待办”：进入待办后台
+  REJECTED    // 管理员“否定”：暂不采纳，仍给用户暖心回复
+}
+
+enum TradeStatus {
+  ON_SHELF
+  ESCROW   // 已付款，货款托管中
+  SOLD     // 已放款，交易完成
+  REFUNDED // 已退款，重新上架
+  OFF_SHELF
+}
+
+model User {
+  id             String      @id @default(cuid())
+  phone          String?     @unique
+  wechatOpenid   String?     @unique
+  douyinOpenid   String?     @unique
+  nickname       String      @default("编剧新人")
+  penName    String?
+  bio        String?            // 创作者介绍页
+  region     String?            // v2.71 显式地域（省/地区名，用于地域化创作，可空）
+  ageBand    String?            // v2.71 年龄段：u18/18-24/25-30/31-40/41-50/over50，可空
+  gender     String?            // v2.71 性别：男/女/保密，可空
+  personalized Boolean @default(true) // v2.71 个性化总开关，可一键关闭画像倾斜（合规）
+  extraStorageBytes Int @default(0) // 积分购买的额外存储
+  avatarUrl      String?
+  passwordHash   String?
+  level          MemberLevel @default(FREE)
+  levelExpireAt  DateTime?
+  engineTier     EngineTier  @default(ECONOMY)
+  // 裂变
+  inviteCode     String      @unique
+  invitedById    String?
+  invitedBy      User?       @relation("InviteTree", fields: [invitedById], references: [id])
+  invitees       User[]      @relation("InviteTree")
+  isPartner      Boolean     @default(false)
+  // 状态
+  banned         Boolean     @default(false)
+  isAdmin        Boolean     @default(false) // c199 副管理员标识：可进后台做日常管理；开设账号等超管操作仍以主账号手机号硬判定
+  createdAt      DateTime    @default(now())
+  updatedAt      DateTime    @updatedAt
+
+  pointsAccount  PointsAccount?
+  memberships    Membership[]
+  orders         Order[]
+  projects       Project[]
+  ledgers        LedgerEntry[] @relation("LedgerUser")
+  invitations    Invitation[]  @relation("Inviter")
+  posts          Post[]
+  postLikes      PostLike[]
+  listings       Listing[]
+  feedbacks      Feedback[]
+  matureConsents MatureConsent[]
+  storageObjects StorageObject[]
+  characterAssets CharacterAsset[]
+  propAssets PropAsset[]
+  sceneAssets SceneAsset[]
+
+  @@index([level])
+  @@index([invitedById])
+}
+
+model AdminUser {
+  id           String   @id @default(cuid())
+  account      String   @unique
+  passwordHash String
+  role         String   @default("OP") // 财务/运营/审核/技术/超管，RBAC
+  createdAt    DateTime @default(now())
+}
+
+// 会员订阅记录（付费后写入，level+expireAt 由它派生）
+model Membership {
+  id         String      @id @default(cuid())
+  userId     String
+  user       User        @relation(fields: [userId], references: [id])
+  level      MemberLevel
+  startedAt  DateTime    @default(now())
+  expireAt   DateTime
+  quotaTotal Int         // 本周期赠送集数
+  quotaUsed  Int         @default(0)
+  orderId    String?
+  createdAt  DateTime    @default(now())
+  @@index([userId, expireAt])
+}
+
+// 积分账户：余额为流水物化结果，定时/事务内校准，禁止前端直接改
+model PointsAccount {
+  id            String @id @default(cuid())
+  userId        String @unique
+  user          User   @relation(fields: [userId], references: [id])
+  balance       Int    @default(0) // 可用积分(分)
+  frozen        Int    @default(0) // 冻结中(生成任务占用)
+  bonusGranted  Int    @default(0) // 累计赠送(风控上限用)
+  updatedAt     DateTime @updatedAt
+}
+
+// 复式流水：每一笔积分变动一行，带幂等键防重复扣
+model LedgerEntry {
+  id          String          @id @default(cuid())
+  userId      String
+  user        User            @relation("LedgerUser", fields: [userId], references: [id])
+  direction   LedgerDirection
+  bucket      LedgerBucket
+  amount      Int             // 正数，方向由 direction 决定
+  balanceAfter Int
+  reason      String          // RECHARGE/GEN_SCRIPT/POSTER/PK/XIAONAN/INVITE_REWARD/COMMISSION...
+  refType     String?         // 关联 order/task/poster
+  refId       String?
+  idempotencyKey String       @unique // 幂等：同一业务绝不重复入账
+  expireAt    DateTime?       // 赠送积分90天有效期
+  createdAt   DateTime        @default(now())
+  @@index([userId, createdAt])
+  @@index([reason])
+}
+
+model Order {
+  id          String      @id @default(cuid())
+  userId      String
+  user        User        @relation(fields: [userId], references: [id])
+  kind        OrderKind
+  level       MemberLevel?
+  amountFen   Int         // 金额(分)
+  points      Int         @default(0) // 对应积分
+  status      OrderStatus @default(PENDING)
+  payChannel  String?     // wechat/alipay
+  payTradeNo  String?     @unique
+  paidAt      DateTime?
+  remark      String?
+  createdAt   DateTime    @default(now())
+  payments    Payment[]
+  @@index([userId, status])
+}
+
+model Payment {
+  id          String   @id @default(cuid())
+  orderId     String
+  order       Order    @relation(fields: [orderId], references: [id])
+  channel     String
+  amountFen   Int
+  rawNotify   Json?
+  success     Boolean  @default(false)
+  createdAt   DateTime @default(now())
+}
+
+// v2.92 采访式创作会话：多轮采访（一轮一问）+ 四维记忆空间，产出结构化创意简报
+model InterviewSession {
+  id         String   @id @default(cuid())
+  userId     String
+  title      String   @default("")
+  lang       String   @default("zh")
+  materials  Json     @default("{}") // 四维记忆空间 {relationships/timeline/scenes/quotes/rawNotes}
+  transcript Json     @default("[]") // [{q,a,at}]
+  turnCount  Int      @default(0)
+  status     String   @default("ACTIVE") // ACTIVE | CONVERTED | CLOSED
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+  @@index([userId, status])
+}
+
+model Project {
+  id          String       @id @default(cuid())
+  userId      String
+  user        User         @relation(fields: [userId], references: [id])
+  title       String
+  mode        String       // interview/tag/novel/highlight/hotspot/reverse/interactive/adapt
+  format      ScriptFormat @default(LIVE_ACTION)
+  engineTier  EngineTier   @default(STANDARD)
+  tags        String[]
+  bible       Json?        // 全局圣经:世界观/人设/关系/时间线/伏笔
+  filing      Json?        // 三类分级备案结果
+  investWan   Int?         // 预估投资额（万）
+  specialTopic Boolean     @default(false) // 特殊题材
+  totalEps    Int          @default(0)
+  status      String       @default("draft")
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+  scripts     Script[]
+  tasks       GenerationTask[]
+  posters     Poster[]
+}
+
+model Script {
+  id          String     @id @default(cuid())
+  projectId   String
+  project     Project    @relation(fields: [projectId], references: [id])
+  epNo        Int
+  title       String
+  synopsis    String     // 梗概(分享只用梗概,全文不外露)
+  content     String     // 正文
+  wordCount   Int
+  qcPassed    Boolean    @default(false) // 成稿质检闸门
+  qcReport    Json?
+  version     Int        @default(1)
+  createdAt   DateTime   @default(now())
+  @@unique([projectId, epNo, version])
+}
+
+// 多智能体生成任务（状态机 + SSE 进度）
+model GenerationTask {
+  id           String     @id @default(cuid())
+  projectId    String
+  project      Project    @relation(fields: [projectId], references: [id])
+  stage        String     // outline/draft/polish/finalize
+  pipeline     Json?      // 六岗位+双校验执行状态
+  engineTier   EngineTier
+  status       TaskStatus @default(QUEUED)
+  pointsCost   Int        // 预冻结积分
+  errorMsg     String?
+  createdAt    DateTime   @default(now())
+  finishedAt   DateTime?
+  callLogs     ModelCallLog[]
+  @@index([projectId, status])
+}
+
+// 模型调用成本日志：黑盒，只记引擎档与成本，不向前端暴露供应商
+model ModelCallLog {
+  id          String     @id @default(cuid())
+  taskId      String?
+  task        GenerationTask? @relation(fields: [taskId], references: [id])
+  role        String     // architect/designer/writer/polisher/compliance/market/validator
+  engineTier  EngineTier
+  modality    String     @default("text") // text/image
+  tokensIn    Int        @default(0)
+  tokensOut   Int        @default(0)
+  costFen     Int        // 真实采购成本(分)
+  priceFen    Int        // 向用户计的价(分),校验 price>=2*cost
+  createdAt   DateTime   @default(now())
+  @@index([engineTier, createdAt])
+}
+
+model Poster {
+  id         String   @id @default(cuid())
+  projectId  String
+  project    Project  @relation(fields: [projectId], references: [id])
+  tier       EngineTier
+  imageUrl   String?
+  quote      String?  // 金句主标题
+  pointsCost Int
+  createdAt  DateTime @default(now())
+}
+
+model PkBattle {
+  id          String   @id @default(cuid())
+  userId      String
+  scriptAId   String?
+  scriptBId   String?
+  projectAId  String?
+  projectBId  String?
+  result      Json?
+  pointsCost  Int      @default(10)
+  createdAt   DateTime @default(now())
+}
+
+// 编剧室：选题会(PITCH) / 剧本围读(READ)，异步协作室
+model WritersRoom {
+  id            String   @id @default(cuid())
+  ownerId       String
+  kind          String   // PITCH | READ
+  readMode      String?  // me_xn | user_user | me_other_xn | xn_xn（围读四种参与模式）
+  title         String
+  scriptId      String?
+  scriptText    String?  // 用户直接粘贴的剧本/创意文本
+  state         String   @default("OPEN") // OPEN | ACTIVE | DECIDED | CLOSED
+  payload       Json?    // 议程/选题决议/围读结果等结构化产出
+  inviteCode    String   @unique
+  participantIds String[]
+  pointsCost    Int      @default(0)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  messages      RoomMessage[]
+  @@index([ownerId])
+  @@index([kind, state])
+}
+
+// 编剧室发言：真人(USER)或小南(XN，带立场席位 seat)
+model RoomMessage {
+  id            String   @id @default(cuid())
+  roomId        String
+  room          WritersRoom @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  speakerType   String   // USER | XN
+  speakerUserId String?
+  seat          String?  // XN 扮演的立场席位：host/market/story/production/critic/editor/director/producer/audience
+  speakerName   String?
+  content       String
+  meta          Json?
+  createdAt     DateTime @default(now())
+  @@index([roomId])
+}
+
+// 拆爆款工作台记录（拆解报告→选标签→改编方向→改编大纲→进入创作）
+model TeardownRecord {
+  id          String   @id @default(cuid())
+  userId      String
+  sourceType  String   // text | drama_url | video_url
+  sourceUrl   String?
+  title       String?
+  wordCount   Int      @default(0)
+  report      Json?
+  pickedTags  String[]
+  direction   String?
+  outline     Json?
+  state       String   @default("ANALYZED") // ANALYZED | OUTLINED | TO_PROJECT
+  pointsCost  Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  @@index([userId])
+}
+
+// 广告位（首页多滚动广告位等，统一管理；priceFenDay=刊例价分/天，收费依据）
+model Advert {
+  id           String    @id @default(cuid())
+  slot         String    // home_hero_roll | create_done | square_feed | user_side
+  title        String
+  imageUrl     String?
+  linkUrl      String?
+  badge        String?   // “广告”标识，合规必备
+  sponsorName  String?
+  priceFenDay  Int       @default(0)
+  active       Boolean   @default(true)
+  sort         Int       @default(0)
+  clicks       Int       @default(0)
+  startAt      DateTime?
+  endAt        DateTime?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+  @@index([slot, active])
+}
+
+// 邀请关系与奖励（裂变，成本受控）
+model Invitation {
+  id           String   @id @default(cuid())
+  inviterId    String
+  inviter      User     @relation("Inviter", fields: [inviterId], references: [id])
+  inviteeId    String   @unique
+  registeredAt DateTime @default(now())
+  firstScriptAt DateTime?
+  firstPayAt   DateTime?
+  rewardGiven  Boolean  @default(false)
+  commission   Int      @default(0)
+  @@index([inviterId])
+}
+
+model Feedback {
+  id         String       @id @default(cuid())
+  userId     String?
+  user       User?        @relation(fields: [userId], references: [id])
+  type       FeedbackType
+  urgent     Boolean      @default(false)
+  content    String
+  contact    String?
+  meta       Json?        // 自动采集:页面/浏览器/版本/用户ID脱敏
+  ticketNo   String       @unique
+  status     TicketStatus @default(PENDING)
+  reply      String?
+  createdAt  DateTime     @default(now())
+  @@index([type, status])
+}
+
+model Post {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+  section   String   // experience/team/review/news
+  title     String
+  body      String
+  likes     Int      @default(0)
+  hidden    Boolean  @default(false)
+  createdAt DateTime @default(now())
+  postLikes PostLike[]
+}
+
+// 点赞记录：(userId, postId) 唯一约束做幂等，防止刷热度
+model PostLike {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+  postId    String
+  post      Post     @relation(fields: [postId], references: [id])
+  createdAt DateTime @default(now())
+
+  @@unique([userId, postId])
+  @@index([postId])
+}
+
+model Listing {
+  id         String      @id @default(cuid())
+  sellerId   String
+  seller     User        @relation(fields: [sellerId], references: [id])
+  scriptId   String
+  title      String
+  priceFen   Int
+  sample     String      // 样章(非全本)
+  commissionPct Int      // 5/10/15
+  status     TradeStatus @default(ON_SHELF)
+  // v2.72 上架时价值证书快照（确定性零token，作为定价参考与买家信任徽章；无分集则为 null）
+  valueIndex Int?
+  valueGrade String?     // S/A/B/C/NA
+  valueBandLow Int?      // 单集参考下限（元）
+  valueBandHigh Int?     // 单集参考上限（元）
+  valueEpisodes Int?
+  valueAt    DateTime?
+  createdAt  DateTime    @default(now())
+}
+
+model AuditLog {
+  id        String   @id @default(cuid())
+  actorId   String
+  actorType String   // user/admin
+  action    String
+  detail    Json?
+  ip        String?
+  createdAt DateTime @default(now())
+  @@index([actorId, createdAt])
+}
+
+// 后台学习窗口：上传的知识/技能/政策，经合规一致性校验后生效，可打包成技能包
+model KnowledgeItem {
+  id           String   @id @default(cuid())
+  kind         String   // TEXT / URL / VIDEO / FILE
+  title        String
+  content      String   // 正文或转写文本(URL/视频为抓取/转写结果)
+  sourceUrl    String?
+  fileName     String?
+  category     String   // character/plot/payoff/reversal/scene/dialogue/av/compliance
+  status       String   @default("PENDING") // PENDING/APPROVED/REJECTED/ARCHIVED(自主淘汰归档，可恢复)
+  conflictNote String?  // 与国家法规/平台规则相悖时的说明，相悖即驳回不生效
+  version      Int      @default(1)
+  skillVersion String?  // 打入哪个技能包版本
+  source       String   @default("MANUAL") // MANUAL 手动上传 / AUTO 自主学习提炼
+  confidence   Int?     // 自主学习置信度0-99
+  pruneReason  String?  // 被自主淘汰归档的原因
+  lastReferencedAt DateTime? // 最近一次被创作链路引用（供过时淘汰判断）
+  archivedAt   DateTime?
+  learnKey     String?  // 自主学习信号稳定key，用于跨轮去重（市场:tag日/政策id/剧本id:版本）
+  uploadedById String?
+  createdAt    DateTime @default(now())
+  approvedAt   DateTime?
+  @@index([status, category])
+  @@index([source, learnKey])
+  @@index([createdAt])
+}
+
+// 自主学习 / 每周API盘点 报告留痕（仅管理员可见，支撑“自进化全程可追溯”）
+model LearningReport {
+  id          String   @id @default(cuid())
+  kind        String   // DAILY_LEARN 每日自主学习 / WEEKLY_MODEL 每周API盘点
+  summary     Json?
+  text        String
+  createdById String?
+  createdAt   DateTime @default(now())
+  @@index([kind, createdAt])
+}
+
+// 管理员后台模型配置（API Key 加密存储，单例 id=global；C端永不可见明文）
+model ModelConfig {
+  id         String   @id @default("global")
+  payloadEnc String   // AES-256-GCM 加密后的 JSON
+  updatedBy  String?
+  updatedAt  DateTime @updatedAt
+}
+
+// 剧本交易购买流水（担保交易：下单即结算，买家扣分、卖家加税后、平台抽佣）
+model Purchase {
+  id               String   @id @default(cuid())
+  buyerId          String
+  sellerId         String
+  listingId        String
+  pricePoints      Int
+  commissionPoints Int
+  sellerGainPoints Int
+  status           String   @default("ESCROW") // ESCROW/SETTLED/REFUNDED
+  createdAt        DateTime @default(now())
+  @@index([buyerId])
+  @@index([listingId])
+}
+// 第11模式·成年向分级授权留痕：问卷/法域/责任承担/付费开通，30天到期重签，全程可审计
+model MatureConsent {
+  id                  String   @id @default(cuid())
+  userId              String
+  user                User     @relation(fields: [userId], references: [id])
+  ageConfirmed        Boolean
+  age                 Int
+  region              String   // CN/HK/TW/US/JP/KR/EU/OTHER
+  purposePersonal     Boolean
+  noMinorDistribution Boolean
+  boundaryAccepted    Boolean
+  legalSelfResponsible Boolean
+  paidOrderId         String?
+  signedAt            DateTime @default(now())
+  expireAt            DateTime
+  revokedAt           DateTime?
+  @@index([userId, expireAt])
+}
+// 有限存储：每个对象记大小，用户用量=对象求和，可删除/可积分扩容；超出配额拒绝写入
+model StorageObject {
+  id         String   @id @default(cuid())
+  userId     String
+  user       User     @relation(fields: [userId], references: [id])
+  kind       String   // script/docx/pdf/poster/audio/import
+  refId      String?
+  bytes      Int
+  createdAt  DateTime @default(now())
+  deletedAt  DateTime?
+  @@index([userId, kind])
+}
+
+// v2.151 角色资产库：L3 编导"角色可资产化"落地——跨剧沉淀可复用人设/声纹/视觉锚点，立项时引用注入创作管线
+model CharacterAsset {
+  id                 String   @id @default(cuid())
+  userId             String
+  user               User     @relation(fields: [userId], references: [id])
+  name               String   // 角色名（含标志性称呼）
+  persona            String   // 人设内核（欲望/弧光/性格底色压缩）
+  voice              String?  // 声音特质（句式/语气词/口头禅气质）
+  signatureLines     Json?    // 标志性台词 ["..."]（台词气质锚，不逐字照搬）
+  voicePrint         Json?    // 声纹摘要 {avgLen,shortRatio,questionRatio,exclamRatio,topParticles,signature}（由对白指纹引擎离线计算）
+  visualAnchor       String?  // 视觉锚点（AIGC 换剧保持形象一致）
+  tags               String[] // 题材/气质标签（检索用）
+  sourceProjectId    String?  // 沉淀来源项目
+  sourceProjectTitle String?
+  usedCount          Int      @default(0) // 被项目引用次数
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+  @@index([userId, updatedAt])
+}
+
+// v2.159 道具资产库（L3"道具可资产化"：关键信物跨剧沉淀/复用，与 CharacterAsset 家族同构）
+model PropAsset {
+  id                 String   @id @default(cuid())
+  userId             String
+  user               User     @relation(fields: [userId], references: [id])
+  name               String   // 信物名（词典原样或自定义）
+  meaning            String   // 剧情含义/功能（认亲信物/复仇证据/悬念载体）
+  taboo              String?  // 连续性禁忌（已销毁/已交出，禁止凭空再现等）
+  eps                Json?    // 出现集号 [1,3,5]（沉淀产物，跨集连续性参考）
+  closedEps          Json?    // 封禁集号（伴随销毁/丢失动作的集）
+  visualAnchor       String?  // 外观锚点（AIGC 换剧保持道具一致）
+  tags               String[] // 题材/功能标签（检索用）
+  sourceProjectId    String?  // 沉淀来源项目
+  sourceProjectTitle String?
+  usedCount          Int      @default(0) // 被项目引用次数
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+  @@index([userId, updatedAt])
+}
+
+// v2.161 场景资产库（L3"场景可资产化"：关键舞台跨剧沉淀/复用，与 CharacterAsset/PropAsset 家族同构）
+model SceneAsset {
+  id                 String   @id @default(cuid())
+  userId             String
+  user               User     @relation(fields: [userId], references: [id])
+  name               String   // 场景名（地点，场头提取原样或自定义）
+  meaning            String   // 剧情功能（主线舞台/情感锚点/冲突现场/高光打脸场）
+  mood               String?  // 氛围基调（阴森/温馨/压抑…，AIGC 生图光线与节拍适配参考）
+  taboo              String?  // 状态禁忌（已烧毁/已封锁，未补交代不得完好再现等）
+  eps                Json?    // 出现集号 [1,3,5]（沉淀产物，置景复用密度参考）
+  visualAnchor       String?  // 外观锚点（AIGC 换剧保持场景一致）
+  tags               String[] // 题材/功能标签（检索用）
+  sourceProjectId    String?  // 沉淀来源项目
+  sourceProjectTitle String?
+  usedCount          Int      @default(0) // 被项目引用次数
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+  @@index([userId, updatedAt])
+}
