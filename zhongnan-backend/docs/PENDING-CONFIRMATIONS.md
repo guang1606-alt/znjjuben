@@ -41,3 +41,8 @@
 - 现状：已移植 `scripts/daily-review.cjs` 到养正主仓库（适配 Python 后端 + TS 前端结构），每日产出 `docs/daily-review/YYYY-MM-DD.md`
 - 用法：`node scripts/daily-review.cjs`
 - 说明：待确认清单仍以本文件为单一事实源，养正报告自动回显
+
+## 9.【中】WorkshopEnrollment 缺唯一键导致并发报名重复
+- 现状：`workshop_service.enroll` 用 check-then-insert，但 `workshop_enrollments` 表无 `(student_id, course_id)` 唯一约束
+- 风险：学生双击报名会产生重复行，且 `WorkshopCourse.student_count` 被双倍递增
+- 建议：确认后加迁移 `UniqueConstraint("student_id", "course_id", name="uq_enrollment_student_course")`，并改用 `commit_or_return_existing` 或 pg upsert
