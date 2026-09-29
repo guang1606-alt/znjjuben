@@ -1133,6 +1133,38 @@
           </div>
         </div>
       </section>
+      <!-- v2.187 工具优化弹窗铁律：超管发布更新公告面板 -->
+      <section class="panel hidden" id="admUpdatesPane">
+        <div class="adm-toolbar" style="flex-wrap:wrap;gap:8px">
+          <b data-i="admUpdates_title">发布更新公告</b>
+          <span class="spacer"></span>
+          <button class="btn-ghost" id="admUpdReload" data-i="reload">刷新</button>
+        </div>
+        <div class="notice" style="margin:8px 0" data-i="admUpdates_hint">每次工具优化、调整、更新后，发布一条公告，用户端会弹窗提示。版本号须与后端 package.json 保持一致。</div>
+        <div class="subpanel" style="margin-top:8px">
+          <div class="field"><label data-i="admUpdates_version">版本号</label>
+            <input id="admUpdVer" class="adm-input" placeholder="如 2.187.0" maxlength="32" />
+          </div>
+          <div class="field"><label data-i="admUpdates_titleZh">标题（中文）</label>
+            <input id="admUpdTitleZh" class="adm-input" maxlength="120" placeholder="如：弹窗机制上线" />
+          </div>
+          <div class="field"><label data-i="admUpdates_titleEn">标题（英文，选填）</label>
+            <input id="admUpdTitleEn" class="adm-input" maxlength="120" />
+          </div>
+          <div class="field"><label data-i="admUpdates_bodyZh">正文（中文）</label>
+            <textarea id="admUpdBodyZh" class="adm-input" rows="4" maxlength="2000" placeholder="每次工具优化都会弹窗通知你。"></textarea>
+          </div>
+          <div class="field"><label data-i="admUpdates_bodyEn">正文（英文，选填）</label>
+            <textarea id="admUpdBodyEn" class="adm-input" rows="4" maxlength="2000"></textarea>
+          </div>
+          <div class="field"><label class="adm-create-admin"><input type="checkbox" id="admUpdPinned" /><span data-i="admUpdates_pinned">置顶（覆盖最新公告优先级）</span></label></div>
+          <div class="field"><button class="btn-primary" id="admUpdSubmit" data-i="admUpdates_submit">发布</button></div>
+        </div>
+        <div class="subpanel" style="margin-top:12px">
+          <b data-i="admUpdates_history">历史公告</b>
+          <div id="admUpdList" class="feed" style="margin-top:8px"></div>
+        </div>
+      </section>
     </div>
   </main>
   <!-- 登录/注册模态 -->

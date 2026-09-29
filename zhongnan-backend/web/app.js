@@ -6968,7 +6968,7 @@
   function idemToken() { return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`; }
 
   /* ---------- 超级管理员后台 ---------- */
-  const ADM_TABS = ['users', 'stats', 'finance', 'posts', 'models', 'knowledge', 'feedback', 'safety', 'handoff'];
+  const ADM_TABS = ['users', 'stats', 'finance', 'posts', 'models', 'knowledge', 'feedback', 'safety', 'handoff', 'updates'];
   let admTab = 'users', admPage = 1, admInited = false;
   const lvName = (lv) => (lang === 'en' ? LEVEL_EN : LEVEL_ZH)[lv] || lv;
   async function admApi(path, opts) {
@@ -7003,8 +7003,8 @@
     $('admTabs').querySelectorAll('[data-atab]').forEach((b) => b.onclick = () => { admTab = b.getAttribute('data-atab'); renderAdmTabs(); loadAdmTab(); });
   }
   function loadAdmTab() {
-    ['Users', 'Stats', 'Finance', 'Posts', 'Models', 'Knowledge', 'Feedback', 'Safety', 'Handoff'].forEach((n) => $('adm' + n + 'Pane').classList.add('hidden'));
-    const map = { users: 'Users', stats: 'Stats', finance: 'Finance', posts: 'Posts', models: 'Models', knowledge: 'Knowledge', feedback: 'Feedback', safety: 'Safety', handoff: 'Handoff' };
+    ['Users', 'Stats', 'Finance', 'Posts', 'Models', 'Knowledge', 'Feedback', 'Safety', 'Handoff', 'Updates'].forEach((n) => $('adm' + n + 'Pane').classList.add('hidden'));
+    const map = { users: 'Users', stats: 'Stats', finance: 'Finance', posts: 'Posts', models: 'Models', knowledge: 'Knowledge', feedback: 'Feedback', safety: 'Safety', handoff: 'Handoff', updates: 'Updates' };
     $('adm' + map[admTab] + 'Pane').classList.remove('hidden');
     if (admTab === 'users') loadAdmUsers();
     if (admTab === 'stats') loadAdmStats();
@@ -7015,6 +7015,7 @@
     if (admTab === 'feedback') loadAdmFeedback();
     if (admTab === 'safety') loadAdmSafety();
     if (admTab === 'handoff') loadAdmHandoff();
+    if (admTab === 'updates') loadAdmUpdates();
   }
   function initAdmin() {
     $('admUserSearch').onclick = () => { admPage = 1; loadAdmUsers(); };
@@ -7061,6 +7062,53 @@
     $('hdCopy').onclick = copyHandoffBrief;
     $('hdDownload').onclick = downloadHandoffBrief;
     $('hdImport').onchange = importAdmHandoff;
+    // v2.187 工具优化弹窗铁律：发布更新公告面板事件绑定
+    $('admUpdReload').onclick = loadAdmUpdates;
+    $('admUpdSubmit').onclick = submitAdmUpdate;
+  }
+  // ── v2.187 工具优化弹窗铁律：超管发布更新公告 ──
+  async function loadAdmUpdates() {
+    const listEl = $('admUpdList');
+    if (listEl) listEl.innerHTML = `<div class="muted">${t('loading') || '加载中…'}</div>`;
+    try {
+      // 复用 /api/updates/latest（只读最新一条）；历史全量走 /api/updates/since?version=0.0.0
+      const res = await Api.request('/api/updates/since?version=0.0.0');
+      const data = await Api.jsonOrThrow(res);
+      const items = Array.isArray(data?.items) ? data.items : [];
+      if (items.length === 0) { if (listEl) listEl.innerHTML = `<div class="muted">${lang === 'en' ? 'No announcements yet.' : '暂无公告。'}</div>`; return; }
+      if (listEl) listEl.innerHTML = items.map((a) => {
+        const title = a.titleZh || a.titleEn || `v${a.version}`;
+        const body = (a.bodyZh || a.bodyEn || '').slice(0, 200);
+        const pinned = a.pinned ? `<span class="badge">${lang === 'en' ? 'Pinned' : '置顶'}</span> ` : '';
+        const ver = escapeHtml(a.version);
+        const t1 = escapeHtml(title);
+        const b1 = escapeHtml(body);
+        const d = a.createdAt ? new Date(a.createdAt).toLocaleString(lang === 'en' ? 'en-US' : 'zh-CN') : '';
+        return `<div class="card row-card"><div>${pinned}<b>v${ver}</b> <span>${t1}</span> <span class="muted">${d}</span></div><div class="muted" style="margin-top:4px;white-space:pre-wrap">${b1}</div></div>`;
+      }).join('');
+    } catch (e) { if (listEl) listEl.innerHTML = `<div class="muted">${escapeHtml(e.message || '')}</div>`; }
+  }
+  async function submitAdmUpdate() {
+    const version = $('admUpdVer').value.trim();
+    const titleZh = $('admUpdTitleZh').value.trim();
+    const titleEn = $('admUpdTitleEn').value.trim() || null;
+    const bodyZh = $('admUpdBodyZh').value.trim();
+    const bodyEn = $('admUpdBodyEn').value.trim() || null;
+    const pinned = $('admUpdPinned').checked;
+    if (!version) { xnSay(lang === 'en' ? 'Version required' : '请填写版本号'); return; }
+    if (!titleZh) { xnSay(lang === 'en' ? 'Title required' : '请填写中文标题'); return; }
+    if (!bodyZh) { xnSay(lang === 'en' ? 'Body required' : '请填写中文正文'); return; }
+    try {
+      const res = await Api.request('/api/admin/updates', {
+        method: 'POST',
+        body: JSON.stringify({ version, titleZh, titleEn, bodyZh, bodyEn, pinned }),
+      });
+      const j = await Api.jsonOrThrow(res);
+      xnSay(lang === 'en' ? `Published v${j.version}` : `已发布 v${j.version}`);
+      $('admUpdVer').value = ''; $('admUpdTitleZh').value = ''; $('admUpdTitleEn').value = '';
+      $('admUpdBodyZh').value = ''; $('admUpdBodyEn').value = ''; $('admUpdPinned').checked = false;
+      loadAdmUpdates();
+    } catch (e) { xnSay(e.message || String(e)); }
   }
   // ── v2.43 迭代接续档案：系统快照只读、脉络可编辑、口令一键带走 ──
   let hdCache = null;
