@@ -6507,6 +6507,8 @@
       const res = await Api.request('/api/market/investor-lens', { method: 'POST', body: JSON.stringify({ text: text.slice(0, 6000), tags }) });
       const d = await Api.jsonOrThrow(res);
       renderInvestorLens(d);
+      // 体检后串联：按所选标签推荐适配投稿渠道（商业闭环最后一公里）
+      loadSubmissionMatch(tags);
     } catch { panel.classList.add('hidden'); }
   }
   function renderInvestorLens(d) {
@@ -6530,6 +6532,37 @@
   }
   const invRefreshBtn = $('invRefreshBtn');
   if (invRefreshBtn) invRefreshBtn.onclick = () => { if (currentProjectId) loadInvestorLens(currentProjectId); };
+
+  /* ---------- 投稿渠道推荐（按标签匹配适配平台，商业闭环） ---------- */
+  async function loadSubmissionMatch(tags) {
+    const panel = $('submissionPanel'); if (!panel) return;
+    if (!tags || !tags.length) { panel.classList.add('hidden'); return; }
+    try {
+      const r = await Api.request('/api/submission/match?tags=' + encodeURIComponent(tags.join(',')) + '&count=6');
+      const d = await Api.jsonOrThrow(r);
+      renderSubmission(d.matches);
+      panel.classList.remove('hidden');
+    } catch { panel.classList.add('hidden'); }
+  }
+  function renderSubmission(matches) {
+    const list = $('submissionList'); if (!list) return;
+    list.innerHTML = matches.map((c) => {
+      const verifiedBadge = c.verified
+        ? `<span class="chip" style="background:#e8f5e9;color:#2e7d32">${lang === 'en' ? 'Verified' : '联系方式已核验'}</span>`
+        : `<span class="chip" style="background:#fff3e0;color:#e65100">${lang === 'en' ? 'Contact pending' : '联系方式待核验'}</span>`;
+      const kinds = (c.kinds || []).join('·');
+      const matched = (c.matched || []).map((t) => `<span class="chip" style="font-size:11px">${escapeHtml(t)}</span>`).join('');
+      return `<div class="sub-card">
+        <div class="sub-head"><b>${escapeHtml(c.name)}</b><span class="muted">${escapeHtml(c.region === 'overseas' ? (lang === 'en' ? 'Overseas' : '海外') : (lang === 'en' ? 'Domestic' : '国内'))}</span>${verifiedBadge}</div>
+        <div class="sub-meta"><span>${escapeHtml(kinds)}</span>${matched}</div>
+        ${c.highlight ? `<div class="sub-hl">${escapeHtml(c.highlight)}</div>` : ''}
+      </div>`;
+    }).join('');
+    const notice = $('submissionNotice');
+    if (notice) notice.textContent = lang === 'en'
+      ? 'Tip: platforms with pending contacts are listed for reference only; verify official entry before submitting.'
+      : '提示：标"待核验"的渠道仅作题材适配参考，投稿前请务必到官方入口核验对接方式，勿轻信第三方。';
+  }
 
   function showFail(msg, refunded) {
     $('progressPanel').classList.add('hidden'); $('failPanel').classList.remove('hidden');

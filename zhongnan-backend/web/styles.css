@@ -804,6 +804,15 @@ textarea { background: var(--panel); color: var(--text); border: 1px solid var(-
 .investor-questions .inv-q{margin:6px 0;line-height:1.65;color:var(--text)}
 #invPremise{margin-top:10px;font-size:.82rem;line-height:1.65;color:var(--text-2)}
 @media (max-width:640px){.investor-verdict b{font-size:22px}.investor-head{flex-wrap:wrap}}
+.submission-panel{margin:14px 0;padding:17px;border:1px solid var(--line);border-radius:14px;background:var(--panel-2)}
+.submission-list{display:flex;flex-direction:column;gap:8px;margin:8px 0}
+.sub-card{padding:10px 12px;border-radius:10px;background:var(--panel);border:1px solid var(--line)}
+.sub-head{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.sub-head b{font-size:.95rem}
+.sub-head .muted{font-size:.78rem}
+.sub-meta{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin:5px 0;font-size:.8rem;color:var(--text-2)}
+.sub-meta .chip{font-size:11px;padding:2px 7px;border-radius:6px}
+.sub-hl{font-size:.82rem;line-height:1.55;color:var(--accent-strong);margin-top:4px}
 
 /* ================= 小南递招：方法卡 + 钩子 ================= */
 .craft-bench{margin:14px 0}

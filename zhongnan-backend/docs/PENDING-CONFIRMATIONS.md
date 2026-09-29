@@ -27,3 +27,12 @@
 ## 5.【低】多人协作的 git 身份区分
 - 现状：本机所有提交作者均为 `123 <a123@yangguangdeMacBook-Pro.local>`（自动生成），多位协作者共用一台机器时无法从提交记录区分是谁做的
 - 建议：为每位协作者配置独立 `git config user.name/user.email`（或至少给本机配一个正式身份），每日复盘报告的"协作动态"才能按人统计
+
+## 6.【中】支付接口接入（order.ts 占位符）
+- 现状：`src/routes/order.ts` 的下单接口返回 `payParams: 'TODO_CALL_PROVIDER'`，未对接微信/支付宝
+- 如需上线收款：提供商户号/密钥，在 order.ts 注入真实下单逻辑
+
+## 7.【中】投稿渠道联系方式核验（12 个平台）
+- 现状：`src/config/submission-channels.ts` 中 12 个投稿平台的 `contact.detail` 均为空，前端已显式标注"联系方式待核验"
+- 操作：运营到各平台官方入口核验对接方式后，在该文件填入 `detail` 并写 `verifiedAt`（ISO 时间）；前端自动切换为"已核验"徽章
+- 说明：投稿渠道匹配功能已上线（v2.195），即使联系方式未核验，题材适配推荐也可用
