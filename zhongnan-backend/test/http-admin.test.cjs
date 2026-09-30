@@ -206,7 +206,7 @@ test('管理员后台：完整闭环', async (t) => {
     assert.strictEqual((await req('POST', '/api/admin/users/sub2/ban', adminTok, { banned: false })).status, 200);
     // 保护不误伤：主账号可处置普通用户
     assert.strictEqual((await req('POST', '/api/admin/users/u3/ban', adminTok, { banned: true })).status, 200);
-    assert.strictEqual((await req('POST', '/api/admin/users/u3/reset-password', adminTok, { newPassword: 'ok12345' })).status, 200);
+    assert.strictEqual((await req('POST', '/api/admin/users/u3/reset-password', adminTok, { newPassword: 'ok123456' })).status, 200);
   });
 
   await t.test('数据总览聚合正确', async () => {

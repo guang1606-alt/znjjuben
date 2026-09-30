@@ -21,9 +21,10 @@ export interface PwStrength { ok: boolean; score: number; problems: string[] }
 export function passwordStrength(pw: string): PwStrength {
   const problems: string[] = [];
   if (!pw || pw.length < 8) problems.push('密码至少8位');
+  // 黑名单优先于复杂度：12345678 这类纯数字弱口令应报「弱口令」而非笼统的「需包含字母」
+  if (WEAK_PASSWORDS.has((pw || '').toLowerCase())) problems.push('弱口令不可用');
   if (pw && !/[a-zA-Z]/.test(pw)) problems.push('需包含字母');
   if (pw && !/\d/.test(pw)) problems.push('需包含数字');
-  if (WEAK_PASSWORDS.has((pw || '').toLowerCase())) problems.push('弱口令不可用');
   let score = 0;
   if ((pw || '').length >= 8) score += 1;
   if ((pw || '').length >= 12) score += 1;

@@ -10,6 +10,7 @@ import { z } from 'zod';
 import { authRequired, AuthRequest } from '../middleware/auth';
 import { createRequireAdmin, requireSuperAdmin, SUPER_ADMIN_PHONE } from '../middleware/admin';
 import { hashPassword, genInviteCode } from '../lib/auth';
+import { passwordStrength } from '../lib/auth-policy';
 import { prisma as defaultPrisma } from '../lib/prisma';
 import { MemberLevel, MEMBERSHIP, EP_PRICE, ENGINE, EngineTier } from '../config/pricing';
 import { checkEpPrice, simulateMonthlyPlan } from '../config/pricing-sim';
@@ -108,6 +109,9 @@ export function createAdminRouter(prisma: PrismaLike | any) {
     const p = createSchema.safeParse(req.body);
     if (!p.success) return res.status(400).json({ error: p.error.issues[0]?.message ?? '参数不合法' });
     const { phone, initialPassword, level, nickname, isAdmin } = p.data;
+    // v2.212 统一密码策略：开设账号的初始密码与注册同规则（8位+字母+数字+黑名单）
+    const pwCheck = passwordStrength(initialPassword);
+    if (!pwCheck.ok) return res.status(400).json({ error: `初始密码${pwCheck.problems[0]}` });
     const existed = await prisma.user.findUnique({ where: { phone } });
     if (existed) return res.status(409).json({ error: '该手机号已存在' });
     const u = await prisma.user.create({
@@ -227,11 +231,13 @@ export function createAdminRouter(prisma: PrismaLike | any) {
     }
   });
 
-  // 重置密码（argon2id 重新哈希；管理员不获知原密码）
-  const pwSchema = z.object({ newPassword: z.string().min(6).max(64) });
+  // 重置密码（argon2id 重新哈希；管理员不获知原密码）。v2.212 统一密码策略：与注册同规则（8位+字母+数字+黑名单），修复 min(6) 不一致
+  const pwSchema = z.object({ newPassword: z.string().min(8, '新密码至少8位').max(64) });
   r.post('/users/:id/reset-password', ...admin, guardTarget, async (req: AuthRequest, res) => {
     const p = pwSchema.safeParse(req.body);
-    if (!p.success) return res.status(400).json({ error: '新密码长度需 6-64 位' });
+    if (!p.success) return res.status(400).json({ error: '新密码长度需 8-64 位' });
+    const pw = passwordStrength(p.data.newPassword);
+    if (!pw.ok) return res.status(400).json({ error: `新密码${pw.problems[0]}` });
     const u = (req as any)._targetUser;
     const hash = await hashPassword(p.data.newPassword);
     await prisma.user.update({ where: { id: u.id }, data: { passwordHash: hash } });

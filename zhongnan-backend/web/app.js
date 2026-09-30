@@ -8353,7 +8353,7 @@
     const nickname = $('admCreateNick').value.trim();
     const level = $('admCreateLevel').value;
     if (!/^1[3-9]\d{9}$/.test(phone)) { xnSay(lang === 'en' ? 'Invalid phone number.' : '手机号格式不正确'); return; }
-    if ((pw || '').length < 8) { xnSay(lang === 'en' ? 'Initial password: at least 8 characters.' : '初始密码至少 8 位'); return; }
+    if ((pw || '').length < 8 || !/[a-zA-Z]/.test(pw) || !/\d/.test(pw)) { xnSay(lang === 'en' ? 'Initial password: 8+ characters with letters and numbers.' : '初始密码至少 8 位，且需同时包含字母和数字'); return; }
     try {
       await admApi('/users', { method: 'POST', body: JSON.stringify({ phone, initialPassword: pw, level, nickname: nickname || undefined, isAdmin: $('admCreateIsAdmin').checked }) });
       xnSay(lang === 'en' ? 'Account created. Share the phone + initial password with the user.' : '账号已开设，把手机号与初始密码交给对方即可登录');
@@ -8402,8 +8402,9 @@
           .then(() => { xnSay(t('admOk')); loadAdmUsers(); }).catch((e) => xnSay(e.message));
       };
       tr.querySelector('[data-act="resetpw"]').onclick = async () => {
-        const np = await uiPrompt({ body: lang === 'en' ? 'New password (6-64):' : '为该用户设置新密码（6-64 位）：', type: 'password' });
+        const np = await uiPrompt({ body: lang === 'en' ? 'New password (8-64, letters + numbers):' : '为该用户设置新密码（8-64 位，需含字母和数字）：', type: 'password' });
         if (!np) return;
+        if (np.length < 8 || !/[a-zA-Z]/.test(np) || !/\d/.test(np)) { xnSay(lang === 'en' ? '8+ characters with letters and numbers.' : '至少 8 位，且需同时包含字母和数字'); return; }
         admApi('/users/' + uid + '/reset-password', { method: 'POST', body: JSON.stringify({ newPassword: np }) })
           .then(() => xnSay(t('admOk'))).catch((e) => xnSay(e.message));
       };

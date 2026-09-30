@@ -2,6 +2,7 @@ import { asyncRouter } from '../lib/async-router';
 import { z } from 'zod';
 import { prisma as defaultPrisma } from '../lib/prisma';
 import { hashPassword, verifyPassword, signAccess, signRefresh, genInviteCode } from '../lib/auth';
+import { passwordStrength } from '../lib/auth-policy';
 import { grantBonus } from '../lib/billing';
 import { withBillingTransaction } from '../lib/prisma-tx';
 import { INVITE, MEMBERSHIP, MemberLevel } from '../config/pricing';
@@ -28,9 +29,13 @@ export function createAuthRouter(prisma: PrismaLike | any) {
     if (!parsed.success) return res.status(400).json({ error: parsed.error.issues[0].message });
     const { phone, password, inviteCode } = parsed.data;
     // 主账号仅由受控引导创建；未初始化时也不可通过公开注册取得特权。
+    // （409 占用判断优先于密码强度：与既有防枚举契约一致，保留号一律同样响应）
     if (phone === SUPER_ADMIN_PHONE) return res.status(409).json({ error: '该手机号已注册' });
     const existed = await prisma.user.findUnique({ where: { phone } });
     if (existed) return res.status(409).json({ error: '该手机号已注册' });
+    // v2.212 统一密码策略：弱口令黑名单 + 必须含字母和数字（登录不校验强度，存量用户不受影响）
+    const pw = passwordStrength(password);
+    if (!pw.ok) return res.status(400).json({ error: pw.problems[0] });
     const inviter = inviteCode ? await prisma.user.findUnique({ where: { inviteCode } }) : null;
     const user = await prisma.$transaction(async (tx: any) => {
       const u = await tx.user.create({
