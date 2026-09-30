@@ -2580,7 +2580,8 @@ generateRouter.post('/episodes', authRequired, async (req: AuthRequest, res) => 
       });
     }
     await prisma.generationTask.update({ where: { id: task.id }, data: { status: 'RUNNING' } });
-    send({ stage: 'frozen', points, free: isFree, viaQuota: paidViaQuota, staff: isStaff, quotaRemainAfter: paidViaQuota ? charge.quotaRemainBefore - 1 : charge.quotaRemainBefore });
+    // v2.233 端点对齐：frozen 帧携带 taskId——前端据此前调 POST /tasks/:id/cancel（v2.190 取消能力此前无前端入口）
+    send({ stage: 'frozen', taskId: task.id, points, free: isFree, viaQuota: paidViaQuota, staff: isStaff, quotaRemainAfter: paidViaQuota ? charge.quotaRemainBefore - 1 : charge.quotaRemainBefore });
 
     const fallbackBible: Bible = { worldview: '', characters: {}, timeline: [], foreshadow: [] };
     const bible = (project.bible as unknown as Bible) ?? fallbackBible;

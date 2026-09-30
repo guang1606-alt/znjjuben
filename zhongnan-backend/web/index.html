@@ -357,6 +357,7 @@
         <div style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap;align-items:center">
           <button class="btn-ghost" id="ivStartBtn">🎬 开始采访（5积分/轮）</button>
           <button class="btn-primary hidden" id="ivBriefBtn">📋 生成创意简报并回填（免费）</button>
+          <button class="btn-ghost hidden" id="ivStopBtn">⏹ 结束会话</button>
           <span class="muted" id="ivTip"></span>
         </div>
       </section>
@@ -481,6 +482,7 @@
         <div class="timeline" id="timeline"></div>
         <div class="role-strip" id="roleStrip"></div>
         <div class="staff-log" id="staffLog"></div>
+        <div style="display:flex;justify-content:flex-end;margin-top:8px"><button class="btn-ghost hidden" id="genCancelBtn">✕ 取消生成</button></div>
         <div class="xn">
           <div class="xn-avatar">🐼</div>
           <div class="xn-bubble">

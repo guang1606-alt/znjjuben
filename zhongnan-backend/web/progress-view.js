@@ -105,6 +105,13 @@
         next.error = String(evt.error || '生成失败，已冻结积分将原路退回');
         return next;
 
+      // v2.233 端点对齐：用户显式取消（后端 v2.190 abort → 发 cancelled 帧）；复用 failed 相位渲染
+      case 'cancelled':
+        next.phase = 'failed';
+        next.cancelled = true;
+        next.error = String(evt.error || '已取消生成，冻结积分将原路退回');
+        return next;
+
       default:
         // 未知事件安全忽略，不崩状态机
         return s;

@@ -740,6 +740,7 @@
     return lang === 'en' ? {
       heading: 'Interview Mode · Xiaonan asks, you answer',
       start: '🎬 Start interview (5 pts/turn)', reply: 'Reply', briefBtn: '📋 Build brief & fill in (Free)',
+      ivStop: '⏹ End session',
       restart: '🎬 New interview (5 pts/turn)', restoring: 'Restoring your interview…',
       restoreFailed: 'Could not restore your interview. Reopen this panel to retry, or start a new interview.',
       answer: 'Answer in your own words…', hintStart: 'Write your idea in the box above, then start.',
@@ -754,6 +755,7 @@
     } : {
       heading: '采访式创作 · 小南来采访你',
       start: '🎬 开始采访（5积分/轮）', reply: '回答并继续', briefBtn: '📋 生成创意简报并回填（免费）',
+      ivStop: '⏹ 结束会话',
       restart: '🎬 新建采访（5积分/轮）', restoring: '正在恢复已保存的采访…',
       restoreFailed: '采访恢复失败。可重新打开面板重试，或主动新建采访。',
       answer: '想到哪说到哪，像聊天一样…', hintStart: '先在上方创意框写下你的想法，再点「开始采访」。',
@@ -798,7 +800,10 @@
     $('ivAnswer').placeholder = T.answer;
     $('ivStartBtn').classList.remove('hidden');
     $('ivBriefBtn').classList.toggle('hidden', !ivSessionId || !ivReady || ivClosed);
+    $('ivStopBtn').textContent = T.ivStop; // v2.233 会话关闭入口
+    $('ivStopBtn').classList.toggle('hidden', !ivSessionId || ivClosed);
     $('ivStartBtn').disabled = ivBusy;
+    $('ivStopBtn').disabled = ivBusy;
     $('ivAnswer').disabled = ivBusy || ivClosed;
     $('ivSendBtn').disabled = ivBusy || ivClosed;
     $('ivBriefBtn').disabled = ivBusy;
@@ -862,12 +867,25 @@
     ivRenderStatus();
     return ivLoading;
   }
+  // v2.233 结束会话：消费 POST /api/interview/sessions/:id/close（后端已有一段时间，此前无前端入口）
+  async function ivClose() {
+    if (!ivSessionId || ivBusy || ivClosed) return;
+    ivBusy = true; ivRenderStatus();
+    try {
+      await Api.request(`/api/interview/sessions/${ivSessionId}/close`, { method: 'POST' });
+      ivClosed = true;
+    } catch (e) {
+      xnSay((e && e.message) || (lang === 'en' ? 'Failed to end the session, try again later.' : '结束失败，请稍后重试'));
+    }
+    ivBusy = false; ivRenderStatus();
+  }
   function initInterviewPanel() {
     if (!ivInited) {
       ivInited = true;
       $('ivStartBtn').onclick = ivStart;
       $('ivSendBtn').onclick = ivReply;
       $('ivBriefBtn').onclick = ivBrief;
+      $('ivStopBtn').onclick = ivClose;
       $('ivAnswer').addEventListener('keydown', (e) => { if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); ivReply(); } });
       window.addEventListener('storage', (e) => { if (!e.key || e.key === 'zn_user' || e.key === 'zn_token') initInterviewPanel(); });
     }
@@ -3589,6 +3607,15 @@
     } else {
       stopWaitTips();
     }
+    // v2.233 取消按钮：会话运行中且已捕获 taskId 时可见；点击后置忙直至 cancelled 帧到达
+    const as = genSessions.find((s) => s.id === activeSessionId);
+    const canCancel = !!(as && as.status === 'running' && as.taskId);
+    const cbtn = $('genCancelBtn');
+    if (cbtn) {
+      cbtn.classList.toggle('hidden', !canCancel);
+      cbtn.disabled = !!(as && as.cancelling);
+      if (as && as.cancelling) cbtn.textContent = t('genCancelling'); else cbtn.textContent = t('genCancel');
+    }
   }
   // ===== 钩子编排控制台（v1.83，PRD 导演钩子体系：用户选项 vs 系统默认） =====
   const hookPref = { mode: 'auto', strength: 'balanced', preferred: [], microFlavors: [] };
@@ -5708,8 +5735,15 @@
   }
   function handleEvent(data, session) {
     if (!genSessions.includes(session) || !isPrivateSessionCurrent(session.account)) return;
+    if (data.taskId && !session.taskId) session.taskId = data.taskId; // v2.233 取消闭环：frozen 帧起捕获，供取消端点调用
     session.progress = PV().reduceProgress(session.progress, data);
     if (session.id === activeSessionId) { progress = session.progress; renderProgress(); }
+    // v2.233 用户显式取消：后端已 abort 流水线、退还冻结积分并标 CANCELLED（v2.190 能力的前端消费）
+    if (data.stage === 'cancelled') {
+      session.status = 'failed'; session.error = t('genCancelled'); renderTaskQueue();
+      if (session.id === activeSessionId) showFail(session.error, true);
+      return;
+    }
     // 受限题材合规预警（只提醒、不拦截）：小南先提示改写法，结果区再汇总（随会话保存，切回可复现）
     if (data.stage === 'context' && Array.isArray(data.complianceWarnings) && data.complianceWarnings.length) {
       session.pendingWarnings = data.complianceWarnings;
@@ -8173,6 +8207,18 @@
     applyTargetedFix(b, inWorks ? currentWorksProject?.id : currentProjectId, inWorks ? currentWorksDiagnosis : lastDiagnosis);
   });
   $('failRetry').onclick = genClickGuard(() => startGenerate());
+  // v2.233 取消生成：调后端取消端点（abort 流水线 + 退冻结积分），随后等 cancelled 帧统一走失败态
+  $('genCancelBtn').onclick = async () => {
+    const as = genSessions.find((s) => s.id === activeSessionId);
+    if (!as || !as.taskId || as.status !== 'running' || as.cancelling) return;
+    as.cancelling = true; renderProgress();
+    try {
+      await Api.request('/api/generate/tasks/' + as.taskId + '/cancel', { method: 'POST' });
+    } catch (e) {
+      as.cancelling = false; renderProgress();
+      xnSay((e && e.message) || t('genCancelFail'));
+    }
+  };
   $('genBtn').onclick = genClickGuard(() => startGenerate());
   $('xnFloat').onclick = () => xnSay(lang === 'en' ? 'Xiaonan here — tell me your idea.' : '小南在呢，说说你的创意吧～');
 
