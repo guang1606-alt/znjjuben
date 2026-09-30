@@ -224,5 +224,29 @@
   /** 列出所有可用工具 id */
   function listLessons() { return Object.keys(LESSONS); }
 
-  return { getLesson, listLessons };
+  /** 工具箱静态卡 id → 方法论卡片 id 映射（A3 卡片分层） */
+  const CARD_TO_LESSON = {
+    toolPitch: 'tbCardPitch',
+    toolRead: 'tbCardRead',
+    toolTeardown: 'tbCardTd',
+    toolDiversity: 'tbCardDv',
+    toolBranch: 'tbCardBr',
+  };
+
+  /**
+   * 工具箱卡片分层提示行：卡片 → 一句话方法论 → 进工作台。
+   * @param {string} cardId 工具箱静态卡 id（如 'toolTeardown'）
+   * @param {boolean} en true=英文，false=中文
+   * @returns {string|null} HTML 提示行；未知卡返回 null
+   */
+  function hintLine(cardId, en) {
+    const lessonId = CARD_TO_LESSON[cardId];
+    if (!lessonId) return null;
+    const c = getLesson(lessonId, en);
+    if (!c || !c.oneLiner) return null;
+    const prefix = en ? 'Method: ' : '方法论：';
+    return `<div class="tb-hint" data-for="${cardId}"><span class="tb-hint-icon" aria-hidden="true">🎓</span><span class="tb-hint-text">${prefix}${c.oneLiner}</span></div>`;
+  }
+
+  return { getLesson, listLessons, hintLine };
 });

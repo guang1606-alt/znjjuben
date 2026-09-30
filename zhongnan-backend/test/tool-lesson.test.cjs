@@ -6,7 +6,7 @@
 const { describe, it } = require('node:test');
 const assert = require('node:assert');
 
-const { getLesson, listLessons } = require('../web/tool-lesson.js');
+const { getLesson, listLessons, hintLine } = require('../web/tool-lesson.js');
 
 describe('小南课堂 · getLesson 基础行为', () => {
   it('5 个工具都有方法论卡片', () => {
@@ -91,5 +91,43 @@ describe('小南课堂 · 费曼式方法论核心', () => {
       assert.ok(c.diagram.includes('xmlns'), `${id} diagram 应有 xmlns`);
       assert.ok(c.diagram.includes('</svg>'), `${id} diagram 应闭合 </svg>`);
     });
+  });
+});
+
+describe('小南课堂 · hintLine（工具箱卡片分层提示行，A3）', () => {
+  it('toolTeardown → 拆爆款 oneLiner 提示行', () => {
+    const h = hintLine('toolTeardown', false);
+    assert.ok(h && h.includes('tb-hint'), '应含 tb-hint class');
+    assert.ok(h.includes('🎓'), '应含 🎓 图标');
+    assert.ok(h.includes('拆片不是抄片'), `应含拆爆款 oneLiner 片段，实际：${h}`);
+  });
+
+  it('toolDiversity → 多版本去重 oneLiner', () => {
+    const h = hintLine('toolDiversity', false);
+    assert.ok(h && h.includes('多版本不是换皮'), `实际：${h}`);
+  });
+
+  it('toolBranch → 互动分支 oneLiner', () => {
+    const h = hintLine('toolBranch', false);
+    assert.ok(h && h.includes('合法骨架'), `实际：${h}`);
+  });
+
+  it('toolPitch / toolRead 备用映射同样可用', () => {
+    const p = hintLine('toolPitch', false);
+    const r = hintLine('toolRead', false);
+    assert.ok(p && p.includes('四关'), `实际：${p}`);
+    assert.ok(r && r.includes('挑'), `实际：${r}`);
+  });
+
+  it('未知卡片 id 返回 null', () => {
+    assert.strictEqual(hintLine('unknown', false), null);
+    assert.strictEqual(hintLine('', false), null);
+    assert.strictEqual(hintLine(null, false), null);
+  });
+
+  it('英文版含 ASCII 字母且不含中文冒号（用英文冒号）', () => {
+    const h = hintLine('toolTeardown', true);
+    assert.ok(h && /[a-zA-Z]/.test(h), '英文提示行应含字母');
+    assert.ok(h.includes('Method:'), `应含英文前缀 Method:，实际：${h}`);
   });
 });

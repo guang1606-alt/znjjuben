@@ -49,6 +49,7 @@
     document.documentElement.setAttribute('lang', lang === 'en' ? 'en' : 'zh-CN');
     document.title = lang === 'en' ? 'ZhongnanJi · AGI Screenwriting Master' : '终南集 · 人工通用智能（AGI）编剧大师';
     renderStaticText(); renderModes(); renderHome(); renderSelects(); renderAuthButton();
+    _applyToolboxHints(); // A3 工具箱卡片分层：静态卡注入方法论一句话提示行（随语言刷新）
     // v2.188 初始化同步守卫：applyLang 期间 syncTagBench/syncModeBrief 不主动调 openWorkbench（避免 layer 自动展开覆盖 12 模式主页）
     _initSyncing = true;
     // 语言切换时同步标签工作台（维度下拉与已选标签的显示语言）
@@ -1695,6 +1696,16 @@
   Object.entries(_TOOL_TO_PANEL).forEach(([tid, pid]) => {
     const t = $(tid); if (t) t.addEventListener('click', () => openWorkbench(pid));
   });
+  // A3 工具箱卡片分层：卡片 → 一句话方法论提示行（幂等，先清旧再注入）
+  function _applyToolboxHints() {
+    if (typeof ZnToolLesson === 'undefined' || !ZnToolLesson.hintLine) return;
+    Object.keys(_TOOL_TO_PANEL).forEach((cardId) => {
+      const card = $(cardId); if (!card) return;
+      const old = card.querySelector('.tb-hint'); if (old) old.remove();
+      const html = ZnToolLesson.hintLine(cardId, lang === 'en');
+      if (html) card.insertAdjacentHTML('beforeend', html);
+    });
+  }
   // 各 panel 的"收起"按钮 → 关工作台层
   ['roomClose', 'teardownClose', 'dvClose', 'brClose'].forEach((id) => {
     const b = $(id); if (b) b.addEventListener('click', closeWorkbench);

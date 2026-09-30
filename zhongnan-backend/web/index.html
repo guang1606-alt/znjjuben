@@ -65,12 +65,14 @@
         <div class="home-tool-grid" id="homeToolGrid"></div>
       </section>
 
-      <section class="home-section home-updates" id="homeUpdates">
-        <div class="home-section-head">
+      <!-- A2 v2.200 首页瘦身：最新动态折叠为 details（默认收起，点标题展开） -->
+      <details class="home-section home-updates" id="homeUpdates">
+        <summary class="home-section-head">
           <h2 data-i="homeUpdatesTitle">最新动态</h2>
-        </div>
+          <span class="home-updates-caret" aria-hidden="true">▾</span>
+        </summary>
         <div id="homeUpdatesBody" class="home-updates-body"><div class="muted" data-i="homeUpdatesEmpty">暂无新动态</div></div>
-      </section>
+      </details>
     </div>
 
     <!-- v2.191 创作工具箱：独立模块，拆爆款 / 多版本去重 / 互动分支 -->

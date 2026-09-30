@@ -279,6 +279,12 @@ h1, h2, h3, h4 { font-weight: 700; }
   background: var(--panel); border: 1px solid color-mix(in srgb, var(--line) 80%, transparent);
   border-radius: 16px; padding: 18px 20px; min-height: 60px;
 }
+/* A2 v2.200 首页瘦身分层：最新动态 details 折叠 + 首页卡片描述两行截断 */
+details.home-updates > summary.home-section-head { list-style: none; cursor: pointer; user-select: none; }
+details.home-updates > summary.home-section-head::-webkit-details-marker { display: none; }
+details.home-updates > summary.home-section-head .home-updates-caret { display: inline-block; margin-left: auto; color: var(--text-3); transition: transform .22s var(--ease-out, ease); font-size: .8rem; }
+details.home-updates[open] > summary.home-section-head .home-updates-caret { transform: rotate(180deg); }
+.home-quick-card span, .home-tool-card p { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 .home-update-item { display: flex; flex-direction: column; gap: 4px; padding: 10px 0; border-bottom: 1px dashed var(--line); }
 .home-update-item:last-child { border-bottom: none; }
 .home-update-item .hu-title { font-weight: 600; font-size: .92rem; }
@@ -678,6 +684,11 @@ textarea { background: var(--panel); color: var(--text); border: 1px solid var(-
 @media (max-width:420px){ .tool-card h3{padding-right:96px} }
 .tool-card:hover{transform:translateY(-3px);box-shadow:var(--shadow-lg);border-color:var(--accent)}
 .tool-cost{position:absolute;top:13px;right:13px!important;min-height:0!important;font-size:.72rem;color:var(--gold-deep);background:var(--gold-soft);border:1px solid color-mix(in srgb,var(--gold) 30%,transparent);padding:2px 9px;border-radius:999px;font-weight:600}
+/* A3 工具箱卡片分层：方法论一句话提示行（卡片 → 方法论 → 进工作台） */
+.tb-hint{display:flex;gap:6px;align-items:flex-start;margin-top:10px;padding:7px 10px;border-radius:8px;background:color-mix(in srgb,var(--accent) 7%,transparent);border:1px dashed color-mix(in srgb,var(--accent) 30%,transparent);font-size:.78rem;line-height:1.5;color:var(--text-2)}
+.tb-hint-icon{flex:none}
+.tb-hint-text{overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
+.tb-hint-text b{color:var(--accent);font-weight:600}
 .room-tabs{display:flex;gap:8px;align-items:center;margin-bottom:14px}
 .room-tab{background:var(--panel-2);border:1px solid var(--line);color:var(--text-2);border-radius:999px;padding:6px 17px;cursor:pointer}
 .room-tab.on{background:var(--accent);color:#fbf7ec;border-color:var(--accent)}
