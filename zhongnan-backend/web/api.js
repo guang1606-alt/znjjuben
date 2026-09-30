@@ -227,6 +227,14 @@
     responseSessions.set(res, session);
     return res;
   }
+  // v2.226 错误信息脱敏回落层：后端内部裸码（INTERNAL_ERROR / SERVER_BUSY / 无 body 的 5xx）不再直达用户，
+  // 统一回落本地双语友好文案；e.error 保留原码、e.httpStatus 保留状态码，调用方分支判断不受影响。
+  function znLangEn() {
+    try { return (typeof localStorage !== 'undefined' && localStorage.getItem('zn_lang')) === 'en'; }
+    catch { return false; }
+  }
+  function serverFailText(en) { return en ? 'Server hiccup — please try again later.' : '服务开小差了，请稍后重试'; }
+
   async function jsonOrThrow(res) {
     const session = responseSessions.get(res);
     if (session) assertSameSession(session);
@@ -234,11 +242,17 @@
     if (session) assertSameSession(session);
     let d = null; try { d = t ? JSON.parse(t) : null; } catch {}
     if (!res.ok) {
-      // 幂等撞车展示后端中文提示；其余错误仍以 error 码为 message，保留 e.error/e.code 供分支判断
+      const isServerFail = res.status >= 500;
+      const rawCode = (d && (d.error || d.message)) || null;
+      // 幂等撞车展示后端中文提示；内部裸码回落友好文案；其余错误仍以 error 码为 message
+      const internalCode = d && (d.error === 'INTERNAL_ERROR' || d.error === 'SERVER_BUSY');
+      const noBody5xx = isServerFail && !rawCode;
       const friendly = d && d.error === 'IDEMPOTENT_REPLAY' ? (d.message || d.error)
-        : (d && (d.error || d.message))
-          || (res.status >= 500 ? 'SERVER_BUSY' : res.status >= 400 ? ('HTTP ' + res.status) : 'UNKNOWN');
-      const e = new Error(friendly); if (d) Object.assign(e, d); e.httpStatus = res.status; throw e;
+        : (internalCode || noBody5xx) ? serverFailText(znLangEn())
+          : rawCode || (res.status >= 500 ? 'SERVER_BUSY' : res.status >= 400 ? ('HTTP ' + res.status) : 'UNKNOWN');
+      const e = new Error(friendly); if (d) Object.assign(e, d); e.httpStatus = res.status;
+      if (isServerFail && !e.error) e.error = 'SERVER_BUSY'; // 无 body 时也保证 e.error 原码可分支
+      throw e;
     }
     return d;
   }
