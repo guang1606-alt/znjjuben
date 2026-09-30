@@ -6,13 +6,14 @@
  */
 import { asyncRouter } from '../lib/async-router';
 import { createHash } from 'crypto';
+import { isDeepStrictEqual } from 'util';
 import { z } from 'zod';
 import { authRequired, AuthRequest } from '../middleware/auth';
 import { prisma as defaultPrisma } from '../lib/prisma';
 import { consumeFlexible, refundFlexible } from '../lib/billing';
 import { withBillingTransaction } from '../lib/prisma-tx';
 import {
-  VALUE_ADDED, vaPointsForLevel, MemberLevel,
+  VALUE_ADDED, vaPointsForLevel, MemberLevel, activeProjectLimit,
 } from '../config/pricing';
 import { EngineTier } from '../config/pricing';
 import { teardown, buildAdaptOutline, adaptDirections, TeardownSource } from '../engine/hit-teardown';
@@ -153,7 +154,11 @@ export function createTeardownRouter(prisma: PrismaLike | any) {
 
   // 3) 确认改编大纲 → 直接创建改编项目（进入创作环节）
   router.post('/:id/to-project', authRequired, async (req: AuthRequest, res) => {
-    const schema = z.object({ title: z.string().min(1).max(120).optional() });
+    const schema = z.object({
+      title: z.string().trim().min(1).max(120).optional(), totalEps: z.number().int().min(1).max(500).default(20),
+      engineTier: z.nativeEnum(EngineTier).default(EngineTier.STANDARD),
+      format: z.enum(['LIVE_ACTION', 'AIGC']).default('LIVE_ACTION'),
+    });
     const p = schema.safeParse(req.body);
     if (!p.success) return res.status(400).json({ error: '项目名不合法' });
     const userId = req.userId!;
@@ -161,15 +166,55 @@ export function createTeardownRouter(prisma: PrismaLike | any) {
     if (!rec) return res.status(404).json({ error: '拆解记录不存在' });
     if (rec.userId !== userId) return res.status(403).json({ error: '无权操作他人记录' });
     if (!rec.outline) return res.status(400).json({ error: '请先生成改编大纲' });
+    let level: MemberLevel;
+    try { level = await levelOf(userId); } catch (e: any) { if (e?.code === 'BANNED') return res.status(403).json({ error: '账号已封禁' }); throw e; }
     const title = p.data.title || `拆爆款改编·${(rec.title || '未命名').slice(0, 24)}`;
-    const project = await prisma.project.create({
-      data: {
-        userId, title, mode: 'adapt', totalEps: 0, engineTier: EngineTier.STANDARD,
-        tags: Array.from(new Set([...(rec.pickedTags || []), '拆爆款改编'])).slice(0, 30),
-        format: 'LIVE_ACTION', status: 'draft',
-      },
+    const outline = rec.outline as any;
+    const brief = [
+      `改编梗概：${outline.logline || ''}`, `改编方向：${outline.direction || ''}`,
+      `人物：\n${(outline.characters || []).map((c: any) => `${c.name}｜${c.role}｜目标：${c.want}｜秘密：${c.secret}`).join('\n')}`,
+      `故事主线：${outline.mainline || ''}`,
+      `分段大纲：\n${(outline.arc || []).map((a: any) => `${a.stage}：${a.goal}`).join('\n')}`,
+      `开场钩子：${outline.openingHook || ''}`, `结局兑现：${outline.endingPayoff || ''}`,
+      `原创要求：${outline.isolationNote || ''}`,
+    ].join('\n\n').slice(0, 8000);
+    const project = await withBillingTransaction(prisma, userId, async (tx) => {
+      await tx.lockAccount(userId);
+      const raw = tx.raw as any;
+      const candidates = await raw.project.findMany({ where: { userId, bible: { path: ['adaptationDraft', 'recordId'], equals: rec.id } } });
+      const related = candidates.filter((x: any) => x.bible?.adaptationDraft?.recordId === rec.id);
+      const matching = related.find((x: any) => isDeepStrictEqual(x.bible.adaptationDraft.outline, rec.outline));
+      if (matching) {
+        await raw.teardownRecord.update({ where: { id: rec.id }, data: { state: 'TO_PROJECT' } });
+        return matching;
+      }
+      // 改过大纲的未开写草稿可原地更新；已开写项目保留原稿，另建项目承接新大纲。
+      for (const candidate of related) {
+        if (candidate.status !== 'draft' || await raw.script.count({ where: { projectId: candidate.id } })) continue;
+        const updated = await raw.project.update({ where: { id: candidate.id }, data: {
+          title, totalEps: p.data.totalEps, engineTier: p.data.engineTier, format: p.data.format,
+          tags: Array.from(new Set([...(rec.pickedTags || []), '拆爆款改编'])).slice(0, 30),
+          bible: { ...candidate.bible, adaptationDraft: { recordId: rec.id, brief, outline: rec.outline } },
+        } });
+        await raw.teardownRecord.update({ where: { id: rec.id }, data: { state: 'TO_PROJECT' } });
+        return updated;
+      }
+      const mine = await raw.project.findMany({ where: { userId }, select: { status: true } });
+      const activeCount = mine.filter((x: any) => x.status !== 'archived').length;
+      const limit = activeProjectLimit(level);
+      if (activeCount >= limit) return { limited: true, activeCount, limit };
+      const created = await raw.project.create({
+        data: {
+          userId, title, mode: 'adapt', totalEps: p.data.totalEps, engineTier: p.data.engineTier,
+          tags: Array.from(new Set([...(rec.pickedTags || []), '拆爆款改编'])).slice(0, 30),
+          format: p.data.format, status: 'draft',
+          bible: { adaptationDraft: { recordId: rec.id, brief, outline: rec.outline } },
+        },
+      });
+      await raw.teardownRecord.update({ where: { id: rec.id }, data: { state: 'TO_PROJECT' } });
+      return created;
     });
-    await prisma.teardownRecord.update({ where: { id: rec.id }, data: { state: 'TO_PROJECT' } });
+    if (project.limited) return res.status(403).json({ error: 'REACH_PROJECT_LIMIT', activeCount: project.activeCount, limit: project.limit, message: `当前会员最多同时进行 ${project.limit} 个剧本项目，请先归档旧项目或升级会员` });
     res.json({ project, outline: rec.outline });
   });
 

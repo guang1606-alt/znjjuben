@@ -94,20 +94,21 @@ export function continuityBrief(input: ContinuityBriefInput = {}): ContinuityBri
     });
   }
 
-  // 3) 未桥接人物状态：同状态去重（取最早 onset），按悬空时长降序
+  // 3) 未桥接人物状态：按人物×状态去重（取最早 onset），按悬空时长降序
   const resolvedStates = input.prevStates?.resolved ?? [];
-  const seenStates = new Set<CharStateId>();
+  const seenStates = new Set<string>();
   const unresolvedStates = (input.prevStates?.onsets ?? [])
-    .filter((o) => !resolvedStates.includes(o.state))
-    .filter((o) => (seenStates.has(o.state) ? false : (seenStates.add(o.state), true)))
+    .filter((o) => o.character || !resolvedStates.includes(o.state)) // 旧无人物台账保留原兼容口径；具名活动记录优先。
+    .sort((a, b) => a.onsetInEp - b.onsetInEp)
+    .filter((o) => { const key = `${o.state}:${o.character ?? ''}`; return seenStates.has(key) ? false : (seenStates.add(key), true); })
     .map((o) => ({ ...o, age: Math.max(1, curEpNo - o.onsetInEp) }))
     .sort((a, b) => b.age - a.age)
     .slice(0, CAP);
   for (const st of unresolvedStates) {
     items.push({
       kind: 'state', priority: st.age >= 2 ? 'high' : 'mid',
-      zh: `人物状态「${CHAR_STATE_META[st.state].zh}」第${st.onsetInEp}集确立、至今未交代——本集必须桥接：给出去向/恢复，或借他人之口明确"有意维持"；不得凭空消失。`,
-      en: `Character state "${CHAR_STATE_META[st.state].en}" set in ep${st.onsetInEp} is still unaddressed — bridge it this episode: show the outcome/recovery or deliberately maintain it via other characters; never let it vanish.`,
+      zh: `${st.character ? `人物「${st.character}」的状态` : '人物状态'}「${CHAR_STATE_META[st.state].zh}」第${st.onsetInEp}集确立、至今未交代——本集必须桥接：给出去向/恢复，或借他人之口明确"有意维持"；不得凭空消失。`,
+      en: `${st.character ? `${st.character}'s state` : 'Character state'} "${CHAR_STATE_META[st.state].en}" set in ep${st.onsetInEp} is still unaddressed — bridge it this episode: show the outcome/recovery or deliberately maintain it via other characters; never let it vanish.`,
     });
   }
 

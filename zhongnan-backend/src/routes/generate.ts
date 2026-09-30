@@ -6,6 +6,7 @@ import { EngineTier, MemberLevel, MEMBERSHIP, episodePoints, FEN_PER_POINT, reso
 import { freeze, settle, unfreeze, consumeFlexible, refundFlexible } from '../lib/billing';
 import { withBillingTransaction } from '../lib/prisma-tx';
 import { runEpisode, Bible } from '../agents/pipeline';
+import { latestScripts } from '../lib/latest-scripts';
 import { hooksByLayer, ALL_HOOKS, CueMode, Strength, VALID_FLAVORS, HOOK_FLAVORS, FLAVOR_META, describeHook } from '../engine/hook-system';
 import { BEAT_LIBRARY, localizeBeat, PAYOFF_FLAVORS, PAYOFF_FLAVOR_META, VALID_PAYOFF_FLAVORS, REVERSAL_FLAVORS, REVERSAL_FLAVOR_META, VALID_REVERSAL_FLAVORS, EMOTION_FLAVORS, EMOTION_FLAVOR_META, VALID_EMOTION_FLAVORS, normalizeBeatPref } from '../engine/beat-system';
 import { buildEmotionWave, adviseWavePoint } from '../engine/emotion-wave';
@@ -556,8 +557,31 @@ generateRouter.get('/character-assets/usage', authRequired, async (req: AuthRequ
   }).catch(() => [] as any[]);
   res.json({ usage: buildAssetUsageMap(projects, 'castAssets'), scannedProjects: projects.length });
 });
-// 手动建/改（同名覆盖 upsert 语义：角色库一人一档）
+// 手动编辑以记录 id 为准；同名创建或改名冲突均不覆盖已有资产。
+async function saveManualAsset(modelName: 'characterAsset' | 'propAsset' | 'sceneAsset', id: string | undefined, userId: string, data: { name: string }, prefix: string, res: any) {
+  try {
+    const result = await withBillingTransaction(prisma, userId, async (tx) => {
+      // 复用账户行锁，让同用户的资产查重与写入原子完成；不扣积分。
+      await tx.lockAccount(userId);
+      const model = (tx.raw as any)[modelName];
+      const existing = id ? await model.findUnique({ where: { id } }) : null;
+      if (id && (!existing || existing.userId !== userId)) return { status: 404, body: { error: `${prefix}_ASSET_NOT_FOUND`, message: '资产不存在或无权编辑' } };
+      const conflict = await model.findFirst({ where: { userId, name: data.name } });
+      if (conflict && conflict.id !== id) return { status: 409, body: { error: `${prefix}_ASSET_NAME_CONFLICT`, message: '已有同名资产，请换一个名称后再保存' } };
+      const row = id
+        ? await model.update({ where: { id }, data })
+        : await model.create({ data: { ...data, userId } });
+      return { status: 200, body: { asset: row, updated: !!id } };
+    });
+    // 事务可能重试，提交完成后才能回复，避免发送成功后又回滚。
+    return res.status(result.status).json(result.body);
+  } catch (error) {
+    if ((error as { code?: string }).code === 'P2002') return res.status(409).json({ error: `${prefix}_ASSET_NAME_CONFLICT`, message: '已有同名资产，请换一个名称后再保存' });
+    throw error;
+  }
+}
 const castAssetSchema = z.object({
+  id: z.string().trim().min(1).optional(),
   name: z.string().trim().min(1).max(20),
   persona: z.string().trim().min(1).max(200),
   voice: z.string().trim().max(PATCH_FIELDS_CAST.voice.max).optional().nullable(),
@@ -573,15 +597,7 @@ generateRouter.post('/character-assets', authRequired, async (req: AuthRequest, 
     name: d.name, persona: d.persona, voice: d.voice ?? null,
     signatureLines: d.signatureLines ?? [], visualAnchor: d.visualAnchor ?? null, tags: d.tags ?? [],
   };
-  const existing = await prisma.characterAsset.findFirst({ where: { userId: req.userId!, name: d.name } }).catch(() => null as any);
-  if (existing) {
-    const row = await prisma.characterAsset.update({ where: { id: existing.id }, data }).catch(() => null);
-    if (!row) return res.status(500).json({ error: 'CAST_ASSET_SAVE_FAILED' });
-    return res.json({ asset: row, updated: true });
-  }
-  const row = await prisma.characterAsset.create({ data: { ...data, userId: req.userId! } }).catch(() => null);
-  if (!row) return res.status(500).json({ error: 'CAST_ASSET_SAVE_FAILED' });
-  res.json({ asset: row, updated: false });
+  return saveManualAsset('characterAsset', d.id, req.userId!, data, 'CAST', res);
 });
 // 删除（归属校验，静默防越权探测）
 generateRouter.delete('/character-assets/:id', authRequired, async (req: AuthRequest, res) => {
@@ -771,8 +787,9 @@ generateRouter.get('/prop-assets/usage', authRequired, async (req: AuthRequest, 
   }).catch(() => [] as any[]);
   res.json({ usage: buildAssetUsageMap(projects, 'propAssets'), scannedProjects: projects.length });
 });
-// 手动建/改（同名覆盖 upsert 语义：道具库一物一档）
+// 手动建/改：新建不传 id，编辑必须传原记录 id。
 const propAssetSchema = z.object({
+  id: z.string().trim().min(1).optional(),
   name: z.string().trim().min(1).max(30),
   meaning: z.string().trim().min(1).max(200),
   taboo: z.string().trim().max(PATCH_FIELDS_PROP.taboo.max).optional().nullable(),
@@ -790,15 +807,7 @@ generateRouter.post('/prop-assets', authRequired, async (req: AuthRequest, res) 
     eps: normalizeEps(d.eps), closedEps: normalizeEps(d.closedEps),
     visualAnchor: d.visualAnchor ?? null, tags: d.tags ?? [],
   };
-  const existing = await prisma.propAsset.findFirst({ where: { userId: req.userId!, name: d.name } }).catch(() => null as any);
-  if (existing) {
-    const row = await prisma.propAsset.update({ where: { id: existing.id }, data }).catch(() => null);
-    if (!row) return res.status(500).json({ error: 'PROP_ASSET_SAVE_FAILED' });
-    return res.json({ asset: row, updated: true });
-  }
-  const row = await prisma.propAsset.create({ data: { ...data, userId: req.userId! } }).catch(() => null);
-  if (!row) return res.status(500).json({ error: 'PROP_ASSET_SAVE_FAILED' });
-  res.json({ asset: row, updated: false });
+  return saveManualAsset('propAsset', d.id, req.userId!, data, 'PROP', res);
 });
 // 删除（归属校验，静默防越权探测）
 generateRouter.delete('/prop-assets/:id', authRequired, async (req: AuthRequest, res) => {
@@ -1052,8 +1061,9 @@ generateRouter.get('/asset-dashboard', authRequired, async (req: AuthRequest, re
     castStats, propStats, sceneStats,
   });
 });
-// 手动建/改（同名覆盖 upsert 语义：场景库一景一档）
+// 手动建/改：新建不传 id，编辑必须传原记录 id。
 const sceneAssetSchema = z.object({
+  id: z.string().trim().min(1).optional(),
   name: z.string().trim().min(1).max(30),
   meaning: z.string().trim().min(1).max(200),
   mood: z.string().trim().max(PATCH_FIELDS_SCENE.mood.max).optional().nullable(),
@@ -1071,15 +1081,7 @@ generateRouter.post('/scene-assets', authRequired, async (req: AuthRequest, res)
     eps: normalizeEps(d.eps),
     visualAnchor: d.visualAnchor ?? null, tags: d.tags ?? [],
   };
-  const existing = await prisma.sceneAsset.findFirst({ where: { userId: req.userId!, name: d.name } }).catch(() => null as any);
-  if (existing) {
-    const row = await prisma.sceneAsset.update({ where: { id: existing.id }, data }).catch(() => null);
-    if (!row) return res.status(500).json({ error: 'SCENE_ASSET_SAVE_FAILED' });
-    return res.json({ asset: row, updated: true });
-  }
-  const row = await prisma.sceneAsset.create({ data: { ...data, userId: req.userId! } }).catch(() => null);
-  if (!row) return res.status(500).json({ error: 'SCENE_ASSET_SAVE_FAILED' });
-  res.json({ asset: row, updated: false });
+  return saveManualAsset('sceneAsset', d.id, req.userId!, data, 'SCENE', res);
 });
 // 删除（归属校验，静默防越权探测）
 generateRouter.delete('/scene-assets/:id', authRequired, async (req: AuthRequest, res) => {
@@ -1858,8 +1860,11 @@ generateRouter.post('/projects/:id/fix', authRequired, async (req: AuthRequest, 
   const latestMap = new Map<number, any>();
   scripts.forEach((s: any) => latestMap.set(s.epNo, s));
   const latestList = [...latestMap.values()];
+  if (wantedEp !== undefined && !latestMap.has(wantedEp)) {
+    return res.status(400).json({ error: '指定的分集不存在，请刷新后重试' });
+  }
   // 自动定位该问题最严重的一集；v2.39 用户从波形点集显式指定时尊重用户选择
-  const target = wantedEp && latestMap.has(wantedEp)
+  const target = wantedEp !== undefined
     ? { epNo: wantedEp, score: null }
     : pickEpisodeForFix(latestList.map((s) => ({ epNo: s.epNo, title: s.title, content: s.content })), fix.rule);
   const targetScript = latestMap.get(target.epNo);
@@ -2494,15 +2499,17 @@ generateRouter.post('/episodes', authRequired, async (req: AuthRequest, res) => 
       send({ stage: 'progress', pipelineStage: stage, role: e.role, status: e.status, note: e.note,
         percent: pg.percent, label: pg.label, xiaonanLine: pg.xiaonanLine, tip: pg.tip, stageKind: pg.stageKind });
     };
-    // 本集在全剧中的0基序号=项目内已有集数，用于跨集钩子轮换（集尾卡点不重样）
-    const epIndex = await prisma.script.count({ where: { projectId } });
+    // 修订版不增加集数；下一集序号由现有最大 epNo 决定，兼容删集留下的空号。
+    const lastEpisode = await prisma.script.findFirst({ where: { projectId }, orderBy: { epNo: 'desc' }, select: { epNo: true } });
+    const epIndex = lastEpisode?.epNo ?? 0;
     // v2.106 跨集连续性：拉取前集正文摘要（角色状态/伏笔/集尾钩子），注入架构师/撰写师
     // 此前多集生成时管线完全不知道前集内容——人物状态/伏笔/剧情线全靠 LLM 凭空衔接
     let prevEpisode: { epNo: number; title: string; summary: string; ending?: string } | null = null;
     let prevScript: { epNo: number; title: string; content: string; qcReport: any } | null = null;
     if (epIndex > 0) {
       prevScript = await prisma.script.findFirst({
-        where: { projectId, epNo: epIndex - 1 },
+        where: { projectId, epNo: epIndex },
+        orderBy: { version: 'desc' },
         select: { epNo: true, title: true, content: true, qcReport: true },
       }).catch(() => null) as any;
       if (prevScript && prevScript.content) {
@@ -2590,13 +2597,12 @@ generateRouter.post('/episodes', authRequired, async (req: AuthRequest, res) => 
     const prevPoisonRows: PoisonRow[] = [];
     if (epIndex > 0) {
       const prevRows = await prisma.script.findMany({
-        where: { projectId, epNo: { lt: epIndex } },
+        where: { projectId, epNo: { lte: epIndex } },
         select: { epNo: true, version: true, qcReport: true, content: true },
         orderBy: [{ epNo: 'desc' }, { version: 'desc' }], // epNo 降序取最近，version 降序保证每集先读到最新版
-        take: 40,
       }).catch(() => [] as { epNo: number; version: number; qcReport: any; content: string }[]);
       const seenEps = new Set<number>();
-      for (const s of prevRows) {
+      for (const s of latestScripts<any>(prevRows).slice(-8).reverse()) {
         if (seenEps.has(s.epNo) || seenEps.size >= 8) continue;
         seenEps.add(s.epNo);
         trackedRows.push({ epNo: s.epNo, content: typeof s.content === 'string' ? s.content : '' });
@@ -3054,6 +3060,7 @@ generateRouter.post('/episodes', authRequired, async (req: AuthRequest, res) => 
     const postScan = await scanWithStore(draft, prisma);
     const postBlocked = postScan.blocked.map((h) => ({ label: h.label, matched: h.matched, advice: h.advice }));
     const postWarns = postScan.warnings.map((h) => ({ label: h.label, advice: h.advice }));
+    if (postScan.level === 'block') throw new Error('COMPLIANCE_REJECTED:终稿未通过内容审核，请调整创意后重试');
     // v2.18 X剧本露骨内容硬线：命中即不入库、不交付，走 catch 原路退还冻结积分（只回类别不回显词面）
     if (result.matureScreen && !result.matureScreen.allowed) {
       throw new Error(`MATURE_HARD_BLOCK:${result.matureScreen.blockedCategories.join('|')}`);
@@ -3064,7 +3071,8 @@ generateRouter.post('/episodes', authRequired, async (req: AuthRequest, res) => 
     }
     // 全局圣经存回项目：下一集读到已立人物/时间线/伏笔（跨集联动）
     // JSON 序列化反序列化清理 undefined（Prisma 不允许 JSON 数组含 undefined）
-    await prisma.project.update({ where: { id: projectId }, data: { bible: JSON.parse(JSON.stringify(result.bible)) as object } });
+    const storedBible = project.bible && typeof project.bible === 'object' && !Array.isArray(project.bible) ? project.bible : {};
+    await prisma.project.update({ where: { id: projectId }, data: { bible: JSON.parse(JSON.stringify({ ...storedBible, ...result.bible })) as object } });
     // v2.84 自主学习引用追踪：更新本轮被使用知识的 lastReferencedAt，供 pruneKnowledge 判过时
     if (knowledgeHints && knowledgeHints.length) {
       const hintTitles = knowledgeHints.map((k: { title: string; content: string; category: string }) => k.title);
@@ -3077,7 +3085,7 @@ generateRouter.post('/episodes', authRequired, async (req: AuthRequest, res) => 
     // 付费档毛利熔断；免费档为获客补贴（单日3集封顶），只记成本不熔断
     if (!isFree && !paidViaQuota && totalCostFen > 0) assertMargin(points * FEN_PER_POINT, totalCostFen);
 
-    const epNo = await prisma.script.count({ where: { projectId } });
+    const epNo = epIndex;
     // v2.80 屈辱-打脸跨集账本：终稿提取本集羞辱雷（供 qcReport.humiliation 落库，下一集欠账记账）
     const curHumBits = extractHumiliationBits(draft, epNo + 1);
     // v2.80 多集悬念干旱账本：终稿提取本集悬念线状态（供 qcReport.mystery 落库，下一集干旱记账）；集尾悬念钩定线词，无钩继承前集活跃线
@@ -3170,7 +3178,7 @@ generateRouter.post('/episodes', authRequired, async (req: AuthRequest, res) => 
     await prisma.script.create({
       data: {
         projectId, epNo: epNo + 1, title: `第${epNo + 1}集`, synopsis: brief.slice(0, 120),
-        content: draft, wordCount: draft.length, qcPassed: antiAi.pass && postScan.level !== 'block',
+        content: draft, wordCount: draft.length, qcPassed: antiAi.pass,
         // v2.109 持久化伏笔账本+角色弧光到 qcReport，供下一集精确读取（此前在前集正文2000字上重算，不够准）
         // v2.150 复盘修复：展开 QC 引擎摘要（score+hits 轻量摘要，台账键已排除），恢复 v2.129 质检聚合卡数据源；
         // 台账键字面量后写优先，双保险防覆盖

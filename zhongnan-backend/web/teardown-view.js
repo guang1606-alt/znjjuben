@@ -9,7 +9,7 @@
       outlineFail: '生成大纲失败', logline: '一句话', mainline: '主线', openHook: '开场钩子', endPay: '结局兑付',
       chars: '人物', want: '欲望', secret: '底牌', arc: '起承转合', isolation: '不侵权隔离',
       toProject: '确认，进入改编创作', copyOutline: '一键复制大纲', copied: '大纲已复制', outlineDone: (p) => `改编大纲已生成，消耗 ${p} 积分`,
-      projLimit: '项目数已达当前会员上限，请升级或清理旧项目', projFail: '创建改编项目失败', projOk: '已为你创建改编项目，可在“我的作品”中继续生成完整剧本',
+      projLimit: '项目数已达当前会员上限，请升级或清理旧项目', projFail: '创建改编项目失败', projOk: '改编草稿已保存，请确认创作简报后生成完整剧本',
       reuse: '复用',
       history: '🕘 我的拆解记录', historyHide: '收起记录', histLoading: '记录加载中…', histEmpty: '还没有拆解记录，先拆一条爆款吧',
       histFail: '记录加载失败', histOpenFail: '打开记录失败', histResume: '点击恢复，继续改编',
@@ -22,7 +22,7 @@
       outlineFail: 'Failed to build outline', logline: 'Logline', mainline: 'Main line', openHook: 'Opening hook', endPay: 'Ending payoff',
       chars: 'Characters', want: 'Want', secret: 'Hidden card', arc: 'Setup / build / turn / resolve', isolation: 'Non-infringement isolation',
       toProject: 'Confirm & start adaptation', copyOutline: 'Copy outline', copied: 'Outline copied', outlineDone: (p) => `Adaptation outline ready, ${p} points used`,
-      projLimit: 'Project limit reached for your tier — upgrade or remove old projects', projFail: 'Failed to create adaptation project', projOk: 'Adaptation project created — continue in “My Works”.',
+      projLimit: 'Project limit reached for your tier — upgrade or remove old projects', projFail: 'Failed to create adaptation project', projOk: 'Adaptation draft saved. Review the brief before generating.',
       reuse: 'Reuse',
       history: '🕘 My teardowns', historyHide: 'Hide', histLoading: 'Loading records…', histEmpty: 'No teardowns yet — analyze a hit script first',
       histFail: 'Failed to load records', histOpenFail: 'Failed to open record', histResume: 'Click to resume adaptation',
@@ -130,12 +130,16 @@
   async function toProject() {
     const restore = btn('tdToProject');
     try {
-      const r = await raw(`/api/teardown/${state.recordId}/to-project`, {});
+      const r = await raw(`/api/teardown/${state.recordId}/to-project`, {
+        totalEps: Math.max(1, Math.min(300, parseInt($('episodes')?.value, 10) || 20)),
+        engineTier: $('engine')?.value || 'STANDARD', format: $('scriptFormatSel')?.value || 'LIVE_ACTION',
+      });
       if (!r.ok) {
         if (r.data.error === 'REACH_PROJECT_LIMIT') { alert(r.data.message || T().projLimit); return; }
         alert(r.data.message || r.data.error || T().projFail); return;
       }
-      alert(T().projOk);
+      window.dispatchEvent(new CustomEvent('zn-adaptation-project', { detail: { project: r.data.project } }));
+      toast(T().projOk);
     } catch (e) {
       if (needLogin(e)) return; alert(failMsg(e, T().projFail));
     } finally { restore(); }

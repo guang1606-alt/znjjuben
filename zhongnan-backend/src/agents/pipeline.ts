@@ -1868,7 +1868,7 @@ ${techLines}
   let foreshadowRes = foreshadowLedger(draft, options.prevForeshadow ?? null);
   let arcRes = arcTracker(Object.fromEntries(Object.entries(cast).map(([k, v]) => [k, v.arc])), draft, options.prevArc ?? null);
   let secretRes = secretLedger(draft, options.prevSecrets ?? null, hookLang); // v2.80 跨集信息差台账（悬空/失忆/节奏三检）
-  let stateRes = characterStateLedger(draft, options.prevStates ?? null, hookLang); // v2.80 人物状态跨集台账（悬空/凭空恢复两检）
+  let stateRes = characterStateLedger(draft, options.prevStates ?? null, hookLang, Object.keys(cast)); // v2.80 人物状态跨集台账（悬空/凭空恢复两检）
   let voicePrintRes = voicePrint(cast, draft, hookLang);
   let dialogueAiTasteRes = dialogueAiTaste(draft); // v2.80 对白AI味检测（创作能力：定位AI生成对白痕迹，喂polisher定向润色）
   let sceneEmotionFlatRes = sceneEmotionFlat(draft); // v2.80 场景情绪平检测（创作能力：单场情绪对比度）
@@ -2083,7 +2083,7 @@ ${techLines}
     foreshadowRes = foreshadowLedger(draft, options.prevForeshadow ?? null);
     arcRes = arcTracker(Object.fromEntries(Object.entries(cast).map(([k, v]) => [k, v.arc])), draft, options.prevArc ?? null);
     secretRes = secretLedger(draft, options.prevSecrets ?? null, hookLang);
-    stateRes = characterStateLedger(draft, options.prevStates ?? null, hookLang);
+    stateRes = characterStateLedger(draft, options.prevStates ?? null, hookLang, Object.keys(cast));
     voicePrintRes = voicePrint(cast, draft, hookLang);
   dialogueAiTasteRes = dialogueAiTaste(draft);
   sceneEmotionFlatRes = sceneEmotionFlat(draft);
@@ -2631,6 +2631,212 @@ ${techLines}
         : `${directive('polisher')}\n必须删除AI腔:${antiAi.hits.join('、')}\n必须替换老套桥段:${cliche.hits.map((h) => `${h.found}→${h.alt}`).join('；')}\n必须把书面腔改成能念出口的人话:${tongue.hits.map((h) => `${h.word}→${h.fix}`).join('；')}\n${lifeDetailDirective(draft)}；把抽象叙述改成可拍摄的具体动作/道具${(() => { const g = genericReactionScan(draft); return g.hits.length ? `；身份/真相揭晓处把这些偷懒的通用反应(${g.hits.join('、')})改成只有此人物才会说的专属反应/动作` : ''; })()}${craftAdvice}${rhythmAdvice}${charAdvice}${styleAdvice}${foreshadowAdvice}${arcAdvice}${voiceAdvice}${sdtAdvice}${cliffhangerAdvice}${coolMomentAdvice}${dialogueWaterAdvice}${conflictDensityAdvice}${punchlineDensityAdvice}${sceneDensityAdvice}${repetitionAdvice}${characterBalanceAdvice}${twistDensityAdvice}${dialogueLengthAdvice}${informationDensityAdvice}${suspenseTensionAdvice}${sceneHeaderAdvice}${dialogueFunctionAdvice}${causalLogicAdvice}${protagonistGoalAdvice}${antagonistQualityAdvice}${payoffRhythmAdvice}${relationshipAdvice}${scenePaddingAdvice}${supportingAdvice}${conflictEscalationAdvice}${subtextAdvice}${supportingArcAdvice}${scenePurposeAdvice}${timelineAdvice}${continuityAdvice}${misunderstandingAdvice}${plotArmorAdvice}${evidenceChainAdvice}${cheatRuleAdvice}${memoryFakeoutAdvice}${emotionalAftermathAdvice}${locationContinuityAdvice}${characterPresenceAdvice}${openingWeldAdvice}\n保持人物:${Object.keys(cast).join('、')}\n${formatDirective}\n${layoutKeepRule}\n原稿:${draft.slice(0, 8000)}`}`, cost)).text;
     if (fixed.length > 100) draft = fixed;
   }
+  // v2.18 双制式字数闭环（PRD 2.5 刚性）：闸门判 → 离线无损压缩/润色岗精修，超标先删叙述填充绝不动台词，不足按场景补视听细节不编造剧情
+  // 字数不足/超限时最多重试 3 次（弱模型常不达 800 字下限或严重超标，需多轮精修）
+  let lengthPlan = adaptScriptLength(draft, options.scriptFormat ?? 'LIVE', options.aigcDurationMin ?? 1);
+  if (!lengthPlan.ready && lengthPlan.status === 'over' && lengthPlan.compressed && !lengthPlan.need) {
+    draft = lengthPlan.compressed.text; // 超标且无损压缩可解决：直接用压缩稿
+    lengthPlan = adaptScriptLength(draft, options.scriptFormat ?? 'LIVE', options.aigcDurationMin ?? 1);
+  }
+  let lenRetry = 0;
+  // 记录距目标字数最近的版本，防止多轮修复间字数振荡（如 656→777→656 回落）
+  let bestDraft = draft;
+  let bestDist = Math.abs(lengthPlan.current - lengthPlan.target);
+  while (!lengthPlan.ready && lenRetry < 3) {
+    lenRetry += 1;
+    emit({ role: 'polisher', status: 'retry', note: hookLang === 'en'
+      ? `Length gate: ~${lengthPlan.current} chars now, must hit ${lengthPlan.range[0]}-${lengthPlan.range[1]} (target ${lengthPlan.target}) — revision ${lenRetry}`
+      : `制式字数闸门：当前约${lengthPlan.current}字，需落在${lengthPlan.range[0]}-${lengthPlan.range[1]}字（目标${lengthPlan.target}），第${lenRetry}次精修` });
+    // 字数不足时把逐场景扩写计划（缺口/补写类型）下发，模型按场景精确补写而非盲目重写
+    const expandTypeEn: Record<string, string> = {
+      '环境与烟火气细节': 'environment & life-detail',
+      '人物微表情/小动作': 'micro-expression & small action',
+      '内心活动外化': 'externalized inner state',
+      '一个短台词回合': 'one short dialogue beat',
+      '音效与氛围': 'sound effect & atmosphere',
+    };
+    const expansionPlan = lengthPlan.status === 'under' && lengthPlan.expansion?.length
+      ? (hookLang === 'en'
+        ? `\nAdd exactly as follows per scene (no new plot, only audiovisual/action/dialogue detail):\n${lengthPlan.expansion.map((s) => `- scene #${s.scene}: now ~${s.current} chars, add ~${s.targetAdd} via ${s.types.map((t) => expandTypeEn[t] ?? t).join(', ')}`).join('\n')}`
+        : `\n逐场景精确补写（只补视听/动作/台词细节，不得编造新剧情）：\n${lengthPlan.expansion.map((s) => `- 场景「${s.head.slice(0, 20)}」：现约${s.current}字，补约${s.targetAdd}字，补写方向：${s.types.join('、')}`).join('\n')}`)
+      : '';
+    const monotoneRule = lengthPlan.status === 'under'
+      ? (hookLang === 'en' ? '\nCRITICAL: only ADD content, never delete existing scenes/dialogue; the output must be LONGER than the input.' : '\n硬性要求：只许增补不许删减已有场景与台词，输出必须比原稿更长。')
+      : '';
+    // v2.80 AIGC 超限：给逐场硬预算表（真实模型只看总数会拒绝砍半），明确砍叙述保台词、必要时并场
+    const trimPlan = lengthPlan.status === 'over' && (options.scriptFormat ?? 'LIVE') === 'AIGC'
+      ? planTrim(draft, 'AIGC', options.aigcDurationMin ?? 1)
+      : null;
+    const trimDirective = trimPlan
+      ? (hookLang === 'en'
+        ? `\nHARD per-scene budget for the ${options.aigcDurationMin ?? 1}-min cut (total ~${trimPlan.target} character-equivalents), obey each row:\n${trimPlan.scenes.map((s) => s.drop
+          ? `- scene #${s.scene} "${s.head}": MERGE this scene into a neighboring scene or delete it (do not keep it as its own scene)`
+          : `- scene #${s.scene} "${s.head}": now ~${s.current}, keep AT MOST ~${s.targetKeep} (cut ~${s.cutUnits} of narration, keep every existing spoken line; spoken content is ${Math.round(s.spokenRatio * 100)}%${s.addDialogueUnits > 0 ? `, add ~${s.addDialogueUnits} units of short dialogue or (inner: ...) beats` : ''})`).join('\n')}\nCut secondary business, redundant atmosphere and repeated reactions; do NOT cut the opening hook, the ending cliffhanger, or any character dialogue.`
+        : `\n${options.aigcDurationMin ?? 1}分钟成片逐场硬预算（全集约${trimPlan.target}字），必须逐场执行：\n${trimPlan.scenes.map((s) => s.drop
+          ? `- 第${s.scene}场「${s.head}」：并入邻场或整组删掉，不得再作为独立场保留`
+          : `- 第${s.scene}场「${s.head}」：现约${s.current}字，最多保留约${s.targetKeep}字（砍约${s.cutUnits}字叙述，台词一句不删；当前发声约占${Math.round(s.spokenRatio * 100)}%${s.addDialogueUnits > 0 ? `，需补约${s.addDialogueUnits}字短句台词或（内心：…）` : ''}）`).join('\n')}\n砍次要动作、重复氛围与同义反应；开头钩子、集尾卡点和人物台词不许删。`)
+      : '';
+    const lenTask = hookLang === 'en'
+      ? `Length/format repair. The episode is about ${lengthPlan.current} character-equivalents but this ${options.scriptFormat === 'AIGC' ? `AIGC production script must be ${lengthPlan.range[0]}-${lengthPlan.range[1]} for its runtime; when UNDER, enrich audiovisual/micro-emotion/sound detail per scene (spoken dialogue+V.O. only 18-28%) without inventing new plot, when OVER, cut narration to the per-scene budget below and never pad` : `live-action shooting script must be 800-1000 characters, currently ${lengthPlan.current - lengthPlan.range[1]} OVER: keep only 3-4 scenes (~250 chars each), cut environment descriptions to one △ line each, merge or drop minor dialogue rounds, keep the opening hook and ending cliffhanger intact`}. Target around ${lengthPlan.target}. Keep every character consistent with: ${Object.keys(cast).join(', ')}.${expansionPlan}${trimDirective}${monotoneRule} Original:\n${draft.slice(0, 8000)}`
+      : `制式字数修正：当前约${lengthPlan.current}字，本集为${options.scriptFormat === 'AIGC' ? `AIGC制作剧本，按成片时长须落在${lengthPlan.range[0]}-${lengthPlan.range[1]}字：不足时按场景补足视听/微情绪/音效细节（台词+OS仅占18%-28%），超限时严格按下面逐场预算只砍叙述不砍台词，均不得编造新剧情` : `真人实拍剧本必须800-1000字，当前超${lengthPlan.current - lengthPlan.range[1]}字：只保留3-4个场景（每场景压到约250字），环境/心理描写每处只留一条△动作行，合并或删掉次要台词回合，开头钩子与集尾卡点必须保留`}，目标约${lengthPlan.target}字；人物不得走样（${Object.keys(cast).join('、')}）。${expansionPlan}${trimDirective}${monotoneRule}原稿：\n${draft.slice(0, 8000)}`;
+    const fixedLen = (await _textRole(tier, 'polisher', `${directive('polisher', hookLang)}\n${lenTask}\n${formatDirective}`, cost)).text;
+    if (fixedLen.length > 100) draft = fixedLen;
+    lengthPlan = adaptScriptLength(draft, options.scriptFormat ?? 'LIVE', options.aigcDurationMin ?? 1);
+    const dist = Math.abs(lengthPlan.current - lengthPlan.target);
+    if (dist < bestDist) { bestDist = dist; bestDraft = draft; }
+  }
+  // 修复后仍不达标：取回距目标最近的一版（振荡兜底），再重算闸门
+  if (!lengthPlan.ready && bestDraft !== draft) {
+    draft = bestDraft;
+    lengthPlan = adaptScriptLength(draft, options.scriptFormat ?? 'LIVE', options.aigcDurationMin ?? 1);
+  }
+  // v2.80 AIGC 确定性硬剪兜底：真实模型多轮拒绝砍半时，只剪叙述句/必要时并场、台词全保，机械保证落入时长区间
+  if (fmtMode === 'AIGC' && !lengthPlan.ready && lengthPlan.status === 'over') {
+    const aigcDur0 = options.aigcDurationMin ?? 1;
+    const ht = hardTrimToRange(draft, 'AIGC', aigcDur0);
+    if (ht.after < ht.before) {
+      draft = ht.text;
+      lengthPlan = adaptScriptLength(draft, 'AIGC', aigcDur0);
+      emit({ role: 'polisher', status: 'retry', note: hookLang === 'en'
+        ? `Length ceiling enforced deterministically: ${ht.before} -> ${ht.after} character-equivalents (narration-only trim${ht.droppedScenes.length ? `, merged scene(s) #${ht.droppedScenes.join(', #')}` : ''}); all dialogue kept`
+        : `超限硬剪兜底：${ht.before}→${ht.after}字（只剪叙述句${ht.droppedScenes.length ? `，并入第${ht.droppedScenes.join('、')}场` : ''}），台词一句未删` });
+    }
+  }
+  // v2.79 版式修复轮（LIVE）：字数达标后若缺 △动作行/规范台词行，说明成稿小说化，润色岗按强制版式重排（最多2轮，不改剧情只改行式）
+  if ((options.scriptFormat ?? 'LIVE') === 'LIVE') {
+    let fmtReport = validateScript(draft, 'LIVE');
+    let fmtRetry = 0;
+    while ((!fmtReport.hasAction || !fmtReport.hasDialogue) && fmtRetry < 2) {
+      fmtRetry += 1;
+      const missingAction = !fmtReport.hasAction;
+      const missingDialogue = !fmtReport.hasDialogue;
+      emit({ role: 'polisher', status: 'retry', note: hookLang === 'en'
+        ? `Layout gate: missing${missingAction ? ' △ action lines' : ''}${missingAction && missingDialogue ? ' and' : ''}${missingDialogue ? ' NAME: dialogue lines' : ''}; re-flow into screenplay layout without changing plot`
+        : `剧本版式闸门：缺${missingAction ? '△动作提示行' : ''}${missingAction && missingDialogue ? '、' : ''}${missingDialogue ? '规范角色台词行' : ''}，按分行版式重排（不改剧情）` });
+      const fmtTask = hookLang === 'en'
+        ? `The draft below was written as prose fiction. WITHOUT changing the plot or adding/removing events, re-flow it into the standard short-drama screenplay layout: (1) split every filmable action into its own △ line (one action per line, under 40 chars); (2) turn every spoken line into its own "NAME (emotion): dialogue" line; (3) start each scene with "SCENE: location time INT./EXT."; (4) keep 800-1000 characters total. Characters: ${Object.keys(cast).join(', ')}. Draft:\n${draft.slice(0, 8000)}`
+        : `下面的成稿被写成了小说式叙述，请不改剧情、不增删情节，只重排成标准短剧剧本版式：①把每个可拍摄动作拆成独立的△行（每行一个动作，≤40字）；②把所有对白改写成“角色名（情绪）：台词”的独立行；③场景以“场景：地点 时间 内景/外景”开头；④总字数仍控制在800-1000字。人物：${Object.keys(cast).join('、')}。原稿：\n${draft.slice(0, 8000)}`;
+      const reformatted = (await _textRole(tier, 'polisher', `${directive('polisher', hookLang)}\n${fmtTask}\n${formatDirective}`, cost)).text;
+      if (reformatted.length > 100) draft = reformatted;
+      fmtReport = validateScript(draft, 'LIVE');
+      lengthPlan = adaptScriptLength(draft, 'LIVE', options.aigcDurationMin ?? 1);
+    }
+  } else if (fmtMode === 'AIGC') {
+    // v2.80 版式修复轮（AIGC）：字数达标后若场数/五维/流畅度/发声构成不合格（小说化、提示词化、台词嵌段落），
+    // 润色岗只按 Z-AIGC 流畅本重排，不改剧情；issue 由机器诊断给出，英文链路全部英文（零中文）
+    const aigcDur = options.aigcDurationMin ?? 1;
+    let cov = validateAigcScreenplay(draft, hookLang === 'en' ? 'en' : 'zh');
+    let aigcFmtRetry = 0;
+    const maxFmtRetry = 3;
+    while (!cov.pass && aigcFmtRetry < maxFmtRetry) {
+      aigcFmtRetry += 1;
+      const issueList = [...cov.sceneIssues, ...cov.smoothnessIssues, ...cov.compositionIssues].slice(0, 10);
+      const comp = cov.composition;
+      const spokenGap = comp && comp.spokenRatio < 0.18
+        ? Math.max(80, Math.round((0.22 * comp.totalCjk) - comp.spokenCjk))
+        : 0;
+      const spokenDirective = spokenGap > 0
+        ? (hookLang === 'en'
+          ? `\nMANDATORY SPOKEN-RATIO FIX: current spoken content is ${Math.round(comp.spokenRatio * 100)}% (~${comp.spokenCjk} units), must reach 18-28%. Add about ${spokenGap} character-equivalents of short dialogue or (inner: ...) beats across the scenes (especially scenes with no dialogue). Cut an equal amount of atmosphere description to keep total length in range. Every non-transition scene MUST have at least one spoken line.`
+          : `\n【硬指标·发声占比必须达标】当前台词+OS占比仅${Math.round(comp.spokenRatio * 100)}%（约${comp.spokenCjk}字），必须补到18%-28%。请在全场（尤其无台词的场次）增补约${spokenGap}字的短句台词或（内心：…）独白，同时删掉等量的环境/氛围描写以保持总字数不变。每个非过场短场都至少要有一句人物发声。`)
+        : '';
+      emit({ role: 'polisher', status: 'retry', note: hookLang === 'en'
+        ? `AIGC layout gate (round ${aigcFmtRetry}/${maxFmtRetry}): ${issueList.length} standard issue(s); re-flowing into the Z-AIGC flowing script without changing plot`
+        : `AIGC制式闸门（第${aigcFmtRetry}/${maxFmtRetry}轮）：${issueList.length}项场/五维/流畅度/构成问题，按Z-AIGC流畅本重排（不改剧情）` });
+      const fmtTask = hookLang === 'en'
+        ? `AIGC FORMAT REPAIR. The episode below fails the Z-AIGC flowing production-script standard. WITHOUT changing the plot, events, characters or total length (stay within ${lengthPlan.range[0]}-${lengthPlan.range[1]} character-equivalents for the ${aigcDur}-min cut), fix ONLY layout and texture:\n`
+          + '1. Body text must be smooth, human-readable prose paragraphs: never △ markers, never prompt-sheet wording, never stacked [shot-size]/camera-move tags or keyword lists.\n'
+          + '2. Every scene head on its own line as INT./EXT. PLACE - TIME; 3-5 scenes; no text lines outside a scene head.\n'
+          + '3. Inner voice and sound are carried ONLY by natural parentheticals inside prose: (inner: ...), (V.O.: ...), (SFX: ...), (MUSIC: ...), (AMBIENT: ...).\n'
+          + '4. Every spoken line is its own line as NAME (emotion): dialogue with short lines; spoken dialogue+V.O.+inner monologue totals 18-28% of text, the other 72-82% is non-spoken visual/action/atmosphere narrative.\n'
+          + '5. Every scene renders five dimensions: environment/light/space, character action, micro-emotion, sound atmosphere, dialogue (only a very short transition beat may omit dialogue).\n'
+          + spokenDirective
+          + '\nMachine-detected issues to fix:\n- ' + issueList.join('\n- ')
+          + `\nCharacters: ${Object.keys(cast).join(', ')}. Draft:\n${draft.slice(0, 8000)}`
+        : `AIGC制式修复：下面的成稿未通过Z-AIGC流畅制作本标准。请不改剧情、不增删情节、不改人设，总字数仍保持在${lengthPlan.range[0]}-${lengthPlan.range[1]}字（${aigcDur}分钟成片）区间，只修正版式与肌理：\n`
+          + '①正文必须是好读的流畅自然段：不加△、不写提示词式文字、不堆【景别】【运镜】等技术标签或关键词罗列；\n'
+          + '②每个场标独占一行，格式为“内景/外景 地点·时间”，全集3-5场，不允许有游离在场标之外的文本行；\n'
+          + '③内心/OS/画外音/音效/配乐/环境音只能用自然段内的自然括号承载，如（内心：…）（OS：…）（音效：…）（配乐：…）；\n'
+          + '④每句台词独占一行，格式为“角色名（情绪）：台词”，用短句；台词+OS+内心独白只占全片18%-28%，其余72%-82%必须是不发声的环境/动作/氛围画面叙述；\n'
+          + '⑤每场都要写足五个维度：环境光影空间、人物动作、微情绪、声音氛围、台词（极短过场短场可豁免台词）。\n'
+          + spokenDirective
+          + '\n机器诊断出的具体问题：\n- ' + issueList.join('\n- ')
+          + `\n人物：${Object.keys(cast).join('、')}。原稿：\n${draft.slice(0, 8000)}`;
+      const reformatted = (await _textRole(tier, 'polisher', `${directive('polisher', hookLang)}\n${fmtTask}\n${formatDirective}`, cost)).text;
+      if (reformatted.length > 100) draft = reformatted;
+      // 修复轮可能把字数推回超限：再做一次只剪叙述的硬剪，保证版式修复不冲破时长闸门
+      const lpAfter = adaptScriptLength(draft, 'AIGC', aigcDur);
+      if (!lpAfter.ready && lpAfter.status === 'over') draft = hardTrimToRange(draft, 'AIGC', aigcDur).text;
+      cov = validateAigcScreenplay(draft, hookLang === 'en' ? 'en' : 'zh');
+      lengthPlan = adaptScriptLength(draft, 'AIGC', aigcDur);
+    }
+    // v2.80 发声比兜底：3 轮修复后仍 <18%，确定性把叙述中的内心句转为 (inner:…) 独白
+    if (!cov.pass && cov.composition && cov.composition.spokenRatio < 0.18) {
+      const needUnits = Math.max(60, Math.round(0.22 * cov.composition.totalCjk) - cov.composition.spokenCjk);
+      const before = draft;
+      draft = boostSpokenRatio(draft, needUnits);
+      if (draft !== before) {
+        cov = validateAigcScreenplay(draft, hookLang === 'en' ? 'en' : 'zh');
+        lengthPlan = adaptScriptLength(draft, 'AIGC', aigcDur);
+        emit({ role: 'polisher', status: 'retry', note: hookLang === 'en'
+          ? `Spoken-ratio floor enforced: converted inner-thought narration to (inner: ...) beats (~${needUnits} units)`
+          : `发声比兜底：把叙述中的内心活动转为（内心：…）独白（约${needUnits}字）` });
+      }
+    }
+    // v2.80 发声下限外科兜底：确定性转换无果（模型写纯外部动作 / 反复整稿重排把台词写残）后，
+    // 让模型"只增不改"地给每个无声场各补一句极短发声，并把总占比补进 18-28%；任何回归一律拒收
+    if (!cov.pass && cov.composition && cov.composition.spokenRatio < 0.18) {
+      const curve = analyzeAigcSceneCurve(draft);
+      const comp0 = cov.composition;
+      const langEn = hookLang === 'en';
+      // 补到 21% 的需求量；设微补硬上限（英 96 词 / 中 160 字），并保证不越过 26%（给括号词留余量到 28%）
+      const addUnits = Math.min(langEn ? 96 : 160,
+        Math.round(0.26 * comp0.totalCjk - comp0.spokenCjk),
+        Math.max(langEn ? 10 : 16, Math.round(0.21 * comp0.totalCjk - comp0.spokenCjk)));
+      // 分配补句配额：完全无声场各先补 1 句，再按发声从少到多追加，每场至多 2 句
+      const perBeat = langEn ? 13 : 20;
+      const order = [...curve].filter((c) => c.head).sort((a, b) => {
+        const av = a.spokenCjk === 0 ? 0 : 1, bv = b.spokenCjk === 0 ? 0 : 1;
+        return av - bv || a.spokenCjk - b.spokenCjk;
+      });
+      const beatsNeed = Math.max(curve.filter((c) => c.head && c.spokenCjk === 0).length,
+        Math.min(order.length * 2, Math.ceil(addUnits / perBeat)));
+      const beatsByNo = new Map<number, number>();
+      for (const c of order) { if (beatsByNo.size >= Math.min(beatsNeed, order.length)) break; beatsByNo.set(c.scene, 1); }
+      let extra = beatsNeed - beatsByNo.size;
+      for (const c of order) { if (extra <= 0) break; beatsByNo.set(c.scene, (beatsByNo.get(c.scene) || 0) + 1); extra--; }
+      const targetList = order.filter((c) => beatsByNo.get(c.scene)).map((c) => `"${c.head}" — ${beatsByNo.get(c.scene)} beat(s)`).join('; ');
+      const prevIssueCount = cov.sceneIssues.length + cov.smoothnessIssues.length + cov.compositionIssues.length;
+      const microTask = langEn
+        ? `SPOKEN-BEAT INSERTION (strictly additive). The episode is only ${Math.round(comp0.spokenRatio * 100)}% spoken (floor is 18%).\n`
+          + `Do NOT rewrite, paraphrase, reorder or delete ANY existing word, line or scene. ONLY ADD new spoken beats, distributed EXACTLY as listed:\n`
+          + `- ${targetList}. Each beat is one short 6-${perBeat + 2}-word line; total new voice about ${addUnits} words.\n`
+          + `Each beat is either a spoken line on its OWN line "NAME: line" or an "(inner: ...)" monologue (cue and text on the SAME line, never split across two lines), in the character's established voice and consistent with the action shown.\n`
+          + `Stay within ${lengthPlan.range[0]}-${lengthPlan.range[1]} character-equivalents total; if near the ceiling, cut an equal amount of pure atmosphere description, never existing dialogue. Output the COMPLETE script verbatim with only the additions.\nCharacters: ${Object.keys(cast).join(', ')}.\nScript:\n${draft.slice(0, 8000)}`
+        : `发声补写（严格只增不改）：下面成稿发声占比仅${Math.round(comp0.spokenRatio * 100)}%（下限18%）。\n`
+          + `禁止改写、转述、调序或删除任何已有字句、场标与场次。只许按下面的场次配额新增发声：\n`
+          + `- ${targetList}。每处补 1 句 ${Math.round(perBeat * 0.6)}-${perBeat + 4} 字短句；新增发声合计约${addUnits}字。\n`
+          + `每句要么独占一行写成"角色名（情绪）：台词"，要么写成"（内心：…）"独白；角色名与内容必须在同一行、不得拆两行；贴合人物口吻与当下动作。\n`
+          + `总字数仍须在${lengthPlan.range[0]}-${lengthPlan.range[1]}字区间；若接近上限，删减等量纯环境氛围描写，但不得删已有台词。请输出完整成稿，除新增发声外其余一字不动。\n人物：${Object.keys(cast).join('、')}。\n成稿：\n${draft.slice(0, 8000)}`;
+      const micro = await _textRole(tier, 'polisher', `${directive('polisher', hookLang)}\n${microTask}\n${formatDirective}`, cost);
+      const cand = micro.text || '';
+      if (!micro.sandbox && cand.length > 100) {
+        const ncov = validateAigcScreenplay(cand, langEn ? 'en' : 'zh');
+        const nLen = adaptScriptLength(cand, 'AIGC', aigcDur);
+        const nIssueCount = ncov.sceneIssues.length + ncov.smoothnessIssues.length + ncov.compositionIssues.length;
+        if (ncov.composition && ncov.composition.spokenRatio >= 0.18 && ncov.composition.spokenRatio <= 0.28
+          && nLen.ready && nIssueCount <= prevIssueCount) {
+          draft = cand; cov = ncov; lengthPlan = nLen;
+          emit({ role: 'polisher', status: 'retry', note: langEn
+            ? `Spoken floor micro-patch: added ~${addUnits} words across quiet scenes, now ${Math.round(ncov.composition.spokenRatio * 100)}% spoken`
+            : `发声下限微补：按场次配额补约${addUnits}字发声，现发声比${Math.round(ncov.composition.spokenRatio * 100)}%` });
+        }
+      }
+    }
+  }
+  // 所有改稿与元注释清理必须先完成；下方完整复扫及跨集台账只读取实际交付稿。
+  draft = stripModelMetaComments(draft);
+  lengthPlan = adaptScriptLength(draft, options.scriptFormat ?? 'LIVE', options.aigcDurationMin ?? 1);
   antiAi = antiAiScan(draft);
   cliche = clicheScan(draft, strength);
   tongue = dialogueScan(draft, colloquialLevel);
@@ -2645,7 +2851,7 @@ ${techLines}
   foreshadowRes = foreshadowLedger(draft, options.prevForeshadow ?? null);
   arcRes = arcTracker(Object.fromEntries(Object.entries(cast).map(([k, v]) => [k, v.arc])), draft, options.prevArc ?? null);
   secretRes = secretLedger(draft, options.prevSecrets ?? null, hookLang); // v2.80 终稿重算，保持台账数据新鲜
-  stateRes = characterStateLedger(draft, options.prevStates ?? null, hookLang);
+  stateRes = characterStateLedger(draft, options.prevStates ?? null, hookLang, Object.keys(cast));
   voicePrintRes = voicePrint(cast, draft, hookLang);
   dialogueAiTasteRes = dialogueAiTaste(draft);
   sceneEmotionFlatRes = sceneEmotionFlat(draft);
@@ -2932,209 +3138,6 @@ ${techLines}
   const openingCheck = firstAppearanceCheck(draft.slice(0, 260), hookLang === 'en' ? 'en' : 'zh');
   // v2.101 六维统一评分卡在 market 评分完成后计算（见下方）
 
-  // v2.18 双制式字数闭环（PRD 2.5 刚性）：闸门判 → 离线无损压缩/润色岗精修，超标先删叙述填充绝不动台词，不足按场景补视听细节不编造剧情
-  // 字数不足/超限时最多重试 3 次（弱模型常不达 800 字下限或严重超标，需多轮精修）
-  let lengthPlan = adaptScriptLength(draft, options.scriptFormat ?? 'LIVE', options.aigcDurationMin ?? 1);
-  if (!lengthPlan.ready && lengthPlan.status === 'over' && lengthPlan.compressed && !lengthPlan.need) {
-    draft = lengthPlan.compressed.text; // 超标且无损压缩可解决：直接用压缩稿
-    lengthPlan = adaptScriptLength(draft, options.scriptFormat ?? 'LIVE', options.aigcDurationMin ?? 1);
-  }
-  let lenRetry = 0;
-  // 记录距目标字数最近的版本，防止多轮修复间字数振荡（如 656→777→656 回落）
-  let bestDraft = draft;
-  let bestDist = Math.abs(lengthPlan.current - lengthPlan.target);
-  while (!lengthPlan.ready && lenRetry < 3) {
-    lenRetry += 1;
-    emit({ role: 'polisher', status: 'retry', note: hookLang === 'en'
-      ? `Length gate: ~${lengthPlan.current} chars now, must hit ${lengthPlan.range[0]}-${lengthPlan.range[1]} (target ${lengthPlan.target}) — revision ${lenRetry}`
-      : `制式字数闸门：当前约${lengthPlan.current}字，需落在${lengthPlan.range[0]}-${lengthPlan.range[1]}字（目标${lengthPlan.target}），第${lenRetry}次精修` });
-    // 字数不足时把逐场景扩写计划（缺口/补写类型）下发，模型按场景精确补写而非盲目重写
-    const expandTypeEn: Record<string, string> = {
-      '环境与烟火气细节': 'environment & life-detail',
-      '人物微表情/小动作': 'micro-expression & small action',
-      '内心活动外化': 'externalized inner state',
-      '一个短台词回合': 'one short dialogue beat',
-      '音效与氛围': 'sound effect & atmosphere',
-    };
-    const expansionPlan = lengthPlan.status === 'under' && lengthPlan.expansion?.length
-      ? (hookLang === 'en'
-        ? `\nAdd exactly as follows per scene (no new plot, only audiovisual/action/dialogue detail):\n${lengthPlan.expansion.map((s) => `- scene #${s.scene}: now ~${s.current} chars, add ~${s.targetAdd} via ${s.types.map((t) => expandTypeEn[t] ?? t).join(', ')}`).join('\n')}`
-        : `\n逐场景精确补写（只补视听/动作/台词细节，不得编造新剧情）：\n${lengthPlan.expansion.map((s) => `- 场景「${s.head.slice(0, 20)}」：现约${s.current}字，补约${s.targetAdd}字，补写方向：${s.types.join('、')}`).join('\n')}`)
-      : '';
-    const monotoneRule = lengthPlan.status === 'under'
-      ? (hookLang === 'en' ? '\nCRITICAL: only ADD content, never delete existing scenes/dialogue; the output must be LONGER than the input.' : '\n硬性要求：只许增补不许删减已有场景与台词，输出必须比原稿更长。')
-      : '';
-    // v2.80 AIGC 超限：给逐场硬预算表（真实模型只看总数会拒绝砍半），明确砍叙述保台词、必要时并场
-    const trimPlan = lengthPlan.status === 'over' && (options.scriptFormat ?? 'LIVE') === 'AIGC'
-      ? planTrim(draft, 'AIGC', options.aigcDurationMin ?? 1)
-      : null;
-    const trimDirective = trimPlan
-      ? (hookLang === 'en'
-        ? `\nHARD per-scene budget for the ${options.aigcDurationMin ?? 1}-min cut (total ~${trimPlan.target} character-equivalents), obey each row:\n${trimPlan.scenes.map((s) => s.drop
-          ? `- scene #${s.scene} "${s.head}": MERGE this scene into a neighboring scene or delete it (do not keep it as its own scene)`
-          : `- scene #${s.scene} "${s.head}": now ~${s.current}, keep AT MOST ~${s.targetKeep} (cut ~${s.cutUnits} of narration, keep every existing spoken line; spoken content is ${Math.round(s.spokenRatio * 100)}%${s.addDialogueUnits > 0 ? `, add ~${s.addDialogueUnits} units of short dialogue or (inner: ...) beats` : ''})`).join('\n')}\nCut secondary business, redundant atmosphere and repeated reactions; do NOT cut the opening hook, the ending cliffhanger, or any character dialogue.`
-        : `\n${options.aigcDurationMin ?? 1}分钟成片逐场硬预算（全集约${trimPlan.target}字），必须逐场执行：\n${trimPlan.scenes.map((s) => s.drop
-          ? `- 第${s.scene}场「${s.head}」：并入邻场或整组删掉，不得再作为独立场保留`
-          : `- 第${s.scene}场「${s.head}」：现约${s.current}字，最多保留约${s.targetKeep}字（砍约${s.cutUnits}字叙述，台词一句不删；当前发声约占${Math.round(s.spokenRatio * 100)}%${s.addDialogueUnits > 0 ? `，需补约${s.addDialogueUnits}字短句台词或（内心：…）` : ''}）`).join('\n')}\n砍次要动作、重复氛围与同义反应；开头钩子、集尾卡点和人物台词不许删。`)
-      : '';
-    const lenTask = hookLang === 'en'
-      ? `Length/format repair. The episode is about ${lengthPlan.current} character-equivalents but this ${options.scriptFormat === 'AIGC' ? `AIGC production script must be ${lengthPlan.range[0]}-${lengthPlan.range[1]} for its runtime; when UNDER, enrich audiovisual/micro-emotion/sound detail per scene (spoken dialogue+V.O. only 18-28%) without inventing new plot, when OVER, cut narration to the per-scene budget below and never pad` : `live-action shooting script must be 800-1000 characters, currently ${lengthPlan.current - lengthPlan.range[1]} OVER: keep only 3-4 scenes (~250 chars each), cut environment descriptions to one △ line each, merge or drop minor dialogue rounds, keep the opening hook and ending cliffhanger intact`}. Target around ${lengthPlan.target}. Keep every character consistent with: ${Object.keys(cast).join(', ')}.${expansionPlan}${trimDirective}${monotoneRule} Original:\n${draft.slice(0, 8000)}`
-      : `制式字数修正：当前约${lengthPlan.current}字，本集为${options.scriptFormat === 'AIGC' ? `AIGC制作剧本，按成片时长须落在${lengthPlan.range[0]}-${lengthPlan.range[1]}字：不足时按场景补足视听/微情绪/音效细节（台词+OS仅占18%-28%），超限时严格按下面逐场预算只砍叙述不砍台词，均不得编造新剧情` : `真人实拍剧本必须800-1000字，当前超${lengthPlan.current - lengthPlan.range[1]}字：只保留3-4个场景（每场景压到约250字），环境/心理描写每处只留一条△动作行，合并或删掉次要台词回合，开头钩子与集尾卡点必须保留`}，目标约${lengthPlan.target}字；人物不得走样（${Object.keys(cast).join('、')}）。${expansionPlan}${trimDirective}${monotoneRule}原稿：\n${draft.slice(0, 8000)}`;
-    const fixedLen = (await _textRole(tier, 'polisher', `${directive('polisher', hookLang)}\n${lenTask}\n${formatDirective}`, cost)).text;
-    if (fixedLen.length > 100) draft = fixedLen;
-    lengthPlan = adaptScriptLength(draft, options.scriptFormat ?? 'LIVE', options.aigcDurationMin ?? 1);
-    const dist = Math.abs(lengthPlan.current - lengthPlan.target);
-    if (dist < bestDist) { bestDist = dist; bestDraft = draft; }
-  }
-  // 修复后仍不达标：取回距目标最近的一版（振荡兜底），再重算闸门
-  if (!lengthPlan.ready && bestDraft !== draft) {
-    draft = bestDraft;
-    lengthPlan = adaptScriptLength(draft, options.scriptFormat ?? 'LIVE', options.aigcDurationMin ?? 1);
-  }
-  // v2.80 AIGC 确定性硬剪兜底：真实模型多轮拒绝砍半时，只剪叙述句/必要时并场、台词全保，机械保证落入时长区间
-  if (fmtMode === 'AIGC' && !lengthPlan.ready && lengthPlan.status === 'over') {
-    const aigcDur0 = options.aigcDurationMin ?? 1;
-    const ht = hardTrimToRange(draft, 'AIGC', aigcDur0);
-    if (ht.after < ht.before) {
-      draft = ht.text;
-      lengthPlan = adaptScriptLength(draft, 'AIGC', aigcDur0);
-      emit({ role: 'polisher', status: 'retry', note: hookLang === 'en'
-        ? `Length ceiling enforced deterministically: ${ht.before} -> ${ht.after} character-equivalents (narration-only trim${ht.droppedScenes.length ? `, merged scene(s) #${ht.droppedScenes.join(', #')}` : ''}); all dialogue kept`
-        : `超限硬剪兜底：${ht.before}→${ht.after}字（只剪叙述句${ht.droppedScenes.length ? `，并入第${ht.droppedScenes.join('、')}场` : ''}），台词一句未删` });
-    }
-  }
-  // v2.79 版式修复轮（LIVE）：字数达标后若缺 △动作行/规范台词行，说明成稿小说化，润色岗按强制版式重排（最多2轮，不改剧情只改行式）
-  if ((options.scriptFormat ?? 'LIVE') === 'LIVE') {
-    let fmtReport = validateScript(draft, 'LIVE');
-    let fmtRetry = 0;
-    while ((!fmtReport.hasAction || !fmtReport.hasDialogue) && fmtRetry < 2) {
-      fmtRetry += 1;
-      const missingAction = !fmtReport.hasAction;
-      const missingDialogue = !fmtReport.hasDialogue;
-      emit({ role: 'polisher', status: 'retry', note: hookLang === 'en'
-        ? `Layout gate: missing${missingAction ? ' △ action lines' : ''}${missingAction && missingDialogue ? ' and' : ''}${missingDialogue ? ' NAME: dialogue lines' : ''}; re-flow into screenplay layout without changing plot`
-        : `剧本版式闸门：缺${missingAction ? '△动作提示行' : ''}${missingAction && missingDialogue ? '、' : ''}${missingDialogue ? '规范角色台词行' : ''}，按分行版式重排（不改剧情）` });
-      const fmtTask = hookLang === 'en'
-        ? `The draft below was written as prose fiction. WITHOUT changing the plot or adding/removing events, re-flow it into the standard short-drama screenplay layout: (1) split every filmable action into its own △ line (one action per line, under 40 chars); (2) turn every spoken line into its own "NAME (emotion): dialogue" line; (3) start each scene with "SCENE: location time INT./EXT."; (4) keep 800-1000 characters total. Characters: ${Object.keys(cast).join(', ')}. Draft:\n${draft.slice(0, 8000)}`
-        : `下面的成稿被写成了小说式叙述，请不改剧情、不增删情节，只重排成标准短剧剧本版式：①把每个可拍摄动作拆成独立的△行（每行一个动作，≤40字）；②把所有对白改写成“角色名（情绪）：台词”的独立行；③场景以“场景：地点 时间 内景/外景”开头；④总字数仍控制在800-1000字。人物：${Object.keys(cast).join('、')}。原稿：\n${draft.slice(0, 8000)}`;
-      const reformatted = (await _textRole(tier, 'polisher', `${directive('polisher', hookLang)}\n${fmtTask}\n${formatDirective}`, cost)).text;
-      if (reformatted.length > 100) draft = reformatted;
-      fmtReport = validateScript(draft, 'LIVE');
-      lengthPlan = adaptScriptLength(draft, 'LIVE', options.aigcDurationMin ?? 1);
-    }
-  } else if (fmtMode === 'AIGC') {
-    // v2.80 版式修复轮（AIGC）：字数达标后若场数/五维/流畅度/发声构成不合格（小说化、提示词化、台词嵌段落），
-    // 润色岗只按 Z-AIGC 流畅本重排，不改剧情；issue 由机器诊断给出，英文链路全部英文（零中文）
-    const aigcDur = options.aigcDurationMin ?? 1;
-    let cov = validateAigcScreenplay(draft, hookLang === 'en' ? 'en' : 'zh');
-    let aigcFmtRetry = 0;
-    const maxFmtRetry = 3;
-    while (!cov.pass && aigcFmtRetry < maxFmtRetry) {
-      aigcFmtRetry += 1;
-      const issueList = [...cov.sceneIssues, ...cov.smoothnessIssues, ...cov.compositionIssues].slice(0, 10);
-      const comp = cov.composition;
-      const spokenGap = comp && comp.spokenRatio < 0.18
-        ? Math.max(80, Math.round((0.22 * comp.totalCjk) - comp.spokenCjk))
-        : 0;
-      const spokenDirective = spokenGap > 0
-        ? (hookLang === 'en'
-          ? `\nMANDATORY SPOKEN-RATIO FIX: current spoken content is ${Math.round(comp.spokenRatio * 100)}% (~${comp.spokenCjk} units), must reach 18-28%. Add about ${spokenGap} character-equivalents of short dialogue or (inner: ...) beats across the scenes (especially scenes with no dialogue). Cut an equal amount of atmosphere description to keep total length in range. Every non-transition scene MUST have at least one spoken line.`
-          : `\n【硬指标·发声占比必须达标】当前台词+OS占比仅${Math.round(comp.spokenRatio * 100)}%（约${comp.spokenCjk}字），必须补到18%-28%。请在全场（尤其无台词的场次）增补约${spokenGap}字的短句台词或（内心：…）独白，同时删掉等量的环境/氛围描写以保持总字数不变。每个非过场短场都至少要有一句人物发声。`)
-        : '';
-      emit({ role: 'polisher', status: 'retry', note: hookLang === 'en'
-        ? `AIGC layout gate (round ${aigcFmtRetry}/${maxFmtRetry}): ${issueList.length} standard issue(s); re-flowing into the Z-AIGC flowing script without changing plot`
-        : `AIGC制式闸门（第${aigcFmtRetry}/${maxFmtRetry}轮）：${issueList.length}项场/五维/流畅度/构成问题，按Z-AIGC流畅本重排（不改剧情）` });
-      const fmtTask = hookLang === 'en'
-        ? `AIGC FORMAT REPAIR. The episode below fails the Z-AIGC flowing production-script standard. WITHOUT changing the plot, events, characters or total length (stay within ${lengthPlan.range[0]}-${lengthPlan.range[1]} character-equivalents for the ${aigcDur}-min cut), fix ONLY layout and texture:\n`
-          + '1. Body text must be smooth, human-readable prose paragraphs: never △ markers, never prompt-sheet wording, never stacked [shot-size]/camera-move tags or keyword lists.\n'
-          + '2. Every scene head on its own line as INT./EXT. PLACE - TIME; 3-5 scenes; no text lines outside a scene head.\n'
-          + '3. Inner voice and sound are carried ONLY by natural parentheticals inside prose: (inner: ...), (V.O.: ...), (SFX: ...), (MUSIC: ...), (AMBIENT: ...).\n'
-          + '4. Every spoken line is its own line as NAME (emotion): dialogue with short lines; spoken dialogue+V.O.+inner monologue totals 18-28% of text, the other 72-82% is non-spoken visual/action/atmosphere narrative.\n'
-          + '5. Every scene renders five dimensions: environment/light/space, character action, micro-emotion, sound atmosphere, dialogue (only a very short transition beat may omit dialogue).\n'
-          + spokenDirective
-          + '\nMachine-detected issues to fix:\n- ' + issueList.join('\n- ')
-          + `\nCharacters: ${Object.keys(cast).join(', ')}. Draft:\n${draft.slice(0, 8000)}`
-        : `AIGC制式修复：下面的成稿未通过Z-AIGC流畅制作本标准。请不改剧情、不增删情节、不改人设，总字数仍保持在${lengthPlan.range[0]}-${lengthPlan.range[1]}字（${aigcDur}分钟成片）区间，只修正版式与肌理：\n`
-          + '①正文必须是好读的流畅自然段：不加△、不写提示词式文字、不堆【景别】【运镜】等技术标签或关键词罗列；\n'
-          + '②每个场标独占一行，格式为“内景/外景 地点·时间”，全集3-5场，不允许有游离在场标之外的文本行；\n'
-          + '③内心/OS/画外音/音效/配乐/环境音只能用自然段内的自然括号承载，如（内心：…）（OS：…）（音效：…）（配乐：…）；\n'
-          + '④每句台词独占一行，格式为“角色名（情绪）：台词”，用短句；台词+OS+内心独白只占全片18%-28%，其余72%-82%必须是不发声的环境/动作/氛围画面叙述；\n'
-          + '⑤每场都要写足五个维度：环境光影空间、人物动作、微情绪、声音氛围、台词（极短过场短场可豁免台词）。\n'
-          + spokenDirective
-          + '\n机器诊断出的具体问题：\n- ' + issueList.join('\n- ')
-          + `\n人物：${Object.keys(cast).join('、')}。原稿：\n${draft.slice(0, 8000)}`;
-      const reformatted = (await _textRole(tier, 'polisher', `${directive('polisher', hookLang)}\n${fmtTask}\n${formatDirective}`, cost)).text;
-      if (reformatted.length > 100) draft = reformatted;
-      // 修复轮可能把字数推回超限：再做一次只剪叙述的硬剪，保证版式修复不冲破时长闸门
-      const lpAfter = adaptScriptLength(draft, 'AIGC', aigcDur);
-      if (!lpAfter.ready && lpAfter.status === 'over') draft = hardTrimToRange(draft, 'AIGC', aigcDur).text;
-      cov = validateAigcScreenplay(draft, hookLang === 'en' ? 'en' : 'zh');
-      lengthPlan = adaptScriptLength(draft, 'AIGC', aigcDur);
-    }
-    // v2.80 发声比兜底：3 轮修复后仍 <18%，确定性把叙述中的内心句转为 (inner:…) 独白
-    if (!cov.pass && cov.composition && cov.composition.spokenRatio < 0.18) {
-      const needUnits = Math.max(60, Math.round(0.22 * cov.composition.totalCjk) - cov.composition.spokenCjk);
-      const before = draft;
-      draft = boostSpokenRatio(draft, needUnits);
-      if (draft !== before) {
-        cov = validateAigcScreenplay(draft, hookLang === 'en' ? 'en' : 'zh');
-        lengthPlan = adaptScriptLength(draft, 'AIGC', aigcDur);
-        emit({ role: 'polisher', status: 'retry', note: hookLang === 'en'
-          ? `Spoken-ratio floor enforced: converted inner-thought narration to (inner: ...) beats (~${needUnits} units)`
-          : `发声比兜底：把叙述中的内心活动转为（内心：…）独白（约${needUnits}字）` });
-      }
-    }
-    // v2.80 发声下限外科兜底：确定性转换无果（模型写纯外部动作 / 反复整稿重排把台词写残）后，
-    // 让模型"只增不改"地给每个无声场各补一句极短发声，并把总占比补进 18-28%；任何回归一律拒收
-    if (!cov.pass && cov.composition && cov.composition.spokenRatio < 0.18) {
-      const curve = analyzeAigcSceneCurve(draft);
-      const comp0 = cov.composition;
-      const langEn = hookLang === 'en';
-      // 补到 21% 的需求量；设微补硬上限（英 96 词 / 中 160 字），并保证不越过 26%（给括号词留余量到 28%）
-      const addUnits = Math.min(langEn ? 96 : 160,
-        Math.round(0.26 * comp0.totalCjk - comp0.spokenCjk),
-        Math.max(langEn ? 10 : 16, Math.round(0.21 * comp0.totalCjk - comp0.spokenCjk)));
-      // 分配补句配额：完全无声场各先补 1 句，再按发声从少到多追加，每场至多 2 句
-      const perBeat = langEn ? 13 : 20;
-      const order = [...curve].filter((c) => c.head).sort((a, b) => {
-        const av = a.spokenCjk === 0 ? 0 : 1, bv = b.spokenCjk === 0 ? 0 : 1;
-        return av - bv || a.spokenCjk - b.spokenCjk;
-      });
-      const beatsNeed = Math.max(curve.filter((c) => c.head && c.spokenCjk === 0).length,
-        Math.min(order.length * 2, Math.ceil(addUnits / perBeat)));
-      const beatsByNo = new Map<number, number>();
-      for (const c of order) { if (beatsByNo.size >= Math.min(beatsNeed, order.length)) break; beatsByNo.set(c.scene, 1); }
-      let extra = beatsNeed - beatsByNo.size;
-      for (const c of order) { if (extra <= 0) break; beatsByNo.set(c.scene, (beatsByNo.get(c.scene) || 0) + 1); extra--; }
-      const targetList = order.filter((c) => beatsByNo.get(c.scene)).map((c) => `"${c.head}" — ${beatsByNo.get(c.scene)} beat(s)`).join('; ');
-      const prevIssueCount = cov.sceneIssues.length + cov.smoothnessIssues.length + cov.compositionIssues.length;
-      const microTask = langEn
-        ? `SPOKEN-BEAT INSERTION (strictly additive). The episode is only ${Math.round(comp0.spokenRatio * 100)}% spoken (floor is 18%).\n`
-          + `Do NOT rewrite, paraphrase, reorder or delete ANY existing word, line or scene. ONLY ADD new spoken beats, distributed EXACTLY as listed:\n`
-          + `- ${targetList}. Each beat is one short 6-${perBeat + 2}-word line; total new voice about ${addUnits} words.\n`
-          + `Each beat is either a spoken line on its OWN line "NAME: line" or an "(inner: ...)" monologue (cue and text on the SAME line, never split across two lines), in the character's established voice and consistent with the action shown.\n`
-          + `Stay within ${lengthPlan.range[0]}-${lengthPlan.range[1]} character-equivalents total; if near the ceiling, cut an equal amount of pure atmosphere description, never existing dialogue. Output the COMPLETE script verbatim with only the additions.\nCharacters: ${Object.keys(cast).join(', ')}.\nScript:\n${draft.slice(0, 8000)}`
-        : `发声补写（严格只增不改）：下面成稿发声占比仅${Math.round(comp0.spokenRatio * 100)}%（下限18%）。\n`
-          + `禁止改写、转述、调序或删除任何已有字句、场标与场次。只许按下面的场次配额新增发声：\n`
-          + `- ${targetList}。每处补 1 句 ${Math.round(perBeat * 0.6)}-${perBeat + 4} 字短句；新增发声合计约${addUnits}字。\n`
-          + `每句要么独占一行写成"角色名（情绪）：台词"，要么写成"（内心：…）"独白；角色名与内容必须在同一行、不得拆两行；贴合人物口吻与当下动作。\n`
-          + `总字数仍须在${lengthPlan.range[0]}-${lengthPlan.range[1]}字区间；若接近上限，删减等量纯环境氛围描写，但不得删已有台词。请输出完整成稿，除新增发声外其余一字不动。\n人物：${Object.keys(cast).join('、')}。\n成稿：\n${draft.slice(0, 8000)}`;
-      const micro = await _textRole(tier, 'polisher', `${directive('polisher', hookLang)}\n${microTask}\n${formatDirective}`, cost);
-      const cand = micro.text || '';
-      if (!micro.sandbox && cand.length > 100) {
-        const ncov = validateAigcScreenplay(cand, langEn ? 'en' : 'zh');
-        const nLen = adaptScriptLength(cand, 'AIGC', aigcDur);
-        const nIssueCount = ncov.sceneIssues.length + ncov.smoothnessIssues.length + ncov.compositionIssues.length;
-        if (ncov.composition && ncov.composition.spokenRatio >= 0.18 && ncov.composition.spokenRatio <= 0.28
-          && nLen.ready && nIssueCount <= prevIssueCount) {
-          draft = cand; cov = ncov; lengthPlan = nLen;
-          emit({ role: 'polisher', status: 'retry', note: langEn
-            ? `Spoken floor micro-patch: added ~${addUnits} words across quiet scenes, now ${Math.round(ncov.composition.spokenRatio * 100)}% spoken`
-            : `发声下限微补：按场次配额补约${addUnits}字发声，现发声比${Math.round(ncov.composition.spokenRatio * 100)}%` });
-        }
-      }
-    }
-  }
   emit({ role: 'consistency', status: 'done', note: hookLang === 'en' ? 'QC gate converged: final draft cleared for compliance & market review' : '质检闸门收敛：终稿过筛，转合规与市场评估' });
   // styleCheckRes 已在闸门循环后计算完毕，不再重复计算
   const styleCheck = styleCheckRes;
@@ -3161,7 +3164,10 @@ ${techLines}
   const { data: comp } = await _jsonRole<ComplianceReport>(tier, 'compliance',
     `${directive('compliance', hookLang)}\n${G.episodeColon}${draft.slice(0, 6000)}\n${G.jsonCompliance}`, { pass: true, risks: [] }, cost);
   if (!Array.isArray(comp.risks)) comp.risks = [];
-  if (!comp.pass) emit({ role: 'compliance', status: 'retry', note: hookLang === 'en' ? `Compliance risk: ${comp.risks[0] ?? 'content risk'}` : `合规风险：${comp.risks[0] ?? '内容风险'}` });
+  if (!comp.pass) {
+    emit({ role: 'compliance', status: 'retry', note: hookLang === 'en' ? `Compliance risk: ${comp.risks[0] ?? 'content risk'}` : `合规风险：${comp.risks[0] ?? '内容风险'}` });
+    throw new Error('COMPLIANCE_REJECTED');
+  }
   else emit({ role: 'compliance', status: 'done', note: hookLang === 'en' ? 'Compliance passed' : '合规通过' });
 
   // ⑧ 市场评分（不阻塞，记录供优化建议）
@@ -3260,7 +3266,6 @@ ${techLines}
   const beats: EpisodeBeats = { plan: epBeat, issues: beatIssues, strength: beatPref.strength, mode: beatPref.mode };
   // v2.33 AIGC 流畅制作本：同步产出机器分镜层（供 libtv 类工作流/导出按集场拆分），LIVE 本为 null
   // isAigcFmt 已在 beatDirective 构建处声明
-  draft = stripModelMetaComments(draft);
   const aigcManifest = isAigcFmt ? buildShotManifest(draft) : null;
   const aigcVolumePlan = isAigcFmt ? planAigcVolume(options.aigcDurationMin ?? 1) : null;
   const aigcCurve = isAigcFmt ? analyzeAigcSceneCurve(draft) : null;

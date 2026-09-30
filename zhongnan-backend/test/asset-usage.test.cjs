@@ -81,9 +81,10 @@ describe('资产 usage 端点', { concurrency: 1 }, () => {
     const cu = await jsonReq('GET', '/api/generate/character-assets/usage', 'u_usage', 'BASIC');
     assert.strictEqual(cu.status, 200);
     assert.strictEqual(cu.json.scannedProjects, 2);
-    assert.strictEqual(cu.json.usage[cast.id].length, 2, '同资产跨两剧聚合');
-    assert.strictEqual(cu.json.usage[cast.id][0].projectTitle, '旧案');
-    assert.strictEqual(cu.json.usage[cast.id][1].status, 'COMPLETED');
+    const castUsage = cu.json.usage[cast.id];
+    assert.strictEqual(castUsage.length, 2, '同资产跨两剧聚合');
+    assert.deepStrictEqual(new Set(castUsage.map(item => item.projectTitle)), new Set(['旧案', '新案']));
+    assert.strictEqual(castUsage.find(item => item.projectTitle === '新案').status, 'COMPLETED');
 
     const pu = await jsonReq('GET', '/api/generate/prop-assets/usage', 'u_usage', 'BASIC');
     assert.strictEqual(pu.status, 200);

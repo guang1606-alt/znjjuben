@@ -6,9 +6,9 @@
 - 认证：argon2id、JWT 短访问+刷新；**生产环境缺 JWT 密钥直接拒绝启动**；bannedGuard 30 秒缓存封禁拦截（含持旧令牌）。
 - 金钱：积分复式账本、Serializable+行锁、冻结/结算/退款；会员发货时长叠加/同卡复用/只升不降；所有付费动作（创作/PK/海报/小南/选题会/围读/拆爆款/管理调分）支持 `Idempotency-Key` 头或 `clientToken` 幂等，撞车返回 409 且不重复扣费。
 - 交易：担保托管、确认收货放款、24h 自动放款（每小时幂等 cron）、佣金；上架/详情/购买全程归属校验（IDOR 已修）。
-- 支付回调：fail-closed 验签（未配置密钥一律拒绝）；**占位实现上线收款前必须换官方 SDK**（见第 7 节）。
+- 支付尚未接通：有效商品的下单请求返回 `503 PAYMENT_NOT_CONFIGURED`，不创建待支付订单；微信/支付宝回调保持拒绝状态。上线收款前必须完成渠道下单、官方验签/解密和金额核验（见第 7 节）。
 - 创作：SSE 六岗位流式进度；免费档每日 2 集原子占坑（含在途 QUEUED/RUNNING）；模型网关重试每次新建 AbortController、图片供应商返回结构异常可识别并退款。
-- 测试基线：**1201 tests / 0 fail / 134 suites**（`node --test test/`，约 6 秒，全部用内存桩，不碰真实数据库）。
+- 测试入口：先 `npm run build` 再 `npm test`；统一入口兼容 Windows，并设置测试环境。通过数量以当次输出为准，内存桩/沙盘回归不等于生产数据库、真实模型或支付链路验证。
 
 ## 1. 服务器与环境
 - Ubuntu 22.04、Node.js 20、PostgreSQL 16、Nginx、pm2（当前无 Redis 强依赖；限流/队列接入时再装）
@@ -34,8 +34,9 @@ npx prisma db push      # 本仓库无 migrate 历史；PostLike 等表随 schem
 以 [.env.example](../.env.example) 为准（已按代码实际读取整理），要点：
 - `JWT_ACCESS_SECRET / JWT_REFRESH_SECRET`：`openssl rand -hex 32` 各一份（生产强制 ≥16 位）
 - `CONFIG_SECRET`：落库供应商配置的加密密钥，`openssl rand -hex 32`
+- `SUPER_ADMIN_INIT_PASSWORD`：首次创建超管或补设密码时必须显式提供，去除首尾空白后至少 12 位；没有内置默认口令。已有正常密码不会被覆盖，保留手机号不可公开注册。
 - 模型：`MODEL_GATEWAY_BASE_URL`、`MODEL_TEXT_ECONOMY/STANDARD/FLAGSHIP_KEY` 与 `MODEL_ECONOMY/STANDARD/FLAGSHIP`；图片 `MODEL_IMAGE_STANDARD_KEY/_STANDARD`、`MODEL_IMAGE_FLAGSHIP_KEY/_FLAGSHIP`，图片网关可单独用 `MODEL_IMAGE_GATEWAY_BASE_URL`
-- 支付：当前仅 `WECHAT_API_V3_KEY`（HMAC 占位）、`ALIPAY_PUBLIC_KEY` / `ALIPAY_NOTIFY_SECRET` 被读取；其余 OSS/Redis/商户证书等变量为预留，代码尚未消费
+- 支付：当前下单与回调关闭；仅填写支付环境变量不会启用收款，必须先完成第 7 节的渠道接入与联调。
 - `CORS_ORIGINS`：同源托管可留空；跨域填前端来源白名单
 
 ## 4. 一键部署与守护
@@ -45,7 +46,7 @@ pm2 start ecosystem.config.cjs          # 或直接 ./scripts/deploy.sh 走完�
 pm2 save && pm2 startup
 ```
 - [ecosystem.config.cjs](../ecosystem.config.cjs)：cluster 2 实例、600M 重启、日志 logs/；实例数用 `PM2_INSTANCES=N` 覆盖
-- [scripts/deploy.sh](../scripts/deploy.sh)：npm ci → prisma generate → 1201 全量测试 → tsc 编译 → db push → pm2 reload → 健康检查，任何一步失败即中止
+- [scripts/deploy.sh](../scripts/deploy.sh)：npm ci → prisma generate → tsc 编译 → npm test → db push → pm2 reload → 健康检查，任何一步失败即中止。测试使用当前源码的构建产物；脚本和健康探针成功不代表真实业务链路已经验证。
 - 更新版本：拉代码后 `./scripts/deploy.sh`（pm2 reload 零停机）
 
 ## 5. Nginx + HTTPS（SSE 必须关缓冲）
@@ -83,24 +84,27 @@ DAYS=7 npm run cost:report             # 近 7 天
 - 业务侧运营数据：管理后台 `GET /api/admin/stats/overview`、`GET /api/admin/finance/overview`（需超管 JWT）。
 
 ## 7. 上线收款前必办
-1. 把 [src/routes/order.ts](../src/routes/order.ts) 的 `verifyWechatSignature/verifyAlipaySign` 占位换成官方 SDK 验签（wechatpay-node-v3 平台证书 RSA-SHA256；alipay-sdk checkNotifySign RSA2），回调地址 `https://域名/api/order/notify/*`
+1. 在 [src/routes/order.ts](../src/routes/order.ts) 接入真实渠道下单、官方 SDK 验签/资源解密、订单归属与金额核验、幂等发货；验证完成前保持当前下单 `503` 与回调拒绝行为。回调地址 `https://域名/api/order/notify/*`
 2. 火山方舟/OpenAI 各档密钥与模型名填 env，先小额沙箱验证：下单→支付→回调→积分到账→生成扣费/海报退款 全链路
 3. 配置 CONFIG_SECRET 后不要轮换丢失（旧加密配置无法解密）
 
 ## 8. 上线检查清单
 - [x] argon2id；登录不区分“用户不存在/密码错”；生产 JWT 强制密钥；banned 全 API 拦截
-- [x] 账本事务/行锁/幂等；价格服务端 assertNoLoss 启动熔断；支付 fail-closed；IDOR 归属校验
+- [x] 账本事务/行锁/幂等；价格服务端 assertNoLoss 启动熔断；未接通支付保持关闭；IDOR 归属校验
+- [ ] 生产数据库、真实模型和支付/退款链路完成实际联调与验收（本地演示及自动化回归不能代替）
 - [x] zod 入参、Prisma 参数化、全局错误处理不泄漏堆栈、CORS 白名单、前端 XSS 转义与 javascript: 链接拦截
 - [ ] 运维待补：全站接口限流（express-rate-limit，登录/下单更严）、注册密码强度策略、广告点击计数鉴权、refresh 令牌轮换、全局 12MB JSON 限额按路由细化、HTTPS 强制、日志脱敏、备份异地、WAF/告警（ModelCallLog 成本阈值、负载 >80%）
 
 ## 9. 日常运维速记
 ```bash
-npm run build && node --test test/     # 发布前回归（1201 全绿是硬门槛）
+npm run build                          # 测试读取 dist，先构建当前源码
+npm test                               # 发布前回归（Windows 也使用统一入口）
 npm run typecheck                       # 类型检查
 pm2 logs zhongnan-api                   # 实时日志（logs/err.log、logs/out.log）
 node scripts/healthcheck.cjs            # 存活探针
 ./scripts/backup-db.sh                  # 手工备份
-# 本地内存桩 demo（无 PG、无密钥，SANDBOX 占位稿，图片报错退款）：
-PORT=8099 node scripts/start-demo.cjs
+# 本地内存桩 demo（默认 8099 端口，先构建再启动）：
+npm run demo
 ```
-演示账号（仅 demo）：13900000001/2/3/4 对应 FREE/BASIC/ADVANCED/PRO，超管 13900000000，密码统一 demo123456。
+Windows PowerShell 如遇脚本执行策略限制，使用 `npm.cmd run build`、`npm.cmd test`、`npm.cmd run demo`。演示数据重启即清空；未配置模型供应商时，文字生成使用固定 SANDBOX 示例稿，仅可走查页面与本地链路，不能验证真实生成质量。
+演示账号仅用于本地测试，登录信息见演示启动终端；生产超管必须按第 3 节单独配置，不能沿用演示凭据。

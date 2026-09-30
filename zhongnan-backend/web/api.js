@@ -24,95 +24,158 @@
     set(k, v) { localStorage.setItem(k, JSON.stringify(v)); },
     del(k) { localStorage.removeItem(k); },
   };
+  let sessionVersion = 0;
+  let authAttemptVersion = 0;
+  const responseSessions = new WeakMap();
   function getToken() { return store.get(K.access); }
   function getUser() { return store.get(K.user); }
   function setSession({ accessToken, refreshToken, user }) {
+    sessionVersion++;
     if (accessToken) store.set(K.access, accessToken);
     if (refreshToken) store.set(K.refresh, refreshToken);
     if (user) store.set(K.user, user);
   }
-  function clearSession() { [K.access, K.refresh, K.user].forEach((k) => store.del(k)); }
+  function clearSession() { sessionVersion++; [K.access, K.refresh, K.user].forEach((k) => store.del(k)); }
   function isAuthed() { return !!getToken(); }
 
-  // 带超时的 fetch：默认 30s，超时抛 TIMEOUT，触发 onNetworkError 钩子
-  function fetchWithTimeout(path, opts, timeoutMs) {
-    const t = timeoutMs || opts.timeout || DEFAULT_TIMEOUT;
-    if (t <= 0) return fetch(path, opts); // 0 = 不超时（用于 SSE/长任务）
-    const ctrl = new AbortController();
-    const timer = setTimeout(() => ctrl.abort(), t);
-    return fetch(path, Object.assign({}, opts, { signal: ctrl.signal }))
-      .finally(() => clearTimeout(timer));
+  function sessionSnapshot() {
+    return { version: sessionVersion, access: getToken(), refresh: store.get(K.refresh), user: JSON.stringify(getUser()) };
+  }
+  function sessionChangedError() {
+    const err = new Error('SESSION_CHANGED'); err.code = 'SESSION_CHANGED'; err.name = 'AbortError'; return err;
+  }
+  function assertSameSession(snapshot) {
+    // 同一账号并发续期允许 access 变化；登录/退出代次和持久化身份仍须一致。
+    const accessChangedWithoutRefresh = !snapshot.refresh && getToken() !== snapshot.access;
+    if (sessionVersion !== snapshot.version || store.get(K.refresh) !== snapshot.refresh ||
+        JSON.stringify(getUser()) !== snapshot.user || accessChangedWithoutRefresh) {
+      throw sessionChangedError();
+    }
   }
 
-  async function raw(path, opts = {}) {
+  function abortError() {
+    const err = new Error('ABORTED'); err.name = 'AbortError'; err.code = 'ABORTED'; return err;
+  }
+
+  // 带超时的 fetch：默认 30s，超时抛 TIMEOUT，触发 onNetworkError 钩子
+  async function fetchWithTimeout(path, opts = {}, timeoutMs) {
+    const t = timeoutMs ?? opts.timeout ?? DEFAULT_TIMEOUT;
+    if (opts.signal && opts.signal.aborted) return Promise.reject(abortError());
+    if (t <= 0) return fetch(path, opts); // 0 = 不超时（用于 SSE/长任务）
+    const ctrl = new AbortController();
+    let timedOut = false;
+    const timer = setTimeout(() => { timedOut = true; ctrl.abort(); }, t);
+    let signal = ctrl.signal;
+    if (opts.signal) {
+      if (typeof AbortSignal !== 'undefined' && typeof AbortSignal.any === 'function') {
+        signal = AbortSignal.any([opts.signal, ctrl.signal]);
+      } else {
+        // 不能在收到响应头时移除监听：SSE 的 body 仍须响应调用方取消。
+        opts.signal.addEventListener('abort', () => ctrl.abort(), { once: true });
+      }
+    }
+    try { return await fetch(path, Object.assign({}, opts, { signal })); }
+    catch (e) { if (timedOut) { const err = new Error('TIMEOUT'); err.code = 'TIMEOUT'; throw err; } throw e; }
+    finally { clearTimeout(timer); }
+  }
+
+  async function raw(path, opts = {}, token = getToken()) {
     const headers = Object.assign({ 'Content-Type': 'application/json' }, opts.headers || {});
-    const tk = getToken(); if (tk) headers.Authorization = 'Bearer ' + tk;
+    if (token) headers.Authorization = 'Bearer ' + token;
     return fetchWithTimeout(path, Object.assign({}, opts, { headers }), opts.timeout);
   }
 
   // 网络错误分类：超时 / 中断 / DNS 失败
   function isNetworkErr(e) {
-    return e && (e.name === 'AbortError' || e.name === 'TypeError' || e.code === 'NETWORK_ERR');
+    return e && (e.name === 'AbortError' || e.name === 'TypeError' || e.code === 'NETWORK_ERR' || e.code === 'TIMEOUT');
   }
   function makeNetErr(path, e) {
-    const err = new Error(e.name === 'AbortError' ? 'TIMEOUT' : 'NETWORK_ERR');
+    const err = new Error(e.code === 'TIMEOUT' || e.name === 'AbortError' ? 'TIMEOUT' : 'NETWORK_ERR');
     err.code = err.message; err.path = path; err.cause = e;
     return err;
   }
 
   // 401 → 用 refresh 换新 access 重试一次；仍失败则清登录态并抛 AUTH_REQUIRED
   async function request(path, opts = {}) {
+    const session = sessionSnapshot();
+    const mayRetry = !opts.body && ['GET', 'HEAD'].includes((opts.method || 'GET').toUpperCase());
+    function ensureActive() {
+      assertSameSession(session);
+      if (opts.signal && opts.signal.aborted) throw abortError();
+    }
+    function networkFailure(e) {
+      ensureActive();
+      const ne = makeNetErr(path, e);
+      if (hooks.onNetworkError) try { hooks.onNetworkError(ne, path); } catch {}
+      throw ne;
+    }
     let res;
     try {
-      res = await raw(path, opts);
+      res = await raw(path, opts, session.access);
     } catch (e) {
       // GET 类（无 body）+ 网络错误：单次退避重试一次（应对瞬时抖动）
-      if (!opts.body && isNetworkErr(e)) {
+      ensureActive();
+      if (mayRetry && isNetworkErr(e)) {
         await new Promise((r) => setTimeout(r, RETRY_BACKOFF_MS));
-        try { res = await raw(path, opts); }
-        catch (e2) { const ne = makeNetErr(path, e2); if (hooks.onNetworkError) try { hooks.onNetworkError(ne, path); } catch {} throw ne; }
+        ensureActive();
+        try { res = await raw(path, opts, getToken()); }
+        catch (e2) { networkFailure(e2); }
       } else {
-        const ne = makeNetErr(path, e);
-        if (hooks.onNetworkError) try { hooks.onNetworkError(ne, path); } catch {}
-        throw ne;
+        networkFailure(e);
       }
     }
+    ensureActive();
 
     // 401 → refresh 重试一次
     if (res.status === 401) {
-      const rt = store.get(K.refresh);
+      const rt = session.refresh;
       if (rt) {
         try {
-          const rr = await fetch('/api/auth/refresh', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ refreshToken: rt }) });
+          const rr = await fetchWithTimeout('/api/auth/refresh', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ refreshToken: rt }), signal: opts.signal, timeout: opts.timeout });
+          ensureActive();
           if (rr.ok) {
             const txt = await rr.text();
+            ensureActive();
             let d = null;
             try { d = txt ? JSON.parse(txt) : null; } catch { /* 网关返回非 JSON 时不得把整个请求链打崩 */ }
-            if (d && d.accessToken) { store.set(K.access, d.accessToken); res = await raw(path, opts); }
+            if (d && d.accessToken) {
+              store.set(K.access, d.accessToken);
+              res = await raw(path, opts, d.accessToken);
+              ensureActive();
+            }
           }
         } catch (e) { /* refresh 网络错误吞掉，落到下面 401 清登录态 */ }
       }
     }
+    ensureActive();
 
     // 5xx 服务器忙：触发钩子（不重试 POST，避免双扣费）
-    if (res.status >= 500 && res.status < 600 && !opts.body) {
+    if (res.status >= 500 && res.status < 600 && mayRetry) {
       await new Promise((r) => setTimeout(r, RETRY_BACKOFF_MS));
-      try { res = await raw(path, opts); }
+      ensureActive();
+      try { res = await raw(path, opts, getToken()); }
       catch (e) { /* 重试失败保留原 5xx res，下面 jsonOrThrow 会抛 */ }
+      ensureActive();
       if (res.status >= 500 && hooks.onServerBusy) {
         try { hooks.onServerBusy(res, path); } catch {}
       }
     }
 
     if (res.status === 401) {
+      ensureActive();
       clearSession();
       if (hooks.onAuthRequired) try { hooks.onAuthRequired(); } catch {}
       const e = new Error('AUTH_REQUIRED'); e.code = 'AUTH_REQUIRED'; throw e;
     }
+    responseSessions.set(res, session);
     return res;
   }
   async function jsonOrThrow(res) {
-    const t = await res.text(); let d = null; try { d = t ? JSON.parse(t) : null; } catch {}
+    const session = responseSessions.get(res);
+    if (session) assertSameSession(session);
+    const t = await res.text();
+    if (session) assertSameSession(session);
+    let d = null; try { d = t ? JSON.parse(t) : null; } catch {}
     if (!res.ok) {
       // 幂等撞车展示后端中文提示；其余错误仍以 error 码为 message，保留 e.error/e.code 供分支判断
       const friendly = d && d.error === 'IDEMPOTENT_REPLAY' ? (d.message || d.error)
@@ -123,15 +186,32 @@
     return d;
   }
 
+  async function authenticate(path, body) {
+    const attempt = ++authAttemptVersion;
+    const session = sessionSnapshot();
+    function ensureCurrentAttempt() {
+      assertSameSession(session);
+      if (attempt !== authAttemptVersion) throw sessionChangedError();
+    }
+    let data;
+    try {
+      const res = await raw(path, { method: 'POST', body: JSON.stringify(body) }, session.access);
+      ensureCurrentAttempt();
+      data = await jsonOrThrow(res);
+      ensureCurrentAttempt();
+    } catch (e) { ensureCurrentAttempt(); throw e; }
+    // 登录/注册共用代次：只有最后发起的操作可以写入会话，退出同样使旧操作失效。
+    setSession(data);
+    return data;
+  }
+
   const auth = {
     async register(phone, password, inviteCode) {
       const body = { phone, password }; if (inviteCode) body.inviteCode = inviteCode;
-      const res = await raw('/api/auth/register', { method: 'POST', body: JSON.stringify(body) });
-      const d = await jsonOrThrow(res); setSession(d); return d;
+      return authenticate('/api/auth/register', body);
     },
     async login(phone, password) {
-      const res = await raw('/api/auth/login', { method: 'POST', body: JSON.stringify({ phone, password }) });
-      const d = await jsonOrThrow(res); setSession(d); return d;
+      return authenticate('/api/auth/login', { phone, password });
     },
     logout() { clearSession(); },
   };

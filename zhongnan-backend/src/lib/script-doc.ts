@@ -7,6 +7,7 @@
  */
 import { MemberLevel } from '../config/pricing';
 import { BRAND } from '../config/brand';
+import { latestScripts } from './latest-scripts';
 import { buildShotManifest } from '../engine/aigc-screenplay';
 import { analyzeAigcComposition } from '../engine/aigc-screenplay';
 import { resolveVisualStyle, buildVisualStylePrompt } from '../engine/visual-style-library'; // v2.148 视觉画风编码库（分镜附录画风锚点注入）
@@ -63,7 +64,7 @@ export function canExportShotList(level: MemberLevel | string | undefined): bool
   return LEVEL_RANK[(level ?? MemberLevel.FREE) as MemberLevel] >= LEVEL_RANK[MemberLevel.ADVANCED];
 }
 
-interface ScriptLike { epNo: number; title: string; synopsis?: string | null; content: string; wordCount?: number }
+interface ScriptLike { epNo: number; version?: number; title: string; synopsis?: string | null; content: string; wordCount?: number }
 interface ProjectLike {
   title: string; mode?: string; format?: string; totalEps?: number;
   bible?: unknown; createdAt?: Date | string;
@@ -110,7 +111,7 @@ export function buildScriptDoc(
   scripts: ScriptLike[],
   opts: { penName?: string | null; noWatermark?: boolean; level?: MemberLevel | string; now?: Date; includeShotList?: boolean; visualStyleId?: string; cameraStyleId?: string } = {},
 ): ScriptDoc {
-  const eps = [...scripts].sort((a, b) => a.epNo - b.epNo);
+  const eps = latestScripts(scripts);
   const bible = normalizeBibleDoc(project.bible); // v2.193 c193 真归一：契约内字段恒为声明类型
   const bibleRaw = asBibleRaw(project.bible);    // 归一契约外的自由偏好（beatPrefs/hookPrefs）
   const level = (opts.level ?? MemberLevel.FREE) as MemberLevel;

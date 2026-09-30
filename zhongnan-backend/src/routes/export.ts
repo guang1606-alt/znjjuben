@@ -15,6 +15,7 @@ import { buildExportDocument } from '../engine/export-doc';
 import { normalizeBibleCharacters } from '../lib/cast-arc'; // v2.192 c192 人物表归一同源复用
 import { renderDocx } from '../lib/export-docx';
 import { renderPdf } from '../lib/export-pdf';
+import { latestScripts } from '../lib/latest-scripts';
 
 type PrismaLike = typeof defaultPrisma;
 
@@ -46,7 +47,7 @@ export function createExportRouter(prisma: PrismaLike | any) {
     if (owner.banned) return res.status(403).json({ error: '账号已封禁' });
     const project = await prisma.project.findFirst({ where: { id: req.params.projectId, userId: req.userId! } });
     if (!project) return res.status(404).json({ error: '项目不存在或无权访问' });
-    const scripts = await prisma.script.findMany({ where: { projectId: project.id } });
+    const scripts = latestScripts<any>(await prisma.script.findMany({ where: { projectId: project.id } }));
     if (!scripts.length) return res.status(400).json({ error: '该项目还没有成稿分集，暂无物料可聚合' });
     const episodes = scripts.map((s: { epNo: number; content: string }) => ({ ep: s.epNo, content: s.content || '' }));
     const materials = buildProductionMaterials(episodes);
@@ -76,7 +77,7 @@ export function createExportRouter(prisma: PrismaLike | any) {
 
     const project = await prisma.project.findFirst({ where: { id: req.params.projectId, userId: req.userId! } });
     if (!project) return res.status(404).json({ error: '项目不存在或无权访问' });
-    const scripts = await prisma.script.findMany({ where: { projectId: project.id } });
+    const scripts = latestScripts<any>(await prisma.script.findMany({ where: { projectId: project.id } }));
     if (!scripts.length) return res.status(400).json({ error: '该项目还没有成稿分集，暂无可导出内容' });
 
     // v2.148 画风锚点：AIGC 项目从 project.bible 读取视觉画风编号，随分镜附录注入统一画风提示词

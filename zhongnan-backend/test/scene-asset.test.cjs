@@ -156,7 +156,7 @@ describe('场景资产引擎·体检评分与冲突预警', () => {
 // —— HTTP 闭环（串行）——
 describe('场景资产 HTTP 闭环（串行）', { concurrency: 1 }, () => {
   let projIdFromRef = null;
-  it('手动建档+非法参数400（含 eps 类型校验）+同名upsert+列表归属隔离+删除防越权+未登录401', async () => {
+  it('手动建档+非法参数400（含 eps 类型校验）+按id编辑+列表归属隔离+删除防越权+未登录401', async () => {
     mem._seedUser({ id: 'u_sc_a', level: 'BASIC', balance: 5000 });
     mem._seedUser({ id: 'u_sc_b', level: 'BASIC', balance: 5000 });
     const r1 = await jsonReq('POST', '/api/generate/scene-assets', 'u_sc_a', 'BASIC', { name: '老宅祠堂', meaning: '家产争夺的主线舞台', mood: '森严压抑', taboo: '后期已烧毁，再现有须补重建交代', eps: [1, 2, 2, 99999, 0] });
@@ -170,10 +170,10 @@ describe('场景资产 HTTP 闭环（串行）', { concurrency: 1 }, () => {
     const badEps = await jsonReq('POST', '/api/generate/scene-assets', 'u_sc_a', 'BASIC', { name: '天台', meaning: '情感锚点', eps: '1,2' });
     assert.strictEqual(badEps.status, 400);
     assert.strictEqual(badEps.json.field, 'eps', 'eps 必须是数字数组');
-    const r2 = await jsonReq('POST', '/api/generate/scene-assets', 'u_sc_a', 'BASIC', { name: '老宅祠堂', meaning: '手动精修后的主线舞台' });
+    const r2 = await jsonReq('POST', '/api/generate/scene-assets', 'u_sc_a', 'BASIC', { id: r1.json.asset.id, name: '老宅祠堂', meaning: '手动精修后的主线舞台' });
     assert.strictEqual(r2.status, 200);
-    assert.strictEqual(r2.json.updated, true, '同名走 upsert 更新');
-    assert.strictEqual(mem._sceneAssets.length, 1, 'upsert 不新建行');
+    assert.strictEqual(r2.json.updated, true, '按 id 更新本人记录');
+    assert.strictEqual(mem._sceneAssets.length, 1, '编辑不新建行');
     const listA = await jsonReq('GET', '/api/generate/scene-assets', 'u_sc_a', 'BASIC');
     assert.strictEqual(listA.json.assets.length, 1);
     const listB = await jsonReq('GET', '/api/generate/scene-assets', 'u_sc_b', 'BASIC');
@@ -242,7 +242,7 @@ describe('场景资产 HTTP 闭环（串行）', { concurrency: 1 }, () => {
     assert.strictEqual(first.meaning, '功能待补', '场景无功能一手源，创建占位不臆造语义');
     // 手动精修功能/氛围/禁忌/锚点/标签（沉淀不产这些字段，只能手动补）
     const manual = await jsonReq('POST', '/api/generate/scene-assets', 'u_sc_h', 'BASIC', {
-      name: '老宅祠堂', meaning: '家产争夺的主线舞台', mood: '森严压抑', taboo: '后期已烧毁', visualAnchor: '青砖黛瓦三进院', tags: ['权谋', '祠堂'],
+      id: first.id, name: '老宅祠堂', meaning: '家产争夺的主线舞台', mood: '森严压抑', taboo: '后期已烧毁', visualAnchor: '青砖黛瓦三进院', tags: ['权谋', '祠堂'],
     });
     assert.strictEqual(manual.status, 200);
     // 二次沉淀：同名 update 只并集 eps；功能/氛围/禁忌/锚点/标签一律不触碰（c155 占位稿不降级前置）

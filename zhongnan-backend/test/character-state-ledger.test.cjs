@@ -6,6 +6,66 @@ const { characterStateLedger, CHAR_STATE_META } = require('../dist/engine/charac
 
 const CJK = /[\u4e00-\u9fff]/;
 
+test('人物状态隔离：另一人物生产不能消掉原人物的怀孕', () => {
+  const first = characterStateLedger('林晚怀孕了。');
+  const second = characterStateLedger('王丽顺产生下一个孩子。', first.nextState);
+  assert.strictEqual(second.nextState.onsets.length, 1);
+  assert.strictEqual(second.nextState.onsets[0].character, '林晚');
+  assert.strictEqual(second.unresolved.length, 1);
+  assert.ok(second.issues.some(i => i.type === 'bridge_without_onset'));
+});
+
+test('同一人物再次触发已解决的状态仍应入账', () => {
+  const first = characterStateLedger('林晚怀孕了。');
+  const second = characterStateLedger('林晚顺产生下一个孩子。', first.nextState);
+  assert.strictEqual(second.nextState.onsets.length, 0);
+  const third = characterStateLedger('林晚再次怀孕了。', second.nextState);
+  assert.strictEqual(third.nextState.onsets.length, 1);
+  assert.strictEqual(third.nextState.onsets[0].character, '林晚');
+  assert.strictEqual(third.nextState.onsets[0].onsetInEp, 3);
+  assert.ok(!third.nextState.resolved.includes('pregnant'));
+});
+
+test('具名双人状态在同一行分别入账，桥接只消掉对应人物', () => {
+  const first = characterStateLedger('林晚怀孕了，王丽也怀孕了。', null, 'zh', ['林晚', '王丽']);
+  assert.strictEqual(first.nextState.onsets.length, 2);
+  const second = characterStateLedger('王丽生下孩子。', first.nextState, 'zh', ['林晚', '王丽']);
+  assert.deepStrictEqual(second.nextState.onsets.map(o => o.character), ['林晚']);
+});
+
+test('顺序台账允许本集先恢复后再次失忆，并保留最早未解决 onset', () => {
+  const first = characterStateLedger('林晚失忆了。', null, 'zh', ['林晚']);
+  const second = characterStateLedger('林晚恢复记忆。\n林晚再次失忆了。', first.nextState, 'zh', ['林晚']);
+  assert.strictEqual(second.nextState.onsets.length, 1);
+  assert.strictEqual(second.nextState.onsets[0].onsetInEp, 2);
+  const third = characterStateLedger('林晚仍然失忆。', second.nextState, 'zh', ['林晚']);
+  assert.strictEqual(third.nextState.onsets.length, 1);
+  assert.strictEqual(third.nextState.onsets[0].onsetInEp, 2);
+});
+
+test('同一分句的状态恢复后再发生应保留最后状态，复合桥接只计一次', () => {
+  const repeated = characterStateLedger('林晚失忆后恢复记忆又失忆了。', null, 'zh', ['林晚']);
+  assert.strictEqual(repeated.onsets.length, 2);
+  assert.strictEqual(repeated.nextState.onsets.length, 1);
+  assert.strictEqual(repeated.nextState.onsets[0].character, '林晚');
+  assert.strictEqual(repeated.nextState.onsets[0].state, 'memory_loss');
+  assert.ok(!repeated.nextState.resolved.includes('memory_loss'));
+  const pregnancy = characterStateLedger('林晚怀孕了。', null, 'zh', ['林晚']);
+  const birth = characterStateLedger('林晚顺产生下孩子。', pregnancy.nextState, 'zh', ['林晚']);
+  assert.strictEqual(birth.bridges.length, 1);
+  assert.strictEqual(birth.nextState.onsets.length, 0);
+  assert.ok(!birth.issues.some(i => i.type === 'bridge_without_onset'));
+});
+
+test('英文人物隔离与旧台账兼容：历史 resolved 不阻止新 onset', () => {
+  const first = characterStateLedger('Anna is pregnant.', null, 'en', ['Anna', 'Beth']);
+  const second = characterStateLedger('Beth gave birth.', first.nextState, 'en', ['Anna', 'Beth']);
+  assert.strictEqual(second.unresolved.length, 1);
+  assert.strictEqual(second.unresolved[0].character, 'Anna');
+  const legacy = characterStateLedger('Anna is pregnant.', { onsets: [], resolved: ['pregnant'], epNo: 6 }, 'en', ['Anna']);
+  assert.strictEqual(legacy.nextState.onsets[0].onsetInEp, 7);
+});
+
 // —— 中文：首集立起怀孕状态 ——
 const ZH_EP1 = `场景一 医院 日
 医生：她怀孕了，两个月。

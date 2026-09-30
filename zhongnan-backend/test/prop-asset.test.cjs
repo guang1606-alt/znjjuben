@@ -161,7 +161,7 @@ describe('道具资产引擎·体检评分与冲突预警', () => {
 // —— HTTP 闭环（串行）——
 describe('道具资产 HTTP 闭环（串行）', { concurrency: 1 }, () => {
   let projIdFromRef = null;
-  it('手动建档+非法参数400（含 eps 类型校验）+同名upsert+列表归属隔离+删除防越权+未登录401', async () => {
+  it('手动建档+非法参数400（含 eps 类型校验）+按id编辑+列表归属隔离+删除防越权+未登录401', async () => {
     mem._seedUser({ id: 'u_pa_a', level: 'BASIC', balance: 5000 });
     mem._seedUser({ id: 'u_pa_b', level: 'BASIC', balance: 5000 });
     const r1 = await jsonReq('POST', '/api/generate/prop-assets', 'u_pa_a', 'BASIC', { name: '玉佩', meaning: '母亲留下的认亲凭证', taboo: '已烧毁，再现有须补找回交代', eps: [1, 2, 2, 99999, 0] });
@@ -175,10 +175,10 @@ describe('道具资产 HTTP 闭环（串行）', { concurrency: 1 }, () => {
     const badEps = await jsonReq('POST', '/api/generate/prop-assets', 'u_pa_a', 'BASIC', { name: '玉佩', meaning: 'x', eps: ['3'] });
     assert.strictEqual(badEps.status, 400);
     assert.strictEqual(badEps.json.field, 'eps', 'eps 必须是数字数组');
-    const r2 = await jsonReq('POST', '/api/generate/prop-assets', 'u_pa_a', 'BASIC', { name: '玉佩', meaning: '手动精修后的完整含义' });
+    const r2 = await jsonReq('POST', '/api/generate/prop-assets', 'u_pa_a', 'BASIC', { id: r1.json.asset.id, name: '玉佩', meaning: '手动精修后的完整含义' });
     assert.strictEqual(r2.status, 200);
-    assert.strictEqual(r2.json.updated, true, '同名走 upsert 更新');
-    assert.strictEqual(mem._propAssets.length, 1, 'upsert 不新建行');
+    assert.strictEqual(r2.json.updated, true, '按 id 更新本人记录');
+    assert.strictEqual(mem._propAssets.length, 1, '编辑不新建行');
     const listA = await jsonReq('GET', '/api/generate/prop-assets', 'u_pa_a', 'BASIC');
     assert.strictEqual(listA.json.assets.length, 1);
     const listB = await jsonReq('GET', '/api/generate/prop-assets', 'u_pa_b', 'BASIC');
@@ -246,7 +246,7 @@ describe('道具资产 HTTP 闭环（串行）', { concurrency: 1 }, () => {
     assert.ok(first.meaning.includes('认亲的凭证'), '含义线索取首现语境');
     // 手动精修 taboo/visualAnchor/tags（沉淀不产这些字段，只能手动补）
     const manual = await jsonReq('POST', '/api/generate/prop-assets', 'u_pa_h', 'BASIC', {
-      name: '玉佩', meaning: '母亲留下的认亲凭证', taboo: '已烧毁，再现有须补找回交代', visualAnchor: '羊脂白玉雕云纹', tags: ['认亲', '信物'],
+      id: first.id, name: '玉佩', meaning: '母亲留下的认亲凭证', taboo: '已烧毁，再现有须补找回交代', visualAnchor: '羊脂白玉雕云纹', tags: ['认亲', '信物'],
     });
     assert.strictEqual(manual.status, 200);
     // 二次沉淀：同名 update；meaning 属本体以一手源刷新；taboo/visualAnchor/tags 不触碰

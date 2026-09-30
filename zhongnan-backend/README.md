@@ -1,39 +1,42 @@
-# 终南编剧AI · 后端服务（可上线主链路版）
+# 终南编剧AI · 后端与同源前端
 
-配套前端 v0.95.x。完整上线步骤见 [`docs/DEPLOYMENT.md`](./docs/DEPLOYMENT.md)，架构见 [`docs/ARCHITECTURE.md`](./docs/ARCHITECTURE.md)。
+Express + TypeScript + Prisma；原生 JavaScript 前端位于 `web/`，由后端同源托管。部署说明见 [`docs/DEPLOYMENT.md`](./docs/DEPLOYMENT.md)，架构见 [`docs/ARCHITECTURE.md`](./docs/ARCHITECTURE.md)。
 
-## 已实现（真实代码，非占位）
-- **定价** `config/pricing.ts`：严格对齐 PRD（月卡39/99/299、100集=100元=1000积分、超量1/0.8/0.5元、佣金15/10/5%）；引擎档位升级补差价，保证任何组合“售价≥成本×2”，启动机器校验
-- **积分账本** `lib/billing.ts` + `lib/prisma-tx.ts`：复式流水、冻结/结算/失败退款、幂等防多扣、赠送上限、Serializable 事务+行锁防并发超扣
-- **模型黑盒** `lib/model-proxy.ts`：OpenAI 兼容（火山方舟/GPT-image），密钥仅服务端、按 usage 算真实成本、毛利熔断
-- **创作管线** `agents/pipeline.ts`：六岗位+双校验，SSE 进度
-- **路由**：认证(注册/登录/刷新/邀请绑定)、创作(免费每日3集/付费冻结结算)、增值(海报/PK/小南)、订单(下单+支付回调验签+幂等发货)、反馈工单
-- **数据模型** `prisma/schema.prisma`：20+ 表
+## 当前实现与边界
 
-## 协作者本地启动（从仓库拉代码后照此走通）
-前置：Node.js 20+（推荐 22）、PostgreSQL 16（本地空库即可）。
-```bash
-cp .env.example .env          # 至少填：DATABASE_URL、JWT_ACCESS_SECRET、JWT_REFRESH_SECRET、CONFIG_SECRET（均≥16位）
-npm ci
-npx prisma generate
-npx prisma db push            # 本仓库无 migrate 历史，用 db push 对齐 schema
-npm run build                 # tsc 编译，类型零错误
-npm test                      # 全量回归（node scripts/run-tests.cjs test/，5000+ 用例须全绿）
-PORT=8899 node dist/index.js  # 勿用默认 8080（易端口占用）；浏览器开 http://localhost:8899
-```
-- 前端为 `web/` 纯静态站，由服务同源托管，**零构建**；改 `web/app.js`/`styles.css` 刷新即生效。
-- 首次启动自动引导创建唯一超级管理员主账号（手机号硬编码，见 `.env.example` 说明；密码可用 `SUPER_ADMIN_INIT_PASSWORD` 指定）。
-- 测试用 `NODE_ENV=test`，`.cjs` 用例引用 `dist/`，故改 TS 后须先 `npm run build` 再跑测试；严禁 `--test-force-exit`。
+- **认证与权限**：注册、登录、刷新令牌、邀请绑定及管理路由；生产环境需配置 JWT 密钥。
+- **创作与编辑**：标签创作、采访式创作、SSE 进度、剧集版本、角色/道具/场景资产编辑及导出。
+- **积分账本**：冻结、结算、失败退款、幂等流水与数据库事务；定价规则见 `src/config/pricing.ts`。
+- **模型调用**：`src/lib/model-proxy.ts` 对接兼容网关；未配置供应商时走沙盘兜底，不能据此认定真实模型已接通。
+- **支付未接通**：商品目录可查看；`POST /api/order/create` 在有效商品请求下返回 `503 PAYMENT_NOT_CONFIGURED`，不创建待支付订单；支付回调保持关闭。真实下单、官方验签/解密、金额核验与到账链路仍需接入并验证。
 
-## 自检
-```bash
-npm run build && npm test     # 类型零错误 + 全量用例通过，是提交前的硬门槛
+本地演示与自动化测试不能替代生产数据库、真实模型或支付渠道的联调。
+
+## 安装与自检（Windows PowerShell）
+
+在本目录执行；`.cmd` 后缀可避免 PowerShell 的脚本执行策略拦截：
+
+```powershell
+npm.cmd ci
+npx.cmd prisma generate
+npm.cmd run build
+npm.cmd test
 ```
 
-## 上线还需你提供（代码无法替代）
-1. 各档模型密钥（文本+图片，填 .env，后台黑盒）
-2. 服务器 + 域名
-3. 微信/支付宝商户号与证书（支付回调验签当前为内置占位，上线前须换官方 SDK）
+`npm test` 使用 `scripts/run-tests.cjs` 统一设置测试环境并展开测试目录，支持 Windows。测试读取 `dist/`，修改 TypeScript 后应先构建再运行；通过数量以当次测试输出为准。
 
-## 尚未接入的能力
-三方 OAuth、OSS（海报图片转存永久 URL）、外部任务队列、敏感词审核（数据模型与规范已备好，见 DEPLOYMENT 第0/7节）。社区、剧本市场与担保放款、管理后台 RBAC 均已在 `src/routes/` 落地，勿重复建设。
+## 本地演示
+
+```powershell
+npm.cmd run demo
+```
+
+该命令先构建再启动演示服务，默认地址为 `http://127.0.0.1:8099`（可用 `PORT` 环境变量覆盖）。演示使用内存数据，**重启即清空**，无需 PostgreSQL，仅供本地功能走查。
+
+未配置模型供应商时，文字生成返回固定的 SANDBOX 示例稿，不代表系统已根据输入完成真实 AI 创作；图片等依赖外部服务的功能也不能据此验证。演示账号与数据不得用于生产。
+
+## 生产配置要点
+
+- 按 `.env.example` 配置 `DATABASE_URL`、`JWT_ACCESS_SECRET`、`JWT_REFRESH_SECRET`、`CONFIG_SECRET` 及模型网关。
+- 创建超管账号或为其补设密码前，必须显式配置 `SUPER_ADMIN_INIT_PASSWORD`，去除首尾空白后至少 12 位。未配置或过短时拒绝创建/补设；已有正常密码不会被覆盖。生产超管没有内置默认口令，保留手机号也不能通过公开注册取得权限。
+- 支付渠道仍需完成代码接入及实际联调，仅填写商户参数不会开启收款。发布前须分别验证生产数据库、真实模型、支付与退款链路。

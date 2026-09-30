@@ -69,11 +69,23 @@ export function createInterviewRouter(prisma: PrismaLike) {
     if (!Array.isArray(v)) return [];
     return v.map((x) => { const o = (x ?? {}) as Record<string, unknown>; return { q: String(o.q ?? ''), a: String(o.a ?? '') }; });
   };
-  const pubSession = (s: Record<string, unknown>) => ({
-    id: s.id, title: s.title, lang: s.lang, status: s.status,
-    materials: asMaterials(s.materials), transcript: asTranscript(s.transcript),
-    turnCount: s.turnCount, createdAt: s.createdAt, updatedAt: s.updatedAt,
-  });
+  // 当前尚未回答的问题随素材 JSON 持久化，避免把上一条已回答的 q 当作本轮追问。
+  const currentQuestion = (v: unknown): string => {
+    const question = v && typeof v === 'object' ? (v as Record<string, unknown>).currentQuestion : undefined;
+    return typeof question === 'string' ? question : '';
+  };
+  const pubSession = (s: Record<string, unknown>) => {
+    const materials = asMaterials(s.materials);
+    const lang = normLang(s.lang);
+    return {
+      id: s.id, title: s.title, lang: s.lang, status: s.status,
+      materials, transcript: asTranscript(s.transcript),
+      question: currentQuestion(s.materials),
+      ready: readyCheck(materials, Number(s.turnCount) || 0, lang),
+      gaps: gapReport(materials, lang),
+      turnCount: s.turnCount, createdAt: s.createdAt, updatedAt: s.updatedAt,
+    };
+  };
 
   async function accessibleSession(id: string, userId: string) {
     const s = await prisma.interviewSession.findUnique({ where: { id } });
@@ -108,7 +120,7 @@ export function createInterviewRouter(prisma: PrismaLike) {
       const transcript = [...prev.transcript, { q: prev.lastQuestion, a: args.text.slice(0, 4000) }];
       const turnCount = transcript.length;
       const data = {
-        materials: out.materials as unknown as Record<string, unknown>,
+        materials: { ...out.materials, currentQuestion: out.question } as unknown as Record<string, unknown>,
         transcript: transcript as unknown as Record<string, unknown>[],
         turnCount,
       };
@@ -168,7 +180,7 @@ export function createInterviewRouter(prisma: PrismaLike) {
     return runTurn(req, res, {
       userId: req.userId!, sessionId: s.id, text: p.data.text,
       lang: normLang(s.lang), tier: p.data.engineTier ?? EngineTier.STANDARD,
-    }, { materials: asMaterials(s.materials), transcript: asTranscript(s.transcript), lastQuestion: asTranscript(s.transcript).slice(-1)[0]?.q ?? '' });
+    }, { materials: asMaterials(s.materials), transcript: asTranscript(s.transcript), lastQuestion: currentQuestion(s.materials) });
   });
 
   /* ---------------- 会话查询 ---------------- */

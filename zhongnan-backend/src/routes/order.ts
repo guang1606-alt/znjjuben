@@ -1,6 +1,5 @@
 import { asyncRouter } from '../lib/async-router';
 import { z } from 'zod';
-import crypto from 'crypto';
 import { prisma as defaultPrisma } from '../lib/prisma';
 import { authRequired, AuthRequest } from '../middleware/auth';
 import { MemberLevel, MEMBERSHIP, X_SCRIPT } from '../config/pricing';
@@ -107,9 +106,8 @@ export function createOrderRouter(prisma: PrismaLike | any) {
     const plans = (['FREE', 'BASIC', 'ADVANCED', 'PRO'] as MemberLevel[]).map((lv) => ({
       level: lv, ...MEMBERSHIP[lv],
     }));
-    res.json({ items, plans, xScript: X_SCRIPT, pointsPerYuan: 10 });
+    res.json({ items, plans, xScript: X_SCRIPT, pointsPerYuan: 10, paymentAvailable: false });
   });
-  const deliverPaidOrder = createDeliver(prisma);
   const createSchema = z.object({ sku: z.string().min(1).max(40) });
 
   orderRouter.post('/create', authRequired, async (req: AuthRequest, res) => {
@@ -117,80 +115,16 @@ export function createOrderRouter(prisma: PrismaLike | any) {
     if (!parsed.success) return res.status(400).json({ error: '商品参数无效' });
     const sku = SKU[parsed.data.sku];
     if (!sku) return res.status(400).json({ error: '商品不存在' });
-    const order = await prisma.order.create({
-      data: {
-        userId: req.userId!, kind: sku.kind, level: sku.level,
-        amountFen: sku.amountFen, points: sku.points ?? 0, status: 'PENDING', remark: sku.remark,
-      },
-    });
-    // 生产：此处调用微信 Native/JSAPI 或支付宝下单，返回 codeUrl/payForm；沙箱先返回订单号
-    res.json({ orderId: order.id, amountFen: order.amountFen, payParams: 'TODO_CALL_PROVIDER' });
+    // 接入真实渠道下单及回调核验前，不创建无法支付的待支付订单。
+    return res.status(503).json({ code: 'PAYMENT_NOT_CONFIGURED', error: '在线支付暂未开通，请联系管理员处理充值或会员开通。' });
   });
 
-  /** 微信支付回调：生产用商户证书验签（wechatpay-node-v3），此处给出验签骨架 */
-  orderRouter.post('/notify/wechat', async (req, res) => {
-    try {
-      const signature = req.headers['wechatpay-signature'] as string;
-      if (!signature || !verifyWechatSignature(JSON.stringify(req.body), signature))
-        return res.status(401).json({ code: 'FAIL', message: '验签失败' });
-      const orderId = req.body?.out_trade_no;
-      const tradeNo = req.body?.transaction_id;
-      if (req.body?.event_type === 'TRANSACTION.SUCCESS') await deliverPaidOrder(orderId, tradeNo);
-      res.json({ code: 'SUCCESS' });
-    } catch {
-      res.status(500).json({ code: 'FAIL' });
-    }
+  // 渠道下单、官方签名/资源解密及订单金额核验尚未接通，回调必须保持关闭。
+  orderRouter.post('/notify/wechat', (_req, res) => {
+    res.status(401).json({ code: 'FAIL', message: '支付渠道暂未开通' });
   });
-
-  /** 支付宝回调：生产用支付宝公钥验签（alipay-sdk） */
-  orderRouter.post('/notify/alipay', async (req, res) => {
-    if (!verifyAlipaySign(req.body)) return res.send('fail');
-    if (req.body.trade_status === 'TRADE_SUCCESS')
-      await deliverPaidOrder(req.body.out_trade_no, req.body.trade_no);
-    res.send('success');
-  });
-
+  orderRouter.post('/notify/alipay', (_req, res) => { res.send('fail'); });
   return orderRouter;
-}
-
-// —— 支付回调验签（fail-closed）——
-// ⚠️ 安全红线：回调是“收款发货”的唯一触发点，验签必须默认拒绝。以下为本地占位实现，
-//   生产上线务必替换为官方 SDK：
-//   - 微信：wechatpay-node-v3，用微信支付平台证书做 RSA-SHA256 验签（校验 Wechatpay-Serial/时间戳/随机串），
-//     不是用 APIv3 密钥对 body 做 HMAC；
-//   - 支付宝：alipay-sdk 的 checkNotifySign，用支付宝公钥做 RSA2 验签（即下方 ALIPAY_PUBLIC_KEY 分支）。
-//   绝不能仅凭配了 APPID/MCHID 就放行（旧逻辑可被任意外部请求伪造“支付成功”白嫖发货）。
-function verifyWechatSignature(raw: string, sig: string): boolean {
-  const secret = process.env.WECHAT_API_V3_KEY;
-  if (!secret) return false; // 未配置密钥：一律拒绝（测试 http-order 依赖此行为）
-  try { return crypto.createHmac('sha256', secret).update(raw).digest('hex') === sig; } catch { return false; }
-}
-
-/** 支付宝回调参数按 key 排序拼接待验签串（与官方 RSA2 规则一致：剔除 sign/sign_type 与空值） */
-function alipaySignBase(params: Record<string, unknown>): string {
-  return Object.keys(params)
-    .filter((k) => k !== 'sign' && k !== 'sign_type' && params[k] !== undefined && params[k] !== null && params[k] !== '')
-    .sort()
-    .map((k) => `${k}=${params[k]}`)
-    .join('&');
-}
-function verifyAlipaySign(params: unknown): boolean {
-  if (!params || typeof params !== 'object') return false;
-  const p = params as Record<string, unknown>;
-  const sign = String(p.sign || '');
-  if (!sign) return false;
-  // 生产路径：配置支付宝公钥 → RSA2(非对称) 验签
-  const pubKey = process.env.ALIPAY_PUBLIC_KEY;
-  if (pubKey) {
-    try {
-      return crypto.createVerify('RSA-SHA256').update(alipaySignBase(p)).verify(pubKey, sign, 'base64');
-    } catch { return false; }
-  }
-  // 本地/联调占位：仅当显式配置 ALIPAY_NOTIFY_SECRET 时才做 HMAC 校验；
-  // 注意：只配 ALIPAY_APPID 绝不构成验签通过条件。
-  const secret = process.env.ALIPAY_NOTIFY_SECRET;
-  if (!secret) return false;
-  try { return crypto.createHmac('sha256', secret).update(alipaySignBase(p)).digest('hex') === sign; } catch { return false; }
 }
 
 export const orderRouter = createOrderRouter(defaultPrisma);

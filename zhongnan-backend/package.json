@@ -10,7 +10,7 @@
     "demo": "tsc -p tsconfig.json && node scripts/start-demo.cjs",
     "demo:only": "node scripts/start-demo.cjs",
     "typecheck": "tsc --noEmit",
-    "test": "node scripts/run-tests.cjs test/",
+    "test": "node scripts/run-tests.cjs",
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev",
     "db:push": "prisma db push",

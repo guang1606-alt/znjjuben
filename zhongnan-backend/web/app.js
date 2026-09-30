@@ -77,6 +77,7 @@
 
   /* ---------- 12 模式 ---------- */
   let selectedMode = 'tags';
+  let draftProject = null;
   // v2.14 名场面工作台内部轨道：名场面拓展(默认,高级) / 爆款逆向批量(专业)
   let selectedTrack = 'signature_scene';
   function renderModes() {
@@ -109,6 +110,7 @@
           if (typeof switchView === 'function') switchView('vip');
           return;
         }
+        clearDraftProject();
         selectedMode = m.id; if (m.id !== 'hit_lab') selectedTrack = 'signature_scene'; renderModes(); syncTagBench(); syncModeBrief();
       };
       grid.appendChild(card);
@@ -237,6 +239,7 @@
     default: { zh: ['用一句话描述你的故事创意', '谁、遇到什么麻烦、准备怎么反击；越具体出本越准。'], en: ['One-line story idea', 'Who, what trouble, how they fight back — the more specific, the better.'] },
   };
   function syncModeBrief() {
+    if (draftProject && selectedMode !== 'adapt') clearDraftProject();
     const panel = $('modeBriefPanel'); if (!panel) return;
     const show = selectedMode !== 'tags';
     panel.classList.toggle('hidden', !show);
@@ -584,10 +587,14 @@
   let briefUploadInited = false;
   /* ---------- v2.92 采访式创作会话：一轮一问 + 四维记忆空间，就绪后产出结构化简报回填 ---------- */
   let ivInited = false, ivSessionId = null, ivTurn = 0, ivReady = false;
+  let ivOwner = null, ivEpoch = 0, ivLoaded = false, ivLoading = null, ivBusy = false, ivClosed = false;
+  let ivGaps = null, ivMaterials = null, ivIdeaValue = '', ivRestoreError = false;
   function ivT() {
     return lang === 'en' ? {
       heading: 'Interview Mode · Xiaonan asks, you answer',
       start: '🎬 Start interview (5 pts/turn)', reply: 'Reply', briefBtn: '📋 Build brief & fill in (Free)',
+      restart: '🎬 New interview (5 pts/turn)', restoring: 'Restoring your interview…',
+      restoreFailed: 'Could not restore your interview. Reopen this panel to retry, or start a new interview.',
       answer: 'Answer in your own words…', hintStart: 'Write your idea in the box above, then start.',
       hintOpen: 'One question per round — materials are captured automatically.',
       round: (n) => `Round ${n}`, ready: 'Ready to draft',
@@ -600,6 +607,8 @@
     } : {
       heading: '采访式创作 · 小南来采访你',
       start: '🎬 开始采访（5积分/轮）', reply: '回答并继续', briefBtn: '📋 生成创意简报并回填（免费）',
+      restart: '🎬 新建采访（5积分/轮）', restoring: '正在恢复已保存的采访…',
+      restoreFailed: '采访恢复失败。可重新打开面板重试，或主动新建采访。',
       answer: '想到哪说到哪，像聊天一样…', hintStart: '先在上方创意框写下你的想法，再点「开始采访」。',
       hintOpen: '一轮只问一个问题——你的素材会被自动记录归档。',
       round: (n) => `第 ${n} 轮`, ready: '素材已就绪，可以出本',
@@ -634,75 +643,154 @@
   }
   function ivRenderStatus() {
     const T = ivT();
-    $('ivStatus').textContent = ivSessionId ? (ivReady ? T.ready : T.round(ivTurn)) : T.hintStart;
+    $('ivStatus').textContent = ivLoading ? T.restoring : ivClosed ? T.closed : ivSessionId ? (ivReady ? T.ready : T.round(ivTurn)) : T.hintStart;
     $('ivHeading').textContent = T.heading;
-    $('ivStartBtn').textContent = T.start;
+    $('ivStartBtn').textContent = ivSessionId ? T.restart : T.start;
     $('ivSendBtn').textContent = T.reply;
     $('ivBriefBtn').textContent = T.briefBtn;
     $('ivAnswer').placeholder = T.answer;
+    $('ivStartBtn').classList.remove('hidden');
+    $('ivBriefBtn').classList.toggle('hidden', !ivSessionId || !ivReady || ivClosed);
+    $('ivStartBtn').disabled = ivBusy;
+    $('ivAnswer').disabled = ivBusy || ivClosed;
+    $('ivSendBtn').disabled = ivBusy || ivClosed;
+    $('ivBriefBtn').disabled = ivBusy;
+    $('ivTip').textContent = ivRestoreError ? T.restoreFailed : ivClosed ? T.closed : ivSessionId ? T.hintOpen : T.hintStart;
+    ivRenderGaps(ivGaps, ivReady);
+  }
+  function ivCurrentOwner() { return Api.isAuthed() ? (Api.getUser()?.id || null) : null; }
+  function ivSyncOwner() {
+    const owner = ivCurrentOwner();
+    if (owner !== ivOwner) {
+      // 登录态改变时废弃旧请求，不能让上一账号的迟到响应重新填入面板。
+      ivEpoch++; ivOwner = owner;
+      ivSessionId = null; ivTurn = 0; ivReady = false; ivClosed = false;
+      ivLoaded = false; ivLoading = null; ivBusy = false; ivRestoreError = false;
+      ivGaps = null; ivMaterials = null;
+      $('ivTranscript').innerHTML = ''; $('ivAnswer').value = '';
+      const idea = $('modeBrief');
+      if (ivIdeaValue && idea?.value === ivIdeaValue) idea.value = '';
+      ivIdeaValue = '';
+      ivRenderStatus();
+    }
+    return owner;
+  }
+  function ivIsCurrent(owner, epoch) {
+    return owner === ivOwner && owner === ivCurrentOwner() && epoch === ivEpoch;
+  }
+  function ivRestoreSession() {
+    const owner = ivSyncOwner();
+    if (!owner || ivLoaded || ivLoading || ivBusy) return ivLoading;
+    const epoch = ivEpoch;
+    ivBusy = true; ivRestoreError = false;
+    // 恢复只查询服务器已持久化内容，不调用付费开场/追问，也不生成简报。
+    ivLoading = (async () => {
+      try {
+        const res = await Api.request('/api/interview/sessions');
+        const j = await Api.jsonOrThrow(res);
+        if (!ivIsCurrent(owner, epoch)) return;
+        const session = (Array.isArray(j?.sessions) ? j.sessions : []).find(s => s.status === 'ACTIVE');
+        ivLoaded = true;
+        if (!session) return;
+        ivSessionId = session.id; ivTurn = Number(session.turnCount) || 0; ivReady = !!session.ready;
+        ivGaps = session.gaps; ivMaterials = session.materials;
+        const transcript = Array.isArray(session.transcript) ? session.transcript : [];
+        const box = $('ivTranscript'); box.innerHTML = '';
+        transcript.forEach(row => {
+          if (row.q) box.appendChild(ivBubble(row.q, 'xn'));
+          if (row.a) box.appendChild(ivBubble(row.a, 'me'));
+        });
+        if (session.question) box.appendChild(ivBubble(session.question, 'xn'));
+        box.scrollTop = box.scrollHeight;
+        const idea = $('modeBrief');
+        if (selectedMode === 'interview' && idea && !idea.value.trim() && transcript[0]?.a) {
+          idea.value = transcript[0].a; ivIdeaValue = idea.value;
+        }
+      } catch (e) {
+        if (ivIsCurrent(owner, epoch)) ivRestoreError = true;
+      } finally {
+        if (ivIsCurrent(owner, epoch)) { ivBusy = false; ivLoading = null; ivRenderStatus(); }
+      }
+    })();
+    ivRenderStatus();
+    return ivLoading;
   }
   function initInterviewPanel() {
-    if (ivInited) { ivRenderStatus(); return; }
-    ivInited = true;
-    $('ivStartBtn').onclick = ivStart;
-    $('ivSendBtn').onclick = ivReply;
-    $('ivBriefBtn').onclick = ivBrief;
-    $('ivAnswer').addEventListener('keydown', (e) => { if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); ivReply(); } });
+    if (!ivInited) {
+      ivInited = true;
+      $('ivStartBtn').onclick = ivStart;
+      $('ivSendBtn').onclick = ivReply;
+      $('ivBriefBtn').onclick = ivBrief;
+      $('ivAnswer').addEventListener('keydown', (e) => { if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); ivReply(); } });
+      window.addEventListener('storage', (e) => { if (!e.key || e.key === 'zn_user' || e.key === 'zn_token') initInterviewPanel(); });
+    }
+    const pending = ivRestoreSession();
     ivRenderStatus();
+    return pending;
   }
   async function ivStart() {
-    if (!Api.isAuthed()) { xnSay(t('needLogin')); openAuth('login'); return; }
+    const owner = ivSyncOwner();
+    if (!owner) { xnSay(t('needLogin')); openAuth('login'); return; }
+    if (ivBusy) return;
     const T = ivT();
     const idea = ($('modeBrief')?.value || '').trim();
     if (idea.length < 4) { xnSay(T.needIdea); $('modeBrief')?.focus(); return; }
-    const btn = $('ivStartBtn'); btn.disabled = true;
+    const epoch = ivEpoch;
+    ivBusy = true; ivRenderStatus();
     try {
       const res = await Api.request('/api/interview/sessions', { method: 'POST', body: JSON.stringify({ idea, lang: lang === 'en' ? 'en' : 'zh' }) });
       const j = await Api.jsonOrThrow(res);
+      if (!ivIsCurrent(owner, epoch)) return;
       ivSessionId = j.sessionId; ivTurn = j.turnCount || 1; ivReady = !!j.ready;
+      ivGaps = j.gaps; ivMaterials = j.materials; ivIdeaValue = idea;
+      ivLoaded = true; ivClosed = false; ivRestoreError = false;
       const box = $('ivTranscript'); box.innerHTML = '';
       box.appendChild(ivBubble(idea, 'me'));
-      box.appendChild(ivBubble(j.question, 'xn'));
+      if (j.question) box.appendChild(ivBubble(j.question, 'xn'));
       box.scrollTop = box.scrollHeight;
-      ivRenderGaps(j.gaps, j.ready); ivRenderStatus();
-      btn.classList.add('hidden');
-      $('ivTip').textContent = T.hintOpen;
-      $('ivAnswer').focus();
-    } catch (e) { xnSay(e.message || 'FAIL'); } finally { btn.disabled = false; }
+      $('ivAnswer').value = '';
+    } catch (e) { if (ivIsCurrent(owner, epoch)) xnSay(e.message || 'FAIL'); }
+    finally { if (ivIsCurrent(owner, epoch)) { ivBusy = false; ivRenderStatus(); } }
+    if (ivIsCurrent(owner, epoch) && !ivClosed) $('ivAnswer').focus();
   }
   async function ivReply() {
-    if (!ivSessionId) { ivStart(); return; }
+    const owner = ivSyncOwner();
+    if (ivBusy || ivClosed) return;
+    if (!ivSessionId) return ivStart();
     const T = ivT();
     const ta = $('ivAnswer'); const text = (ta.value || '').trim();
     if (!text) { ta.focus(); return; }
-    const btn = $('ivSendBtn'); btn.disabled = true;
+    const epoch = ivEpoch;
+    ivBusy = true; ivRenderStatus();
     try {
       const res = await Api.request(`/api/interview/sessions/${ivSessionId}/turn`, { method: 'POST', body: JSON.stringify({ text }) });
       const j = await Api.jsonOrThrow(res);
+      if (!ivIsCurrent(owner, epoch)) return;
       const box = $('ivTranscript');
       box.appendChild(ivBubble(text, 'me'));
-      box.appendChild(ivBubble(j.question, 'xn'));
+      if (j.question) box.appendChild(ivBubble(j.question, 'xn'));
       box.scrollTop = box.scrollHeight;
       ta.value = '';
-      ivTurn = j.turnCount; ivReady = !!j.ready;
-      ivRenderGaps(j.gaps, j.ready); ivRenderStatus();
-      $('ivBriefBtn').classList.toggle('hidden', !ivReady);
+      ivTurn = j.turnCount; ivReady = !!j.ready; ivGaps = j.gaps; ivMaterials = j.materials;
       if (ivReady) xnSay(T.readySay);
-    } catch (e) { xnSay(e.message || 'FAIL'); } finally { btn.disabled = false; }
+    } catch (e) { if (ivIsCurrent(owner, epoch)) xnSay(e.message || 'FAIL'); }
+    finally { if (ivIsCurrent(owner, epoch)) { ivBusy = false; ivRenderStatus(); } }
   }
   async function ivBrief() {
-    if (!ivSessionId) return;
-    const btn = $('ivBriefBtn'); btn.disabled = true;
+    const owner = ivSyncOwner();
+    if (!ivSessionId || ivBusy || ivClosed || !ivReady) return;
+    const epoch = ivEpoch;
+    ivBusy = true; ivRenderStatus();
     try {
       const res = await Api.request(`/api/interview/sessions/${ivSessionId}/brief`, { method: 'POST', body: JSON.stringify({}) });
       const j = await Api.jsonOrThrow(res);
+      if (!ivIsCurrent(owner, epoch)) return;
       const ta = $('modeBrief');
-      if (ta) { ta.value = j.brief; ta.focus(); }
-      $('ivBriefBtn').classList.add('hidden');
-      $('ivAnswer').disabled = true; $('ivSendBtn').disabled = true;
-      $('ivTip').textContent = ivT().closed;
+      if (ta) { ta.value = j.brief; ivIdeaValue = ta.value; ta.focus(); }
+      ivClosed = true;
       xnSay(ivT().briefDone);
-    } catch (e) { xnSay(e.message || 'FAIL'); } finally { btn.disabled = false; }
+    } catch (e) { if (ivIsCurrent(owner, epoch)) xnSay(e.message || 'FAIL'); }
+    finally { if (ivIsCurrent(owner, epoch)) { ivBusy = false; ivRenderStatus(); } }
   }
   function initBriefUpload() {
     if (briefUploadInited) return; const input = $('briefFile'); if (!input) return; briefUploadInited = true;
@@ -1124,77 +1212,6 @@
     $('xnLine').textContent = line;
     const tipEl = $('xnTip');
     if (tip) { tipEl.textContent = tip; tipEl.classList.remove('hidden'); } else tipEl.classList.add('hidden');
-    znToast(line); // c201 用户反馈：小南台词区不够醒目，校验/扣费/错误提示容易被无视成"点了没反应"——顶部 toast 兜底可见性
-  }
-  /* ---------- c201 用户反馈修复：全局轻提示 / 模态输入 / 按钮小菜单 ----------
-   * 背景：多端（尤其微信内置浏览器/手机 WebView）下 window.prompt 被禁用或极不显眼，
-   * 原依赖 prompt 的功能（管理员调积分/重置密码/驳回原因）表现为"点了没动作"。
-   * 统一替换为自制模态；全局 toast 让所有 xnSay 提示可见。 */
-  function znToast(msg) {
-    try {
-      let host = document.getElementById('znToastHost');
-      if (!host) { host = document.createElement('div'); host.id = 'znToastHost'; document.body.appendChild(host); }
-      const el = document.createElement('div');
-      el.className = 'zn-toast';
-      el.textContent = String(msg || '');
-      host.appendChild(el);
-      requestAnimationFrame(() => el.classList.add('zn-toast-in'));
-      setTimeout(() => { el.classList.remove('zn-toast-in'); setTimeout(() => el.remove(), 320); }, 2800);
-      while (host.children.length > 3) host.firstChild.remove();
-    } catch { /* 无 DOM 环境忽略 */ }
-  }
-  window.znToast = znToast; // 供独立 view（room/branch 等）复用
-  // 模态输入框：替代 window.prompt。resolve(value|null)；Enter=确定，Esc=取消
-  function askText(label, def) {
-    return new Promise((resolve) => {
-      const backdrop = document.createElement('div');
-      backdrop.className = 'zn-ask-backdrop';
-      backdrop.innerHTML = `<div class="zn-ask" role="dialog" aria-modal="true">
-        <div class="zn-ask-label"></div>
-        <input class="zn-ask-input" type="text" />
-        <div class="zn-ask-btns"><button type="button" class="btn-ghost zn-ask-cancel"></button><button type="button" class="btn-primary zn-ask-ok"></button></div>
-      </div>`;
-      const done = (val) => { backdrop.remove(); document.removeEventListener('keydown', onKey, true); resolve(val); };
-      const onKey = (e) => {
-        if (e.key === 'Escape') { e.stopPropagation(); done(null); }
-        else if (e.key === 'Enter' && e.target && e.target.classList && e.target.classList.contains('zn-ask-input')) { e.preventDefault(); done(inp.value.trim()); }
-      };
-      document.addEventListener('keydown', onKey, true);
-      backdrop.addEventListener('mousedown', (e) => { if (e.target === backdrop) done(null); });
-      backdrop.querySelector('.zn-ask-label').textContent = label || '';
-      const inp = backdrop.querySelector('.zn-ask-input');
-      inp.value = def != null ? String(def) : '';
-      backdrop.querySelector('.zn-ask-ok').textContent = t('askOk');
-      backdrop.querySelector('.zn-ask-cancel').textContent = t('askCancel');
-      backdrop.querySelector('.zn-ask-ok').onclick = () => done(inp.value.trim());
-      backdrop.querySelector('.zn-ask-cancel').onclick = () => done(null);
-      document.body.appendChild(backdrop);
-      inp.focus(); inp.select();
-    });
-  }
-  // 按钮下方小菜单（主题/字号直接选择，替代"单击轮切"）：items=[{label,value,cur}]
-  function openMiniMenu(anchorBtn, items, onPick) {
-    document.querySelectorAll('.zn-mini-menu').forEach((m) => m.remove());
-    const menu = document.createElement('div');
-    menu.className = 'zn-mini-menu';
-    items.forEach((it) => {
-      const b = document.createElement('button');
-      b.type = 'button';
-      b.textContent = (it.cur ? '✓ ' : '') + it.label;
-      if (it.cur) b.classList.add('cur');
-      b.onclick = () => { menu.remove(); onPick(it.value); };
-      menu.appendChild(b);
-    });
-    document.body.appendChild(menu);
-    const r = anchorBtn.getBoundingClientRect();
-    menu.style.top = Math.round(r.bottom + 6 + window.scrollY) + 'px';
-    const mw = menu.offsetWidth || 140;
-    let left = r.right - mw; if (left < 8) left = Math.max(8, Math.round(r.left + window.scrollX));
-    menu.style.left = left + 'px';
-    setTimeout(() => {
-      const close = (e) => { if (!menu.contains(e.target)) { menu.remove(); document.removeEventListener('mousedown', close); } };
-      document.addEventListener('mousedown', close);
-    }, 0);
   }
   // 供零构建子视图（branch-view / teardown-view 等独立 IIFE）调用
   window.xnSay = xnSay;
@@ -1243,6 +1260,7 @@
   let _switchAnimToken = 0;
   function switchView(v) {
     if (!VIEWS.includes(v)) return;
+    if (v !== 'studio') closeWorkbench();
     const cur = document.querySelector('.nav-item.active');
     const sameView = cur && cur.getAttribute('data-view') === v;
     if (sameView) return;
@@ -1313,10 +1331,8 @@
   if (typeof Api !== 'undefined' && Api.onAuthRequired) {
     Api.onAuthRequired(() => {
       toastError('登录已过期，请重新登录', '需重新登录');
-      const openLogin = (typeof openLoginModal === 'function') ? openLoginModal
-        : (typeof window.openLoginModal === 'function' ? window.openLoginModal : null);
-      if (openLogin) try { openLogin(); } catch {}
-      else if (typeof switchView === 'function') switchView('studio');
+      renderAuthButton();
+      openAuth('login');
     });
     Api.onNetworkError((err, path) => {
       const msg = err.code === 'TIMEOUT' ? '请求超时，请检查网络后重试' : '网络异常，请稍后重试';
@@ -1409,6 +1425,10 @@
     const layer = $('workbenchLayer'); if (!layer) return;
     const body = $('workbenchBody');
     const el = $(id); if (!el) return;
+    // 面板已移出 view-studio；后台任务的迟到更新不能覆盖作品/会员等页面，
+    // 也不能取消导航触发的关闭定时器。隐藏面板，避免返回创作页时混入其他工作台。
+    const studio = $('view-studio');
+    if (!studio || studio.classList.contains('hidden')) { el.classList.add('hidden'); return; }
     // v2.188 取消 pending 的 _hideWorkbenchLayer timer（切换 panel 时旧 timer 会异步关闭 layer）
     if (_workbenchHideTimer) { clearTimeout(_workbenchHideTimer); _workbenchHideTimer = null; }
     // 把 panel 移到 body 顶部（让它在最前）
@@ -1458,9 +1478,9 @@
   }
   function closeWorkbench() {
     const layer = $('workbenchLayer'); if (!layer) return;
-    const cur = layer.dataset.current;
-    if (cur) { const el = $(cur); if (el) el.classList.add('hidden'); }
-    else _hideWorkbenchLayer();
+    // 同一轮导航可能刚打开新 panel，Observer 尚未同步 current；一并关闭待展示面板。
+    _WORKBENCH_PANEL_IDS.forEach((id) => { const el = $(id); if (el) el.classList.add('hidden'); });
+    _hideWorkbenchLayer();
   }
   function _workbenchEsc(e) { if (e.key === 'Escape') closeWorkbench(); }
 
@@ -1528,7 +1548,78 @@
 
   /* ---------- 登录/注册 ---------- */
   let authMode = 'login';
+  let privateAccountOwner, privateAccountEpoch = 0;
+  function privateAccountId() {
+    if (!Api.isAuthed()) return null;
+    const user = Api.getUser();
+    return user?.id ? String(user.id) : (user?.phone || null);
+  }
+  function syncPrivateAccount() {
+    const owner = privateAccountId();
+    if (privateAccountOwner === undefined) { privateAccountOwner = owner; return; }
+    if (owner === privateAccountOwner) return;
+    privateAccountOwner = owner;
+    privateAccountEpoch++;
+    resetPrivateAccountState();
+  }
+  function capturePrivateSession() {
+    syncPrivateAccount();
+    return { owner: privateAccountOwner, epoch: privateAccountEpoch };
+  }
+  function isPrivateSessionCurrent(snapshot) {
+    return !!snapshot?.owner && snapshot.owner === privateAccountOwner && snapshot.epoch === privateAccountEpoch
+      && snapshot.owner === privateAccountId();
+  }
+  // 只清当前页面与在途任务；作品和按账号保存的采访草稿仍留在原存储中。
+  function resetPrivateAccountState() {
+    curPurchase = null; purchaseViewSeq++;
+    genSessions.forEach((session) => session.abortCtrl?.abort());
+    abortCtrl?.abort();
+    genSessions = []; activeSessionId = null;
+    progress = lastDone = abortCtrl = currentProjectId = pendingWarnings = lastFiling = null;
+    currentScripts = []; currentWorksProject = currentWorksDiagnosis = null;
+    lastDiagnosis = lastWave = waveProjectId = meCache = capsCache = null;
+    castAssetsLoaded = propAssetsLoaded = sceneAssetsLoaded = false;
+    dashJumpTarget = dashConflictScroll = null;
+    castThinActive = propThinActive = sceneThinActive = false;
+    rrFixedKeys.clear();
+    clearDraftProject(); stopWaitTips();
+    listenFinish(); listenBumpReqSeq();
+    listenTts.data = null;
+    listenSeries.list = [];
+    dpPages = []; dpActive = dpEpisodeCount = 0; matData = null;
+    tagChosen = [];
+    ['worksGrid', 'worksCount', 'worksDetailTitle', 'epsList', 'scriptText', 'scoreGrid', 'diagBars', 'waveChart',
+      'roleStrip', 'staffLog', 'taskQueue', 'aigcDash', 'dashBody', 'listenSegments', 'listenMeta', 'listenNote',
+      'dpBody', 'dpSummary', 'dpTabs', 'matBody', 'matSummary', 'tagChosen', 'tagReport', 'tagWhy',
+      'meAvatar', 'meNickname', 'meLevel', 'mePen', 'meBio', 'mePoints', 'meStorage', 'meInvite',
+      'mineBox', 'fullText', 'fullTitle', 'fullNotice'].forEach((id) => {
+      const node = $(id); if (node) node.textContent = '';
+    });
+    ['modeBrief', 'sourceText', 'tagIdea', 'tagSearch', 'inNickname', 'inPen', 'inBio', 'inRegion', 'inAgeBand', 'inGender'].forEach((id) => {
+      const node = $(id); if (node) node.value = '';
+    });
+    ['cast', 'prop', 'scene'].forEach((family) => {
+      const select = $(family + 'AssetSelect');
+      if (select) select.innerHTML = `<option value="">${t(family + 'AssetNone')}</option>`;
+      ['Grid', 'Conflicts', 'Edit', 'Empty'].forEach((part) => { const node = $(family + 'Lib' + part); if (node) node.textContent = ''; });
+      const search = $(family + 'LibSearch'); if (search) search.value = '';
+      const editor = $(family + 'LibEdit'); if (editor) editor.classList.add('hidden');
+    });
+    ['worksDetail', 'profileEdit', 'progressPanel', 'resultPanel', 'failPanel', 'diagPanel', 'wavePanel', 'investorPanel',
+      'taskQueuePanel', 'listenModal', 'assetDashboardModal', 'castLibModal', 'propLibModal', 'sceneLibModal',
+      'dpModal', 'matModal', 'dlMenu', 'tagReport', 'tagWhy', 'mineModal', 'fullModal'].forEach((id) => $(id)?.classList.add('hidden'));
+    if ($('profileCard')) $('profileCard').style.display = 'none';
+    if ($('worksEmpty')) {
+      $('worksEmpty').textContent = t(privateAccountOwner ? 'worksEmpty' : 'needLogin');
+      $('worksEmpty').classList.remove('hidden');
+    }
+    $('readRewritePanel')?.remove();
+    closeWorkbench(); renderTaskQueue(); refreshListenBtn();
+  }
   function renderAuthButton() {
+    syncPrivateAccount();
+    if (ivInited) initInterviewPanel();
     const btn = $('loginBtn'); if (!btn || !window.Api) return;
     const u = Api.getUser();
     if (u) {
@@ -1540,6 +1631,11 @@
       btn.onclick = () => openAuth('login');
     }
   }
+  window.addEventListener('storage', (event) => {
+    if (event.key === 'zn_user' || event.key === 'zn_token' || event.key === null) {
+      renderAuthButton(); refreshAdminNav(); renderModes();
+    }
+  });
   function openAuth(mode) { authMode = mode || 'login'; $('authModal').classList.remove('hidden'); syncAuthTabs(); }
   function closeAuth() { $('authModal').classList.add('hidden'); $('authErr').classList.add('hidden'); }
   function syncAuthTabs() {
@@ -1564,16 +1660,53 @@
     try {
       if (authMode === 'register') await Api.auth.register(phone, pwd, invite);
       else await Api.auth.login(phone, pwd);
-      closeAuth(); renderAuthButton(); loadMe(); xnSay(authMode === 'register' ? t('regOk') : t('loginOk'));
+      closeAuth(); renderAuthButton(); loadMe();
+      if (!$('view-works').classList.contains('hidden')) loadWorks().catch((e) => { if (e.code !== 'SESSION_CHANGED') toastError(e.message); });
+      xnSay(authMode === 'register' ? t('regOk') : t('loginOk'));
     } catch (e) { showAuthErr(e.message); } finally { $('authSubmit').disabled = false; }
   };
 
   /* ---------- 作品库 ---------- */
+  function syncDraftProject() {
+    const note = $('draftProjectNotice');
+    if (note) {
+      note.classList.toggle('hidden', !draftProject);
+      note.innerHTML = draftProject
+        ? `${lang === 'en' ? 'Continuing saved project' : '继续已保存项目'}：${escapeHtml(draftProject.title)} · ${draftProject.totalEps} ${lang === 'en' ? 'episodes' : '集'}
+          <span class="muted">${lang === 'en' ? 'The project episode count, engine and format are retained.' : '沿用该项目的集数、引擎和制式，可修改下方创作简报。'}</span>
+          <button type="button" class="btn-ghost" id="leaveDraftBtn">${lang === 'en' ? 'Start a new project' : '另起新项目'}</button>`
+        : '';
+      if (draftProject) $('leaveDraftBtn').onclick = clearDraftProject;
+    }
+    ['episodes', 'engine', 'scriptFormatSel'].forEach((id) => { if ($(id)) $(id).disabled = !!draftProject; });
+  }
+  function clearDraftProject() { draftProject = null; syncDraftProject(); }
+  function resumeAdaptationProject(project) {
+    const draft = project?.bible?.adaptationDraft;
+    if (!project?.id || !draft?.brief) return;
+    draftProject = project;
+    selectedMode = 'adapt';
+    switchView('studio'); renderModes(); syncTagBench(); syncModeBrief();
+    $('modeBrief').value = draft.brief;
+    $('episodes').value = project.totalEps || 20;
+    $('engine').value = project.engineTier || 'STANDARD';
+    if ($('scriptFormatSel')) {
+      $('scriptFormatSel').value = project.format || 'LIVE_ACTION';
+      $('scriptFormatSel').dispatchEvent?.(new Event('change'));
+    }
+    if ($('sourceText')) $('sourceText').value = '';
+    syncDraftProject(); closeWorkbench();
+    $('modeBrief').focus();
+    xnSay(lang === 'en' ? 'Your adaptation brief is ready. Review it, then generate this project.' : '已恢复改编大纲，确认简报后点击「生成剧本」即可继续这个项目。');
+  }
+  window.addEventListener('zn-adaptation-project', (event) => resumeAdaptationProject(event.detail?.project));
   async function loadWorks() {
+    const account = capturePrivateSession();
     const grid = $('worksGrid'), empty = $('worksEmpty'); grid.innerHTML = '';
     if (!Api.isAuthed()) { empty.textContent = t('needLogin'); empty.classList.remove('hidden'); $('worksCount').textContent = ''; return; }
     const res = await Api.request('/api/generate/projects');
     const list = await Api.jsonOrThrow(res);
+    if (!isPrivateSessionCurrent(account)) return;
     $('worksCount').textContent = t('worksCount', { n: list.length });
     empty.classList.toggle('hidden', list.length > 0);
     if (!list.length) empty.textContent = t('worksEmpty');
@@ -1582,7 +1715,7 @@
       c.innerHTML = `<h3>${escapeHtml(p.title)}</h3>
         <div class="muted">${p.mode} · ${p.totalEps || 0} eps · ${PV().formatDateTime(p.createdAt, lang)}</div>
         <div class="work-badges"><span class="badge">${p.engineTier || 'STANDARD'}</span><span class="badge">${p.format || 'LIVE_ACTION'}</span></div>`;
-      c.onclick = () => openProject(p);
+      c.onclick = () => { if (isPrivateSessionCurrent(account)) openProject(p); };
       grid.appendChild(c);
     });
   }
@@ -1678,14 +1811,23 @@
   }
 
   async function openProject(p) {
+    const account = capturePrivateSession();
+    if (!isPrivateSessionCurrent(account)) return;
     currentWorksProject = p; currentWorksDiagnosis = null;
+    const isCurrentProject = () => isPrivateSessionCurrent(account) && currentWorksProject?.id === p.id;
     const stalePanel = document.getElementById('readRewritePanel'); if (stalePanel) stalePanel.remove(); // c200：切作品即清围读面板，防 A 房意见挂到 B 项目
     const detail = $('worksDetail'); detail.classList.remove('hidden');
     $('worksDetailTitle').textContent = p.title;
     $('epsList').innerHTML = lang === 'en' ? 'Loading…' : '加载中…';
     const res = await Api.request(`/api/generate/projects/${p.id}/scripts`);
     const eps = await Api.jsonOrThrow(res);
-    if (!eps.length) { $('epsList').innerHTML = `<div class="notice">${lang === 'en' ? 'No finished episodes yet.' : '暂无成稿分集。'}</div>`; return; }
+    if (!isCurrentProject()) return;
+    if (!eps.length) {
+      $('epsList').innerHTML = `<div class="notice">${lang === 'en' ? 'No finished episodes yet.' : '暂无成稿分集。'}</div>`
+        + (p.bible?.adaptationDraft?.brief ? `<button type="button" class="btn-primary" id="worksResumeDraft">${lang === 'en' ? 'Continue adaptation' : '继续改编创作'}</button>` : '');
+      if (p.bible?.adaptationDraft?.brief) $('worksResumeDraft').onclick = () => resumeAdaptationProject(p);
+      return;
+    }
     // c202 版本分组：/fix 每改一次新增一行版本，旧逻辑把每一行都渲染成独立 EP 块，改出 v2 后页面出现两个“EP1”。
     // 现在同 epNo 只渲染一个块（默认最新版全文），历史版本折叠，并提供两版逐行对比（零扣费只读端点）。
     const groups = new Map();
@@ -1725,6 +1867,7 @@
     // c220 质检 chip 点击即修：创作/结构/闸门三族 chip 携带 data-qcfix（台账跨集键不挂）。
     // 委托在 wd 容器上，诊断面板 innerHTML 每次重建处理器不丢；成功后重建作品+重跑诊断，chip 按新正文刷新。
     wd.addEventListener('click', async (e) => {
+      if (!isCurrentProject()) return;
       const chip = e.target.closest && e.target.closest('[data-qcfix]');
       if (!chip || !wd.contains(chip)) return;
       const ep = Number(chip.getAttribute('data-ep'));
@@ -1743,14 +1886,18 @@
           method: 'POST', body: JSON.stringify({ fix: { rule, dimLabel: dim, advice }, epNo: ep }),
         });
         const txt2 = await res.text(); const d = txt2 ? JSON.parse(txt2) : {};
+        if (!isCurrentProject()) return;
         if (!res.ok) throw Object.assign(new Error(d.error || 'FAIL'), { msg: d.message, httpStatus: res.status, upsell: d.upsell });
         xnSay(enLang
           ? `Done — Ep${d.epNo} rewritten to v${d.newVersion}, used ${d.pointsCharged} pts. Refreshing QC…`
           : `搞定！第${d.epNo}集已出新版 v${d.newVersion}，消耗${d.pointsCharged}积分。正在刷新质检…`);
         await refreshResultScripts(p.id).catch(() => {});
+        if (!isCurrentProject()) return;
         await openProject(p);
+        if (!isCurrentProject()) return;
         const btn = $('worksDiagBtn'); if (btn) btn.click();
       } catch (err) {
+        if (!isCurrentProject()) return;
         chip.style.opacity = ''; chip.style.pointerEvents = '';
         if (err.message === 'AUTH_REQUIRED') { openAuth('login'); return; }
         if (err.message === 'INSUFFICIENT') xnSay(enLang ? 'Not enough points — top up to keep polishing.' : '积分不够啦，充值后小南就能继续帮你打磨～');
@@ -1763,46 +1910,54 @@
     });
     // v2.151 一键沉淀：项目圣经+最近成稿 → 角色资产草稿（零 token 确定性提取），沉淀后刷新立项下拉
     $('castHarvestBtn').onclick = async () => {
+      if (!isCurrentProject()) return;
       const note = $('castHarvestNote');
       note.classList.remove('hidden');
       note.textContent = lang === 'en' ? 'Harvesting…' : '正在提取角色资产…';
       try {
         const rr = await Api.request(`/api/generate/character-assets/from-project/${p.id}?lang=${lang === 'en' ? 'en' : 'zh'}`, { method: 'POST' });
         const d = await Api.jsonOrThrow(rr);
+        if (!isCurrentProject()) return;
         note.textContent = (d.created + d.updated) > 0 ? t('castDepositDone', { c: d.created, u: d.updated }) : t('castDepositEmpty');
         castAssetsLoaded = false; loadCastAssets(true); // 沉淀后强制刷新立项引用下拉
-      } catch { note.textContent = t('castDepositFail'); }
+      } catch { if (isCurrentProject()) note.textContent = t('castDepositFail'); }
     };
     // v2.159 一键沉淀：全部分集成稿 × 信物词典 → 道具资产草稿（零 token 确定性提取），沉淀后刷新立项下拉
     $('propHarvestBtn').onclick = async () => {
+      if (!isCurrentProject()) return;
       const note = $('propHarvestNote');
       note.classList.remove('hidden');
       note.textContent = lang === 'en' ? 'Harvesting…' : '正在提取道具资产…';
       try {
         const rr = await Api.request(`/api/generate/prop-assets/from-project/${p.id}?lang=${lang === 'en' ? 'en' : 'zh'}`, { method: 'POST' });
         const d = await Api.jsonOrThrow(rr);
+        if (!isCurrentProject()) return;
         note.textContent = (d.created + d.updated) > 0 ? t('propDepositDone', { c: d.created, u: d.updated }) : t('propDepositEmpty');
         propAssetsLoaded = false; loadPropAssets(true); // 沉淀后强制刷新立项引用下拉
-      } catch { note.textContent = t('propDepositFail'); }
+      } catch { if (isCurrentProject()) note.textContent = t('propDepositFail'); }
     };
     // v2.161 一键沉淀：全部分集成稿 × 场头解析 → 场景资产草稿（零 token 确定性提取），沉淀后刷新立项下拉
     $('sceneHarvestBtn').onclick = async () => {
+      if (!isCurrentProject()) return;
       const note = $('sceneHarvestNote');
       note.classList.remove('hidden');
       note.textContent = lang === 'en' ? 'Harvesting…' : '正在提取场景资产…';
       try {
         const rr = await Api.request(`/api/generate/scene-assets/from-project/${p.id}?lang=${lang === 'en' ? 'en' : 'zh'}`, { method: 'POST' });
         const d = await Api.jsonOrThrow(rr);
+        if (!isCurrentProject()) return;
         note.textContent = (d.created + d.updated) > 0 ? t('sceneDepositDone', { c: d.created, u: d.updated }) : t('sceneDepositEmpty');
         sceneAssetsLoaded = false; loadSceneAssets(true); // 沉淀后强制刷新立项引用下拉
-      } catch { note.textContent = t('sceneDepositFail'); }
+      } catch { if (isCurrentProject()) note.textContent = t('sceneDepositFail'); }
     };
     $('worksDiagBtn').onclick = async () => {
+      if (!isCurrentProject()) return;
       wd.classList.remove('hidden');
       wd.innerHTML = `<div class="diag-loading">${lang === 'en' ? 'Running full-script diagnosis…' : '正在对全本跑四套质检尺子…'}</div>`;
       try {
         const rr = await Api.request(`/api/generate/projects/${p.id}/diagnosis?lang=${strategyLocale()}`);
         const d = await Api.jsonOrThrow(rr);
+        if (!isCurrentProject()) return;
         currentWorksDiagnosis = d;
         const sc = d.scorecard || {}; const { bars, fixHtml } = buildDiagnosisHtml(d);
         // c202：QC 汇总卡只统计每集最新版，否则同一集 v1/v2 重复计数
@@ -1810,17 +1965,20 @@
         wd.innerHTML = `<div class="diag-head"><div class="diag-total"><b style="color:${diagColor(sc.total || 0)}">${sc.total ?? '—'}</b><span>${levelTag(sc.level || '')}</span>
             <small>${lang === 'en' ? `${d.counts.episodeCount} ep` : `共${d.counts.episodeCount}集`}</small></div></div>
             <div class="diag-bars">${bars}</div><div class="diag-fixes">${fixHtml}</div>${qcHtml}`;
-      } catch (e) { wd.innerHTML = `<div class="notice err">${lang === 'en' ? 'Diagnosis failed.' : '诊断失败，请稍后重试。'}</div>`; }
+      } catch (e) { if (isCurrentProject()) wd.innerHTML = `<div class="notice err">${lang === 'en' ? 'Diagnosis failed.' : '诊断失败，请稍后重试。'}</div>`; }
     };
   }
 
   /* ---------- 个人资料卡 ---------- */
   let meCache = null;
   async function loadMe() {
+    const account = capturePrivateSession();
     const card = $('profileCard');
     if (!Api.isAuthed()) { card.style.display = 'none'; return; }
     card.style.display = '';
-    const res = await Api.request('/api/auth/me'); const me = await Api.jsonOrThrow(res); meCache = me;
+    const res = await Api.request('/api/auth/me'); const me = await Api.jsonOrThrow(res);
+    if (!isPrivateSessionCurrent(account)) return;
+    meCache = me;
     const lv = (lang === 'en' ? LEVEL_EN : LEVEL_ZH)[me.level] || me.level;
     $('meAvatar').textContent = (me.penName || me.nickname || '编').slice(0, 1);
     $('meNickname').textContent = me.nickname || (lang === 'en' ? 'New writer' : '编剧新人');
@@ -1836,83 +1994,6 @@
     $('inGender').value = me.gender || ''; $('inPersonalized').checked = me.personalized !== false;
     refreshAdminNav(); renderModes(); loadCaps(); loadCastAssets(); loadPropAssets(); loadSceneAssets(); // v2.151/v2.159/v2.161 登录后预取角色/道具/场景资产清单
   }
-  /* ---------- c201 用户反馈：积分变动明细（每笔加/扣透明可查） ---------- */
-  // c201 复盘补全：积分流水 reason 友好名——与后端 billing/escrow/order/market/admin 实际写入的 reason 全量对齐，
-  // 含 18 个增值服务短名（权威长名见 pricing.ts VALUE_ADDED.desc，流水取短名避免撑爆面板）；未知码原样兜底，绝不吞信息。
-  const LEDGER_REASON_ZH = {
-    FREEZE: '任务冻结', CONSUME: '生成扣费', REFUND: '退回',
-    RECHARGE: '充值', BUY_HOLD: '购剧托管', SCRIPT_SALE: '售剧收入', INVITE_REGISTER: '邀请奖励',
-    SCRIPT_EP_ECONOMY: '经济引擎加集', POSTER_STANDARD: '标准海报', POSTER_FLAGSHIP: '精品海报',
-    SHARE_POSTER: '分享海报', PK_BATTLE: '剧本PK', XIAONAN_DEEP: '小南深度共创',
-    EVAL_REPORT: '市场价值评估', AI_POLISH: 'AI精修去AI化', STORYBOARD: '分镜转换',
-    COPYRIGHT: '版权存证', STORAGE_10G: '存储扩容', LISTEN_SCRIPT: '听剧本',
-    PITCH_MEETING: '选题会', TABLE_READ: '剧本围读', TEARDOWN_ANALYZE: '拆爆款·拆解',
-    TEARDOWN_OUTLINE: '拆爆款·大纲', TARGETED_FIX: '针对性改写', INTERVIEW_TURN: '采访追问',
-  };
-  const LEDGER_REASON_EN = {
-    FREEZE: 'Frozen for task', CONSUME: 'Generation', REFUND: 'Refund',
-    RECHARGE: 'Recharge', BUY_HOLD: 'Purchase held', SCRIPT_SALE: 'Script sale', INVITE_REGISTER: 'Invite reward',
-    SCRIPT_EP_ECONOMY: 'Extra episode', POSTER_STANDARD: 'Standard poster', POSTER_FLAGSHIP: 'Premium poster',
-    SHARE_POSTER: 'Share poster', PK_BATTLE: 'Script PK', XIAONAN_DEEP: 'Deep co-creation',
-    EVAL_REPORT: 'Value report', AI_POLISH: 'AI polish', STORYBOARD: 'Storyboard',
-    COPYRIGHT: 'Copyright', STORAGE_10G: 'Storage +10G', LISTEN_SCRIPT: 'Listen TTS',
-    PITCH_MEETING: 'Pitch meeting', TABLE_READ: 'Table read', TEARDOWN_ANALYZE: 'Hit teardown',
-    TEARDOWN_OUTLINE: 'Adapt outline', TARGETED_FIX: 'Targeted rewrite', INTERVIEW_TURN: 'Interview turn',
-  };
-  function friendlyReason(reason) {
-    const r = String(reason || '');
-    const isEn = lang === 'en';
-    const map = isEn ? LEDGER_REASON_EN : LEDGER_REASON_ZH;
-    if (r.startsWith('ADMIN_ADJUST')) {
-      const base = isEn ? 'Admin adjust' : '后台调整';
-      // 管理端默认原因就是「后台调整」，同名不重复追加；仅展示自定义原因
-      const detail = r.slice('ADMIN_ADJUST:'.length).trim();
-      return (!detail || detail === '后台调整' || detail === base) ? base : `${base} · ${detail}`;
-    }
-    if (r.endsWith(':REFUND')) {
-      const base = r.slice(0, -':REFUND'.length);
-      const label = map[base] || base;
-      return isEn ? `${label} refund` : `${label} · 退回`;
-    }
-    return map[r] || r;
-  }
-  let ledgerLoaded = false;
-  async function togglePointsLedger() {
-    const pane = $('pointsLedgerPane');
-    if (!pane) return;
-    const show = pane.classList.contains('hidden');
-    pane.classList.toggle('hidden', !show);
-    if (!show || (ledgerLoaded && pane.dataset.lang === lang)) return;
-    pane.innerHTML = `<div class="muted">${lang === 'en' ? 'Loading…' : '加载中…'}</div>`;
-    pane.dataset.lang = lang;
-    try {
-      const res = await Api.request('/api/auth/points/ledger');
-      const j = await Api.jsonOrThrow(res);
-      const rows = (j.items || []).map((it) => {
-        const isIn = it.direction === 'IN' || it.direction === 'UNFROZEN';
-        const isFrozen = it.direction === 'FROZEN';
-        // CONSUME 是「冻结额结算实扣」（billing.settle 只减 frozen 不动 balance）：余额在冻结行已减过，
-        // 本行不再显示减号，否则两行连看像被扣两次；真实余额减少只有 FROZEN 与增值/托管类 OUT。
-        const isSettle = it.reason === 'CONSUME';
-        const sign = (isIn || isSettle) ? (isIn ? '+' : '') : '−';
-        const color = isFrozen ? 'color:var(--gold-deep,#a0710a)'
-          : isSettle ? 'color:var(--muted,#8a8a8a)'
-          : isIn ? 'color:var(--ok,#1d9e74)' : 'color:var(--danger,#d4473b)';
-        const time = it.createdAt ? new Date(it.createdAt).toLocaleString(lang === 'en' ? 'en-US' : 'zh-CN', { hour12: false }) : '';
-        const verb = isFrozen ? (lang === 'en' ? 'frozen' : '冻结')
-          : isSettle ? (lang === 'en' ? 'settled' : '结算')
-          : isIn ? (lang === 'en' ? 'in' : '收入')
-          : (lang === 'en' ? 'spent' : '支出');
-        return `<div class="points-ledger-row">
-          <div class="pl-main"><b style="${color}">${sign}${it.amount}</b><span class="muted">${verb}</span><span>${escapeHtml(friendlyReason(it.reason))}</span></div>
-          <div class="pl-sub muted">${time}${it.balanceAfter != null ? ` · ${t('ledgerBalance')} ${it.balanceAfter}` : ''}</div>
-        </div>`;
-      }).join('');
-      pane.innerHTML = rows || `<div class="muted">${t('ledgerEmpty')}</div>`;
-      ledgerLoaded = true;
-    } catch (e) { pane.innerHTML = `<div class="muted">${escapeHtml(e.message || 'error')}</div>`; }
-  }
-  $('pointsLedgerBtn').onclick = togglePointsLedger;
   // v2.71 显式画像下拉（与后端 profile-mapping 白名单一致；幂等，只填充一次）
   const PF_REGIONS = ['黑龙江','吉林','辽宁','北京','天津','陕西','甘肃','宁夏','青海','新疆','河南','河北','山西','内蒙古','山东','四川','重庆','湖南','湖北','上海','江苏','浙江','安徽','广东','广西','海南','福建','台湾','云南','贵州','江西','海外','其他'];
   const PF_AGES = [['u18','ageU18'],['18-24','age1824'],['25-30','age2530'],['31-40','age3140'],['41-50','age4150'],['over50','ageOver50']];
@@ -1948,6 +2029,14 @@
     if (!res.ok) { const g = $('plansGrid'); if (g) g.innerHTML = `<div class="muted">${t('loadFail')}</div>`; return; }
     const cat = await res.json().catch(() => null);
     if (!cat || !Array.isArray(cat.plans)) { const g = $('plansGrid'); if (g) g.innerHTML = `<div class="muted">${t('loadFail')}</div>`; return; }
+    const paymentUnavailable = cat.paymentAvailable === false;
+    const disabled = paymentUnavailable ? ' disabled' : '';
+    const purchaseLabel = paymentUnavailable ? (lang === 'en' ? 'Online payment unavailable' : '在线支付暂未开通') : t('subscribe');
+    const paymentNotice = $('paymentNotice');
+    if (paymentNotice) {
+      paymentNotice.classList.toggle('hidden', !paymentUnavailable);
+      paymentNotice.textContent = lang === 'en' ? 'Online payment is not available yet. Contact the administrator for credits or membership.' : '在线支付暂未开通，请联系管理员处理充值或会员开通。';
+    }
     const lvName = (lv) => (lang === 'en' ? LEVEL_EN : LEVEL_ZH)[lv] || lv;
     const cur = Api.getUser()?.level;
     $('plansGrid').innerHTML = cat.plans.map((p) => {
@@ -1977,14 +2066,14 @@
       if (yearItem) {
         const yearMonthly = (yearItem.amountFen / 12 / 100);
         const savePct = Math.round((1 - yearItem.amountFen / (p.monthlyFen * 12)) * 100);
-        yearLine = `<button class="btn-ghost plan-year" data-sku="${yearSku}">${lang==='en'?'Yearly':'年卡'} ¥${yearItem.amountYuan} · ${lang==='en'?'≈':'折'}¥${yearMonthly.toFixed(1)}/${lang==='en'?'mo':'月'} · ${lang==='en'?'save':'省'}${savePct}%</button>`;
+        yearLine = `<button class="btn-ghost plan-year" data-sku="${yearSku}"${disabled}>${lang==='en'?'Yearly':'年卡'} ¥${yearItem.amountYuan} · ${lang==='en'?'≈':'折'}¥${yearMonthly.toFixed(1)}/${lang==='en'?'mo':'月'} · ${lang==='en'?'save':'省'}${savePct}%</button>`;
       }
       return `<div class="plan-card ${p.level==='ADVANCED'?'featured':''}">
         <h3>${lvName(p.level)}${isCur?` <span class="badge">${t('currentPlan')}</span>`:''}</h3>
         <div class="plan-price">${price?('¥'+price):'¥0'}<small>/${lang==='en'?'mo':'月'}</small></div>
         <ul class="plan-perks">${perks.map((x)=>`<li>${x}</li>`).join('')}</ul>
         <div class="plan-actions">
-          ${monthSku?`<button class="btn-primary" data-sku="${monthSku}">${t('subscribe')}</button>`:'<span class="muted">—</span>'}
+          ${monthSku?`<button class="btn-primary" data-sku="${monthSku}"${disabled}>${purchaseLabel}</button>`:'<span class="muted">—</span>'}
           ${yearLine}
         </div>
       </div>`;
@@ -1994,7 +2083,7 @@
       const bonus = i.points - base;
       const bonusTxt = bonus > 0 ? `<span class="badge pack-bonus">${lang==='en'?'bonus +':'赠 +'}${bonus}</span>` : '';
       return `<div class="plan-card"><h3>${i.points} ${t('points')} ${bonusTxt}</h3><div class="plan-price">¥${i.amountYuan}</div>
-       <button class="btn-ghost" data-sku="${i.sku}">${t('subscribe')}</button></div>`;
+       <button class="btn-ghost" data-sku="${i.sku}"${disabled}>${purchaseLabel}</button></div>`;
     }).join('');
     document.querySelectorAll('[data-sku]').forEach((b) => b.onclick = () => placeOrder(b.getAttribute('data-sku')));
   }
@@ -2338,6 +2427,7 @@
 
   /* ---------- 剧本交易广场 ---------- */
   let curPurchase = null;
+  let purchaseViewSeq = 0;
   async function loadListings() {
     const sort = $('mkSort').value || 'new';
     let list = [], failed = false;
@@ -2393,7 +2483,7 @@
         <div class="v-section"><b>${lang === 'en' ? 'Sample' : '样章'}</b><div class="listing-sample">${escapeHtml(d.sample || (lang==='en'?'No sample':'暂无样章'))}</div></div>
         <div class="listing-foot" style="margin-top:12px"><span class="price-tag">${d.pricePoints} ${t('points')}</span>
           <button class="btn-primary" id="detailBuyBtn">${t('buy')}</button></div>`;
-      $('detailBuyBtn').onclick = () => { $('detailModal').classList.add('hidden'); buyListing(id); };
+      $('detailBuyBtn').onclick = () => { closeModal('detailModal'); buyListing(id); };
     } catch (e) { body.innerHTML = `<div class="muted">${escapeHtml(e.message)}</div>`; }
   }
   $('mkSort').onchange = loadListings;
@@ -2494,31 +2584,51 @@
   };
   async function buyListing(id) {
     if (!Api.isAuthed()) { openAuth('login'); return; }
-    const token = Api.getToken();
+    const account = capturePrivateSession(), requestSeq = ++purchaseViewSeq;
     try {
       const res = await Api.request(`/api/market/listings/${id}/buy`, { method: 'POST' });
       const d = await Api.jsonOrThrow(res);
-      if (Api.getToken() !== token) return;
-      curPurchase = { id: d.purchaseId };
+      if (!isPrivateSessionCurrent(account) || requestSeq !== purchaseViewSeq) return;
+      curPurchase = { id: d.purchaseId, account };
       $('fullTitle').textContent = lang === 'en' ? 'Full script unlocked' : '全本已解锁';
       $('fullText').textContent = d.fullText || '';
       $('fullNotice').textContent = (lang === 'en'
         ? `Spent ${d.spentPoints} credits, held in escrow. Refundable within ${d.refundableWithinHours}h; after confirming, funds settle to seller.`
         : `已支付 ${d.spentPoints} 积分，资金托管中。${d.refundableWithinHours} 小时内可退款；确认收货后货款结算给卖家。`);
-      $('fullConfirm').classList.remove('hidden'); $('fullRefund').classList.remove('hidden');
+      $('fullConfirm').classList.remove('hidden');
+      $('fullRefund').classList.remove('hidden');
       openModal('fullModal'); xnSay(t('boughtOk'));
-    } catch (e) { xnSay(e.message); }
+    } catch (e) { if (e.code !== 'SESSION_CHANGED' && isPrivateSessionCurrent(account) && requestSeq === purchaseViewSeq) xnSay(e.message); }
+  }
+  async function viewPurchasedScript(id) {
+    const account = capturePrivateSession(), requestSeq = ++purchaseViewSeq;
+    try {
+      const res = await Api.request(`/api/market/purchases/${encodeURIComponent(id)}/content`);
+      const d = await Api.jsonOrThrow(res);
+      if (!isPrivateSessionCurrent(account) || requestSeq !== purchaseViewSeq) return;
+      const status = d.status;
+      curPurchase = { id, account };
+      $('fullTitle').textContent = d.title || (lang === 'en' ? 'Purchased script' : '已购剧本');
+      $('fullText').textContent = d.fullText || '';
+      $('fullNotice').textContent = status === 'ESCROW'
+        ? (lang === 'en' ? 'Funds are held in escrow. Refunds are available within 24 hours of purchase.' : '资金托管中，可在购买后 24 小时内退款。')
+        : (lang === 'en' ? 'Purchase complete. Your script remains available here.' : '交易已完成，可随时查看已购剧本。');
+      $('fullConfirm').classList.toggle('hidden', status !== 'ESCROW');
+      $('fullRefund').classList.toggle('hidden', status !== 'ESCROW');
+      $('mineModal').classList.add('hidden');
+      openModal('fullModal');
+    } catch (e) { if (e.code !== 'SESSION_CHANGED' && isPrivateSessionCurrent(account) && requestSeq === purchaseViewSeq) xnSay(e.message); }
   }
   $('fullCopy').onclick = () => copy($('fullText').textContent);
-  $('fullConfirm').onclick = async () => { if (!curPurchase) return; await dealAction(`/api/market/purchases/${curPurchase.id}/confirm`); };
-  $('fullRefund').onclick = async () => { if (!curPurchase) return; await dealAction(`/api/market/purchases/${curPurchase.id}/refund`); };
+  $('fullConfirm').onclick = async () => { if (!curPurchase || !isPrivateSessionCurrent(curPurchase.account)) return; await dealAction(`/api/market/purchases/${curPurchase.id}/confirm`); };
+  $('fullRefund').onclick = async () => { if (!curPurchase || !isPrivateSessionCurrent(curPurchase.account)) return; await dealAction(`/api/market/purchases/${curPurchase.id}/refund`); };
   async function dealAction(url) {
     try { const res = await Api.request(url, { method: 'POST' }); const d = await Api.jsonOrThrow(res); $('fullModal').classList.add('hidden'); xnSay(d.notice || (lang === 'en' ? 'Done.' : '操作成功')); loadListings(); }
     catch (e) { xnSay(e.message); }
   }
   $('mkMineBtn').onclick = async () => {
     if (!Api.isAuthed()) { openAuth('login'); return; }
-    const token = Api.getToken();
+    const account = capturePrivateSession();
     let d, dash;
     try {
       const [resMy, resDash] = await Promise.all([
@@ -2526,11 +2636,11 @@
         Api.request('/api/market/seller-dashboard'),
       ]);
       d = await Api.jsonOrThrow(resMy);
-      dash = resDash.ok ? await resDash.json() : null;
-    } catch (e) { xnSay(e.message); return; }
-    if (Api.getToken() !== token) return;
+      dash = resDash.ok ? await Api.jsonOrThrow(resDash) : null;
+    } catch (e) { if (e.code !== 'SESSION_CHANGED' && isPrivateSessionCurrent(account)) xnSay(e.message); return; }
+    if (!isPrivateSessionCurrent(account)) return;
     const row = (x, isBuy) => `<div class="deal-row"><span>#${x.id.slice(-5)} · ${x.pricePoints} ${t('points')} · ${t(x.status === 'ESCROW' ? 'escrow' : x.status === 'REFUNDED' ? 'refunded' : 'settled')}</span>
-      ${isBuy && (x.status === 'ESCROW' || x.status === 'SETTLED') ? `<span><button class="btn-ghost" data-content="${x.id}">${lang === 'en' ? 'View script' : '查看剧本'}</button>${x.status === 'ESCROW' ? ` <button class="btn-ghost" data-confirm="${x.id}">${t('confirmReceive')}</button> <button class="btn-ghost" data-refund="${x.id}">${t('refund24')}</button>` : ''}</span>` : ''}</div>`;
+      ${isBuy && (x.status === 'ESCROW' || x.status === 'SETTLED') ? `<span><button class="btn-ghost" data-view-purchase="${x.id}">${lang === 'en' ? 'View script' : '查看剧本'}</button> ${x.status === 'ESCROW' ? `<button class="btn-ghost" data-confirm="${x.id}">${t('confirmReceive')}</button> <button class="btn-ghost" data-refund="${x.id}">${t('refund24')}</button>` : ''}</span>` : ''}</div>`;
     // v2.75 卖家工作台：统计卡 + 我的上架列表
     let dashHtml = '';
     if (dash && dash.stats) {
@@ -2572,32 +2682,14 @@
        <h4 style="margin-top:14px">${t('mySales')}</h4>${d.sales.length ? d.sales.map((x) => row(x, false)).join('') : `<div class="muted">${t('noDeal')}</div>`}`;
     $('mineBox').querySelectorAll('[data-confirm]').forEach((b) => b.onclick = async () => { await dealAction(`/api/market/purchases/${b.getAttribute('data-confirm')}/confirm`); $('mkMineBtn').click(); });
     $('mineBox').querySelectorAll('[data-refund]').forEach((b) => b.onclick = async () => { await dealAction(`/api/market/purchases/${b.getAttribute('data-refund')}/refund`); $('mkMineBtn').click(); });
-    $('mineBox').querySelectorAll('[data-content]').forEach((b) => b.onclick = async () => {
-      const id = b.getAttribute('data-content');
-      const session = Api.getToken();
-      try {
-        const d = await Api.jsonOrThrow(await Api.request(`/api/market/purchases/${id}/content`));
-        if (Api.getToken() !== session) return;
-        curPurchase = { id };
-        $('fullTitle').textContent = d.title || (lang === 'en' ? 'Purchased script' : '已购剧本');
-        $('fullText').textContent = d.fullText || '';
-        $('fullNotice').textContent = d.status === 'SETTLED'
-          ? (lang === 'en' ? 'Transaction completed.' : '交易已完成。')
-          : (lang === 'en' ? 'Funds are held in escrow. You can confirm receipt or request a refund within 24 hours.' : '资金托管中。可确认收货，或在购买后24小时内申请退款。');
-        $('fullConfirm').classList.toggle('hidden', d.status !== 'ESCROW');
-        $('fullRefund').classList.toggle('hidden', d.status !== 'ESCROW');
-        $('mineModal').classList.add('hidden');
-        openModal('fullModal');
-      } catch (e) { xnSay(e.message); }
-    });
+    $('mineBox').querySelectorAll('[data-view-purchase]').forEach((b) => b.onclick = () => viewPurchasedScript(b.getAttribute('data-view-purchase')));
     $('mineBox').querySelectorAll('[data-delist]').forEach((b) => b.onclick = async () => {
       if (!confirm(lang === 'en' ? 'Delist this script? It will be removed from the marketplace.' : '确认下架该剧本？下架后将从交易广场移除。')) return;
       const r = await Api.request(`/api/market/listings/${b.getAttribute('data-delist')}/delist`, { method: 'PATCH' });
       if (r.ok) { xnSay(lang === 'en' ? 'Delisted' : '已下架'); $('mkMineBtn').click(); } else { xnSay((await r.json()).error || '失败'); }
     });
     $('mineBox').querySelectorAll('[data-relist]').forEach((b) => b.onclick = async () => {
-      // c201：prompt → 自制模态（留空保持原价与原语义一致）
-      const newPrice = await askText(lang === 'en' ? 'New price in yuan (leave empty to keep current):' : '输入新售价（元），留空保持原价：', '');
+      const newPrice = prompt(lang === 'en' ? 'New price in yuan (leave empty to keep current):' : '输入新售价（元），留空保持原价：');
       if (newPrice === null) return;
       const body = {};
       if (newPrice.trim()) { const yuan = Number(newPrice); if (!Number.isFinite(yuan) || yuan < 1) { xnSay(lang === 'en' ? 'Invalid price' : '价格不合法'); return; } body.priceFen = Math.round(yuan * 100); }
@@ -2613,16 +2705,19 @@
   let genSessions = [];   // {id,title,projectId,progress,abortCtrl,status:'running'|'done'|'failed',doneData,pendingWarnings,error}
   let activeSessionId = null;
   // 切换主视口到指定会话：running 恢复进度视图，done 跳项目详情，failed 展示失败原因
-  function switchSession(id) {
+  async function switchSession(id) {
     const s = genSessions.find((x) => x.id === id);
     if (!s) return;
     activeSessionId = s.id;
     progress = s.progress; abortCtrl = s.abortCtrl; currentProjectId = s.projectId;
     lastDone = s.doneData || null; pendingWarnings = s.pendingWarnings || null;
     if (s.status === 'running' && s.progress) {
+      closeWorkbench(); switchView('studio');
       resetPanels(); $('progressPanel').classList.remove('hidden'); renderProgress();
     } else if (s.status === 'done' && s.projectId) {
-      openProject(s.projectId);
+      switchView('works');
+      try { await openProject(s.project || { id: s.projectId, title: s.title }); }
+      catch (e) { toastError(e.message || (lang === 'en' ? 'Unable to open project.' : '打开作品失败，请重试。')); }
     } else if (s.status === 'failed') {
       resetPanels(); showFail(s.error || (lang === 'en' ? 'failed' : '生成失败'));
     }
@@ -2639,7 +2734,9 @@
       if (!genSessions.find((s) => s.id === activeSessionId)) activeSessionId = genSessions[0] ? genSessions[0].id : null;
     }
     if (!genSessions.length) { panel.classList.add('hidden'); box.innerHTML = ''; return; }
-    panel.classList.remove('hidden');
+    // 切到作品后的 await/生成事件仍会刷新卡片；刷新数据不等于重新打开工作台。
+    const studio = $('view-studio');
+    panel.classList.toggle('hidden', !studio || studio.classList.contains('hidden'));
     box.innerHTML = genSessions.map((s) => {
       const icon = s.status === 'running' ? '⏳' : (s.status === 'done' ? '✅' : '❌');
       const stTxt = s.status === 'running' ? ((s.progress && s.progress.percent ? s.progress.percent + '%' : (lang === 'en' ? 'starting' : '启动中'))) : (s.status === 'done' ? (lang === 'en' ? 'done' : '已完成') : (lang === 'en' ? 'failed' : '已失败'));
@@ -3469,11 +3566,13 @@
   let castAssetsLoaded = false;
   async function loadCastAssets(force) {
     if ((castAssetsLoaded && !force) || !Api.isAuthed()) return;
+    const account = capturePrivateSession();
     const sel = $('castAssetSelect');
     if (!sel) return;
     try {
       const res = await Api.request('/api/generate/character-assets');
       const d = await res.json();
+      if (!isPrivateSessionCurrent(account)) return;
       if (!res.ok || !Array.isArray(d.assets)) return;
       sel.innerHTML = `<option value="">${t('castAssetNone')}</option>`;
       d.assets.forEach((a) => {
@@ -3504,11 +3603,13 @@
   let propAssetsLoaded = false;
   async function loadPropAssets(force) {
     if ((propAssetsLoaded && !force) || !Api.isAuthed()) return;
+    const account = capturePrivateSession();
     const sel = $('propAssetSelect');
     if (!sel) return;
     try {
       const res = await Api.request('/api/generate/prop-assets');
       const d = await res.json();
+      if (!isPrivateSessionCurrent(account)) return;
       if (!res.ok || !Array.isArray(d.assets)) return;
       sel.innerHTML = `<option value="">${t('propAssetNone')}</option>`;
       d.assets.forEach((a) => {
@@ -3539,11 +3640,13 @@
   let sceneAssetsLoaded = false;
   async function loadSceneAssets(force) {
     if ((sceneAssetsLoaded && !force) || !Api.isAuthed()) return;
+    const account = capturePrivateSession();
     const sel = $('sceneAssetSelect');
     if (!sel) return;
     try {
       const res = await Api.request('/api/generate/scene-assets');
       const d = await res.json();
+      if (!isPrivateSessionCurrent(account)) return;
       if (!res.ok || !Array.isArray(d.assets)) return;
       sel.innerHTML = `<option value="">${t('sceneAssetNone')}</option>`;
       d.assets.forEach((a) => {
@@ -3733,10 +3836,12 @@
     const body = $('dashBody');
     openModal(modal.id);
     if (!Api.isAuthed()) { body.innerHTML = `<div class="notice">${t('needLogin')}</div>`; return; }
+    const account = capturePrivateSession();
     body.innerHTML = `<div class="muted">${t('dashLoading')}</div>`;
     try {
       const res = await Api.request(`/api/generate/asset-dashboard?lang=${lang === 'en' ? 'en' : 'zh'}`);
       const data = await Api.jsonOrThrow(res);
+      if (!isPrivateSessionCurrent(account)) return;
       const hotCast = Array.isArray(data.hotCast) ? data.hotCast : [];
       const hotProp = Array.isArray(data.hotProp) ? data.hotProp : [];
       const hotScene = Array.isArray(data.hotScene) ? data.hotScene : [];
@@ -3896,6 +4001,7 @@
         };
       });
     } catch {
+      if (!isPrivateSessionCurrent(account)) return;
       body.innerHTML = `<div class="notice">${t('dashFail')}</div>`;
     }
   }
@@ -3905,6 +4011,7 @@
     const modal = $('castLibModal');
     if (!modal) return;
     if (!Api.isAuthed()) { openModal(modal.id); $('castLibGrid').innerHTML = ''; $('castLibConflicts').innerHTML = ''; $('castLibEdit').classList.add('hidden'); const e = $('castLibEmpty'); e.classList.remove('hidden'); e.textContent = t('needLogin'); return; }
+    const account = capturePrivateSession();
     openModal(modal.id);
     $('castLibEdit').classList.add('hidden');
     const grid = $('castLibGrid'); const empty = $('castLibEmpty');
@@ -3923,6 +4030,7 @@
       const listJson = await Api.jsonOrThrow(listRes);
       const assets = listJson.assets || [];
       const health = await Api.jsonOrThrow(healthRes);
+      if (!isPrivateSessionCurrent(account)) return;
       // v2.166 复盘修复：usage 是辅助观测（📌 当前 N 剧在用），失败不应让整个面板显示 loadFail——
       // 独立 try 兜底空对象，主列表/体检/徽章照常渲染，卡片只是看不到 📌 行
       let usage = {};
@@ -3930,8 +4038,10 @@
         const usageRes = await Api.request(`/api/generate/character-assets/usage`);
         usage = (await Api.jsonOrThrow(usageRes)).usage || {};
       } catch { /* usage 辅助信息，失败静默 */ }
+      if (!isPrivateSessionCurrent(account)) return;
       renderCastLibrary(assets, health, Number(listJson.total), usage);
     } catch {
+      if (!isPrivateSessionCurrent(account)) return;
       // v2.170 复盘修复：fetch 失败时清空 dashJumpTarget，防残留状态导致下次开库误触发滚动高亮
       // v2.185 c180 同口径：也清 dashConflictScroll，防残留导致下次开库误触发滚动高亮
       dashJumpTarget = null;
@@ -4140,7 +4250,10 @@
       </div>`;
     $('castLibEditCancel').onclick = () => box.classList.add('hidden');
     $('castLibEditSave').onclick = async () => {
+      const saveButton = $('castLibEditSave');
+      if (saveButton.disabled) return;
       const body = {
+        id: a.id,
         name: $('castLibEditName').value.trim(),
         persona: $('castLibEditPersona').value.trim(),
         voice: $('castLibEditVoice').value.trim() || null,
@@ -4150,9 +4263,10 @@
         tags: $('castLibEditTags').value.split(/[，,、]/).map((s) => s.trim()).filter(Boolean).map((s) => s.slice(0, 20)).slice(0, 8),
       };
       if (!body.name || !body.persona) { alert(t('castLibInvalid')); return; }
+      saveButton.disabled = true;
       try {
         const r = await Api.request('/api/generate/character-assets', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
-        if (!r.ok) throw new Error('save');
+        if (!r.ok) { const e = await r.json().catch(() => ({})); throw new Error(e.message || e.error || t('castLibFail')); }
         box.classList.add('hidden');
         // v2.177 c173 复盘修复：编辑成功后清空 thin 状态 + 清空搜索框，避免刚补全（score≥55）的资产被 thin 分支过滤掉，用户看不到刚编辑的资产
         castThinActive = false;
@@ -4160,7 +4274,8 @@
         if (_si) _si.value = '';
         castAssetsLoaded = false; loadCastAssets(true);
         openCastLibrary();
-      } catch { alert(t('castLibFail')); }
+      } catch (e) { alert(e.message || t('castLibFail')); }
+      finally { saveButton.disabled = false; }
     };
   }
   // —— v2.159 道具资产库管理面板：列表+体检徽章+冲突预警+内联编辑/删除（与 prop-assets health 端点同构） ——
@@ -4169,6 +4284,7 @@
     const modal = $('propLibModal');
     if (!modal) return;
     if (!Api.isAuthed()) { openModal(modal.id); $('propLibGrid').innerHTML = ''; $('propLibConflicts').innerHTML = ''; $('propLibEdit').classList.add('hidden'); const e = $('propLibEmpty'); e.classList.remove('hidden'); e.textContent = t('needLogin'); return; }
+    const account = capturePrivateSession();
     openModal(modal.id);
     $('propLibEdit').classList.add('hidden');
     const grid = $('propLibGrid'); const empty = $('propLibEmpty');
@@ -4187,14 +4303,17 @@
       const listJson = await Api.jsonOrThrow(listRes);
       const assets = listJson.assets || [];
       const health = await Api.jsonOrThrow(healthRes);
+      if (!isPrivateSessionCurrent(account)) return;
       // v2.166 复盘修复：usage 辅助观测失败不阻塞主面板（与 cast 面板同口径，独立 try 兜底空对象）
       let usage = {};
       try {
         const usageRes = await Api.request(`/api/generate/prop-assets/usage`);
         usage = (await Api.jsonOrThrow(usageRes)).usage || {};
       } catch { /* usage 辅助信息，失败静默 */ }
+      if (!isPrivateSessionCurrent(account)) return;
       renderPropLibrary(assets, health, Number(listJson.total), usage);
     } catch {
+      if (!isPrivateSessionCurrent(account)) return;
       // v2.170 复盘修复：fetch 失败时清空 dashJumpTarget，防残留状态导致下次开库误触发滚动高亮
       // v2.185 c180 同口径：也清 dashConflictScroll，防残留导致下次开库误触发滚动高亮
       dashJumpTarget = null;
@@ -4369,9 +4488,12 @@
       </div>`;
     $('propLibEditCancel').onclick = () => box.classList.add('hidden');
     $('propLibEditSave').onclick = async () => {
+      const saveButton = $('propLibEditSave');
+      if (saveButton.disabled) return;
       // 整档覆盖语义（家族铁律）：eps/closedEps 不提交会被静默清空——编辑表单必须全字段随档提交；1-9999 与后端 normalizeEps 口径一致（超界就地剔除不静默存脏）
       const parseEps = (v) => v.split(/[，,、]/).map((s) => parseInt(s.trim(), 10)).filter((n) => Number.isInteger(n) && n >= 1 && n <= 9999).slice(0, 500);
       const body = {
+        id: a.id,
         name: $('propLibEditName').value.trim(),
         meaning: $('propLibEditMeaning').value.trim(),
         taboo: $('propLibEditTaboo').value.trim() || null,
@@ -4381,9 +4503,10 @@
         tags: $('propLibEditTags').value.split(/[，,、]/).map((s) => s.trim()).filter(Boolean).map((s) => s.slice(0, 20)).slice(0, 8),
       };
       if (!body.name || !body.meaning) { alert(t('propLibInvalid')); return; }
+      saveButton.disabled = true;
       try {
         const r = await Api.request('/api/generate/prop-assets', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
-        if (!r.ok) throw new Error('save');
+        if (!r.ok) { const e = await r.json().catch(() => ({})); throw new Error(e.message || e.error || t('propLibFail')); }
         box.classList.add('hidden');
         // v2.177 c173 复盘修复：编辑成功后清空 thin 状态 + 清空搜索框（与 cast 同构）
         propThinActive = false;
@@ -4391,7 +4514,8 @@
         if (_si) _si.value = '';
         propAssetsLoaded = false; loadPropAssets(true);
         openPropLibrary();
-      } catch { alert(t('propLibFail')); }
+      } catch (e) { alert(e.message || t('propLibFail')); }
+      finally { saveButton.disabled = false; }
     };
   }
   // —— v2.161 场景资产库管理面板：列表+体检徽章+冲突预警+内联编辑/删除（与 scene-assets health 端点同构，第三家族） ——
@@ -4400,6 +4524,7 @@
     const modal = $('sceneLibModal');
     if (!modal) return;
     if (!Api.isAuthed()) { openModal(modal.id); $('sceneLibGrid').innerHTML = ''; $('sceneLibConflicts').innerHTML = ''; $('sceneLibEdit').classList.add('hidden'); const e = $('sceneLibEmpty'); e.classList.remove('hidden'); e.textContent = t('needLogin'); return; }
+    const account = capturePrivateSession();
     openModal(modal.id);
     $('sceneLibEdit').classList.add('hidden');
     const grid = $('sceneLibGrid'); const empty = $('sceneLibEmpty');
@@ -4418,14 +4543,17 @@
       const listJson = await Api.jsonOrThrow(listRes);
       const assets = listJson.assets || [];
       const health = await Api.jsonOrThrow(healthRes);
+      if (!isPrivateSessionCurrent(account)) return;
       // v2.166 复盘修复：usage 辅助观测失败不阻塞主面板（与 cast/prop 面板同口径，独立 try 兜底空对象）
       let usage = {};
       try {
         const usageRes = await Api.request(`/api/generate/scene-assets/usage`);
         usage = (await Api.jsonOrThrow(usageRes)).usage || {};
       } catch { /* usage 辅助信息，失败静默 */ }
+      if (!isPrivateSessionCurrent(account)) return;
       renderSceneLibrary(assets, health, Number(listJson.total), usage);
     } catch {
+      if (!isPrivateSessionCurrent(account)) return;
       // v2.170 复盘修复：fetch 失败时清空 dashJumpTarget，防残留状态导致下次开库误触发滚动高亮
       // v2.185 c180 同口径：也清 dashConflictScroll，防残留导致下次开库误触发滚动高亮
       dashJumpTarget = null;
@@ -4600,9 +4728,12 @@
       </div>`;
     $('sceneLibEditCancel').onclick = () => box.classList.add('hidden');
     $('sceneLibEditSave').onclick = async () => {
+      const saveButton = $('sceneLibEditSave');
+      if (saveButton.disabled) return;
       // 整档覆盖语义（家族铁律）：eps 不提交会被静默清空——编辑表单必须全字段随档提交；1-9999 与后端 normalizeEps 口径一致（超界就地剔除不静默存脏）
       const parseEps = (v) => v.split(/[，,、]/).map((s) => parseInt(s.trim(), 10)).filter((n) => Number.isInteger(n) && n >= 1 && n <= 9999).slice(0, 500);
       const body = {
+        id: a.id,
         name: $('sceneLibEditName').value.trim(),
         meaning: $('sceneLibEditMeaning').value.trim(),
         mood: $('sceneLibEditMood').value.trim() || null,
@@ -4612,9 +4743,10 @@
         tags: $('sceneLibEditTags').value.split(/[，,、]/).map((s) => s.trim()).filter(Boolean).map((s) => s.slice(0, 20)).slice(0, 8),
       };
       if (!body.name || !body.meaning) { alert(t('sceneLibInvalid')); return; }
+      saveButton.disabled = true;
       try {
         const r = await Api.request('/api/generate/scene-assets', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
-        if (!r.ok) throw new Error('save');
+        if (!r.ok) { const e = await r.json().catch(() => ({})); throw new Error(e.message || e.error || t('sceneLibFail')); }
         box.classList.add('hidden');
         // v2.177 c173 复盘修复：编辑成功后清空 thin 状态 + 清空搜索框（与 cast/prop 同构）
         sceneThinActive = false;
@@ -4622,7 +4754,8 @@
         if (_si) _si.value = '';
         sceneAssetsLoaded = false; loadSceneAssets(true);
         openSceneLibrary();
-      } catch { alert(t('sceneLibFail')); }
+      } catch (e) { alert(e.message || t('sceneLibFail')); }
+      finally { saveButton.disabled = false; }
     };
   }
   function wireFormatSelector() {
@@ -4639,9 +4772,19 @@
     sel.addEventListener('change', sync); sync();
   }
 
+  function failGenerationSession(session, message) {
+    session.status = 'failed'; session.error = message;
+    if (session.id === activeSessionId) $('progressPanel').classList.add('hidden');
+    renderTaskQueue();
+  }
   async function startGenerate() {
     if (!Api.isAuthed()) { xnSay(t('needLogin')); openAuth('login'); return; }
-    await loadCastAssets(); await loadPropAssets(); await loadSceneAssets(); // v2.151/v2.159/v2.161 立项前确保角色/道具/场景资产下拉已填充（幂等）
+    const account = capturePrivateSession();
+    const generationDraft = selectedMode === 'adapt' ? draftProject : null;
+    for (const loadAssets of [loadCastAssets, loadPropAssets, loadSceneAssets]) {
+      await loadAssets();
+      if (!isPrivateSessionCurrent(account)) return;
+    }
     let brief, projTitle;
     const useTagBench = selectedMode === 'tags' && $('tagBench') && !$('tagBench').classList.contains('hidden');
     if (useTagBench) {
@@ -4656,7 +4799,7 @@
         $('modeBrief')?.focus(); $('modeBriefPanel')?.classList.remove('hidden');
         return;
       }
-      projTitle = brief.slice(0, 40);
+      projTitle = generationDraft?.title || brief.slice(0, 40);
     }
     // v2.93 剧情软广：品牌简报必填校验（广告词合规由服务端在扣费前预检并回传命中词）
     const bbPayload = brandBriefPayload();
@@ -4668,7 +4811,7 @@
     const brPayload = branchBriefPayload();
     if (brPayload === null) return;
     // v2.132 多任务并行：每单注册独立会话卡片，genBtn 不再被单任务独占（生成期间可再开新单）
-    const session = { id: 'S' + Date.now() + Math.random().toString(36).slice(2, 6), title: projTitle, projectId: null, progress: null, abortCtrl: null, status: 'running', doneData: null, pendingWarnings: null, error: null };
+    const session = { id: 'S' + Date.now() + Math.random().toString(36).slice(2, 6), account, title: projTitle, projectId: null, progress: null, abortCtrl: null, status: 'running', doneData: null, pendingWarnings: null, error: null };
     genSessions.unshift(session); activeSessionId = session.id; renderTaskQueue();
     resetPanels(); $('progressPanel').classList.remove('hidden');
     try {
@@ -4676,20 +4819,27 @@
       const investRaw = parseInt($('investWan').value, 10);
       const investWan = Number.isFinite(investRaw) && investRaw >= 0 ? investRaw : undefined;
       const specialTopic = $('specialTopic').checked;
-      const pr = await Api.request('/api/generate/projects', { method: 'POST', body: JSON.stringify({
-        title: projTitle, mode: selectedMode, ...(selectedMode === 'hit_lab' ? { track: selectedTrack } : {}), totalEps, engineTier: $('engine').value,
-        format: $('scriptFormatSel') ? $('scriptFormatSel').value : 'LIVE_ACTION', investWan, specialTopic, ...hookPayload(), ...beatPayload(), ...castAssetPayload(), ...propAssetPayload(), ...sceneAssetPayload() }) });
-      if (!pr.ok) {
-        genSessions = genSessions.filter((x) => x !== session); renderTaskQueue(); // 建单失败即时撤卡
-        const ej = await pr.json().catch(() => ({}));
-        if (ej.error === 'REACH_PROJECT_LIMIT') {
-          alert((ej.message || '项目数已达当前会员上限') + '\n免费2 / 基础10 / 高级30 / 专业100，升级会员或清理旧项目即可继续');
-          return;
+      let project = generationDraft;
+      if (!project) {
+        const pr = await Api.request('/api/generate/projects', { method: 'POST', body: JSON.stringify({
+          title: projTitle, mode: selectedMode, ...(selectedMode === 'hit_lab' ? { track: selectedTrack } : {}), totalEps, engineTier: $('engine').value,
+          format: $('scriptFormatSel') ? $('scriptFormatSel').value : 'LIVE_ACTION', investWan, specialTopic, ...hookPayload(), ...beatPayload(), ...castAssetPayload(), ...propAssetPayload(), ...sceneAssetPayload() }) });
+        if (!isPrivateSessionCurrent(account)) return;
+        if (!pr.ok) {
+          genSessions = genSessions.filter((x) => x !== session); renderTaskQueue(); // 建单失败即时撤卡
+          const ej = await pr.json().catch(() => ({}));
+          if (!isPrivateSessionCurrent(account)) return;
+          if (ej.error === 'REACH_PROJECT_LIMIT') {
+            alert((ej.message || '项目数已达当前会员上限') + '\n免费2 / 基础10 / 高级30 / 专业100，升级会员或清理旧项目即可继续');
+            return;
+          }
+          if (ej.error === 'MATURE_CONSENT_REQUIRED') { openXMature().catch(() => {}); return; }
+          throw new Error(ej.message || ej.error || ('HTTP ' + pr.status));
         }
-        if (ej.error === 'MATURE_CONSENT_REQUIRED') { openXMature().catch(() => {}); return; }
-        throw new Error(ej.message || ej.error || ('HTTP ' + pr.status));
+        project = await pr.json();
       }
-      const project = await pr.json();
+      if (!isPrivateSessionCurrent(account)) return;
+      session.project = project;
       session.projectId = project.id;
       lastFiling = project.filing || null;
       session.abortCtrl = abortCtrl = new AbortController();
@@ -4697,41 +4847,51 @@
       renderTaskQueue();
       const res = await Api.request('/api/generate/episodes', { method: 'POST', signal: abortCtrl.signal,
         body: JSON.stringify({ projectId: project.id, brief: brief.trim(), engineTier: $('engine').value, lang: outLocale(), ...hookPayload(), ...beatPayload(), ...(aigcPayload()), ...(selectedMode === 'hit_lab' ? { track: selectedTrack } : {}), ...bbPayload, ...tbPayload, ...brPayload, ...sourceTextPayload() }) });
+      if (!isPrivateSessionCurrent(account)) { res.body?.cancel().catch(() => {}); return; }
       if (!res.ok || !res.body) {
         const txt = await res.text().catch(() => '');
+        if (!isPrivateSessionCurrent(account)) return;
         let msg = txt || ('HTTP ' + res.status);
         let j = null;
         try { j = JSON.parse(txt); if (j && j.error) msg = j.error; } catch { /* 非 JSON 原样展示 */ }
         // v2.95 互动分支：闭环校验/必填错误就地提示（尚未扣费）
         if (j && (j.error === 'BRANCH_VALIDATION_FAILED' || j.field === 'mainLine' || j.field === 'choicePoints' || j.field === 'endings')) {
+          failGenerationSession(session, j.message || msg);
           showBranchError(j.message || BRANCH_UI_DICT().required);
           return;
         }
         // v2.94 热点简报：隐私硬信息/必填字段错误就地提示（尚未扣费），不弹通用失败
         if (j && (j.error === 'TREND_PII_BLOCKED' || j.field === 'trendName' || j.field === 'heatCore')) {
+          failGenerationSession(session, j.message || msg);
           showTrendError(j.message || TREND_UI_DICT().pii);
           return;
         }
         // v2.93 品牌简报违规：在面板内就地提示命中词（此时尚未扣费），不再弹通用失败
         if (j && (j.error === 'AD_CLAIM_BLOCKED' || j.field)) {
+          failGenerationSession(session, j.message || msg);
           const hits = Array.isArray(j.hits) && j.hits.length ? '：' + j.hits.join('、') : '';
           showBrandError((j.message || j.error || '品牌简报未通过校验') + hits);
           return;
         }
         throw new Error(msg);
       }
+      if (draftProject?.id === project.id) clearDraftProject();
       const reader = res.body.getReader(), dec = new TextDecoder(); const buf = { text: '' };
       for (;;) {
-        const { done, value } = await reader.read(); if (done) break;
+        const { done, value } = await reader.read();
+        if (!isPrivateSessionCurrent(account)) { reader.cancel().catch(() => {}); return; }
+        if (done) break;
         const frames = PV().parseSseChunk(buf, dec.decode(value, { stream: true }));
         frames.forEach((f) => handleEvent(f, session));
       }
     } catch (e) {
-      session.status = 'failed'; session.error = String(e.message || e); renderTaskQueue();
+      if (!isPrivateSessionCurrent(account) || e.code === 'SESSION_CHANGED') return;
+      failGenerationSession(session, String(e.message || e));
       if (e.code === 'AUTH_REQUIRED') openAuth('login'); else showFail(e.message);
-    } finally { renderTaskQueue(); }
+    } finally { if (isPrivateSessionCurrent(account)) renderTaskQueue(); }
   }
   function handleEvent(data, session) {
+    if (!genSessions.includes(session) || !isPrivateSessionCurrent(session.account)) return;
     session.progress = PV().reduceProgress(session.progress, data);
     if (session.id === activeSessionId) { progress = session.progress; renderProgress(); }
     // 受限题材合规预警（只提醒、不拦截）：小南先提示改写法，结果区再汇总（随会话保存，切回可复现）
@@ -4744,8 +4904,8 @@
       }
     }
     if (data.stage === 'done') {
-      session.status = 'done'; session.doneData = data; lastDone = data; renderTaskQueue();
-      if (session.id === activeSessionId) renderResult(data, session.projectId);
+      session.status = 'done'; session.doneData = data; renderTaskQueue();
+      if (session.id === activeSessionId) { lastDone = data; renderResult(data, session.projectId); }
     }
     if (data.stage === 'failed_refunded') {
       session.status = 'failed'; session.error = data.error || 'failed'; renderTaskQueue();
@@ -4803,8 +4963,8 @@
     const sg = done.antiAi || {}, mk = done.market || {};
     const rows = [
       [lang === 'en' ? 'Anti-AI' : '去AI化', sg.antiAiScore ?? sg.score ?? '-'],
-      [lang === 'en' ? 'Market fit' : '市场匹配', PV().formatDisplayValue(mk.overall ?? mk.score ?? mk.fit)],
-      [lang === 'en' ? 'Audience' : '受众精准', done.audience ?? '-'],
+      [lang === 'en' ? 'Market fit' : '市场匹配', mk.overall ?? mk.score ?? mk.fit],
+      [lang === 'en' ? 'Audience' : '受众精准', done.audience?.cravingScore ?? (typeof done.audience === 'number' ? done.audience : '-')],
     ];
     $('scoreGrid').innerHTML = rows.map(([k, v]) => `<div class="score-cell"><b>${escapeHtml(PV().formatDisplayValue(v))}</b><span>${k}</span></div>`).join('');
     $('sandboxTip').classList.toggle('hidden', !done.sandbox);
@@ -5071,11 +5231,21 @@
     loadInvestorLens(projectId).catch(() => {});
   }
 
-  // 拉取项目全部分集最新版拼正文（生成完成、针对性优化后都会用到）
+  function latestScriptsByEpisode(scripts) {
+    const latest = new Map();
+    for (const script of scripts) {
+      const previous = latest.get(script.epNo);
+      if (!previous || (script.version || 1) > (previous.version || 1)) latest.set(script.epNo, script);
+    }
+    return [...latest.values()].sort((a, b) => a.epNo - b.epNo);
+  }
+  // 正文、复制、TXT 与听剧本只使用每集最新版；历史版本仍在作品详情中保留。
   async function refreshResultScripts(projectId) {
+    const account = capturePrivateSession();
     try {
       const r = await Api.request(`/api/generate/projects/${projectId}/scripts`);
-      const eps = await Api.jsonOrThrow(r);
+      const eps = latestScriptsByEpisode(await Api.jsonOrThrow(r));
+      if (!isPrivateSessionCurrent(account) || (currentProjectId && currentProjectId !== projectId)) return;
       currentScripts = eps;
       const txt = eps.map((s) => `第${s.epNo}集 ${s.title || ''}\n${s.content || ''}`).join('\n\n');
       $('scriptText').textContent = txt || (lang === 'en' ? 'No text in sandbox mode.' : '沙盘模式暂无正文，配置模型密钥后产出。');
@@ -5088,15 +5258,20 @@
         const box = $('aigcDash'); if (box) { box.classList.add('hidden'); box.innerHTML = ''; }
       }
       refreshListenBtn();
-    } catch { $('scriptText').textContent = ''; }
+    } catch { if (isPrivateSessionCurrent(account) && (!currentProjectId || currentProjectId === projectId)) $('scriptText').textContent = ''; }
   }
   // v2.55 听剧本：缓存当前项目分集与小南能力矩阵
   let currentScripts = [];
   let capsCache = null;
   async function loadCaps() {
     if (!Api.isAuthed()) { capsCache = null; refreshListenBtn(); return; }
-    try { const r = await Api.request('/api/generate/assistant/capabilities'); capsCache = await Api.jsonOrThrow(r); }
-    catch { capsCache = null; }
+    const account = capturePrivateSession();
+    try {
+      const r = await Api.request('/api/generate/assistant/capabilities');
+      const data = await Api.jsonOrThrow(r);
+      if (!isPrivateSessionCurrent(account)) return;
+      capsCache = data;
+    } catch { if (!isPrivateSessionCurrent(account)) return; capsCache = null; }
     refreshListenBtn();
   }
   function listenAllowed() {
@@ -5583,10 +5758,12 @@
   let lastDiagnosis = null;
   async function loadDiagnosis(projectId) {
     const panel = $('diagPanel'); if (!panel || !projectId) return;
+    const account = capturePrivateSession();
     const bars = $('diagBars'); bars.innerHTML = `<div class="diag-loading">${lang === 'en' ? 'Running full-script diagnosis…' : '正在对全本跑四套质检尺子…'}</div>`;
     panel.classList.remove('hidden');
     const r = await Api.request(`/api/generate/projects/${projectId}/diagnosis?lang=${strategyLocale()}`);
     const d = await Api.jsonOrThrow(r);
+    if (!isPrivateSessionCurrent(account) || (currentProjectId && currentProjectId !== projectId)) return;
     lastDiagnosis = d;
     renderDiagnosis(d);
   }
@@ -5595,10 +5772,13 @@
   let lastWave = null, waveProjectId = null;
   async function loadEmotionWave(projectId) {
     const panel = $('wavePanel'); if (!panel || !projectId) return;
+    const account = capturePrivateSession();
     waveProjectId = projectId;
     const r = await Api.request(`/api/generate/projects/${projectId}/emotion-wave?lang=${strategyLocale()}`);
+    if (!isPrivateSessionCurrent(account) || waveProjectId !== projectId) return;
     if (!r.ok) { panel.classList.add('hidden'); return; }
     const w = await Api.jsonOrThrow(r);
+    if (!isPrivateSessionCurrent(account) || waveProjectId !== projectId) return;
     lastWave = w;
     renderEmotionWave(w);
   }
@@ -5962,6 +6142,14 @@
   const qcFixAttrs = (ep, rule, dim, advice) =>
     ` data-qcfix="1" data-ep="${Number(ep) || 0}" data-rule="${escapeHtml(rule)}"`
     + ` data-dim="${escapeHtml(String(dim || '').slice(0, 20))}" data-advice="${escapeHtml(String(advice || '').slice(0, 400))}"`;
+  function qcIssueText(issue) {
+    if (typeof issue === 'string') return issue.trim();
+    if (!issue || typeof issue !== 'object') return '';
+    for (const key of ['advice', 'message', 'evidence']) {
+      if (typeof issue[key] === 'string' && issue[key].trim()) return issue[key].trim();
+    }
+    return '';
+  }
   function buildQcReportHtml(eps) {
     const rows = [];
     let total = 0;
@@ -5974,7 +6162,7 @@
         if (!Array.isArray(v.hits) || !v.hits.length) return; // 创作能力引擎统一形态：score + hits[]；结构维度不混入此卡
         if (k === 'sceneSoftEnding' || k === 'showDontTell') return; // c211：专用卡接管（旧库残留的通用摘要行不重复渲染）
         const msgs = [].concat(Array.isArray(v.issues) ? v.issues : []).concat(Array.isArray(v.advice) ? v.advice : [])
-          .map(PV().formatIssueText).filter(Boolean);
+          .map(qcIssueText).filter(Boolean);
         const pair = QC_ENGINE_LABELS[k];
         const name = pair ? (lang === 'en' ? pair[1] : pair[0]) : humanizeEngineKey(k);
         const unrescued = typeof v.unrescuedCount === 'number' ? v.unrescuedCount : v.hits.filter((h) => !h.rescued).length;
@@ -6391,6 +6579,7 @@
   const INV_VERDICT_EN = { STRONG: 'Strong: pitch it', TALK: 'Worth talking after fixes', CAUTION: 'Caution: build certainty first', PASS: 'Hold: hard veto to clear' };
   async function loadInvestorLens(projectId) {
     const panel = $('investorPanel'); if (!panel || !projectId) return;
+    const account = capturePrivateSession();
     $('invBars').innerHTML = `<div class="diag-loading">${lang === 'en' ? 'Assessing through a funder’s eyes…' : '正在用资方视角评估赛道/成本/投流…'}</div>`;
     panel.classList.remove('hidden');
     // 自取全本正文，避免与正文渲染抢时序
@@ -6398,14 +6587,17 @@
     try {
       const r = await Api.request(`/api/generate/projects/${projectId}/scripts`);
       const eps = await Api.jsonOrThrow(r);
+      if (!isPrivateSessionCurrent(account)) return;
       text = eps.map((s) => `第${s.epNo}集 ${s.title || ''}\n${s.content || ''}`).join('\n\n');
-    } catch { text = resultText(); }
+    } catch { if (!isPrivateSessionCurrent(account)) return; text = resultText(); }
+    if (!isPrivateSessionCurrent(account)) return;
     const tags = (typeof tagChosen !== 'undefined' && Array.isArray(tagChosen)) ? tagChosen : [];
     try {
       const res = await Api.request('/api/market/investor-lens', { method: 'POST', body: JSON.stringify({ text: text.slice(0, 6000), tags }) });
       const d = await Api.jsonOrThrow(res);
+      if (!isPrivateSessionCurrent(account) || (currentProjectId && currentProjectId !== projectId)) return;
       renderInvestorLens(d);
-    } catch { panel.classList.add('hidden'); }
+    } catch { if (isPrivateSessionCurrent(account)) panel.classList.add('hidden'); }
   }
   function renderInvestorLens(d) {
     const vCls = { STRONG: 'inv-strong', TALK: 'inv-talk', CAUTION: 'inv-caution', PASS: 'inv-pass' }[d.verdict] || 'inv-talk';
@@ -6772,13 +6964,16 @@
     $('dlMenu').classList.add('hidden');
     if (!currentProjectId) { xnSay(lang === 'en' ? 'Generate a script first.' : '请先生成剧本再预览哦～'); return; }
     if (!Api.getUser()) { openAuth('login'); return; }
+    const account = capturePrivateSession(), projectId = currentProjectId;
+    const isCurrentProject = () => isPrivateSessionCurrent(account) && currentProjectId === projectId;
     $('dpTitle').textContent = t('dpTitle');
     $('dpTabs').innerHTML = ''; $('dpSummary').textContent = ''; $('dpBody').textContent = t('dpLoading');
     openModal('dpModal');
     try {
-      const r = await Api.request(`/api/generate/projects/${currentProjectId}/director-pack`);
-      if (!r.ok) { let m = t('dpEmpty'); try { const j = await r.json(); m = j.error || m; } catch {} $('dpBody').textContent = m; return; }
+      const r = await Api.request(`/api/generate/projects/${projectId}/director-pack`);
+      if (!r.ok) { let m = t('dpEmpty'); try { const j = await r.json(); m = j.error || m; } catch {} if (isCurrentProject()) $('dpBody').textContent = m; return; }
       const data = await r.json();
+      if (!isCurrentProject()) return;
       dpPages = data.pages || []; dpActive = 0; dpEpisodeCount = data.episodeCount || 0;
       const tabs = $('dpTabs'); tabs.innerHTML = '';
       if (!dpPages.length) { $('dpBody').textContent = t('dpEmpty'); return; }
@@ -6789,7 +6984,7 @@
       });
       renderDpSummary();
       renderDpPage();
-    } catch (err) { $('dpBody').textContent = err.message || t('dpEmpty'); }
+    } catch (err) { if (isCurrentProject()) $('dpBody').textContent = err.message || t('dpEmpty'); }
   };
   if ($('dpBtn')) $('dpBtn').onclick = openDirectorPack;
   if ($('dpCopy')) $('dpCopy').onclick = () => { const p = dpPages[dpActive]; if (!p) return; const txt = (p.type === 'wave' && p.wave && p.wave.textLines ? p.wave.textLines.join('\n') + '\n' : '') + p.lines.join('\n'); copy(txt, lang === 'en' ? 'Page copied' : '当前页已复制'); };
@@ -6804,14 +6999,18 @@
     $('dlMenu').classList.add('hidden');
     if (!currentProjectId) { xnSay(lang === 'en' ? 'Generate a script first.' : '请先生成剧本再预览哦～'); return; }
     if (!Api.getUser()) { openAuth('login'); return; }
+    const account = capturePrivateSession(), projectId = currentProjectId;
+    const isCurrentProject = () => isPrivateSessionCurrent(account) && currentProjectId === projectId;
     $('matTitle').textContent = t('matTitle');
     $('matSummary').textContent = '';
     $('matBody').textContent = t('dpLoading');
     openModal('matModal');
     try {
-      const r = await Api.request(`/api/export/${currentProjectId}/materials`);
-      if (!r.ok) { let m = t('matEmpty'); try { const j = await r.json(); m = j.error || m; } catch {} $('matBody').textContent = m; matData = null; return; }
-      const data = await r.json(); matData = data;
+      const r = await Api.request(`/api/export/${projectId}/materials`);
+      if (!r.ok) { let m = t('matEmpty'); try { const j = await r.json(); m = j.error || m; } catch {} if (isCurrentProject()) { $('matBody').textContent = m; matData = null; } return; }
+      const data = await r.json();
+      if (!isCurrentProject()) return;
+      matData = data;
       const en = lang === 'en'; const st = data.stats || {};
       $('matSummary').textContent = en
         ? `${data.title} · ${data.episodeCount} eps · ${st.sceneCount} scenes / ${st.castCount} cast / ${st.propCount} props · header pass ${st.headerRate ?? 0}%`
@@ -6860,7 +7059,7 @@
         }
       });
       if (!mx.length) row(en ? '(No valid scene headers)' : '（无合规场头，无法生成矩阵）');
-    } catch (err) { $('matBody').textContent = err.message || t('matEmpty'); matData = null; }
+    } catch (err) { if (isCurrentProject()) { $('matBody').textContent = err.message || t('matEmpty'); matData = null; } }
   };
   if ($('dlMat')) $('dlMat').onclick = openMaterials;
   if ($('matCopy')) $('matCopy').onclick = () => {
@@ -7060,11 +7259,8 @@
   $('xnFloat').onclick = () => xnSay(lang === 'en' ? 'Xiaonan here — tell me your idea.' : '小南在呢，说说你的创意吧～');
 
   /* ---------- 顶栏控件 ---------- */
-  // c201 用户反馈：主题/字号由"单击轮切"改为"下拉直接选择"，不必连点盲切
-  const THEME_LABEL = { tech: '科技暗色', light: '浅色', dark: '深色', eye: '护眼', auto: '跟随系统' };
-  $('themeBtn').onclick = () => openMiniMenu($('themeBtn'), THEMES.map((k) => ({ value: k, label: (lang === 'en' ? { tech: 'Tech dark', light: 'Light', dark: 'Dark', eye: 'Sepia', auto: 'System' } : THEME_LABEL)[k] || k, cur: theme === k })), (v) => { theme = v; LS.s('zn_theme', v); applyTheme(); });
-  const FONT_LABEL = { sm: '小', md: '中', lg: '大', xl: '特大' };
-  $('fontBtn').onclick = () => openMiniMenu($('fontBtn'), FONTS.map((k) => ({ value: k, label: lang === 'en' ? ({ sm: 'Small', md: 'Medium', lg: 'Large', xl: 'X-Large' })[k] : FONT_LABEL[k], cur: font === k })), (v) => { font = v; LS.s('zn_font', v); applyFont(); });
+  $('themeBtn').onclick = () => { theme = THEMES[(THEMES.indexOf(theme) + 1) % THEMES.length]; LS.s('zn_theme', theme); applyTheme(); };
+  $('fontBtn').onclick = () => { font = FONTS[(FONTS.indexOf(font) + 1) % FONTS.length]; LS.s('zn_font', font); applyFont(); };
   $('langBtn').onclick = () => { const nx = lang === 'zh' ? 'en' : 'zh'; LS.s('zn_lang', nx); applyLang(); };
 
   /* ---------- 工具 ---------- */
@@ -7385,11 +7581,10 @@
     $('admUserTable').querySelectorAll('tbody tr').forEach((tr) => {
       const uid = tr.getAttribute('data-uid');
       tr.querySelector('[data-act="level"]').onchange = (e) => admSetLevel(uid, e.target.value);
-      tr.querySelector('[data-act="points"]').onclick = async () => {
+      tr.querySelector('[data-act="points"]').onclick = () => {
         const delta = parseInt(tr.querySelector('[data-act="delta"]').value, 10);
         if (!delta) { xnSay(lang === 'en' ? 'Enter a non-zero number.' : '请输入非零积分变动'); return; }
-        // c201 用户反馈：window.prompt 在微信内置浏览器等环境被禁用 → 静默失败"无法调整积分"。改为自制模态，全端可用
-        const reason = await askText(lang === 'en' ? 'Reason (logged):' : '调整原因（记入流水）：', '后台调整');
+        const reason = window.prompt(lang === 'en' ? 'Reason (logged):' : '调整原因（记入流水）：', '后台调整');
         if (!reason) return;
         admApi('/users/' + uid + '/points', { method: 'POST', body: JSON.stringify({ delta, reason }) })
           .then(() => { xnSay(t('admOk')); loadAdmUsers(); }).catch((e) => xnSay(e.message));
@@ -7400,9 +7595,8 @@
         admApi('/users/' + uid + '/ban', { method: 'POST', body: JSON.stringify({ banned }) })
           .then(() => { xnSay(t('admOk')); loadAdmUsers(); }).catch((e) => xnSay(e.message));
       };
-      tr.querySelector('[data-act="resetpw"]').onclick = async () => {
-        // c201：同上，prompt → 自制模态
-        const np = await askText(lang === 'en' ? 'New password (6-64):' : '为该用户设置新密码（6-64 位）：');
+      tr.querySelector('[data-act="resetpw"]').onclick = () => {
+        const np = window.prompt(lang === 'en' ? 'New password (6-64):' : '为该用户设置新密码（6-64 位）：');
         if (!np) return;
         admApi('/users/' + uid + '/reset-password', { method: 'POST', body: JSON.stringify({ newPassword: np }) })
           .then(() => xnSay(t('admOk'))).catch((e) => xnSay(e.message));
@@ -7671,8 +7865,7 @@
       const id = b.closest('[data-kid]').getAttribute('data-kid'), act = b.getAttribute('data-kn');
       try {
         if (act === 'reject') {
-          // c201：prompt → 自制模态（微信内置浏览器等环境 prompt 被禁导致静默无动作）
-          const reason = await askText(lang === 'en' ? 'Reject reason:' : '驳回原因（可空）：', '');
+          const reason = window.prompt(lang === 'en' ? 'Reject reason:' : '驳回原因（可空）：', '');
           await admApi(`/knowledge/${id}/reject`, { method: 'POST', body: JSON.stringify({ reason: reason || '人工驳回' }) });
         } else { await admApi(`/knowledge/${id}/approve`, { method: 'POST' }); xnSay(lang === 'en' ? 'Synced to skills.' : '已吸收并同步到创作技能'); }
         loadAdmKnowledge();

@@ -108,8 +108,23 @@ describe('拆爆款 HTTP', () => {
     const j = await r.json();
     assert.strictEqual(j.project.mode, 'adapt');
     assert.ok(j.project.tags.includes('拆爆款改编'));
+    assert.strictEqual(j.project.totalEps, 20);
+    assert.strictEqual(j.project.bible.adaptationDraft.recordId, global.__rec);
+    assert.deepStrictEqual(j.project.bible.adaptationDraft.outline, j.outline);
+    assert.ok(j.project.bible.adaptationDraft.brief.includes(j.outline.logline));
+    assert.ok(j.project.bible.adaptationDraft.brief.length <= 8000);
+    const persisted = await mem.project.findFirst({ where: { id: j.project.id } });
+    assert.deepStrictEqual(persisted.bible, j.project.bible);
     const rec = mem._teardownRecords?.find((x) => x.id === global.__rec);
     assert.strictEqual(rec.state, 'TO_PROJECT');
+  });
+
+  it('同一改编记录重复确认复用原项目，不生成空壳副本', async () => {
+    const first = await (await post(`/${global.__rec}/to-project`, {}, 'basic')).json();
+    const second = await (await post(`/${global.__rec}/to-project`, {}, 'basic')).json();
+    assert.strictEqual(second.project.id, first.project.id);
+    assert.strictEqual((await post(`/${global.__rec}/to-project`, { totalEps: 0 }, 'basic')).status, 400);
+    assert.strictEqual((await post(`/${global.__rec}/to-project`, {}, 'other')).status, 403);
   });
 
   it('我的拆解记录列表：只返摘要（不带 report/outline 大 Json），仅本人记录按时间倒序', async () => {
@@ -148,6 +163,39 @@ describe('拆爆款 HTTP', () => {
 });
 
 describe('拆爆款 幂等与封禁', () => {
+  it('改编保留集数/引擎/制式，新大纲更新未开写草稿；已开写则建立新稿', async () => {
+    const rec = await mem.teardownRecord.create({ data: { userId: 'pro', pickedTags: [], outline: { logline: '第一份大纲' } } });
+    const request = { totalEps: 12, engineTier: 'ECONOMY', format: 'AIGC' };
+    const first = await (await post(`/${rec.id}/to-project`, request, 'pro')).json();
+    assert.strictEqual(first.project.totalEps, 12);
+    assert.strictEqual(first.project.engineTier, 'ECONOMY');
+    assert.strictEqual(first.project.format, 'AIGC');
+    await mem.teardownRecord.update({ where: { id: rec.id }, data: { outline: { logline: '第二份大纲' }, state: 'OUTLINED' } });
+    const next = await (await post(`/${rec.id}/to-project`, request, 'pro')).json();
+    assert.strictEqual(next.project.id, first.project.id);
+    assert.match(next.project.bible.adaptationDraft.brief, /第二份大纲/);
+    assert.strictEqual(rec.state, 'TO_PROJECT');
+    await mem.script.create({ data: { projectId: first.project.id, epNo: 1, version: 1, content: '已开写正文' } });
+    await mem.teardownRecord.update({ where: { id: rec.id }, data: { outline: { logline: '第三份大纲' }, state: 'OUTLINED' } });
+    const fresh = await (await post(`/${rec.id}/to-project`, request, 'pro')).json();
+    assert.notStrictEqual(fresh.project.id, first.project.id);
+    assert.match(fresh.project.bible.adaptationDraft.brief, /第三份大纲/);
+    const again = await (await post(`/${rec.id}/to-project`, request, 'pro')).json();
+    assert.strictEqual(again.project.id, fresh.project.id);
+  });
+
+  it('改编入口遵守项目数上限，但复用草稿不被重复计数', async () => {
+    mem._seedUser({ id: 'draft-free', level: 'FREE' });
+    const rec = await mem.teardownRecord.create({ data: { userId: 'draft-free', pickedTags: [], outline: { logline: '上限测试' } } });
+    const first = await (await post(`/${rec.id}/to-project`, {}, 'draft-free')).json();
+    await mem.project.create({ data: { userId: 'draft-free', status: 'draft' } });
+    const again = await (await post(`/${rec.id}/to-project`, {}, 'draft-free')).json();
+    assert.strictEqual(again.project.id, first.project.id);
+    const other = await mem.teardownRecord.create({ data: { userId: 'draft-free', pickedTags: [], outline: { logline: '新项目' } } });
+    const limited = await post(`/${other.id}/to-project`, {}, 'draft-free');
+    assert.strictEqual(limited.status, 403);
+    assert.strictEqual((await limited.json()).error, 'REACH_PROJECT_LIMIT');
+  });
   it('同 clientToken 重复拆解 → 409 且只扣一次；换新令牌 → 正常再扣', async () => {
     const before = bal('pro');
     const r1 = await post('/analyze', { text: HIT, clientToken: 'td-token-1' }, 'pro', 'PRO');
