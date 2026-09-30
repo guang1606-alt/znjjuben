@@ -2001,9 +2001,9 @@
     $('inAgeBand').innerHTML = opt('', en ? 'Not set' : '不限/未填') + PF_AGES.map(([v, k]) => opt(v, t(k))).join('');
     $('inGender').innerHTML = opt('', en ? 'Not set' : '不限/未填') + opt('男', en ? 'Male' : '男') + opt('女', en ? 'Female' : '女') + opt('保密', en ? 'Prefer not to say' : '保密');
   }
-  // 仅管理员显示「管理后台」入口（依据 /me 返回的 isAdmin）
+  // 后台入口与服务端实际授权保持一致。
   function refreshAdminNav() {
-    const isAdm = !!(meCache && meCache.isAdmin);
+    const isAdm = !!(meCache && meCache.canAdmin);
     document.querySelectorAll('.admin-only').forEach((el) => el.classList.toggle('hidden', !isAdm));
   }
   $('editProfileBtn').onclick = () => $('profileEdit').classList.toggle('hidden');
@@ -2383,6 +2383,7 @@
   /* ---------- 交流广场 ---------- */
   const SQ_SECTIONS = ['', 'experience', 'team', 'review', 'news'];
   let curSection = '';
+  let feedRequestSeq = 0;
   function renderSqTabs() {
     $('sqTabs').innerHTML = SQ_SECTIONS.map((s) =>
       `<button data-sec="${s}" class="${s === curSection ? 'on' : ''}">${t(s === '' ? 'secAll' : 'sec' + s[0].toUpperCase() + s.slice(1))}</button>`).join('');
@@ -2390,8 +2391,10 @@
   }
   async function loadFeed() {
     renderSqTabs();
+    const seq = ++feedRequestSeq;
     let list = [], failed = false;
     try { const res = await fetch('/api/community/posts' + (curSection ? '?section=' + curSection : '')); if (!res.ok) failed = true; else { const j = await res.json(); if (Array.isArray(j)) list = j; } } catch { failed = true; }
+    if (seq !== feedRequestSeq) return;
     const empty = $('sqEmpty'), feed = $('sqFeed');
     empty.textContent = failed ? t('loadFail') : t('sqEmpty');
     empty.classList.toggle('hidden', list.length > 0); feed.innerHTML = '';
@@ -2423,10 +2426,16 @@
   /* ---------- 剧本交易广场 ---------- */
   let curPurchase = null;
   let purchaseViewSeq = 0;
+  let marketRequestSeq = 0;
+  let curBoard = 'all';
   async function loadListings() {
+    curBoard = 'all';
+    document.querySelectorAll('.board-tab').forEach((b) => b.classList.toggle('active', b.dataset.board === 'all'));
+    const seq = ++marketRequestSeq;
     const sort = $('mkSort').value || 'new';
     let list = [], failed = false;
     try { const res = await fetch('/api/market/listings?sort=' + sort); if (!res.ok) failed = true; else { const j = await res.json(); if (Array.isArray(j)) list = j; } } catch { failed = true; }
+    if (seq !== marketRequestSeq) return;
     const grid = $('mkGrid'), empty = $('mkEmpty');
     empty.textContent = failed ? t('loadFail') : t('mkEmpty');
     empty.classList.toggle('hidden', list.length > 0); grid.innerHTML = '';
@@ -2478,18 +2487,19 @@
         <div class="v-section"><b>${lang === 'en' ? 'Sample' : '样章'}</b><div class="listing-sample">${escapeHtml(d.sample || (lang==='en'?'No sample':'暂无样章'))}</div></div>
         <div class="listing-foot" style="margin-top:12px"><span class="price-tag">${d.pricePoints} ${t('points')}</span>
           <button class="btn-primary" id="detailBuyBtn">${t('buy')}</button></div>`;
-      $('detailBuyBtn').onclick = () => { closeModal('detailModal'); buyListing(id); };
+      $('detailBuyBtn').onclick = () => { $('detailModal').classList.add('hidden'); buyListing(id); };
     } catch (e) { body.innerHTML = `<div class="muted">${escapeHtml(e.message)}</div>`; }
   }
   $('mkSort').onchange = loadListings;
   // v2.74 榜单 Tab
-  let curBoard = 'all';
   async function loadBoard(type) {
     curBoard = type;
     document.querySelectorAll('.board-tab').forEach((b) => b.classList.toggle('active', b.dataset.board === type));
     if (type === 'all') { loadListings(); return; }
+    const seq = ++marketRequestSeq;
     let data = { items: [] }, failed = false;
     try { const res = await fetch('/api/market/board?type=' + type); if (!res.ok) failed = true; else data = await res.json(); } catch { failed = true; }
+    if (seq !== marketRequestSeq) return;
     const list = data.items || [];
     const grid = $('mkGrid'), empty = $('mkEmpty');
     empty.textContent = failed ? t('loadFail') : t('mkEmpty');
@@ -7293,7 +7303,7 @@
     // 入口虽只对管理员显示，仍做一次服务端口径校验
     const ensure = meCache ? Promise.resolve(meCache) : Api.request('/api/auth/me').then((r) => r.json()).then((m) => { meCache = m; return m; });
     ensure.then((me) => {
-      if (!me || !me.isAdmin) { xnSay(lang === 'en' ? 'Admin only.' : '仅超级管理员可进入后台'); switchView('studio'); return; }
+      if (!me || !me.canAdmin) { xnSay(lang === 'en' ? 'Admin only.' : '仅超级管理员可进入后台'); switchView('studio'); return; }
       if (!admInited) { initAdmin(); admInited = true; }
       // c199 「开设账号」仅主账号可见（isSuperAdmin 由服务端口径判定，副管理员不可见此入口）
       const createBox = $('admCreateBox'); if (createBox) createBox.classList.toggle('hidden', !me.isSuperAdmin);
