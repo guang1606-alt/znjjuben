@@ -2,7 +2,7 @@
 
 > 面向前端（`web/` 原生 JS 站点及后续独立前端/移动端）的后端 API 契约与适配说明。
 > 后端每次破坏性契约变更都会在此登记：变更内容 → 迁移对照 → 前端已同步点。
-> 版本对齐 `package.json`，当前基线：**v2.225.0**。
+> 版本对齐 `package.json`，当前基线：**v2.226.0**。
 
 ---
 
@@ -104,11 +104,13 @@
 - token 持久化键：`zn_token` / `zn_refresh` / `zn_user`（localStorage）
 - 自助修改密码：`POST /api/auth/change-password`（v2.214，前端资料页入口）
 - **429 限流响应**（v2.217 起）：登录 / 注册 / 改密三类端点在触发暴力防护时返回 `429 { "error": "<中文提示>" }`——前端无需按状态码分支，`jsonOrThrow` 统一展示 error 文案即可
+- **错误信息脱敏回落层**（v2.226 起）：`jsonOrThrow` 对内部裸码（`INTERNAL_ERROR` / `SERVER_BUSY` / 无 body 的 5xx）统一回落本地双语友好文案，用户不再看到错误码原文；原码始终保留在 `e.error`（无 body 5xx 补 `e.error='SERVER_BUSY'`）、状态码在 `e.httpStatus`，调用方按码分支不受影响；业务错误码、`IDEMPOTENT_REPLAY` 后端提示、4xx `HTTP xxx` 语义均未变更
 
 ### 版本历史（前端相关变更登记）
 
 | 版本 | 变更 |
 |---|---|
+| v2.226.0 | `jsonOrThrow` 错误信息脱敏回落层（v2.216 后端 500 契约的前端配套补完）：内部裸码（`INTERNAL_ERROR`/`SERVER_BUSY`/无 body 5xx）回落本地双语友好文案（zh「服务开小差了，请稍后重试」/ en "Server hiccup — please retry later."），`e.error`/`e.httpStatus` 保留原码与状态码供分支；语言读取经 `znLangEn()` 直读 localStorage `zn_lang`（与 room-view 同源，零依赖 app.js）；业务错误码/IDEMPOTENT_REPLAY/4xx 语义零变更（`Object.assign(e,d)` 的 message 覆盖契约保留）；新增 web-api-sanitize 守卫 6 断言（先红后绿） |
 | v2.225.0 | toast 三入口统一（纯前端，无 API 变更）：`znToast(msg, kind)` 重写为 v2.186 富版薄封装（kind 默认 info，签名向后兼容），`#znToastHost` 双 host 与 `.zn-toast` 样式退役（-14 行死样式）；`xnSay(line, tip, kind)` / `Xn.toast(m, kind)` 透传语义，view js 34 处分级——room-view 15 error、teardown-view 10 error+5 ok、diversity-view 3 error，**错误红条/成功绿条首次贯通独立视图**；window 新暴露 `toastError/toastOk/toastInfo`；`_syncTopbarOffset` Toast 分支改指 `#toastStack`（v2.191 让位只覆盖旧 host 的富版压顶缺口一并修复）；新增 web-toast-unify 守卫 8 断言 |
 | v2.224.0 | 错误态第二轮扫尾（纯前端，无 API 变更）：app.js 9 处旧式失败态收口——loadCatalog×2 muted→znError、反馈箱 catch muted→znErrorHtml、买家详情 muted→znErrorHtml 并落实 **INTERNAL_ERROR 回落本地友好文案**（v2.216 契约速查首次在详情页落地）、listen 弹窗 3 处 segBox textContent→znErrorHtml（token 防竞态保留）、PK 榜→znErrorHtml、超管 API 目录 admApiDir→znError（骨架屏占位替换）；**三态统一体系勘察收口**：六个独立 view js（progress-view/tool-lesson/ad-roll/nav-stack/pointer-fx/staff-cost）逐一过筛——progress-view 为零依赖纯函数状态机（浏览器/Node 单测共用）刻意不接入 window 帮助函数，其余五文件无旧式三态写法，收口范围到此完备 |
 | v2.223.0 | 错误态统一（纯前端，无 API 变更）：新增 `znErrorHtml/znError`（与 .zn-empty 同构：⚠+文案+可选细节 hint，`role=alert`，`_znEsc` 转义，window 暴露供 view js 复用）；14 处旧式错误/加载/空态收口——app.js 11 处（2 处 notice err、2 处 p.muted 当错误用、2 处内联 danger 边框 hack、2 处 muted 加载态改骨架屏、3 处旧空态改 znEmpty）、room-view 历史失败态不再冒充记录卡片（`histFail` 键首次接线）、teardown-view 2 处失败态收口；styles.css 新增 `.zn-error`（`--danger` 三主题令牌） |
