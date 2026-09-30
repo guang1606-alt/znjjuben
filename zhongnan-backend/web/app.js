@@ -1716,7 +1716,7 @@
     list.forEach((p) => {
       const c = document.createElement('div'); c.className = 'work-card';
       c.innerHTML = `<h3>${escapeHtml(p.title)}</h3>
-        <div class="muted">${p.mode} · ${p.totalEps || 0} eps · ${new Date(p.createdAt).toLocaleString()}</div>
+        <div class="muted">${p.mode} · ${p.totalEps || 0} eps · ${PV().formatDateTime(p.createdAt, lang)}</div>
         <div class="work-badges"><span class="badge">${p.engineTier || 'STANDARD'}</span><span class="badge">${p.format || 'LIVE_ACTION'}</span></div>
         <div class="work-actions">
           <button class="chip work-action-btn" data-act="rename">${lang === 'en' ? 'Rename' : '重命名'}</button>
@@ -1880,9 +1880,9 @@
       const cmpBtn = (fv, tv) => `<button class="btn-ghost ep-diff-btn" type="button" data-diff="${epNo}:${fv}:${tv}">${lang === 'en' ? `Compare v${fv} → v${tv}` : `对比 v${fv}→v${tv}`}</button>`;
       const hist = oldVers.length
         ? `<details class="ep-history"><summary>${lang === 'en' ? `Past versions (${oldVers.length})` : `历史版本（${oldVers.length}）`}</summary>${oldVers.map((v) =>
-            `<div class="ep-oldver"><span>v${v.version} · ${v.wordCount || 0} ${lang === 'en' ? 'chars' : '字'}</span>${cmpBtn(v.version, latest.version)}</div>`).join('')}</details>`
+            `<div class="ep-oldver"><span>${PV().formatVersion(v.version)} · ${v.wordCount || 0} ${lang === 'en' ? 'chars' : '字'}</span>${cmpBtn(v.version, latest.version)}</div>`).join('')}</details>`
         : '';
-      return `<div class="ep-item" data-ep="${epNo}"><h4>EP${epNo} · ${escapeHtml(latest.title || '')} <span class="muted">(v${latest.version} · ${latest.wordCount || 0} ${lang === 'en' ? 'chars' : '字'})</span>${oldVers.length ? cmpBtn(oldVers[oldVers.length - 1].version, latest.version) : ''}<button class="btn-ghost ep-listen-btn" type="button" data-listen-id="${latest.id}">🎧 ${lang === 'en' ? 'Listen' : '听剧本'}</button></h4>
+      return `<div class="ep-item" data-ep="${epNo}"><h4>EP${epNo} · ${escapeHtml(latest.title || '')} <span class="muted">(${PV().formatVersion(latest.version)} · ${latest.wordCount || 0} ${lang === 'en' ? 'chars' : '字'})</span>${oldVers.length ? cmpBtn(oldVers[oldVers.length - 1].version, latest.version) : ''}<button class="btn-ghost ep-listen-btn" type="button" data-listen-id="${latest.id}">🎧 ${lang === 'en' ? 'Listen' : '听剧本'}</button></h4>
         <div class="muted">${escapeHtml(latest.synopsis || '')}</div><pre>${escapeHtml(latest.content || '')}</pre>${hist}
         <div class="ep-diff hidden" data-diff-box="ep${epNo}"></div></div>`;
     }).join('');
@@ -2588,7 +2588,7 @@
         <div class="v-section"><b>${lang === 'en' ? 'Sample' : '样章'}</b><div class="listing-sample">${escapeHtml(d.sample || (lang==='en'?'No sample':'暂无样章'))}</div></div>
         <div class="listing-foot" style="margin-top:12px"><span class="price-tag">${d.pricePoints} ${t('points')}</span>
           <button class="btn-primary" id="detailBuyBtn">${t('buy')}</button></div>`;
-      $('detailBuyBtn').onclick = () => { closeModal('detailModal'); buyListing(id); };
+      $('detailBuyBtn').onclick = () => { $('detailModal').classList.add('hidden'); buyListing(id); };
     } catch (e) { body.innerHTML = `<div class="muted">${escapeHtml(e.message)}</div>`; }
   }
   $('mkSort').onchange = loadListings;
@@ -2689,15 +2689,18 @@
   };
   async function buyListing(id) {
     if (!Api.isAuthed()) { openAuth('login'); return; }
+    const token = Api.getToken();
     try {
       const res = await Api.request(`/api/market/listings/${id}/buy`, { method: 'POST' });
       const d = await Api.jsonOrThrow(res);
+      if (Api.getToken() !== token) return;
       curPurchase = { id: d.purchaseId };
       $('fullTitle').textContent = lang === 'en' ? 'Full script unlocked' : '全本已解锁';
       $('fullText').textContent = d.fullText || '';
       $('fullNotice').textContent = (lang === 'en'
         ? `Spent ${d.spentPoints} credits, held in escrow. Refundable within ${d.refundableWithinHours}h; after confirming, funds settle to seller.`
         : `已支付 ${d.spentPoints} 积分，资金托管中。${d.refundableWithinHours} 小时内可退款；确认收货后货款结算给卖家。`);
+      $('fullConfirm').classList.remove('hidden'); $('fullRefund').classList.remove('hidden');
       openModal('fullModal'); xnSay(t('boughtOk'));
     } catch (e) { xnSay(e.message); }
   }
@@ -2710,14 +2713,19 @@
   }
   $('mkMineBtn').onclick = async () => {
     if (!Api.isAuthed()) { openAuth('login'); return; }
-    const [resMy, resDash] = await Promise.all([
-      Api.request('/api/market/my'),
-      Api.request('/api/market/seller-dashboard'),
-    ]);
-    const d = await Api.jsonOrThrow(resMy);
-    const dash = resDash.ok ? await resDash.json() : null;
+    const token = Api.getToken();
+    let d, dash;
+    try {
+      const [resMy, resDash] = await Promise.all([
+        Api.request('/api/market/my'),
+        Api.request('/api/market/seller-dashboard'),
+      ]);
+      d = await Api.jsonOrThrow(resMy);
+      dash = resDash.ok ? await resDash.json() : null;
+    } catch (e) { xnSay(e.message); return; }
+    if (Api.getToken() !== token) return;
     const row = (x, isBuy) => `<div class="deal-row"><span>#${x.id.slice(-5)} · ${x.pricePoints} ${t('points')} · ${t(x.status === 'ESCROW' ? 'escrow' : x.status === 'REFUNDED' ? 'refunded' : 'settled')}</span>
-      ${isBuy && x.status === 'ESCROW' ? `<span><button class="btn-ghost" data-confirm="${x.id}">${t('confirmReceive')}</button> <button class="btn-ghost" data-refund="${x.id}">${t('refund24')}</button></span>` : ''}</div>`;
+      ${isBuy && (x.status === 'ESCROW' || x.status === 'SETTLED') ? `<span><button class="btn-ghost" data-content="${x.id}">${lang === 'en' ? 'View script' : '查看剧本'}</button>${x.status === 'ESCROW' ? ` <button class="btn-ghost" data-confirm="${x.id}">${t('confirmReceive')}</button> <button class="btn-ghost" data-refund="${x.id}">${t('refund24')}</button>` : ''}</span>` : ''}</div>`;
     // v2.75 卖家工作台：统计卡 + 我的上架列表
     let dashHtml = '';
     if (dash && dash.stats) {
@@ -2759,6 +2767,24 @@
        <h4 style="margin-top:14px">${t('mySales')}</h4>${d.sales.length ? d.sales.map((x) => row(x, false)).join('') : `<div class="muted">${t('noDeal')}</div>`}`;
     $('mineBox').querySelectorAll('[data-confirm]').forEach((b) => b.onclick = async () => { await dealAction(`/api/market/purchases/${b.getAttribute('data-confirm')}/confirm`); $('mkMineBtn').click(); });
     $('mineBox').querySelectorAll('[data-refund]').forEach((b) => b.onclick = async () => { await dealAction(`/api/market/purchases/${b.getAttribute('data-refund')}/refund`); $('mkMineBtn').click(); });
+    $('mineBox').querySelectorAll('[data-content]').forEach((b) => b.onclick = async () => {
+      const id = b.getAttribute('data-content');
+      const session = Api.getToken();
+      try {
+        const d = await Api.jsonOrThrow(await Api.request(`/api/market/purchases/${id}/content`));
+        if (Api.getToken() !== session) return;
+        curPurchase = { id };
+        $('fullTitle').textContent = d.title || (lang === 'en' ? 'Purchased script' : '已购剧本');
+        $('fullText').textContent = d.fullText || '';
+        $('fullNotice').textContent = d.status === 'SETTLED'
+          ? (lang === 'en' ? 'Transaction completed.' : '交易已完成。')
+          : (lang === 'en' ? 'Funds are held in escrow. You can confirm receipt or request a refund within 24 hours.' : '资金托管中。可确认收货，或在购买后24小时内申请退款。');
+        $('fullConfirm').classList.toggle('hidden', d.status !== 'ESCROW');
+        $('fullRefund').classList.toggle('hidden', d.status !== 'ESCROW');
+        $('mineModal').classList.add('hidden');
+        openModal('fullModal');
+      } catch (e) { xnSay(e.message); }
+    });
     $('mineBox').querySelectorAll('[data-delist]').forEach((b) => b.onclick = async () => {
       if (!confirm(lang === 'en' ? 'Delist this script? It will be removed from the marketplace.' : '确认下架该剧本？下架后将从交易广场移除。')) return;
       const r = await Api.request(`/api/market/listings/${b.getAttribute('data-delist')}/delist`, { method: 'PATCH' });
@@ -4972,10 +4998,10 @@
     const sg = done.antiAi || {}, mk = done.market || {};
     const rows = [
       [lang === 'en' ? 'Anti-AI' : '去AI化', sg.antiAiScore ?? sg.score ?? '-'],
-      [lang === 'en' ? 'Market fit' : '市场匹配', mk.fit ?? '-'],
+      [lang === 'en' ? 'Market fit' : '市场匹配', PV().formatDisplayValue(mk.overall ?? mk.score ?? mk.fit)],
       [lang === 'en' ? 'Audience' : '受众精准', done.audience ?? '-'],
     ];
-    $('scoreGrid').innerHTML = rows.map(([k, v]) => `<div class="score-cell"><b>${v}</b><span>${k}</span></div>`).join('');
+    $('scoreGrid').innerHTML = rows.map(([k, v]) => `<div class="score-cell"><b>${escapeHtml(PV().formatDisplayValue(v))}</b><span>${k}</span></div>`).join('');
     $('sandboxTip').classList.toggle('hidden', !done.sandbox);
     if (done.sandbox) $('sandboxTip').textContent = t('sandboxTip');
     // 受限题材改写法建议（9·1《微短剧发展管理办法》对接，WARN 级不阻断创作）
@@ -6142,7 +6168,8 @@
         if (!v || typeof v !== 'object' || typeof v.score !== 'number' || v.score >= 100) return;
         if (!Array.isArray(v.hits) || !v.hits.length) return; // 创作能力引擎统一形态：score + hits[]；结构维度不混入此卡
         if (k === 'sceneSoftEnding' || k === 'showDontTell') return; // c211：专用卡接管（旧库残留的通用摘要行不重复渲染）
-        const msgs = [].concat(Array.isArray(v.issues) ? v.issues : []).concat(Array.isArray(v.advice) ? v.advice : []);
+        const msgs = [].concat(Array.isArray(v.issues) ? v.issues : []).concat(Array.isArray(v.advice) ? v.advice : [])
+          .map(PV().formatIssueText).filter(Boolean);
         const pair = QC_ENGINE_LABELS[k];
         const name = pair ? (lang === 'en' ? pair[1] : pair[0]) : humanizeEngineKey(k);
         const unrescued = typeof v.unrescuedCount === 'number' ? v.unrescuedCount : v.hits.filter((h) => !h.rescued).length;

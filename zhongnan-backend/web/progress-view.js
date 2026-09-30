@@ -183,5 +183,58 @@
   ];
   function waitTips(en) { return en ? WAIT_TIPS_EN : WAIT_TIPS_ZH; }
 
-  return { createProgress, reduceProgress, stageList, milestone, parseSseChunk, roleMeta, waitTips };
+  function formatDisplayValue(value) {
+    if (value == null || value === '') return '—';
+    if (typeof value !== 'object') return String(value);
+    if (Array.isArray(value)) {
+      const parts = value.map(formatDisplayValue).filter((v) => v !== '—');
+      return parts.length ? parts.slice(0, 3).join(' / ') : '—';
+    }
+    const preferred = ['score', 'overall', 'cravingScore', 'value', 'label', 'name', 'text', 'title', 'grade', 'level'];
+    for (const key of preferred) {
+      const item = value[key];
+      if (item != null && item !== '' && typeof item !== 'object') return String(item);
+    }
+    const parts = Object.values(value)
+      .filter((item) => item != null && item !== '' && typeof item !== 'object')
+      .map(String);
+    return parts.length ? parts.slice(0, 3).join(' / ') : '—';
+  }
+
+  function formatIssueText(issue) {
+    if (issue == null || issue === '') return '';
+    if (typeof issue !== 'object') return String(issue);
+    if (Array.isArray(issue)) return issue.map(formatIssueText).filter(Boolean).join(' / ');
+    const scalar = (keys) => {
+      for (const key of keys) {
+        const value = issue[key];
+        if (value != null && value !== '' && typeof value !== 'object') return String(value);
+      }
+      return '';
+    };
+    const type = scalar(['typeLabel', 'label', 'type']);
+    const evidence = scalar(['evidence', 'snippet', 'line', 'reason', 'message']);
+    const advice = scalar(['advice', 'suggestion', 'fix']);
+    const finding = type && evidence ? `${type}: ${evidence}` : (evidence || type);
+    if (finding && advice) return `${finding} → ${advice}`;
+    return finding || advice || formatDisplayValue(issue);
+  }
+
+  function formatDateTime(value, lang) {
+    if (value == null || value === '') return '—';
+    const date = value instanceof Date ? new Date(value.getTime()) : new Date(value);
+    if (Number.isNaN(date.getTime())) return '—';
+    return date.toLocaleString(lang === 'en' ? 'en-US' : 'zh-CN');
+  }
+
+  function formatVersion(value) {
+    if (value == null || value === '') return '—';
+    const n = Number(value);
+    return Number.isFinite(n) && n > 0 ? `v${n}` : '—';
+  }
+
+  return {
+    createProgress, reduceProgress, stageList, milestone, parseSseChunk, roleMeta, waitTips,
+    formatDisplayValue, formatIssueText, formatDateTime, formatVersion,
+  };
 });

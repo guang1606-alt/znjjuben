@@ -577,6 +577,7 @@ model Purchase {
   commissionPoints Int
   sellerGainPoints Int
   status           String   @default("ESCROW") // ESCROW/SETTLED/REFUNDED
+  contentSnapshot  Json?     // 付款时交付的版本；旧订单为空时兼容读取当前稿
   createdAt        DateTime @default(now())
   @@index([buyerId])
   @@index([listingId])

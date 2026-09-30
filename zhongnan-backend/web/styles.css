@@ -93,7 +93,7 @@ h1, h2, h3, h4 { font-weight: 700; }
 /* ================= 浮岛顶栏（high-end-visual-design: Fluid Island Nav）================= */
 .topbar {
   position: sticky; top: 10px; z-index: 40; display: flex; align-items: center; gap: 14px;
-  width: max-content; max-width: min(1180px, calc(100vw - 32px)); margin: 10px auto 0;
+  width: max-content; max-width: min(1360px, calc(100vw - 32px)); margin: 10px auto 0;
   /* c201 用户反馈：登录后导航项全显示，中档宽度（900-1180px）flex 不换行会把 ctl 挤出胶囊边界——允许换行 + 收缩 */
   flex-wrap: wrap; min-width: 0;
   padding: 8px 14px 8px 12px;
@@ -115,7 +115,7 @@ h1, h2, h3, h4 { font-weight: 700; }
   .nav { gap: 0; margin-left: 4px; }
   .nav button { padding: 6px 9px; font-size: .82rem; }
 }
-.brand { position: relative; display: flex; flex-direction: column; line-height: 1.25; padding-left: 38px; min-width: 0; }
+.brand { position: relative; display: flex; flex-direction: column; line-height: 1.25; padding-left: 38px; min-width: 0; flex-shrink: 0; }
 /* c201 用户反馈：slogan 长文本是中档宽度溢出的主要推手——限宽截断 */
 .brand span { max-width: 34vw; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
 /* 朱砂印章「终」 */
@@ -126,9 +126,9 @@ h1, h2, h3, h4 { font-weight: 700; }
   background: linear-gradient(150deg, var(--cinnabar), color-mix(in srgb, var(--cinnabar) 62%, #000));
   box-shadow: 0 3px 9px -2px rgba(150, 60, 50, .45), inset 0 0 0 1px rgba(255,255,255,.14);
 }
-.brand b { font-family: var(--serif); font-size: 1.12rem; letter-spacing: .08em; }
+.brand b { font-family: var(--serif); font-size: 1.12rem; letter-spacing: .08em; white-space: nowrap; }
 .brand span { font-size: .7rem; color: var(--text-2); letter-spacing: .04em; }
-.nav { display: flex; gap: 2px; margin-left: 8px; min-width: 0; max-width: 100%; overflow-x: auto; scrollbar-width: none; -webkit-overflow-scrolling: touch; } /* c201：换行后自身可横向滚动，不再撑破胶囊 */
+.nav { display: flex; gap: 2px; margin-left: 8px; flex-shrink: 0; min-width: 0; max-width: 100%; overflow-x: auto; scrollbar-width: none; -webkit-overflow-scrolling: touch; } /* c201：换行后自身可横向滚动，不再撑破胶囊 */
 .nav::-webkit-scrollbar { display: none; }
 
 /* ================= c201 用户反馈修复：toast / 模态输入 / 小菜单 / 积分明细 ================= */
@@ -166,12 +166,13 @@ h1, h2, h3, h4 { font-weight: 700; }
 .points-ledger-row .pl-sub { font-size: .74rem; margin-top: 2px; }
 .nav button {
   background: none; border: 0; color: var(--text-2); padding: 7px 13px; border-radius: 999px;
-  font-size: .9rem; letter-spacing: .03em; transition: all .18s var(--ease-out);
+  font-size: .9rem; letter-spacing: .03em; white-space: nowrap; transition: all .18s var(--ease-out);
 }
 .nav button:hover { background: color-mix(in srgb, var(--accent) 10%, transparent); color: var(--accent-strong); }
 .nav button.on { background: var(--accent-weak); color: var(--accent-strong); font-weight: 600; }
 .spacer { flex: 1; }
-.ctl { display: flex; gap: 7px; align-items: center; }
+.ctl { display: flex; gap: 7px; align-items: center; flex-shrink: 0; }
+.ctl button { white-space: nowrap; }
 .chip {
   background: color-mix(in srgb, var(--panel) 60%, transparent); border: 1px solid var(--line);
   color: var(--text); border-radius: 999px; padding: 6px 13px; font-size: .82rem; line-height: 1.4;
@@ -1294,7 +1295,8 @@ summary:hover{color:var(--accent-strong)}
 [data-theme="dark"] .field-row3 select{background:var(--panel-2);border-color:var(--line);color:var(--text)}
 
 /* ================= 交易广场价值证书接入 ================= */
-.list-value{background:linear-gradient(135deg,#fbf5e6,#f5efdd);border:1px solid #e6dabb;border-radius:10px;padding:11px 13px;margin-bottom:10px;font-size:13px}
+.list-value{background:linear-gradient(135deg,#fbf5e6,#f5efdd);border:1px solid #e6dabb;border-radius:10px;padding:11px 13px;margin-bottom:10px;font-size:13px;color:#332d17}
+.list-value .muted{color:#665a3f}
 .lv-head{display:flex;align-items:center;gap:10px;margin-bottom:8px}
 .lv-grade{display:inline-flex;align-items:center;justify-content:center;width:34px;height:34px;border-radius:8px;color:#fbf7ec;font-weight:800;font-size:16px;flex-shrink:0}
 .lv-grade-sm{width:auto;height:20px;padding:0 7px;font-size:11px;border-radius:6px;vertical-align:middle;margin-left:6px}
@@ -1302,10 +1304,11 @@ summary:hover{color:var(--accent-strong)}
 .lv-row b{color:#332d17}
 .list-value .btn-ghost{margin-top:8px;background:#fff;border:1px solid #d8cfae;color:#8a6d1f;border-radius:8px;padding:6px 11px;font-size:12px;cursor:pointer}
 .list-value .btn-ghost:hover{background:#fbf4dd;border-color:var(--gold);color:var(--gold-deep)}
-[data-theme="dark"] .list-value{background:linear-gradient(135deg,#241f14,#1b211c);border-color:#3d3620}
-[data-theme="dark"] .lv-row{border-top-color:#3a3420}
-[data-theme="dark"] .lv-row b{color:#f0e6c8}
-[data-theme="dark"] .list-value .btn-ghost{background:#1b211c;border-color:#3d3620;color:#e0c277}
+[data-theme="dark"] .list-value,[data-theme="tech"] .list-value{background:linear-gradient(135deg,#241f14,#1b211c);border-color:#3d3620;color:#f0e6c8}
+[data-theme="dark"] .list-value .muted,[data-theme="tech"] .list-value .muted{color:#c5bda9}
+[data-theme="dark"] .lv-row,[data-theme="tech"] .lv-row{border-top-color:#3a3420}
+[data-theme="dark"] .lv-row b,[data-theme="tech"] .lv-row b{color:#f0e6c8}
+[data-theme="dark"] .list-value .btn-ghost,[data-theme="tech"] .list-value .btn-ghost{background:#1b211c;border-color:#60532f;color:#e0c277}
 
 /* 买家详情页 + 认证海报 */
 .d-head{display:flex;align-items:center;gap:12px;margin-bottom:12px}
@@ -1355,7 +1358,7 @@ summary:hover{color:var(--accent-strong)}
   .br-body { grid-template-columns: 1fr 210px; gap: 8px; }
   .plans-grid { grid-template-columns: repeat(2, 1fr); }
 }
-@media (max-width: 900px) {
+@media (max-width: 1200px) {
   .topbar { flex-wrap: wrap; gap: 8px; }
   .brand b { white-space: nowrap; }
   .topbar .spacer { display: none; }
@@ -1375,6 +1378,7 @@ summary:hover{color:var(--accent-strong)}
 }
 @media (max-width: 640px) {
   html, body { max-width: 100%; overflow-x: hidden; }
+  #znToastHost { top: auto; bottom: calc(78px + env(safe-area-inset-bottom, 0px)); }
   .topbar { gap: 8px; padding: 9px 12px; position: sticky; max-width: 100vw; min-width: 0; flex-direction: column; align-items: stretch; }
   .brand { align-self: flex-start; min-width: 0; order: 1; }
   .brand b { font-size: 1rem; white-space: nowrap; }
@@ -1383,9 +1387,21 @@ summary:hover{color:var(--accent-strong)}
   .ctl { order: 2; align-self: stretch; width: 100%; gap: 4px; flex-wrap: wrap; justify-content: flex-end; min-width: 0; }
   .ctl .chip { padding: 5px 8px; font-size: .78rem; }
   .ctl .btn-primary { padding: 7px 12px; font-size: .85rem; }
-  .nav { order: 3; width: 100%; min-width: 0; max-width: 100%; margin-left: 0; overflow-x: auto; flex-wrap: nowrap; -webkit-overflow-scrolling: touch; scrollbar-width: none; }
-  .nav::-webkit-scrollbar { display: none; }
-  .nav button { padding: 9px 13px; white-space: nowrap; font-size: .92rem; }
+  .nav { order: 3; width: 100%; min-width: 0; max-width: 100%; margin-left: 0; overflow: visible; flex-wrap: wrap; gap: 3px 5px; white-space: normal; }
+  .nav button { padding: 7px 10px; white-space: nowrap; font-size: .86rem; }
+  #view-studio > .section-title { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 5px 10px; }
+  #view-studio > .section-title h2 { grid-column: 1 / -1; grid-row: 2; min-width: 0; }
+  #view-studio > .section-title small { grid-column: 1 / -1; grid-row: 3; }
+  #view-studio > .section-title #sampleEntryBtn { grid-column: 2; grid-row: 1; justify-self: end; margin-left: 0 !important; white-space: nowrap; }
+  #view-market > .section-title { display: grid; grid-template-columns: minmax(0, 1fr) minmax(124px, auto); align-items: center; gap: 8px 10px; }
+  #view-market > .section-title h2 { grid-column: 1; grid-row: 1; white-space: nowrap; }
+  #view-market > .section-title small { grid-column: 1 / -1; grid-row: 2; line-height: 1.5; }
+  #view-market > .section-title .spacer { display: none; }
+  #view-market > .section-title #mkSort { grid-column: 2; grid-row: 1; width: 100%; min-width: 0; }
+  #view-market > .section-title #mkListBtn, #view-market > .section-title #mkMineBtn { width: 100%; min-width: 0; min-height: 40px; white-space: nowrap; padding: 8px; }
+  #view-market > .section-title #mkListBtn { grid-column: 1; grid-row: 3; }
+  #view-market > .section-title #mkMineBtn { grid-column: 2; grid-row: 3; }
+  .site-footer { padding-right: 76px; }
   .wrap { padding: 14px 12px 96px; }
   .hero { padding: 26px 2px 18px; }
   .hero h1 { font-size: 1.45rem; line-height: 1.4; }

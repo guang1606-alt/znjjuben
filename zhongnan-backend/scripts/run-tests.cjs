@@ -10,13 +10,19 @@
  *  - 用法：npm test [同 node --test 参数，缺省跑 test/ 目录]
  */
 const { spawnSync } = require('node:child_process');
+const { readdirSync } = require('node:fs');
+const { join } = require('node:path');
 
 if (!process.env.NODE_ENV || process.env.NODE_ENV === 'production') {
   process.env.NODE_ENV = 'test';
 }
 
 const args = process.argv.slice(2);
-const patterns = args.length ? args : ['test/'];
+const patterns = args.length && !(args.length === 1 && /^test[\\/]?$/.test(args[0]))
+  ? args
+  : readdirSync(join(__dirname, '..', 'test'))
+    .filter((name) => /\.test\.cjs$/.test(name))
+    .map((name) => join(__dirname, '..', 'test', name));
 // v2.194 c195：默认不再带 --test-force-exit。实测该开关会在并发文件收集未完成时强杀进程，
 // 每轮静默截断 7~14% 用例（全量 5002 条被截到 4316~4639，单文件 98 条被截到 59）——
 // "# fail 0" 绿灯名实不符，真回归可能从未执行。全量/单文件实测均能自行干净退出，无需该开关。

@@ -70,7 +70,11 @@ function createMemoryPrisma() {
       }
       return null;
     },
-    async create({ data }) { const id = data.id || `p_${++seq}`; const p = { id, bible: null, status: 'draft', ...data }; projects.set(id, p); return p; },
+    async create({ data }) {
+      const id = data.id || `p_${++seq}`;
+      const p = { id, bible: null, status: 'draft', ...data, createdAt: data.createdAt ?? new Date() };
+      projects.set(id, p); return p;
+    },
     async update({ where, data }) { const p = projects.get(where.id); Object.assign(p, data); return p; },
     async findMany({ where = {}, orderBy, take } = {}) {
       let r = [...projects.values()].filter((p) => {
@@ -96,7 +100,10 @@ function createMemoryPrisma() {
         return scripts.filter((s) => projects.get(s.projectId)?.userId === where.project.userId).length;
       return scripts.length;
     },
-    async create({ data }) { const row = { id: `s_${++seq}`, createdAt: new Date(), ...data }; scripts.push(row); return row; },
+    async create({ data }) {
+      const row = { id: `s_${++seq}`, ...data, version: data.version ?? 1, createdAt: data.createdAt ?? new Date() };
+      scripts.push(row); return row;
+    },
     async findUnique({ where }) { return scripts.find((s) => s.id === where.id) ?? null; },
     async findFirst({ where = {}, include, orderBy } = {}) {
       let r = scripts.filter((x) => (!where.id || x.id === where.id) && (!where.projectId || x.projectId === where.projectId));
