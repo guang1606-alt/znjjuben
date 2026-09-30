@@ -1642,14 +1642,39 @@
   function _uiReducedMotion() {
     try { return window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches; } catch { return true; }
   }
+  // 焦点圈定（WAI-ARIA dialog）：Tab 在模态内首个↔末个元素循环，Shift+Tab 反向，焦点不逃逸到背景页
+  function _uiTrapTab(e, modal) {
+    const items = Array.from(modal.querySelectorAll('button, input, select, textarea, [tabindex]:not([tabindex="-1"])'))
+      .filter((el) => !el.disabled);
+    if (!items.length) return;
+    const first = items[0];
+    const last = items[items.length - 1];
+    const active = document.activeElement;
+    const inside = modal.contains(active);
+    if (e.shiftKey) {
+      if (active === first || !inside) { e.preventDefault(); last.focus(); }
+    } else if (active === last || !inside) {
+      e.preventDefault(); first.focus();
+    }
+  }
   function uiConfirm(opts) {
     const o = typeof opts === 'string' ? { body: opts } : (opts || {});
     return new Promise((resolve) => {
+      const prevFocus = document.activeElement;
       const { overlay, modal, okBtn, cancelBtn } = _uiModalShell(o);
       let closed = false;
-      const escHandler = (e) => { if (e.key === 'Escape' && !closed) close(false); };
-      const close = (result) => { if (closed) return; closed = true; document.removeEventListener('keydown', escHandler); overlay.remove(); resolve(result); };
-      document.addEventListener('keydown', escHandler);
+      const close = (result) => {
+        if (closed) return; closed = true;
+        document.removeEventListener('keydown', keyHandler); overlay.remove();
+        try { if (prevFocus && prevFocus.focus) prevFocus.focus(); } catch {}
+        resolve(result);
+      };
+      const keyHandler = (e) => {
+        if (closed) return;
+        if (e.key === 'Escape') close(false);
+        else if (e.key === 'Tab') _uiTrapTab(e, modal);
+      };
+      document.addEventListener('keydown', keyHandler);
       okBtn.onclick = () => close(true);
       cancelBtn.onclick = () => close(false);
       overlay.onclick = (e) => { if (e.target === overlay) close(false); };
@@ -1663,6 +1688,7 @@
   function uiPrompt(opts) {
     const o = typeof opts === 'string' ? { value: opts } : (opts || {});
     return new Promise((resolve) => {
+      const prevFocus = document.activeElement;
       const { overlay, modal, bodyEl, okBtn, cancelBtn } = _uiModalShell(o);
       const input = document.createElement('input');
       input.type = o.type || 'text';
@@ -1671,9 +1697,18 @@
       input.style.cssText = 'width:100%;box-sizing:border-box;font-size:14px;padding:9px 10px;margin-bottom:14px;border:1px solid var(--muted,#888);border-radius:6px;background:transparent;color:var(--fg,#222);outline:none';
       if (bodyEl) bodyEl.after(input); else modal.insertBefore(input, modal.lastElementChild);
       let closed = false;
-      const escHandler = (e) => { if (e.key === 'Escape' && !closed) close(null); };
-      const close = (result) => { if (closed) return; closed = true; document.removeEventListener('keydown', escHandler); overlay.remove(); resolve(result); };
-      document.addEventListener('keydown', escHandler);
+      const close = (result) => {
+        if (closed) return; closed = true;
+        document.removeEventListener('keydown', keyHandler); overlay.remove();
+        try { if (prevFocus && prevFocus.focus) prevFocus.focus(); } catch {}
+        resolve(result);
+      };
+      const keyHandler = (e) => {
+        if (closed) return;
+        if (e.key === 'Escape') close(null);
+        else if (e.key === 'Tab') _uiTrapTab(e, modal);
+      };
+      document.addEventListener('keydown', keyHandler);
       const submit = () => { close(input.type === 'password' ? input.value : input.value.trim()); };
       input.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); submit(); } });
       okBtn.onclick = submit;

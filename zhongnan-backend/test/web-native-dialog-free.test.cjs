@@ -66,4 +66,19 @@ describe('D 轮：uiConfirm / uiPrompt 通用模态助手', () => {
     assert.ok(/Escape/.test(region), '应支持 Esc 关闭');
     assert.ok(/overlay\.onclick|\.onclick = \(e\) => \{ if \(e\.target === overlay\)/.test(region), '应支持点击遮罩关闭');
   });
+
+  it('焦点圈定：Tab 在模态内循环，Shift+Tab 反向循环', () => {
+    const region = extractMarkedRegion('v2.202 通用模态对话框');
+    assert.ok(/'Tab'/.test(region), '应监听 Tab 键');
+    assert.ok(/shiftKey/.test(region), '应处理 Shift+Tab 反向循环');
+    assert.ok(/_uiTrapTab/.test(region), '应有圈定 helper（首个↔末个循环）');
+  });
+
+  it('焦点恢复：关闭后焦点回到触发元素（记录 activeElement）', () => {
+    const region = extractMarkedRegion('v2.202 通用模态对话框');
+    assert.ok(/document\.activeElement/.test(region), '应记录打开前的 document.activeElement');
+    // uiConfirm 与 uiPrompt 都要有恢复动作：出现 ≥2 次 prevFocus.focus()
+    const restores = (region.match(/prevFocus\.focus\(\)/g) || []).length;
+    assert.ok(restores >= 2, `uiConfirm 与 uiPrompt 都应恢复焦点，实测 ${restores} 处`);
+  });
 });
