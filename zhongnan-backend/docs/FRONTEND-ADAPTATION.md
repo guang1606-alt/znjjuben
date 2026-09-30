@@ -2,7 +2,7 @@
 
 > 面向前端（`web/` 原生 JS 站点及后续独立前端/移动端）的后端 API 契约与适配说明。
 > 后端每次破坏性契约变更都会在此登记：变更内容 → 迁移对照 → 前端已同步点。
-> 版本对齐 `package.json`，当前基线：**v2.229.0**。
+> 版本对齐 `package.json`，当前基线：**v2.230.0**。
 
 ---
 
@@ -43,6 +43,7 @@
 | `GET /api/generate/prop-assets/health` | 50 | 200 | 同上 |
 | `GET /api/generate/scene-assets/health` | 50 | 200 | 同上 |
 | `GET /api/market/listings` | 50 | 100 | 支持 `section`/`sort`；默认 50 保持橱窗观感 |
+| `GET /api/community/posts` | 50 | 100 | 支持 `section` 过滤（空串=全部分区）；v2.230 纳入契约 |
 
 ### 不在本契约范围的端点（维持原语义）
 
@@ -51,17 +52,17 @@
 | `GET /api/market/board` | `{ type, total, items }` | top-N 榜单；v2.215 修复 `total` 为过滤后真总数（`limit` 只裁 items，take 500 截断硬帽） |
 | `GET /api/tags/search`、`/api/tags/leaves` | 裸数组 | top-N 搜索/热榜，无翻页需求 |
 | `GET /api/generate/*-assets`（列表） | `{ assets, total }` | 硬帽列表（take 200 + total 截断提示铁律），非分页端点 |
-| `GET /api/community/posts` 等 | 裸数组 | 简单列表，暂未纳入统一 |
 
 ---
 
-## 二、v2.215.0 迁移对照（旧 → 新）
+## 二、迁移对照（旧 → 新）
 
 | 变更点 | 旧 | 新 |
 |---|---|---|
 | 体检列表键 | `resp.healths` | `resp.items`（`healths` 键已退役） |
 | 体检响应分页元信息 | `{ total, limit, offset }` | 补齐 `page`、`pageSize`（limit/offset 保留） |
 | 广场列表 `GET /api/market/listings` | **裸数组** `[{...}]`，take 50 静默截断 | `{ items, total, page, pageSize, limit, offset }`，可传 `limit/offset` 翻页 |
+| 交流广场列表 `GET /api/community/posts`（v2.230） | **裸数组** `[{...}]`，take 50 静默截断 | `{ items, total, page, pageSize, limit, offset }`，可传 `page/pageSize`（或 `limit/offset`）翻页；`section` 过滤保留 |
 | admin 用户列表响应 | `{ items, total, page, pageSize }` | 补齐 `limit`、`offset` 回显（旧字段全保留） |
 
 ### `web/` 已同步点（与后端同仓库同版本发布）
@@ -69,6 +70,7 @@
 - `web/app.js` 三处资产体检面板：`health.healths` → `health.items`（6 处读取）
 - `web/app.js` `loadListings()`：`Array.isArray(j)` → `Array.isArray(j.items)` + `list = j.items`
 - 体检面板调用已固定 `limit=200` 拉满（v2.156 铁律），契约变更不影响该用法
+- **v2.230 交流广场消费侧翻页**：`loadFeed()` 传 `page/pageSize`（`SQ_PAGE_SIZE=50` 对齐后端 defaultLimit，`section` 恒传、空串=全部分区）+ 消费 `items/total`（>50 帖不再静默截断）；`renderSqPager()` 翻页器与 market 橱窗 `renderMkPager` 同构（复用 `znPagerState`，上/下一页 disabled 态），分区切换重置第 1 页；`#sqEmpty` 失败/空态收口 `znErrorHtml/znEmptyHtml` 并移除 `notice`/`data-i`（v2.229 `#mkEmpty` 同族），index.html 新增 `#sqPager` 容器
 - **v2.229 消费侧翻页补全**：`loadListings()` 传 `page/pageSize`（`MK_PAGE_SIZE=50` 对齐后端 defaultLimit）+ 消费 `total` 渲染 `#mkPager` 上/下一页翻页器（此前只看第一页，>50 条静默截断）；`mkSort` 切换重置回第 1 页；榜单 Tab 模式隐藏翻页器；admin 用户表 `renderAdmUserPager()` 纯文本页码升级为可交互上/下一页（`admPage` 此前恒为 1）
 
 ---
@@ -117,6 +119,7 @@
 
 | 版本 | 变更 |
 |---|---|
+| v2.230.0 | 交流广场纳入分页统一契约（v2.215 六键，本轮唯一破坏性契约变更）：`GET /api/community/posts` 裸数组 + take 50 静默截断退役 → `{ items, total, page, pageSize, limit, offset }`（`parsePageParams` 默认 50/上限 100，`section` 过滤保留），total 为过滤后真总数；前端 `loadFeed` 消费侧翻页对齐（`SQ_PAGE_SIZE=50`、`renderSqPager` 复用 `znPagerState` 与 `renderMkPager` 同构、分区切换重置页码），失败/空态收口 `znErrorHtml/znEmptyHtml`，`#sqEmpty` 去 `notice`/`data-i`、新增 `#sqPager` 容器；http-community 契约断言改造 + 分页用例（六键/翻页/别名/无效值默认），新增 web-community-feed 守卫 4 断言（先红后绿） |
 | v2.229.0 | 分页契约 v2.215 消费侧覆盖对齐（后端 API 零变更）：market 橱窗 `loadListings` 补 `page/pageSize` 参数并消费 `total`（>50 条不再静默截断），`mkPage` 状态 + `znPagerState` 纯函数 + `renderMkPager` 上/下一页翻页器（disabled 态），`mkSort` 切换重置第 1 页，榜单 Tab 隐藏翻页器；admin 用户表 `renderAdmUserPager` 纯文本页码升级可交互翻页（`admPage` 此前恒为 1）；顺带收口 loadListings/loadBoard 失败态混空态为 `znErrorHtml/znEmptyHtml`（v2.224 漏网点），`#mkEmpty` 移除 `notice`/`data-i`（防语言切换覆盖 innerHTML），新增 `.zn-pager` 样式；新增 web-pagination-coverage 守卫 5 断言（先红后绿） |
 | v2.228.0 | 市场定价校验与后端 `validatePriceFen` 全对齐：新增 `priceFenFromYuan()`（≥1 元且 0.1 元整数倍），上架/重新上架两入口本地预检（粒度不符不再白跑后端 400），提示文案与后端逐字一致，未选剧本/价格非法按后端报错顺序拆分；`listPrice` `step=0.1` + placeholder 标注；新增 web-market-price 守卫 4 断言（先红后绿） |
 | v2.227.0 | 鉴权表单校验与后端 v2.212 统一密码策略全对齐：注册表单补「必含字母和数字」本地校验（此前只查 8 位，弱密码须白跑后端且 4xx 中文提示无 en 本地化），与改密/admin 开号/admin 重置同口径；`authPwd`/`inNewPw` 补 `maxlength=64` 对齐后端 `max(64)`；`authPwd` placeholder 更新完整策略；i18n `authErrPwd` 双语更新（弱口令黑名单仍留服务端单源，避免双源漂移）；新增 web-auth-policy 守卫 5 断言（先红后绿） |
