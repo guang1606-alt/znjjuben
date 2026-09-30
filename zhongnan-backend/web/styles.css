@@ -1642,6 +1642,9 @@ summary:hover{color:var(--accent-strong)}
 .zn-error { display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 28px 14px; text-align: center; color: var(--danger, #b1443a); }
 .zn-error-ico { font-size: 1.7rem; line-height: 1; opacity: .7; }
 .zn-error-txt { font-size: .9rem; }
+/* v2.229 分页翻页器（market 橱窗 + admin 用户表共用） */
+.zn-pager { display: flex; align-items: center; justify-content: center; flex-wrap: wrap; gap: 10px; padding: 12px 0 2px; font-size: .84rem; }
+.zn-pager button:disabled { opacity: .45; cursor: not-allowed; }
 .zn-error-hint { font-size: .8rem; opacity: .85; max-width: 32em; color: var(--text-2); }
 
 /* —— 3. View-Stack 视图切换过渡 —— */

@@ -3093,12 +3093,31 @@
   /* ---------- 剧本交易广场 ---------- */
   let curPurchase = null;
   let purchaseViewSeq = 0;
+  // v2.229 消费侧分页：v2.215 契约 { items, total, ... } 全量消费，>50 条不再静默截断（后端 defaultLimit 50 / maxLimit 100）
+  let mkPage = 1;
+  const MK_PAGE_SIZE = 50;
+  function znPagerState(total, page, pageSize) {
+    const pages = Math.max(1, Math.ceil((Number(total) || 0) / pageSize));
+    return { pages, hasPrev: page > 1, hasNext: page < pages };
+  }
+  function renderMkPager(total, failed) {
+    const pager = $('mkPager');
+    const show = !failed && total > MK_PAGE_SIZE;
+    pager.classList.toggle('hidden', !show);
+    if (!show) return;
+    const { pages, hasPrev, hasNext } = znPagerState(total, mkPage, MK_PAGE_SIZE);
+    pager.innerHTML = `<button class="btn-ghost" id="mkPrevPage"${hasPrev ? '' : ' disabled'}>‹ ${lang === 'en' ? 'Prev' : '上一页'}</button>`
+      + `<span>${t('admTotal')} ${total} · ${t('admPage')} ${mkPage}/${pages}</span>`
+      + `<button class="btn-ghost" id="mkNextPage"${hasNext ? '' : ' disabled'}>${lang === 'en' ? 'Next' : '下一页'} ›</button>`;
+    $('mkPrevPage').onclick = () => { mkPage--; loadListings(); };
+    $('mkNextPage').onclick = () => { mkPage++; loadListings(); };
+  }
   async function loadListings() {
     const sort = $('mkSort').value || 'new';
-    let list = [], failed = false;
-    try { const res = await fetch('/api/market/listings?sort=' + sort); if (!res.ok) failed = true; else { const j = await res.json(); if (Array.isArray(j.items)) list = j.items; } } catch { failed = true; }
+    let list = [], total = 0, failed = false;
+    try { const res = await fetch('/api/market/listings?sort=' + sort + '&page=' + mkPage + '&pageSize=' + MK_PAGE_SIZE); if (!res.ok) failed = true; else { const j = await res.json(); if (Array.isArray(j.items)) { list = j.items; total = Number(j.total) || list.length; } } } catch { failed = true; }
     const grid = $('mkGrid'), empty = $('mkEmpty');
-    empty.textContent = failed ? t('loadFail') : t('mkEmpty');
+    empty.innerHTML = failed ? znErrorHtml(t('loadFail')) : znEmptyHtml(t('mkEmpty'));
     empty.classList.toggle('hidden', list.length > 0); grid.innerHTML = '';
     list.forEach((l) => {
       const c = document.createElement('div'); c.className = 'listing-card';
@@ -3112,6 +3131,7 @@
       c.querySelector('button').onclick = () => openListingDetail(l.id);
       grid.appendChild(c);
     });
+    renderMkPager(total, failed);
   }
   // v2.73 买家详情页：完整价值维度+资方风险+样章，先建立信任再购买
   async function openListingDetail(id) {
@@ -3157,7 +3177,7 @@
       $('detailBuyBtn').onclick = () => { closeModal('detailModal'); buyListing(id); };
     } catch (e) { body.innerHTML = `<div class="muted">${escapeHtml(e.message)}</div>`; }
   }
-  $('mkSort').onchange = loadListings;
+  $('mkSort').onchange = () => { mkPage = 1; loadListings(); };
   // v2.74 榜单 Tab
   let curBoard = 'all';
   async function loadBoard(type) {
@@ -3168,7 +3188,8 @@
     try { const res = await fetch('/api/market/board?type=' + type); if (!res.ok) failed = true; else data = await res.json(); } catch { failed = true; }
     const list = data.items || [];
     const grid = $('mkGrid'), empty = $('mkEmpty');
-    empty.textContent = failed ? t('loadFail') : t('mkEmpty');
+    empty.innerHTML = failed ? znErrorHtml(t('loadFail')) : znEmptyHtml(t('mkEmpty'));
+    $('mkPager').classList.add('hidden');
     empty.classList.toggle('hidden', list.length > 0); grid.innerHTML = '';
     list.forEach((l) => {
       const c = document.createElement('div'); c.className = 'listing-card';
@@ -8498,6 +8519,15 @@
       admPage = 1; loadAdmUsers();
     } catch (e) { xnSay(e.message); }
   }
+  // v2.229 admin 用户表翻页：纯文本页码升级为可交互 pager（admPage 此前恒为 1，第 2 页不可达）
+  function renderAdmUserPager(d) {
+    const { pages, hasPrev, hasNext } = znPagerState(d.total, d.page, 20);
+    $('admUserPager').innerHTML = `<span>${t('admTotal')} ${d.total} · ${t('admPage')} ${d.page}/${pages}</span>`
+      + ` <button class="btn-ghost" id="admPrevPage"${hasPrev ? '' : ' disabled'}>‹ ${lang === 'en' ? 'Prev' : '上一页'}</button>`
+      + ` <button class="btn-ghost" id="admNextPage"${hasNext ? '' : ' disabled'}>${lang === 'en' ? 'Next' : '下一页'} ›</button>`;
+    $('admPrevPage').onclick = () => { if (admPage > 1) { admPage--; loadAdmUsers(); } };
+    $('admNextPage').onclick = () => { admPage++; loadAdmUsers(); };
+  }
   async function loadAdmUsers() {
     const q = encodeURIComponent($('admUserQ').value.trim());
     const d = await admApi(`/users?q=${q}&page=${admPage}&pageSize=20`);
@@ -8521,7 +8551,7 @@
         </td></tr>`;
     }).join('');
     $('admUserTable').innerHTML = head + '<tbody>' + rows + '</tbody>';
-    $('admUserPager').textContent = `${t('admTotal')} ${d.total} · ${t('admPage')} ${d.page}`;
+    renderAdmUserPager(d);
     $('admUserTable').querySelectorAll('tbody tr').forEach((tr) => {
       const uid = tr.getAttribute('data-uid');
       tr.querySelector('[data-act="level"]').onchange = (e) => admSetLevel(uid, e.target.value);
