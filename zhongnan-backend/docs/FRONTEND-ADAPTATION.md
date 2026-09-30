@@ -2,7 +2,7 @@
 
 > 面向前端（`web/` 原生 JS 站点及后续独立前端/移动端）的后端 API 契约与适配说明。
 > 后端每次破坏性契约变更都会在此登记：变更内容 → 迁移对照 → 前端已同步点。
-> 版本对齐 `package.json`，当前基线：**v2.219.0**。
+> 版本对齐 `package.json`，当前基线：**v2.220.0**。
 
 ---
 
@@ -109,6 +109,7 @@
 
 | 版本 | 变更 |
 |---|---|
+| v2.220.0 | 模态统一收口（纯前端交互/a11y，无 API 变更）：18 个 `.modal-mask` 弹窗幂等补 `role=dialog`/`aria-modal`；openModal 焦点入模态、closeModalEl 焦点恢复；全局 Esc 关最上层可见模态（dpModal 专属 Esc 移除）；workbench ESC 退级对打开模态让位（hasOverlay 补 `.modal-mask:not(.hidden)`）；listenModal 关闭清理经 `setModalCloseHook` 钩子（listenFinish 只停播清态，旧双轨点击监听移除）；openAuth/closeAuth 走收口入口（登录弹窗开即聚焦） |
 | v2.219.0 | 前后端能力对齐：web 端补齐 4 处「后端有、前端无入口」——广告位管理标签页（/api/ads/admin/* CRUD）、全量投稿渠道展开（/api/submission/channels）、用户行操作 admin-flag、知识条目归档/恢复；后端 API 无变更 |
 | v2.218.0 | 请求体错误契约：坏 JSON 400「请求体格式错误」/ 超 12mb 413「请求体过大」（原 500 INTERNAL_ERROR）；新增 `TRUST_PROXY_HOPS` 部署变量（默认 1）解析 X-Forwarded-For 真实客户端 IP，保障 IP 维度限流准确 |
 | v2.217.0 | 注册与改密暴力防护：`/register` 同 IP 15min 成功注册 5 个后 429「注册过于频繁」（失败探测不计数）；`/change-password` 当前密码连错 5 次 429「尝试过于频繁」，成功改密清零。前端无 API 变更，仅新增 429 场景 |
