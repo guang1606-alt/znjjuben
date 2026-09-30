@@ -2,6 +2,18 @@
  * v2.208 安全加固（HTTP 层端到端）：
  * 1. 安全响应头中间件——所有响应携带 nosniff/DENY/Referrer-Policy/Permissions-Policy，/api 追加 no-store
  * 2. 登录失败限流——同 IP+手机号 15 分钟窗口内累计 5 次失败即 429 锁定；成功登录清零；不同手机号互不影响
+ *
+ * v2.236 CSP 上线（先红后绿）：
+ * 背景：v2.208 注释「不设 CSP：web 端大量内联样式」仅覆盖 style 维度，把 script 维度也一并放弃了。
+ * 本轮勘察实证：web/ 全部 13 个 JS 0 处 eval/new Function、0 处内联事件处理器，index.html 0 内联
+ * <script>/<style>/onclick（156 处内联 style= 属性仅存于 style 维度），无 @font-face/<form>/<base>，
+ * 脚本与样式全部同源 ./xxx.js/css——script-src 'self'（不含 unsafe-inline）可直接强制，注入型 XSS
+ * 的内联脚本执行面被真正封死（unsafe-inline 只留在 style-src，不殃及 script）。
+ * 策略：仅非 /api 响应携带 CSP（文档与静态资产；JSON API 无需文档策略、避免噪音），值为：
+ *   default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline';
+ *   img-src 'self' data: https: blob:; connect-src 'self'; font-src 'self';
+ *   object-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'self'
+ * （img-src 放行 https: 供广告位用户图、data: 供 CSS 内联 SVG 噪点底纹、blob: 供本地下载预览。）
  */
 const test = require('node:test');
 const assert = require('node:assert/strict');
@@ -54,6 +66,34 @@ test('安全响应头：/api 响应携带 Cache-Control: no-store，静态与健
   assert.strictEqual(api.headers.get('cache-control'), 'no-store');
   const health = await fetch(`${base}/health`);
   assert.notStrictEqual(health.headers.get('cache-control'), 'no-store');
+});
+
+// v2.236 CSP：预期策略全文（改策略必须同步改这里与 app.ts 注释，防止静默放松）
+const EXPECTED_CSP = "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; "
+  + 'img-src \'self\' data: https: blob:; connect-src \'self\'; font-src \'self\'; '
+  + "object-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'self'";
+
+test('安全响应头：SPA 导航与静态资源携带 CSP，script-src 不含 unsafe-inline', async () => {
+  // 浏览器导航（Accept: text/html → 回退 index.html）与同源静态资产
+  const nav = await fetch(`${base}/`, { headers: { Accept: 'text/html' } });
+  assert.match(await nav.text(), /<html/, '导航应回退到 index.html');
+  assert.strictEqual(nav.headers.get('content-security-policy'), EXPECTED_CSP, '导航响应 CSP 不符');
+  const css = await fetch(`${base}/styles.css`);
+  assert.strictEqual(css.headers.get('content-security-policy'), EXPECTED_CSP, '静态资源 CSP 不符');
+  // script-src 明确不含 unsafe-inline（注入型 XSS 的内联脚本执行面必须封死）
+  const scriptSrc = EXPECTED_CSP.match(/script-src ([^;]+)/)[1];
+  assert.ok(!scriptSrc.includes('unsafe-inline'), 'script-src 不得放行 unsafe-inline');
+  assert.ok(EXPECTED_CSP.includes("object-src 'none'"), 'object/embed 必须整体禁用');
+  assert.ok(EXPECTED_CSP.includes("frame-ancestors 'none'"), 'frame-ancestors 与 X-Frame-Options:DENY 对齐');
+});
+
+test('安全响应头：/api JSON 响应不携带 CSP（文档策略不污染 API），/health 非 API 按规则携带', async () => {
+  const api = await post(base, '/api/auth/login', { phone: 'x', password: 'y' });
+  assert.strictEqual(api.headers.get('content-security-policy'), null, '/api 不应携带 CSP');
+  const nf = await fetch(`${base}/api/no-such-route`);
+  assert.strictEqual(nf.headers.get('content-security-policy'), null, '/api 404 不应携带 CSP');
+  const health = await fetch(`${base}/health`);
+  assert.strictEqual(health.headers.get('content-security-policy'), EXPECTED_CSP, '/health 非 /api 路径应携带 CSP');
 });
 
 test('登录限流：同手机号连续 5 次失败后第 6 次被 429 锁定', async () => {

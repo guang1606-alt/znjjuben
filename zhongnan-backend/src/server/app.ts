@@ -53,13 +53,23 @@ export function createApp(routers: AppRouters = {}, preErrorRouter?: Router | Ro
   app.use(cors({ origin: (process.env.CORS_ORIGINS || '').split(',').filter(Boolean), credentials: true }));
   // 安全响应头（v2.208）：nosniff 防_mime嗅探、DENY 防点击劫持、Referrer-Policy 限引荐泄露、
   // Permissions-Policy 关闭摄像头/麦克风/定位；/api 响应禁缓存防 token 与个人信息落中间缓存。
-  // 不设 CSP：web 端大量内联样式，style-src 需 unsafe-inline 形同虚设，贸然上线会全站破坏。
+  // CSP（v2.236 上线）：勘察实证 web/ 全部 JS 0 处 eval/new Function、0 处内联事件处理器，
+  // index.html 0 内联 <script>/<style>/onclick（156 处内联 style= 属性仅存于 style 维度）、
+  // 无 @font-face/<form>/<base>，脚本样式全部同源——script-src 'self'（不含 unsafe-inline）
+  // 直接强制，注入型 XSS 的内联脚本执行面被封死；unsafe-inline 只留在 style-src 不殃及 script。
+  // 仅非 /api 响应携带（文档与静态资产；JSON API 无需文档策略）。守卫：http-security-headers.test.cjs。
+  // img-src 放行 https:（广告位用户图）/data:（CSS 内联 SVG 噪点底纹）/blob:（本地下载预览）。
+  const CSP = "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; "
+    + "img-src 'self' data: https: blob:; connect-src 'self'; font-src 'self'; "
+    + "object-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'self'";
   app.use((_req, res, next) => {
     res.setHeader('X-Content-Type-Options', 'nosniff');
     res.setHeader('X-Frame-Options', 'DENY');
     res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
     res.setHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
-    if (_req.path.startsWith('/api/')) res.setHeader('Cache-Control', 'no-store');
+    const isApi = _req.path === '/api' || _req.path.startsWith('/api/');
+    if (isApi) res.setHeader('Cache-Control', 'no-store');
+    else res.setHeader('Content-Security-Policy', CSP);
     next();
   });
   app.get('/health', (_req, res) => res.json({ ok: true, ts: Date.now() }));
