@@ -43,6 +43,11 @@ export interface AppDeps {
 
 export function createApp(routers: AppRouters = {}, preErrorRouter?: Router | Router[], deps: AppDeps = {}): Express {
   const app = express();
+  // v2.218 反向代理真实 IP：生产在 nginx/veFaaS 网关后，不解析 X-Forwarded-For 则 req.ip 恒为
+  // 代理 IP，注册/登录/邀请码三类 IP 维度限流会把全体用户算成同一来源（注册限流 5 个/15min 必误伤）。
+  // 默认信任 1 跳代理（客户端伪造的 XFF 前缀会被忽略，取倒数第 2 跳即代理所报真实地址）；
+  // 多层网关用 TRUST_PROXY_HOPS 增加跳数，直连部署设 0 关闭解析。
+  app.set('trust proxy', Number(process.env.TRUST_PROXY_HOPS ?? '1') || 0);
   app.use(express.json({ limit: '12mb' })); // 学习窗口支持上传较大文本/转写稿
   app.use(express.text({ type: 'text/plain', limit: '1mb' })); // veFaaS 定时器 Payload 以 text/plain 透传
   app.use(cors({ origin: (process.env.CORS_ORIGINS || '').split(',').filter(Boolean), credentials: true }));
@@ -140,6 +145,14 @@ export function createApp(routers: AppRouters = {}, preErrorRouter?: Router | Ro
   // 终局 catch-all 会抢在它们之前吞掉请求；非 API 未知路径维持 Express 默认 404 即可。
   // 统一兜底错误处理，绝不把堆栈抛给前端
   app.use((err: Error, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
+    // v2.218 请求体客户端错误按原状态码回 JSON（此前一律 500 INTERNAL_ERROR，契约失真）：
+    // 坏 JSON → 400；超过 limit → 413。详情仍记服务端日志。
+    const be = err as any;
+    if (typeof be.type === 'string' && be.type.startsWith('entity.')) {
+      const status = be.status === 413 || be.statusCode === 413 ? 413 : 400;
+      console.error('[bad-request-body]', be.type);
+      return res.status(status).json({ error: status === 413 ? '请求体过大' : '请求体格式错误' });
+    }
     console.error('[unhandled]', err);
     res.status(500).json({ error: 'INTERNAL_ERROR' });
   });

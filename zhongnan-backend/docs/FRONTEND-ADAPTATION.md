@@ -2,7 +2,7 @@
 
 > 面向前端（`web/` 原生 JS 站点及后续独立前端/移动端）的后端 API 契约与适配说明。
 > 后端每次破坏性契约变更都会在此登记：变更内容 → 迁移对照 → 前端已同步点。
-> 版本对齐 `package.json`，当前基线：**v2.217.0**。
+> 版本对齐 `package.json`，当前基线：**v2.218.0**。
 
 ---
 
@@ -78,9 +78,14 @@
 
 - 所有错误均为 JSON：`{ "error": "ERROR_CODE" | "人类可读文案" }`，绝不返回 HTML 或堆栈
 - 未知 `/api/*` 路由：`404 { "error": "NOT_FOUND" }`（v2.213 起）
+- **请求体客户端错误**（v2.218 起）：POST 坏 JSON → `400 { "error": "请求体格式错误" }`；超过 12mb 上限 → `413 { "error": "请求体过大" }`（此前一律 500 INTERNAL_ERROR，契约失真已修正）
 - **500 一律 `{ "error": "INTERNAL_ERROR" }`**（v2.216 起）：内部异常详情（Prisma/路径/供应商错误）只进服务端日志（`failInternal()` 统一出口），前端遇到 `INTERNAL_ERROR` 应显示本地友好文案而非错误码本身
 - 统一兜底：`500 { "error": "INTERNAL_ERROR" }`
 - `/api/*` 响应带 `Cache-Control: no-store`（防 token/个人信息落中间缓存）
+
+### 部署变量（v2.218 起）
+
+- `TRUST_PROXY_HOPS`：反向代理跳数，默认 `1`（nginx/veFaaS 单层网关标准形态）。多层网关设实际跳数；**直连部署（无代理）设 `0`**。影响 `req.ip` → 注册/登录/邀请码三类 IP 维度限流的准确性：不解析 XFF 时全体用户共享代理 IP，注册限流（5 个/15min/IP）必误伤
 
 ### 鉴权与会话（`web/api.js` API 层）
 
@@ -93,6 +98,7 @@
 
 | 版本 | 变更 |
 |---|---|
+| v2.218.0 | 请求体错误契约：坏 JSON 400「请求体格式错误」/ 超 12mb 413「请求体过大」（原 500 INTERNAL_ERROR）；新增 `TRUST_PROXY_HOPS` 部署变量（默认 1）解析 X-Forwarded-For 真实客户端 IP，保障 IP 维度限流准确 |
 | v2.217.0 | 注册与改密暴力防护：`/register` 同 IP 15min 成功注册 5 个后 429「注册过于频繁」（失败探测不计数）；`/change-password` 当前密码连错 5 次 429「尝试过于频繁」，成功改密清零。前端无 API 变更，仅新增 429 场景 |
 | v2.216.0 | 500 错误脱敏：12 处动态异常消息直回（admin-model×10/knowledge/export）统一为 `INTERNAL_ERROR`；详情只进服务端日志；前端导出失败提示对 `INTERNAL_ERROR` 回落本地文案 |
 | v2.215.0 | 分页统一契约（见上）；`healths`→`items`；`/market/listings` 裸数组→包裹；board total 修复 |
