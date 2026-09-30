@@ -12,6 +12,7 @@ import { createRequireAdmin, requireSuperAdmin, SUPER_ADMIN_PHONE } from '../mid
 import { hashPassword, genInviteCode } from '../lib/auth';
 import { passwordStrength } from '../lib/auth-policy';
 import { prisma as defaultPrisma } from '../lib/prisma';
+import { parsePageParams } from '../lib/pagination';
 import { MemberLevel, MEMBERSHIP, EP_PRICE, ENGINE, EngineTier } from '../config/pricing';
 import { checkEpPrice, simulateMonthlyPlan } from '../config/pricing-sim';
 import { withBillingTransaction } from '../lib/prisma-tx';
@@ -128,9 +129,10 @@ export function createAdminRouter(prisma: PrismaLike | any) {
   });
 
   // 用户列表：分页 + 关键词搜索（手机号/昵称/笔名），带积分余额与作品数
+  // v2.215 分页统一契约：parsePageParams 归一化（page/pageSize 主风格 + limit/offset 别名），
+  // 响应 { items, total, page, pageSize, limit, offset } 四元全回显
   r.get('/users', ...admin, async (req: any, res) => {
-    const page = Math.max(1, parseInt(String(req.query.page ?? '1'), 10) || 1);
-    const pageSize = Math.min(100, Math.max(1, parseInt(String(req.query.pageSize ?? '20'), 10) || 20));
+    const { page, pageSize, offset } = parsePageParams(req.query, { defaultLimit: 20, maxLimit: 100 });
     const q = String(req.query.q ?? '').trim();
     const all: any[] = await prisma.user.findMany();
     let list = all;
@@ -141,13 +143,13 @@ export function createAdminRouter(prisma: PrismaLike | any) {
     }
     list.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
     const total = list.length;
-    const pageItems = list.slice((page - 1) * pageSize, page * pageSize);
+    const pageItems = list.slice(offset, offset + pageSize);
     const items = await Promise.all(pageItems.map(async (u) => {
       const acc = await prisma.pointsAccount.findUnique({ where: { userId: u.id } });
       const projs = await prisma.project.findMany({ where: { userId: u.id } });
       return publicUser(u, acc?.balance ?? 0, projs.length);
     }));
-    res.json({ items, total, page, pageSize });
+    res.json({ items, total, page, pageSize, limit: pageSize, offset });
   });
 
   // 封禁 / 解封

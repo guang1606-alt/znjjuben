@@ -402,8 +402,8 @@ describe('角色资产 HTTP 闭环（串行）', { concurrency: 1 }, () => {
   it('资产体检端点：五维完整度 healths + 冲突预警 conflicts（v2.152）', async () => {
     const h = await jsonReq('GET', '/api/generate/character-assets/health?lang=zh', 'u_ca_a', 'BASIC');
     assert.strictEqual(h.status, 200);
-    assert.ok(Array.isArray(h.json.healths) && Array.isArray(h.json.conflicts));
-    const lin = h.json.healths.find((x) => x.name === '林昭');
+    assert.ok(Array.isArray(h.json.items) && Array.isArray(h.json.conflicts));
+    const lin = h.json.items.find((x) => x.name === '林昭');
     assert.ok(lin, '体检按用户归属，u_ca_a 有林昭档');
     assert.strictEqual(typeof lin.score, 'number');
     // 手动建档最后一次 upsert 只传 name+persona(5字,扣10)：全量覆盖语义 voice=null → 30-10=20 分 thin 档
@@ -427,12 +427,12 @@ describe('角色资产 HTTP 闭环（串行）', { concurrency: 1 }, () => {
     assert.strictEqual(p1.json.total, 4);
     assert.strictEqual(p1.json.limit, 2);
     assert.strictEqual(p1.json.offset, 0);
-    assert.strictEqual(p1.json.healths.length, 2, '页大小受 limit 约束');
+    assert.strictEqual(p1.json.items.length, 2, '页大小受 limit 约束');
     // 关键回归：conflicts 不吃分页页——乙丙分属不同页也必须检出同人设重复档
     const sp = p1.json.conflicts.find((c) => c.type === 'same_persona');
     assert.ok(sp, '冲突在全量库上计算，跨页重复档不漏');
     const p2 = await jsonReq('GET', '/api/generate/character-assets/health?limit=2&offset=2', 'u_ca_pg', 'BASIC');
-    assert.strictEqual(p2.json.healths.length, 2);
+    assert.strictEqual(p2.json.items.length, 2);
     assert.strictEqual(p2.json.offset, 2);
     assert.strictEqual(p2.json.total, 4);
     // 钳制：limit 上限 200，负 offset 归零
@@ -471,7 +471,7 @@ describe('角色资产 HTTP 闭环（串行）', { concurrency: 1 }, () => {
     // 列表与体检的可见范围一致（前端 limit=200 拉满后徽章不缺）
     const h = await jsonReq('GET', '/api/generate/character-assets/health?limit=200', 'u_ca_cap', 'BASIC');
     assert.strictEqual(h.json.total, 101);
-    assert.strictEqual(h.json.healths.length, 101);
+    assert.strictEqual(h.json.items.length, 101);
   });
 
   it('v2.163 检索：list/health q 关键词过滤（人设/声音/标签命中，total=命中数，冲突在过滤集上跑）', async () => {
@@ -488,17 +488,17 @@ describe('角色资产 HTTP 闭环（串行）', { concurrency: 1 }, () => {
     // health：声音命中 / 标签大小写不敏感命中
     const h1 = await jsonReq('GET', `/api/generate/character-assets/health?q=${encodeURIComponent('反问')}`, 'u_ca_q', 'BASIC');
     assert.strictEqual(h1.json.total, 1, 'voice 子串命中');
-    assert.strictEqual(h1.json.healths[0].name, '陈默');
+    assert.strictEqual(h1.json.items[0].name, '陈默');
     const h2 = await jsonReq('GET', `/api/generate/character-assets/health?q=${encodeURIComponent('mystery')}`, 'u_ca_q', 'BASIC');
     assert.strictEqual(h2.json.total, 1, '小写 mystery 命中大写 Mystery 标签');
-    assert.strictEqual(h2.json.healths[0].name, '苏眉');
+    assert.strictEqual(h2.json.items[0].name, '苏眉');
     // health：外观锚点/标志性台词命中（v2.164 复盘补 visualAnchor/signatureLines 字段——数组分支泛化后台词也能搜）
     const hA = await jsonReq('GET', `/api/generate/character-assets/health?q=${encodeURIComponent('一道疤')}`, 'u_ca_q', 'BASIC');
     assert.strictEqual(hA.json.total, 1, 'visualAnchor 锚点子串命中');
-    assert.strictEqual(hA.json.healths[0].name, '林昭');
+    assert.strictEqual(hA.json.items[0].name, '林昭');
     const hB = await jsonReq('GET', `/api/generate/character-assets/health?q=${encodeURIComponent('不会说谎')}`, 'u_ca_q', 'BASIC');
     assert.strictEqual(hB.json.total, 1, 'signatureLines 台词气质锚命中（数组字段分支）');
-    assert.strictEqual(hB.json.healths[0].name, '林昭');
+    assert.strictEqual(hB.json.items[0].name, '林昭');
     // health：dup_name 冲突在过滤集上会响，范围外不误报
     const h3 = await jsonReq('GET', `/api/generate/character-assets/health?q=${encodeURIComponent('顾深')}`, 'u_ca_q', 'BASIC');
     assert.strictEqual(h3.json.total, 2);
@@ -508,7 +508,7 @@ describe('角色资产 HTTP 闭环（串行）', { concurrency: 1 }, () => {
     // 不命中 → 空；无 q → 全量（向后兼容）
     const h5 = await jsonReq('GET', `/api/generate/character-assets/health?q=${encodeURIComponent('不存在的角色')}`, 'u_ca_q', 'BASIC');
     assert.strictEqual(h5.json.total, 0);
-    assert.strictEqual(h5.json.healths.length, 0);
+    assert.strictEqual(h5.json.items.length, 0);
     const h6 = await jsonReq('GET', '/api/generate/character-assets/health', 'u_ca_q', 'BASIC');
     assert.strictEqual(h6.json.total, 5, '无 q 保持全量语义');
   });

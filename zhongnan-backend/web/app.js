@@ -3026,7 +3026,7 @@
   async function loadListings() {
     const sort = $('mkSort').value || 'new';
     let list = [], failed = false;
-    try { const res = await fetch('/api/market/listings?sort=' + sort); if (!res.ok) failed = true; else { const j = await res.json(); if (Array.isArray(j)) list = j; } } catch { failed = true; }
+    try { const res = await fetch('/api/market/listings?sort=' + sort); if (!res.ok) failed = true; else { const j = await res.json(); if (Array.isArray(j.items)) list = j.items; } } catch { failed = true; }
     const grid = $('mkGrid'), empty = $('mkEmpty');
     empty.textContent = failed ? t('loadFail') : t('mkEmpty');
     empty.classList.toggle('hidden', list.length > 0); grid.innerHTML = '';
@@ -4734,14 +4734,14 @@
   }
   function renderCastLibrary(assets, health, listTotal, usage) {
     const grid = $('castLibGrid'); const empty = $('castLibEmpty');
-    const hMap = new Map((health.healths || []).map((h) => [h.id, h]));
+    const hMap = new Map((health.items || []).map((h) => [h.id, h]));
     const conflicts = health.conflicts || [];
     let conflictHtml = conflicts.length
       ? `<div class="notice" style="border-color:#c0392b"><b>${t('castLibConflictTitle')}</b><ul style="margin:4px 0 0 18px;padding:0">${conflicts.map((c) => `<li style="font-size:12px">${escapeHtml(c.note)}</li>`).join('')}</ul></div>`
       : '';
     // v2.156 复盘修复：health.total / listTotal 超出渲染条数时给截断提示（不再静默截断）
     // v2.164 复盘修复：搜索态下 total=命中数，文案从"资产库共 N 条"切"搜索命中 N 条"（三面板同口径）
-    const shown = Math.max(assets.length, (health.healths || []).length);
+    const shown = Math.max(assets.length, (health.items || []).length);
     const totalKnown = Math.max(Number.isFinite(listTotal) ? listTotal : 0, Number(health.total) || 0);
     if (totalKnown > shown && shown > 0) {
       const searching = String($('castLibSearch')?.value ?? '').trim() !== '';
@@ -4984,13 +4984,13 @@
   }
   function renderPropLibrary(assets, health, listTotal, usage) {
     const grid = $('propLibGrid'); const empty = $('propLibEmpty');
-    const hMap = new Map((health.healths || []).map((h) => [h.id, h]));
+    const hMap = new Map((health.items || []).map((h) => [h.id, h]));
     const conflicts = health.conflicts || [];
     let conflictHtml = conflicts.length
       ? `<div class="notice" style="border-color:#c0392b"><b>${t('propLibConflictTitle')}</b><ul style="margin:4px 0 0 18px;padding:0">${conflicts.map((c) => `<li style="font-size:12px">${escapeHtml(c.note)}</li>`).join('')}</ul></div>`
       : '';
     // v2.164 复盘修复：搜索态下 total=命中数，文案从"资产库共 N 条"切"搜索命中 N 条"（三面板同口径）
-    const shown = Math.max(assets.length, (health.healths || []).length);
+    const shown = Math.max(assets.length, (health.items || []).length);
     const totalKnown = Math.max(Number.isFinite(listTotal) ? listTotal : 0, Number(health.total) || 0);
     if (totalKnown > shown && shown > 0) {
       const searching = String($('propLibSearch')?.value ?? '').trim() !== '';
@@ -5224,13 +5224,13 @@
   }
   function renderSceneLibrary(assets, health, listTotal, usage) {
     const grid = $('sceneLibGrid'); const empty = $('sceneLibEmpty');
-    const hMap = new Map((health.healths || []).map((h) => [h.id, h]));
+    const hMap = new Map((health.items || []).map((h) => [h.id, h]));
     const conflicts = health.conflicts || [];
     let conflictHtml = conflicts.length
       ? `<div class="notice" style="border-color:#c0392b"><b>${t('sceneLibConflictTitle')}</b><ul style="margin:4px 0 0 18px;padding:0">${conflicts.map((c) => `<li style="font-size:12px">${escapeHtml(c.note)}</li>`).join('')}</ul></div>`
       : '';
     // v2.164 复盘修复：搜索态下 total=命中数，文案从"资产库共 N 条"切"搜索命中 N 条"（三面板同口径）
-    const shown = Math.max(assets.length, (health.healths || []).length);
+    const shown = Math.max(assets.length, (health.items || []).length);
     const totalKnown = Math.max(Number.isFinite(listTotal) ? listTotal : 0, Number(health.total) || 0);
     if (totalKnown > shown && shown > 0) {
       const searching = String($('sceneLibSearch')?.value ?? '').trim() !== '';

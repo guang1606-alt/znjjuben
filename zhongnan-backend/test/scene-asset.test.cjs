@@ -303,8 +303,8 @@ describe('场景资产 HTTP 闭环（串行）', { concurrency: 1 }, () => {
   it('体检查询+五维评分+分页钳制+冲突跑全量库（dup_name/closed_mismatch 跨库触发）', async () => {
     const h = await jsonReq('GET', '/api/generate/scene-assets/health?lang=zh', 'u_sc_h', 'BASIC');
     assert.strictEqual(h.status, 200);
-    assert.ok(Array.isArray(h.json.healths) && Array.isArray(h.json.conflicts));
-    const zt = h.json.healths.find((x) => x.name === '老宅祠堂');
+    assert.ok(Array.isArray(h.json.items) && Array.isArray(h.json.conflicts));
+    const zt = h.json.items.find((x) => x.name === '老宅祠堂');
     assert.ok(zt, '体检按用户归属');
     assert.strictEqual(typeof zt.score, 'number');
     assert.strictEqual(zt.level, 'rich', '五维齐全（功能/氛围/出现集/锚点/标签）=丰满档');
@@ -320,7 +320,7 @@ describe('场景资产 HTTP 闭环（串行）', { concurrency: 1 }, () => {
     assert.strictEqual(p1.status, 200);
     assert.strictEqual(p1.json.total, 4);
     assert.strictEqual(p1.json.limit, 2);
-    assert.strictEqual(p1.json.healths.length, 2, '页大小受 limit 约束');
+    assert.strictEqual(p1.json.items.length, 2, '页大小受 limit 约束');
     const sp = p1.json.conflicts.find((c) => c.type === 'same_scene');
     assert.ok(sp, '冲突在全量库上计算，跨页重复档不漏');
     const p3 = await jsonReq('GET', '/api/generate/scene-assets/health?limit=999&offset=-5', 'u_sc_pg', 'BASIC');
@@ -346,7 +346,7 @@ describe('场景资产 HTTP 闭环（串行）', { concurrency: 1 }, () => {
     assert.strictEqual(list.json.assets.length, 101, 'take:200 硬帽下 101 条全部可见');
     const h = await jsonReq('GET', '/api/generate/scene-assets/health?limit=200', 'u_sc_cap', 'BASIC');
     assert.strictEqual(h.json.total, 101);
-    assert.strictEqual(h.json.healths.length, 101);
+    assert.strictEqual(h.json.items.length, 101);
   });
 
   it('v2.163 检索：list/health q 关键词过滤（标签/氛围/名称命中，total=命中数，冲突在过滤集上跑）', async () => {
@@ -362,7 +362,7 @@ describe('场景资产 HTTP 闭环（串行）', { concurrency: 1 }, () => {
     // health：氛围子串命中 + 名称子串命中（大小写不敏感）
     const h1 = await jsonReq('GET', `/api/generate/scene-assets/health?q=${encodeURIComponent('阴森')}`, 'u_sc_q', 'BASIC');
     assert.strictEqual(h1.json.total, 1, '氛围基调命中');
-    assert.strictEqual(h1.json.healths[0].name, '祠堂');
+    assert.strictEqual(h1.json.items[0].name, '祠堂');
     const h2 = await jsonReq('GET', `/api/generate/scene-assets/health?q=${encodeURIComponent('oldmanor')}`, 'u_sc_q', 'BASIC');
     assert.strictEqual(h2.json.total, 2, '名称大小写不敏感命中两档 OldManor');
     assert.ok(h2.json.conflicts.some((c) => c.type === 'closed_mismatch' && c.a === 'OldManor'), '冲突只对过滤后的集合计算且会响');
@@ -375,7 +375,7 @@ describe('场景资产 HTTP 闭环（串行）', { concurrency: 1 }, () => {
     // 不命中 → 空；无 q → 全量（向后兼容）
     const h4 = await jsonReq('GET', `/api/generate/scene-assets/health?q=${encodeURIComponent('不存在的场')}`, 'u_sc_q', 'BASIC');
     assert.strictEqual(h4.json.total, 0);
-    assert.strictEqual(h4.json.healths.length, 0);
+    assert.strictEqual(h4.json.items.length, 0);
     const h5 = await jsonReq('GET', '/api/generate/scene-assets/health', 'u_sc_q', 'BASIC');
     assert.strictEqual(h5.json.total, 4, '无 q 保持全量语义');
   });

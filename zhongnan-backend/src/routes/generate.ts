@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { authRequired, AuthRequest } from '../middleware/auth';
 import { isAdminUser } from '../middleware/admin';
 import { prisma as defaultPrisma } from '../lib/prisma';
+import { parsePageParams } from '../lib/pagination';
 import { EngineTier, MemberLevel, MEMBERSHIP, episodePoints, FEN_PER_POINT, resolveEpisodeCharge, activeProjectLimit, VALUE_ADDED, vaPointsForLevel } from '../config/pricing';
 import { freeze, settle, unfreeze, consumeFlexible, refundFlexible } from '../lib/billing';
 import { withBillingTransaction } from '../lib/prisma-tx';
@@ -534,10 +535,8 @@ generateRouter.get('/character-assets', authRequired, async (req: AuthRequest, r
 // v2.163 检索：q 过滤 rows 后再分页/体检/冲突——total=过滤后计数，conflicts=搜索视角的冲突报告（自洽且不违全量铁律）
 generateRouter.get('/character-assets/health', authRequired, async (req: AuthRequest, res) => {
   const lang = String((req.query.lang as string) || 'zh') === 'en' ? 'en' as const : 'zh' as const;
-  const limitRaw = Math.round(Number(req.query.limit));
-  const offsetRaw = Math.round(Number(req.query.offset));
-  const limit = Number.isFinite(limitRaw) ? Math.min(Math.max(limitRaw, 1), 200) : 50;
-  const offset = Number.isFinite(offsetRaw) ? Math.max(offsetRaw, 0) : 0;
+  // v2.215 分页统一契约：parsePageParams 归一化；列表键 healths→items，补 page/pageSize 回显
+  const { limit, offset, page, pageSize } = parsePageParams(req.query, { defaultLimit: 50, maxLimit: 200 });
   const q = assetSearchQ(req);
   const where = { userId: req.userId! };
   const rows = await prisma.characterAsset.findMany({
@@ -546,8 +545,8 @@ generateRouter.get('/character-assets/health', authRequired, async (req: AuthReq
   const filtered = q ? rows.filter((r: any) => matchAssetQuery(r, q.toLowerCase(), CAST_SEARCH_FIELDS)) : rows;
   const total = q ? filtered.length : await prisma.characterAsset.count({ where }).catch(() => rows.length);
   res.json({
-    total, limit, offset,
-    healths: filtered.slice(offset, offset + limit).map((r: any) => ({ id: r.id, name: r.name, ...scoreCastAsset(r, lang) })),
+    total, limit, offset, page, pageSize,
+    items: filtered.slice(offset, offset + limit).map((r: any) => ({ id: r.id, name: r.name, ...scoreCastAsset(r, lang) })),
     conflicts: detectCastAssetConflicts(filtered, lang),
   });
 });
@@ -765,10 +764,8 @@ generateRouter.get('/prop-assets', authRequired, async (req: AuthRequest, res) =
 // v2.163 检索：q 过滤 rows 后再分页/体检/冲突（与 cast health 同口径）
 generateRouter.get('/prop-assets/health', authRequired, async (req: AuthRequest, res) => {
   const lang = String((req.query.lang as string) || 'zh') === 'en' ? 'en' as const : 'zh' as const;
-  const limitRaw = Math.round(Number(req.query.limit));
-  const offsetRaw = Math.round(Number(req.query.offset));
-  const limit = Number.isFinite(limitRaw) ? Math.min(Math.max(limitRaw, 1), 200) : 50;
-  const offset = Number.isFinite(offsetRaw) ? Math.max(offsetRaw, 0) : 0;
+  // v2.215 分页统一契约：parsePageParams 归一化；列表键 healths→items，补 page/pageSize 回显
+  const { limit, offset, page, pageSize } = parsePageParams(req.query, { defaultLimit: 50, maxLimit: 200 });
   const q = assetSearchQ(req);
   const where = { userId: req.userId! };
   const rows = await prisma.propAsset.findMany({
@@ -777,8 +774,8 @@ generateRouter.get('/prop-assets/health', authRequired, async (req: AuthRequest,
   const filtered = q ? rows.filter((r: any) => matchAssetQuery(r, q.toLowerCase(), PROP_SEARCH_FIELDS)) : rows;
   const total = q ? filtered.length : await prisma.propAsset.count({ where }).catch(() => rows.length);
   res.json({
-    total, limit, offset,
-    healths: filtered.slice(offset, offset + limit).map((r: any) => ({ id: r.id, name: r.name, ...scorePropAsset(r, lang) })),
+    total, limit, offset, page, pageSize,
+    items: filtered.slice(offset, offset + limit).map((r: any) => ({ id: r.id, name: r.name, ...scorePropAsset(r, lang) })),
     conflicts: detectPropAssetConflicts(filtered, lang),
   });
 });
@@ -948,10 +945,8 @@ generateRouter.get('/scene-assets', authRequired, async (req: AuthRequest, res) 
 // v2.163 检索：q 过滤 rows 后再分页/体检/冲突（与 cast/prop health 同口径）
 generateRouter.get('/scene-assets/health', authRequired, async (req: AuthRequest, res) => {
   const lang = String((req.query.lang as string) || 'zh') === 'en' ? 'en' as const : 'zh' as const;
-  const limitRaw = Math.round(Number(req.query.limit));
-  const offsetRaw = Math.round(Number(req.query.offset));
-  const limit = Number.isFinite(limitRaw) ? Math.min(Math.max(limitRaw, 1), 200) : 50;
-  const offset = Number.isFinite(offsetRaw) ? Math.max(offsetRaw, 0) : 0;
+  // v2.215 分页统一契约：parsePageParams 归一化；列表键 healths→items，补 page/pageSize 回显
+  const { limit, offset, page, pageSize } = parsePageParams(req.query, { defaultLimit: 50, maxLimit: 200 });
   const q = assetSearchQ(req);
   const where = { userId: req.userId! };
   const rows = await prisma.sceneAsset.findMany({
@@ -960,8 +955,8 @@ generateRouter.get('/scene-assets/health', authRequired, async (req: AuthRequest
   const filtered = q ? rows.filter((r: any) => matchAssetQuery(r, q.toLowerCase(), SCENE_SEARCH_FIELDS)) : rows;
   const total = q ? filtered.length : await prisma.sceneAsset.count({ where }).catch(() => rows.length);
   res.json({
-    total, limit, offset,
-    healths: filtered.slice(offset, offset + limit).map((r: any) => ({ id: r.id, name: r.name, ...scoreSceneAsset(r, lang) })),
+    total, limit, offset, page, pageSize,
+    items: filtered.slice(offset, offset + limit).map((r: any) => ({ id: r.id, name: r.name, ...scoreSceneAsset(r, lang) })),
     conflicts: detectSceneAssetConflicts(filtered, lang),
   });
 });

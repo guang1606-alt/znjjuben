@@ -44,7 +44,7 @@ describe('剧本交易广场·担保交易状态机 HTTP 闭环', { concurrency:
     assert.strictEqual(r.status, 200);
     const j = await r.json();
     assert.strictEqual(j.commissionPct, 5);
-    const list = await (await fetch(base + M + '/listings')).json();
+    const list = (await (await fetch(base + M + '/listings')).json()).items;
     assert.ok(list.length >= 1);
     const row = list.find((l) => l.id === j.id);
     assert.strictEqual(row.pricePoints, 100); // 1000分=10元=100积分

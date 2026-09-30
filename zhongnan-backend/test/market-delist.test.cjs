@@ -35,7 +35,7 @@ describe('v2.76 剧本下架', { concurrency: 1 }, () => {
 
   it('下架后从广场列表消失', async () => {
     const r = await fetch(base + M + '/listings');
-    const list = await r.json();
+    const list = (await r.json()).items;
     const ids = list.map((x) => x.id);
     assert.ok(!ids.includes('ls_on'));
   });

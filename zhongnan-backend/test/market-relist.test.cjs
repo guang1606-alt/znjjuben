@@ -36,7 +36,7 @@ describe('v2.77 剧本重新上架', { concurrency: 1 }, () => {
 
   it('重新上架后出现在广场列表', async () => {
     const r = await fetch(base + M + '/listings');
-    const list = await r.json();
+    const list = (await r.json()).items;
     const ids = list.map((x) => x.id);
     assert.ok(ids.includes('ls_off'));
   });

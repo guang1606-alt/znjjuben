@@ -78,7 +78,7 @@ describe('v2.72 价值证书接入交易广场', { concurrency: 1 }, () => {
     const j = await r.json();
     assert.ok(j.value);
     assert.strictEqual(j.value.episodes, 3);
-    const list = await (await fetch(base + M + '/listings')).json();
+    const list = (await (await fetch(base + M + '/listings')).json()).items;
     const row = list.find((l) => l.id === j.id);
     assert.ok(row);
     assert.ok(['S', 'A', 'B', 'C', 'NA'].includes(row.valueGrade));

@@ -130,7 +130,7 @@ async function mountAssetEditor(family) {
     Api.request = async (url, options) => {
       if (!url.startsWith('/api/generate/')) return originalRequest(url, options);
       const asset = {id:'layout-test-asset',name:'布局测试资产',persona:'用于验证输入框边界的人设',meaning:'用于验证输入框边界的含义',signatureLines:['布局测试台词'],tags:[],eps:[],closedEps:[],usedCount:0};
-      const data = url.includes('/health') ? {healths:[{id:asset.id,score:60,level:'usable',advice:[]}],conflicts:[],total:1}
+      const data = url.includes('/health') ? {items:[{id:asset.id,score:60,level:'usable',advice:[]}],conflicts:[],total:1,page:1,pageSize:50,limit:50,offset:0}
         : url.includes('/usage') ? {usage:{}} : {assets:[asset],total:1};
       return new Response(JSON.stringify(data), {headers:{'Content-Type':'application/json'}});
     };

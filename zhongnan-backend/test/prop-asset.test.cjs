@@ -307,8 +307,8 @@ describe('道具资产 HTTP 闭环（串行）', { concurrency: 1 }, () => {
   it('体检查询+分页+冲突跑全量库+closed_mismatch 跨库触发', async () => {
     const h = await jsonReq('GET', '/api/generate/prop-assets/health?lang=zh', 'u_pa_h', 'BASIC');
     assert.strictEqual(h.status, 200);
-    assert.ok(Array.isArray(h.json.healths) && Array.isArray(h.json.conflicts));
-    const yu = h.json.healths.find((x) => x.name === '玉佩');
+    assert.ok(Array.isArray(h.json.items) && Array.isArray(h.json.conflicts));
+    const yu = h.json.items.find((x) => x.name === '玉佩');
     assert.ok(yu, '体检按用户归属');
     assert.strictEqual(typeof yu.score, 'number');
     assert.strictEqual(yu.level, 'rich', '五维齐全（含义/出现集/禁忌/锚点/标签）=丰满档');
@@ -324,7 +324,7 @@ describe('道具资产 HTTP 闭环（串行）', { concurrency: 1 }, () => {
     assert.strictEqual(p1.status, 200);
     assert.strictEqual(p1.json.total, 4);
     assert.strictEqual(p1.json.limit, 2);
-    assert.strictEqual(p1.json.healths.length, 2, '页大小受 limit 约束');
+    assert.strictEqual(p1.json.items.length, 2, '页大小受 limit 约束');
     const sp = p1.json.conflicts.find((c) => c.type === 'same_meaning');
     assert.ok(sp, '冲突在全量库上计算，跨页重复档不漏');
     const p3 = await jsonReq('GET', '/api/generate/prop-assets/health?limit=999&offset=-5', 'u_pa_pg', 'BASIC');
@@ -350,7 +350,7 @@ describe('道具资产 HTTP 闭环（串行）', { concurrency: 1 }, () => {
     assert.strictEqual(list.json.assets.length, 101, 'take:200 硬帽下 101 条全部可见');
     const h = await jsonReq('GET', '/api/generate/prop-assets/health?limit=200', 'u_pa_cap', 'BASIC');
     assert.strictEqual(h.json.total, 101);
-    assert.strictEqual(h.json.healths.length, 101);
+    assert.strictEqual(h.json.items.length, 101);
   });
 
   it('v2.163 检索：list/health q 关键词过滤（标签/含义/大小写不敏感命中，total=命中数，冲突在过滤集上跑）', async () => {
@@ -368,16 +368,16 @@ describe('道具资产 HTTP 闭环（串行）', { concurrency: 1 }, () => {
     // health：含义子串命中 + limit 在过滤集上生效
     const h1 = await jsonReq('GET', `/api/generate/prop-assets/health?limit=1&q=${encodeURIComponent('凭证')}`, 'u_pa_q', 'BASIC');
     assert.strictEqual(h1.json.total, 2, '含义含「凭证」的两档命中');
-    assert.strictEqual(h1.json.healths.length, 1, 'limit 在过滤集上生效');
-    assert.ok(['玉佩', '婚书'].includes(h1.json.healths[0].name));
+    assert.strictEqual(h1.json.items.length, 1, 'limit 在过滤集上生效');
+    assert.ok(['玉佩', '婚书'].includes(h1.json.items[0].name));
     // health：英文标签大小写不敏感命中（单档）
     const h2 = await jsonReq('GET', `/api/generate/prop-assets/health?q=${encodeURIComponent('revenge')}`, 'u_pa_q', 'BASIC');
     assert.strictEqual(h2.json.total, 1, '小写 revenge 命中大写 Revenge 标签');
-    assert.strictEqual(h2.json.healths[0].name, '铜镜');
+    assert.strictEqual(h2.json.items[0].name, '铜镜');
     // health：外观锚点命中（v2.164 复盘补 visualAnchor 字段——搜"青白玉蝉纹"类锚点词必须能命中）
     const hA = await jsonReq('GET', `/api/generate/prop-assets/health?q=${encodeURIComponent('蝉纹')}`, 'u_pa_q', 'BASIC');
     assert.strictEqual(hA.json.total, 1, 'visualAnchor 锚点子串命中');
-    assert.strictEqual(hA.json.healths[0].name, '玉佩');
+    assert.strictEqual(hA.json.items[0].name, '玉佩');
     // health：名称命中两档同名 → dup_name 冲突在过滤集上会响
     const h2b = await jsonReq('GET', `/api/generate/prop-assets/health?q=${encodeURIComponent('铜镜')}`, 'u_pa_q', 'BASIC');
     assert.strictEqual(h2b.json.total, 2);
@@ -388,7 +388,7 @@ describe('道具资产 HTTP 闭环（串行）', { concurrency: 1 }, () => {
     // 不命中 → 空；无 q → 全量（向后兼容）
     const h4 = await jsonReq('GET', `/api/generate/prop-assets/health?q=${encodeURIComponent('不存在的词')}`, 'u_pa_q', 'BASIC');
     assert.strictEqual(h4.json.total, 0);
-    assert.strictEqual(h4.json.healths.length, 0);
+    assert.strictEqual(h4.json.items.length, 0);
     const h5 = await jsonReq('GET', '/api/generate/prop-assets/health', 'u_pa_q', 'BASIC');
     assert.strictEqual(h5.json.total, 5, '无 q 保持全量语义');
   });

@@ -7,6 +7,7 @@
  */
 import { asyncRouter } from '../lib/async-router';
 import { prisma as defaultPrisma } from '../lib/prisma';
+import { parsePageParams } from '../lib/pagination';
 import { authRequired, AuthRequest } from '../middleware/auth';
 import { withBillingTransaction } from '../lib/prisma-tx';
 import { MEMBERSHIP, FEN_PER_POINT, MemberLevel } from '../config/pricing';
@@ -150,15 +151,19 @@ export function createMarketRouter(prisma: PrismaLike | any) {
   });
 
   // 列表/筛选（只给样章）
+  // v2.215 分页统一契约：裸数组升级为 { items, total, page, pageSize, limit, offset }；
+  // 默认 50 保持前端橱窗观感、上限 100；全量窄 select 后路由层分页（total=真总数，不再静默截断 50）
   marketRouter.get('/listings', async (req, res) => {
+    const { limit, offset, page, pageSize } = parsePageParams(req.query, { defaultLimit: 50, maxLimit: 100 });
     const { section, sort } = req.query as Record<string, string>;
-    const list = await prisma.listing.findMany({
+    const all = await prisma.listing.findMany({
       where: { status: { in: ['ON_SHELF', 'ESCROW'] }, ...(section ? { title: { contains: section } } : {}) },
       orderBy: sort === 'price_asc' ? { priceFen: 'asc' } : { createdAt: 'desc' },
-      take: 50,
       select: { id: true, title: true, priceFen: true, sample: true, commissionPct: true, status: true, createdAt: true, valueIndex: true, valueGrade: true, valueEpisodes: true, seller: { select: { nickname: true } } },
     });
-    res.json(list.map((l: any) => ({ ...l, pricePoints: l.priceFen / FEN_PER_POINT })));
+    const total = all.length;
+    const items = all.slice(offset, offset + limit).map((l: any) => ({ ...l, pricePoints: l.priceFen / FEN_PER_POINT }));
+    res.json({ items, total, page, pageSize, limit, offset });
   });
 
   // v2.73 买家详情页：公开浏览，返回价值证书维度+样章+价格，绝不返回全本；价值为确定性零成本重算
@@ -186,9 +191,10 @@ export function createMarketRouter(prisma: PrismaLike | any) {
   marketRouter.get('/board', async (req, res) => {
     const type = String(req.query.type || 'new');
     const limit = Math.min(50, Math.max(1, Number(req.query.limit) || 20));
+    // v2.215 total 真总数语义：limit 只裁 items，total=过滤后总数（take 500 截断硬帽，家族铁律）
     if (type === 'hot') {
       // 热销榜：最近已成交(SETTLED)的剧本，作为社交证明；每件剧本唯一成交一次，按成交时间倒序
-      const purchases = await prisma.purchase.findMany({ where: { status: 'SETTLED' }, orderBy: { createdAt: 'desc' }, take: limit });
+      const purchases = await prisma.purchase.findMany({ where: { status: 'SETTLED' }, orderBy: { createdAt: 'desc' }, take: 500 });
       const rows = await Promise.all(purchases.map(async (p: any) => {
         const listing = await prisma.listing.findUnique({ where: { id: p.listingId } });
         const seller = listing ? await prisma.user.findUnique({ where: { id: listing.sellerId }, select: { nickname: true } }) : null;
@@ -198,18 +204,18 @@ export function createMarketRouter(prisma: PrismaLike | any) {
           valueIndex: listing?.valueIndex ?? null, soldAt: p.createdAt, status: 'SOLD',
         };
       }));
-      return res.json({ type: 'hot', total: rows.length, items: rows });
+      return res.json({ type: 'hot', total: rows.length, items: rows.slice(0, limit) });
     }
     if (type === 'rating') {
       // 好评榜：在售中按价值指数降序（无价值认证的自然靠后）
-      const all = await prisma.listing.findMany({ where: { status: 'ON_SHELF' }, orderBy: [{ valueIndex: 'desc' }, { createdAt: 'desc' }], take: limit, select: { id: true, title: true, priceFen: true, sample: true, commissionPct: true, createdAt: true, valueIndex: true, valueGrade: true, valueEpisodes: true, seller: { select: { nickname: true } } } });
+      const all = await prisma.listing.findMany({ where: { status: 'ON_SHELF' }, orderBy: [{ valueIndex: 'desc' }, { createdAt: 'desc' }], take: 500, select: { id: true, title: true, priceFen: true, sample: true, commissionPct: true, createdAt: true, valueIndex: true, valueGrade: true, valueEpisodes: true, seller: { select: { nickname: true } } } });
       const rows = all.filter((l: any) => l.valueIndex != null).map((l: any) => ({ ...l, pricePoints: l.priceFen / FEN_PER_POINT, status: 'ON_SHELF' }));
-      return res.json({ type: 'rating', total: rows.length, items: rows });
+      return res.json({ type: 'rating', total: rows.length, items: rows.slice(0, limit) });
     }
     // 默认新品榜：在售中按上架时间倒序
-    const all = await prisma.listing.findMany({ where: { status: 'ON_SHELF' }, orderBy: { createdAt: 'desc' }, take: limit, select: { id: true, title: true, priceFen: true, sample: true, commissionPct: true, createdAt: true, valueIndex: true, valueGrade: true, valueEpisodes: true, seller: { select: { nickname: true } } } });
+    const all = await prisma.listing.findMany({ where: { status: 'ON_SHELF' }, orderBy: { createdAt: 'desc' }, take: 500, select: { id: true, title: true, priceFen: true, sample: true, commissionPct: true, createdAt: true, valueIndex: true, valueGrade: true, valueEpisodes: true, seller: { select: { nickname: true } } } });
     const rows = all.map((l: any) => ({ ...l, pricePoints: l.priceFen / FEN_PER_POINT, status: 'ON_SHELF' }));
-    res.json({ type: 'new', total: rows.length, items: rows });
+    res.json({ type: 'new', total: rows.length, items: rows.slice(0, limit) });
   });
 
   // ① 付款 → 托管（扣买家钱，但不给卖家），付款即解锁全本
