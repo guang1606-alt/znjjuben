@@ -1357,31 +1357,20 @@
   }
 
   /* ---------- 小南 ---------- */
-  function xnSay(line, tip) {
+  function xnSay(line, tip, kind) {
     $('xnLine').textContent = line;
     const tipEl = $('xnTip');
     if (tip) { tipEl.textContent = tip; tipEl.classList.remove('hidden'); } else tipEl.classList.add('hidden');
-    znToast(line); // c201 用户反馈：小南台词区不够醒目，校验/扣费/错误提示容易被无视成"点了没反应"——顶部 toast 兜底可见性
+    znToast(line, kind); // c201 用户反馈：小南台词区不够醒目，校验/扣费/错误提示容易被无视成"点了没反应"——顶部 toast 兜底可见性（v2.225 起带 kind 色条语义）
   }
   /* ---------- c201 用户反馈修复：全局轻提示 / 模态输入 / 按钮小菜单 ----------
    * 背景：多端（尤其微信内置浏览器/手机 WebView）下 window.prompt 被禁用或极不显眼，
    * 原依赖 prompt 的功能（管理员调积分/重置密码/驳回原因）表现为"点了没动作"。
    * 统一替换为自制模态；全局 toast 让所有 xnSay 提示可见。 */
-  function znToast(msg) {
-    try {
-      let host = document.getElementById('znToastHost');
-      if (!host) { host = document.createElement('div'); host.id = 'znToastHost'; document.body.appendChild(host); }
-      // v2.191 toast 顶部让开 topbar（导航可能换行）
-      const tb = document.querySelector('.topbar');
-      host.style.top = (tb ? Math.ceil(tb.getBoundingClientRect().bottom) : 14) + 8 + 'px';
-      const el = document.createElement('div');
-      el.className = 'zn-toast';
-      el.textContent = String(msg || '');
-      host.appendChild(el);
-      requestAnimationFrame(() => el.classList.add('zn-toast-in'));
-      setTimeout(() => { el.classList.remove('zn-toast-in'); setTimeout(() => el.remove(), 320); }, 2800);
-      while (host.children.length > 3) host.firstChild.remove();
-    } catch { /* 无 DOM 环境忽略 */ }
+  function znToast(msg, kind) {
+    // v2.225 统一到 v2.186 富版体系（#toastStack 常驻）：kind 色条/关闭按钮/堆叠上限全继承，
+    // 双 host（#znToastHost 动态创建）退役；签名向后兼容，旧纯文本调用点零改动
+    try { toast({ kind: kind || 'info', body: msg }); } catch { /* 无 DOM 环境忽略 */ }
   }
   window.znToast = znToast; // 供独立 view（room/branch 等）复用
   /* ---------- v2.221 加载/空态统一 ----------
@@ -1479,7 +1468,7 @@
   }
   // 供零构建子视图（branch-view / teardown-view 等独立 IIFE）调用
   window.xnSay = xnSay;
-  window.Xn = Object.assign(window.Xn || {}, { toast: (m) => xnSay(m) });
+  window.Xn = Object.assign(window.Xn || {}, { toast: (m, kind) => xnSay(m, undefined, kind) });
   window.addEventListener('zn-auth-required', () => openAuth('login'));
   // c198：编剧室 GO 决议 → 带着决议去立项。统一落到唯一免费模式 tags（标签立项），
   // 只预填卖点与集数并自动给一组标签，不自动点击生成、不扣任何积分；HOLD/NO 房在 room-view 侧不发此事件。
@@ -1643,6 +1632,8 @@
   function toastError(msg, title) { return toast({ kind: 'error', title: title || '出错', body: msg }); }
   function toastOk(msg, title)   { return toast({ kind: 'ok',    title: title || '成功', body: msg }); }
   function toastInfo(msg, title) { return toast({ kind: 'info',  title: title || '', body: msg }); }
+  // v2.225 window 暴露：独立 view js 也可直接复用富版便捷函数（陪伴提示仍建议走 Xn.toast）
+  window.toastError = toastError; window.toastOk = toastOk; window.toastInfo = toastInfo;
   /* ---------- v2.186 全局 Toast 结束 ---------- */
 
   /* ---------- v2.202 通用模态对话框 ---------- */
@@ -1979,9 +1970,9 @@
     // 工作台
     const wl = $('workbenchLayer');
     if (wl && !wl.classList.contains('hidden')) wl.style.paddingTop = pad;
-    // Toast 通知
-    const host = document.getElementById('znToastHost');
-    if (host) host.style.top = Math.ceil(tbBottom) + 8 + 'px';
+    // Toast 通知（v2.225 起 #toastStack 富版单体系接管；v2.191 该让位逻辑此前只覆盖旧 znToastHost，富版压顶缺口一并修复）
+    const stack = document.getElementById('toastStack');
+    if (stack) stack.style.top = Math.ceil(tbBottom) + 8 + 'px';
     // 模态框：高模态框顶部需让开 topbar
     document.querySelectorAll('.modal-mask').forEach((m) => { m.style.paddingTop = pad; });
   }

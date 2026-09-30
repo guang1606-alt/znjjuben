@@ -37,6 +37,8 @@
     },
   };
   const T = () => (en() ? L.en : L.zh);
+  // v2.225 toast 语义分级：本文件调用点均为行数/版本数校验拦截，统一走 error 红条（kind 色条见 v2.186 富版体系）
+  const xnErr = (m) => window.Xn.toast(m, 'error');
   const splitTags = (s) => String(s || '').split(/[,，、;；\s]+/).map((x) => x.trim()).filter(Boolean);
   let rowSeq = 0;
   async function getJson(path) {
@@ -65,7 +67,7 @@
       </div>`;
     wrap.appendChild(div);
     div.querySelector('.dv-del').onclick = () => {
-      if ($('dvRows').children.length <= 2) { window.Xn.toast(T().minTwoDel); return; }
+      if ($('dvRows').children.length <= 2) { xnErr(T().minTwoDel); return; }
       div.remove(); renumber();
     };
     if (prefill) {
@@ -134,7 +136,7 @@
   }
   async function audit() {
     const versions = collect().filter((v) => v.logline || v.archetype || v.conflictTags.length || v.plotTags.length);
-    if (versions.length < 2) { window.Xn.toast(T().minTwoAudit); return; }
+    if (versions.length < 2) { xnErr(T().minTwoAudit); return; }
     znSkeleton('dvResult');
     try {
       const r = await postJson('/api/craft/diversity-audit', { versions, lang: en() ? 'en' : 'zh' });
@@ -155,7 +157,7 @@
       $('diversityPanel').scrollIntoView({ behavior: 'smooth', block: 'start' });
     };
     $('dvClose').onclick = () => $('diversityPanel').classList.add('hidden');
-    $('dvAddBtn').onclick = () => { if ($('dvRows').children.length >= 6) { window.Xn.toast(T().maxSix); return; } addRow(); };
+    $('dvAddBtn').onclick = () => { if ($('dvRows').children.length >= 6) { xnErr(T().maxSix); return; } addRow(); };
     $('dvSeedBtn').onclick = genSeeds;
     $('dvAuditBtn').onclick = audit;
     document.addEventListener('zn-lang', () => {

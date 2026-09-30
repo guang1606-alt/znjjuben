@@ -244,7 +244,7 @@ test('teardown hands the persisted project to the editor with the selected gener
   const { context: c, $ } = setup([], {
     state: { recordId: 'td1' }, btn: () => () => { restored = true; },
     raw: async (url, body) => { requests.push({ url, body }); return { ok: true, data: { project } }; },
-    T: () => ({ projOk: '草稿已保存' }), toast() {}, alert: assert.fail, needLogin: () => false, failMsg: e => e.message,
+    T: () => ({ projOk: '草稿已保存' }), toast() {}, toastErr() {}, toastOk() {}, alert: assert.fail, needLogin: () => false, failMsg: e => e.message,
     CustomEvent: class { constructor(type, init) { this.type = type; this.detail = init.detail; } },
     window: { dispatchEvent: event => events.push(event) },
   });

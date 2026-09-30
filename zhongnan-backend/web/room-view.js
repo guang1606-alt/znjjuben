@@ -95,6 +95,8 @@
     },
   };
   const T = () => (en() ? L.en : L.zh);
+  // v2.225 toast 语义分级：本文件调用点均为校验拦截/请求失败，统一走 error 红条（kind 色条见 v2.186 富版体系）
+  const xnErr = (m) => window.Xn.toast(m, 'error');
   const idemToken = () => `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
   // c199：非安全上下文（http 非 localhost）navigator.clipboard 不存在，?. 静默失败用户无感知；
   // 统一走 Clipboard API + execCommand 兜底，并在触发按钮上给“已复制”瞬时反馈。
@@ -129,7 +131,7 @@
     return window.Api.jsonOrThrow(res);
   }
   function needAuth() {
-    if (!window.Api.isAuthed()) { window.Xn.toast(T().needLogin); return false; }
+    if (!window.Api.isAuthed()) { xnErr(T().needLogin); return false; }
     return true;
   }
   function errMsg(e) {
@@ -181,23 +183,23 @@
   async function pitchOpen() {
     if (!needAuth()) return;
     const idea = $('pitchIdea').value.trim();
-    if (idea.length < 2) { window.Xn.toast(T().needIdea); return; }
+    if (idea.length < 2) { xnErr(T().needIdea); return; }
     const btn = $('pitchOpenBtn'); btn.disabled = true;
     try {
       const j = await post('/api/room/pitch/open', { idea, audience: $('pitchAud').value.trim() || undefined, medium: $('pitchMed').value.trim() || undefined, lang: en() ? 'en' : 'zh', clientToken: idemToken() });
       state.pitchRoom = j.roomId;
       $('pitchMore').classList.remove('hidden');
       await refreshPitch();
-    } catch (e) { window.Xn.toast(errMsg(e)); } finally { btn.disabled = false; }
+    } catch (e) { xnErr(errMsg(e)); } finally { btn.disabled = false; }
   }
   async function pitchSay() {
-    if (!state.pitchRoom) { window.Xn.toast(T().openPitchFirst); return; }
+    if (!state.pitchRoom) { xnErr(T().openPitchFirst); return; }
     const content = $('pitchSay').value.trim();
     if (!content) return;
     try {
       await post(`/api/room/pitch/${state.pitchRoom}/speak`, { content, clientToken: idemToken() });
       $('pitchSay').value = ''; await refreshPitch();
-    } catch (e) { window.Xn.toast(errMsg(e)); }
+    } catch (e) { xnErr(errMsg(e)); }
   }
   function renderVerdict(v) {
     const t = T();
@@ -226,7 +228,7 @@
     }
   }
   async function pitchDecide() {
-    if (!state.pitchRoom) { window.Xn.toast(T().openPitchFirst); return; }
+    if (!state.pitchRoom) { xnErr(T().openPitchFirst); return; }
     // c197：恢复已决议房后按钮仍在；每次点击都带新幂等令牌、服务端必扣 20 积分，故必须有状态感知的二次确认防误触
     // 内部账户（超管/副管理员）重新决议 0 扣费，确认语不展示积分数
     // v2.206 confirm→uiConfirm（pitchDecide 本就 async，签名不变）
@@ -244,7 +246,7 @@
       state.lastVerdict = j.verdict;
       renderVerdict(j.verdict);
       await refreshPitch();
-    } catch (e) { window.Xn.toast(errMsg(e)); }
+    } catch (e) { xnErr(errMsg(e)); }
   }
   // —— 围读 ——
   function renderReadModes(selectedId) {
@@ -400,7 +402,7 @@
     if (!needAuth()) return;
     const picked = state.pickedScript;
     const text = $('readScript').value.trim();
-    if (!picked && text.length < 10) { window.Xn.toast(T().needScript); return; }
+    if (!picked && text.length < 10) { xnErr(T().needScript); return; }
     try {
       const payload = { readMode: state.readMode, mode: $('readFormat').value, lang: en() ? 'en' : 'zh', clientToken: idemToken() };
       if (picked) payload.scriptId = picked.scriptId; // 选了作品分集：全文由后端按 id 取，不信客户端文本
@@ -410,21 +412,21 @@
       clearPicked();
       await refreshRead();
       if (state.readMode === 'xn_xn') readAi(); // 小南+小南：建室即自动围读（首次围读 30 积分由模式描述与既有确认链承担）
-    } catch (e) { window.Xn.toast(errMsg(e)); }
+    } catch (e) { xnErr(errMsg(e)); }
   }
   async function readJoin() {
     if (!needAuth()) return;
     const code = $('readJoinCode').value.trim();
     if (!code) return;
     try { const j = await post('/api/room/read/join', { inviteCode: code }); state.readRoom = j.roomId; await refreshRead(); }
-    catch (e) { window.Xn.toast(errMsg(e)); }
+    catch (e) { xnErr(errMsg(e)); }
   }
   async function readSay() {
-    if (!state.readRoom) { window.Xn.toast(T().needRoom); return; }
+    if (!state.readRoom) { xnErr(T().needRoom); return; }
     const content = $('readSay').value.trim();
     if (!content) return;
     try { await post(`/api/room/read/${state.readRoom}/speak`, { content, clientToken: idemToken() }); $('readSay').value = ''; await refreshRead(); }
-    catch (e) { window.Xn.toast(errMsg(e)); }
+    catch (e) { xnErr(errMsg(e)); }
   }
   function renderReadActions(r) {
     const t = T();
@@ -500,7 +502,7 @@
     row.appendChild(btn);
   }
   async function readAi() {
-    if (!state.readRoom) { window.Xn.toast(T().needRoom2); return; }
+    if (!state.readRoom) { xnErr(T().needRoom2); return; }
     // c199：与 c197 决议二次确认同族——恢复历史房或重跑时结论已存在，再点按钮是一次新的 30 积分扣费，
     // 必须状态感知地明示；首次围读（含 xn_xn 建室自动触发）state.lastRead 为空，不打扰。
     // 内部账户 AI 围读 0 扣费，确认语不展示积分数
@@ -516,7 +518,7 @@
       state.lastRead = j.result;
       renderReadActions(j.result);
       await refreshRead();
-    } catch (e) { window.Xn.toast(errMsg(e)); } finally { btn.disabled = false; }
+    } catch (e) { xnErr(errMsg(e)); } finally { btn.disabled = false; }
   }
   // —— c196 我的编剧室历史：每次打开新鲜拉取；点击恢复消息流 + 决议/围读结论，可继续发言 ——
   function modeName(modeId) {
@@ -597,7 +599,7 @@
         if (state.lastRead) renderReadActions(state.lastRead);
         else $('readActions').classList.add('hidden');
       }
-    } catch (e) { window.Xn.toast(errMsg(e)); }
+    } catch (e) { xnErr(errMsg(e)); }
   }
   function rerender() {
     renderReadModes();
