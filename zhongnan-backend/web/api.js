@@ -270,7 +270,16 @@
     async login(phone, password) {
       return authenticate('/api/auth/login', { phone, password });
     },
-    logout() { clearSession(); },
+    async logout() {
+      // 登出即吊销：先清本地（立即生效），再通知后端作废 refresh token（fire-and-forget，失败由 TTL 自然过期兜底）
+      const rt = getRefreshToken();
+      clearSession();
+      if (rt) {
+        try {
+          await fetchWithTimeout('/api/auth/logout', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ refreshToken: rt }), timeout: 5000 });
+        } catch { /* 后端不可达不阻塞本地登出 */ }
+      }
+    },
   };
 
   return {

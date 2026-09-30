@@ -89,6 +89,22 @@ export function createAuthRouter(prisma: PrismaLike | any) {
       res.status(401).json({ error: 'REFRESH_INVALID' });
     }
   });
+  // 登出即吊销：将该 refresh token 的 jti 标记为已消费（复用 refresh-rotate；旧格式无 jti 用摘要兜底）。
+  // 幂等：无论 token 是否有效均返回 200，不泄露存在性信息；未传 token 仅表示前端已清理。
+  authRouter.post('/logout', async (req, res) => {
+    try {
+      const { verifyRefresh } = await import('../lib/auth');
+      const { consumeRefreshToken } = await import('../lib/refresh-rotate');
+      const { createHash } = await import('crypto');
+      const rt = req.body?.refreshToken;
+      if (rt) {
+        const data = verifyRefresh(rt);
+        const key = data.jti ?? `legacy:${createHash('sha256').update(String(rt)).digest('hex')}`;
+        consumeRefreshToken(key, data.exp ?? Math.floor(Date.now() / 1000) + 86400);
+      }
+    } catch { /* 无效 token 静默：保持幂等 200 */ }
+    res.json({ ok: true });
+  });
   // 当前登录用户资料（个人中心数据源）：资料 + 积分 + 存储用量 + 当前会员权益
   authRouter.get('/me', authRequired, async (req: AuthRequest, res) => {
     const u = await prisma.user.findUnique({ where: { id: req.userId! } });
