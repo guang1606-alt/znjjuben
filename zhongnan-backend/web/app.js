@@ -95,12 +95,20 @@
   window.znIsStaff = () => isStaffAcct();
   // 内部账户在一切价格徽标处看到的统一文案（真实模型成本由平台承担，向 staff 收 0）
   function staffCostLabel() { return lang === 'en' ? 'Staff · Free' : '内部账户 · 免费'; }
+  // staff 工具箱文案精细化：保留操作名+数字归零+尾加「（内部免费）」/「 (Staff Free)」
+  // 纯函数来自 web/staff-cost.js（浏览器与单测共用），不再笼统覆盖丢失操作名
+  const staffCostNormalize = (typeof ZnStaffCost === 'object' && ZnStaffCost && ZnStaffCost.normalizeStaffCost)
+    ? ZnStaffCost.normalizeStaffCost
+    : function staffCostNormalizeFallback(rawTxt, en) { // 兜底：若 staff-cost.js 未加载（极少见），退化到原口径
+        if (rawTxt == null) return rawTxt;
+        return staffCostLabel();
+      };
   function staffCostPatch(root) {
     if (!isStaffAcct()) return;
-    (root || document).querySelectorAll('.tool-cost,[data-cost]').forEach((el) => {
-      const txt = el.textContent || '';
-      if (/积分|pts|points/i.test(txt)) el.textContent = staffCostLabel();
-    });
+    // 工具箱价格徽标：保留操作名+数字归零+尾标（不再笼统替换为 staffCostLabel 丢失操作名）
+    if (typeof ZnStaffCost === 'object' && ZnStaffCost && typeof ZnStaffCost.patchStaffCostInDom === 'function') {
+      ZnStaffCost.patchStaffCostInDom(root || document, lang === 'en');
+    }
     // 固定位置的静态收费按钮/提示：staff 统一换成免费口径（data-i 文本先于本补丁写入）
     const en = lang === 'en';
     const ID_FREE = {
@@ -203,7 +211,8 @@
       HOME_TOOLS.forEach((tool) => {
         const card = document.createElement('button');
         card.className = 'home-tool-card';
-        const costTxt = isStaffAcct() && /积分|pts/i.test(t(tool.cost)) ? staffCostLabel() : t(tool.cost);
+        // staff 渲染分流：保留操作名+数字归零+尾标（不再笼统覆盖为 staffCostLabel 丢失操作名）
+        const costTxt = isStaffAcct() ? staffCostNormalize(t(tool.cost), lang === 'en') : t(tool.cost);
         card.innerHTML = `<h3>${escapeHtml(t(tool.key))}</h3><p>${escapeHtml(t(tool.desc))}</p><span class="tool-cost">${escapeHtml(costTxt)}</span>`;
         card.onclick = () => {
           const panel = ({ toolPitch: 'roomPanel', toolRead: 'roomPanel', toolTeardown: 'teardownPanel', toolDiversity: 'diversityPanel', toolBranch: 'branchPanel' })[tool.id];
