@@ -32,6 +32,11 @@
     },
   };
   const T = () => (en() ? L.en : L.zh);
+  // 内部账户（超管/副管理员）拆爆款 0 扣费，成功提示与历史徽标走免费口径
+  const isStaff = () => !!(window.znIsStaff && window.znIsStaff());
+  const freeDone = () => en() ? 'Teardown done — free for staff' : '拆解完成，内部账户免费';
+  const freeOutline = () => en() ? 'Adaptation outline ready — free for staff' : '改编大纲已生成，内部账户免费';
+  const freeHist = () => en() ? 'Staff free' : '内部免费';
   const toast = (msg) => { try { if (window.Xn && typeof window.Xn.toast === 'function') { window.Xn.toast(msg); return; } } catch { /* Xn 不可用时降级 */ } alert(msg); };
   const idemToken = () => `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
   const failMsg = (e, fallback) => (e && e.code === 'AUTH_REQUIRED') ? '' : ((e && (e.message || e.error)) || fallback);
@@ -86,7 +91,7 @@
       state.recordId = r.data.recordId; state.report = r.data.report; state.directions = r.data.directions;
       state.direction = 'swap_persona'; state.restoreTags = null; state.lastOutline = null;
       renderResult();
-      toast(T().done(r.data.points));
+      toast(r.data.staff ? freeDone() : T().done(r.data.points));
     } catch (e) {
       if (needLogin(e)) return; alert(failMsg(e, T().analyzeFail));
     } finally { restore(); }
@@ -122,7 +127,7 @@
       if (!r.ok) { alert(r.data.message || r.data.error || T().outlineFail); return; }
       state.lastOutline = r.data.outline;
       renderOutline(state.lastOutline);
-      toast(T().outlineDone(r.data.points));
+      toast(r.data.staff ? freeOutline() : T().outlineDone(r.data.points));
     } catch (e) {
       if (needLogin(e)) return; alert(failMsg(e, T().outlineFail));
     } finally { restore(); }
@@ -156,7 +161,7 @@
         const title = x.title || `${t.srcName[x.sourceType] || x.sourceType || ''} · ${t.histFallback(x.wordCount || 0)}`;
         const when = new Date(x.createdAt).toLocaleString(locale, { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' });
         return `<button type="button" class="td-hist-card" data-id="${esc(x.id)}">
-          <span class="td-hist-main"><b>${esc(title)}</b><small>${esc(when)} · ${esc(t.histState[x.state] || x.state)} · ${esc(t.histPoints(x.pointsCost || 0))} · ${esc(t.histTags((x.pickedTags || []).length))}</small></span>
+          <span class="td-hist-main"><b>${esc(title)}</b><small>${esc(when)} · ${esc(t.histState[x.state] || x.state)} · ${esc((x.pointsCost || 0) > 0 ? t.histPoints(x.pointsCost || 0) : (isStaff() ? freeHist() : t.histPoints(0)))} · ${esc(t.histTags((x.pickedTags || []).length))}</small></span>
           <span class="td-hist-go">${esc(t.histResume)}</span>
         </button>`;
       }).join('');

@@ -154,3 +154,44 @@ describe('采访式创作·HTTP 闭环', { concurrency: 1 }, () => {
     assert.strictEqual((await one.json()).session.status, 'CLOSED');
   });
 });
+
+describe('采访式创作·内部账户免费（串行）', { concurrency: 1 }, () => {
+  const { SUPER_ADMIN_PHONE } = require('../dist/middleware/admin.js');
+  const staffRows = (uid) => mem._ledgers.filter((l) => l.userId === uid && l.reason === 'STAFF_FREE' && l.amount === 0 && l.direction === 'OUT');
+  it('副管理员 FREE 零余额：开场+追问均 0 扣费，留 STAFF_FREE 流水', async () => {
+    const uid = 'iv_staff1';
+    mem._seedUser({ id: uid, level: 'FREE', balance: 0, isAdmin: true });
+    const r = await post('/api/interview/sessions', { idea: '一个被辞退的女厨师想夺回自己餐厅的故事，前合伙人处处打压她' }, uid);
+    assert.strictEqual(r.status, 200);
+    const j = await r.json();
+    assert.strictEqual(j.staff, true);
+    assert.strictEqual(j.points, 0);
+    assert.strictEqual(bal(uid), 0);
+    assert.strictEqual(staffRows(uid).length, 1);
+    const t = await post(`/api/interview/sessions/${j.sessionId}/turn`, { text: '她还有个当厨师的师父暗中帮忙' }, uid);
+    assert.strictEqual(t.status, 200);
+    const tj = await t.json();
+    assert.strictEqual(tj.points, 0);
+    assert.strictEqual(bal(uid), 0);
+    assert.strictEqual(staffRows(uid).length, 2);
+  });
+  it('超管手机号硬命中（isAdmin=false）同样免费', async () => {
+    const uid = 'iv_super2';
+    mem._seedUser({ id: uid, level: 'FREE', balance: 0, isAdmin: false, phone: SUPER_ADMIN_PHONE });
+    const r = await post('/api/interview/sessions', { idea: '一个隐藏身份的集团继承人在婆家逆袭的故事' }, uid);
+    assert.strictEqual(r.status, 200);
+    const j = await r.json();
+    assert.strictEqual(j.staff, true);
+    assert.strictEqual(j.points, 0);
+  });
+  it('同回答窗内重放 409，不重复落流水', async () => {
+    const uid = 'iv_staff3';
+    mem._seedUser({ id: uid, level: 'FREE', balance: 0, isAdmin: true });
+    const body = { idea: '一模一样的开场想法用于重放测试，内容足够长超过四个字' };
+    const r1 = await post('/api/interview/sessions', body, uid);
+    assert.strictEqual(r1.status, 200);
+    const r2 = await post('/api/interview/sessions', body, uid);
+    assert.strictEqual(r2.status, 409);
+    assert.strictEqual(staffRows(uid).length, 1);
+  });
+});

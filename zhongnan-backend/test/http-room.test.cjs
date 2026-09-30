@@ -417,3 +417,47 @@ describe('c201 rewrite-pack 加固（版本漂移/闸门元数据/最小权限�
     assert.strictEqual(j.latestVersion, j.roomVersion);
   });
 });
+
+describe('编剧室·内部账户免费（串行）', { concurrency: 1 }, () => {
+  const { SUPER_ADMIN_PHONE } = require('../dist/middleware/admin.js');
+  const staffRows = (uid) => mem._ledgers.filter((l) => l.userId === uid && l.reason === 'STAFF_FREE' && l.amount === 0 && l.direction === 'OUT');
+  it('副管理员 FREE 零余额：选题会开场/发言/决议全 0 扣费', async () => {
+    const uid = 'room_staff1';
+    mem._seedUser({ id: uid, level: 'FREE', balance: 0, isAdmin: true });
+    const open = await post('/api/room/pitch/open', { idea: '被辞退的女厨师想夺回餐厅，前合伙人打压她，她暗中布局反击' }, uid);
+    assert.strictEqual(open.status, 200);
+    const oj = await open.json();
+    assert.strictEqual(oj.staff, true);
+    assert.strictEqual(oj.points, 0);
+    assert.strictEqual(bal(uid), 0);
+    assert.strictEqual(staffRows(uid).length, 1);
+
+    const sp = await post(`/api/room/pitch/${oj.roomId}/speak`, { content: '主角想要夺回餐厅，对手是前合伙人和婆婆，计划做70集竖屏真人短剧' }, uid);
+    assert.strictEqual(sp.status, 200);
+    assert.strictEqual((await sp.json()).points, 0);
+
+    const dec = await post(`/api/room/pitch/${oj.roomId}/decide`, { relation: '师徒反目', conflict: '秘方股权冲突', scenes: '后厨', episodes: 70 }, uid);
+    assert.strictEqual(dec.status, 200);
+    assert.strictEqual((await dec.json()).points, 0);
+    assert.strictEqual(bal(uid), 0);
+    assert.strictEqual(staffRows(uid).length, 3);
+  });
+  it('超管手机号硬命中：AI围读 0 扣费，重放 409', async () => {
+    const uid = 'room_super2';
+    mem._seedUser({ id: uid, level: 'FREE', balance: 0, isAdmin: false, phone: SUPER_ADMIN_PHONE });
+    const op = await post('/api/room/read/open', { readMode: 'xn_xn', scriptText: SCRIPT }, uid);
+    assert.strictEqual(op.status, 200);
+    const rid = (await op.json()).roomId;
+    const body = {};
+    const r1 = await post(`/api/room/read/${rid}/ai-read`, body, uid);
+    assert.strictEqual(r1.status, 200);
+    const j1 = await r1.json();
+    assert.strictEqual(j1.staff, true);
+    assert.strictEqual(j1.points, 0);
+    assert.strictEqual(bal(uid), 0);
+    assert.strictEqual(staffRows(uid).length, 1);
+    const r2 = await post(`/api/room/read/${rid}/ai-read`, body, uid);
+    assert.strictEqual(r2.status, 409, '同参数窗内重放幂等拦截');
+    assert.strictEqual(staffRows(uid).length, 1);
+  });
+});

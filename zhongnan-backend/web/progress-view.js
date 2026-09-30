@@ -51,6 +51,7 @@
         next.phase = 'frozen';
         next.points = Number.isFinite(evt.points) ? evt.points : next.points;
         next.free = !!evt.free;
+        next.staff = !!evt.staff; // 内部账户（超管/副管理员）免费短路
         return next;
 
       case 'context':

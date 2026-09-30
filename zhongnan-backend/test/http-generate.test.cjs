@@ -220,6 +220,136 @@ describe('生成扣费 SSE 资金链路（串行）', { concurrency: 1 }, () => 
     assert.ok(scripts.length >= 1, '剧本应已落库（断网不丢）');
     assert.strictEqual(mem._accounts.get('u_abort').balance, 990, '经济档正常结算扣10积分，不因断连错误退款');
   });
+
+  // ===== 内部账户（超级管理员/杨光指定的管理员）：全免费、不受任何付费墙与额度墙限制 =====
+  const { SUPER_ADMIN_PHONE } = require('../dist/middleware/admin.js');
+  const seedStaff = (id, { level = 'FREE', balance = 0, isAdmin = false, phone } = {}) => {
+    mem._seedUser({ id, level, balance, isAdmin, phone: phone ?? `139${String(id).padEnd(8, '0')}` });
+    const pid = `proj_${id}`;
+    mem._projects.set(pid, { id: pid, userId: id, bible: null });
+    return pid;
+  };
+
+  it('超管 PRO 零余额零会员：免费生成、不扣分不冻结、staff 标记随事件下发、成本仍观测', async () => {
+    const uid = 'u_super01';
+    const pid = seedStaff(uid, { level: 'PRO', balance: 0, phone: SUPER_ADMIN_PHONE });
+    const r = await call(uid, 'PRO', { projectId: pid, brief });
+    assert.strictEqual(r.status, 200);
+    const fz = r.events.find((e) => e.stage === 'frozen');
+    assert.ok(fz, '应有 frozen 事件');
+    assert.strictEqual(fz.staff, true);
+    assert.strictEqual(fz.points, 0);
+    const done = r.events.find((e) => e.stage === 'done');
+    assert.ok(done, '应正常跑完为 done');
+    assert.strictEqual(done.staff, true);
+    assert.strictEqual(done.pointsCharged, 0);
+    assert.ok(typeof done.realCostFen === 'number', '真实成本照常观测（内部测试烧钱可见）');
+    const acc = mem._accounts.get(uid);
+    assert.strictEqual(acc.balance, 0, '零余额也能生成，余额不变');
+    assert.strictEqual(acc.frozen, 0, '无冻结残留');
+    assert.ok(mem._scripts.some((s) => s.projectId === pid), '剧本照常落库');
+  });
+
+  it('副管理员（isAdmin）FREE 零余额：不受每日免费集数墙限制，满额后仍放行', async () => {
+    const uid = 'u_staff02';
+    const pid = seedStaff(uid, { level: 'FREE', balance: 0, isAdmin: true });
+    for (let k = 0; k < P.MEMBERSHIP.FREE.freeEpsPerDay; k++) mem._scripts.push({ projectId: pid, createdAt: new Date() });
+    const r = await call(uid, 'FREE', { projectId: pid, brief });
+    assert.strictEqual(r.status, 200, '副管理员不受 FREE 每日集数墙限制');
+    const done = r.events.find((e) => e.stage === 'done');
+    assert.ok(done && done.staff === true && done.pointsCharged === 0);
+    assert.strictEqual(mem._accounts.get(uid).balance, 0);
+  });
+
+  it('副管理员 FREE：可越权使用 STANDARD 引擎、可上传参考剧本学风格（普通 FREE 均被拦）', async () => {
+    const uid = 'u_staff03';
+    const pid = seedStaff(uid, { level: 'FREE', balance: 0, isAdmin: true });
+    const r1 = await call(uid, 'FREE', { projectId: pid, brief, engineTier: 'STANDARD' });
+    assert.strictEqual(r1.status, 200, '副管理员可使用全部引擎档位');
+    assert.ok(r1.events.some((e) => e.stage === 'done' && e.staff === true));
+    const ref = '参考剧本：'.padEnd(140, '他冷冷开口，字句短促！');
+    const r2 = await call(uid, 'FREE', { projectId: pid, brief, customStyleText: ref });
+    assert.strictEqual(r2.status, 200, '副管理员私有风格学习不拦升级');
+  });
+
+  it('普通用户事件 staff=false 且正常扣 10 分，付费链路不被 staff 短路污染', async () => {
+    const pid = seed('u_plain_staff_check', 'BASIC', 1000);
+    const r = await call('u_plain_staff_check', 'BASIC', { projectId: pid, brief });
+    assert.strictEqual(r.status, 200);
+    const fz = r.events.find((e) => e.stage === 'frozen');
+    assert.strictEqual(fz.staff, false);
+    const done = r.events.find((e) => e.stage === 'done');
+    assert.strictEqual(done.staff, false);
+    assert.strictEqual(done.pointsCharged, 10);
+    assert.strictEqual(mem._accounts.get('u_plain_staff_check').balance, 990);
+  });
+});
+
+describe('内部账户 /fix 增值服务免费（串行）', { concurrency: 1 }, () => {
+  const { SUPER_ADMIN_PHONE } = require('../dist/middleware/admin.js');
+  const mk = (n, prefix) => Array.from({ length: n }, (_, i) => `${prefix}第${i + 1}行，这是足够长的对白或动作描写文本。`).join('\n');
+
+  it('副管理员 FREE：小南等级门放行、0 扣费落 v2、留 0 元 STAFF_FREE 幂等流水可审计', async () => {
+    const uid = 'u_staff_fix1';
+    mem._seedUser({ id: uid, level: 'FREE', balance: 0, isAdmin: true });
+    const h = { Authorization: `Bearer ${signAccess({ sub: uid, level: 'FREE' })}`, 'Content-Type': 'application/json' };
+    const pid = 'proj_staff_fix1';
+    mem._projects.set(pid, { id: pid, userId: uid, bible: null, format: 'LIVE' });
+    mem._scripts.push({ id: 'stafffix1_v1', projectId: pid, epNo: 1, version: 1, title: 't', wordCount: 400, content: mk(20, '原稿'), score: 70 });
+    const MP = require('../dist/lib/model-proxy.js');
+    const orig = MP.callText;
+    MP.callText = async () => ({ text: mk(20, '改写后'), costFen: 0 });
+    try {
+      const r = await fetch(base + `/api/generate/projects/${pid}/fix`, {
+        method: 'POST', headers: h,
+        body: JSON.stringify({ fix: { rule: 'format.length', dimLabel: '格式', advice: '字数不达标，补到单集体量' }, epNo: 1 }),
+      });
+      assert.strictEqual(r.status, 200, 'FREE 副管理员不受小南 BASIC 等级门限制');
+      assert.strictEqual(mem._accounts.get(uid).balance, 0, '内部账户 0 余额完成 /fix，不扣费');
+      const v2 = mem._scripts.find((s) => s.projectId === pid && s.epNo === 1 && s.version === 2);
+      assert.ok(v2, '改写稿照常落 v2');
+      const staffRows = mem._ledgers.filter((l) => l.userId === uid && l.reason === 'STAFF_FREE' && l.amount === 0);
+      assert.ok(staffRows.length >= 1, '留 0 元 STAFF_FREE 流水：幂等防重 + 内部使用可审计');
+    } finally {
+      MP.callText = orig;
+    }
+  });
+
+  it('超管手机号硬判定即 staff：即便 isAdmin 字段为 false 也免费', async () => {
+    const uid = 'u_super_fix2';
+    mem._seedUser({ id: uid, level: 'FREE', balance: 0, isAdmin: false, phone: SUPER_ADMIN_PHONE });
+    const h = { Authorization: `Bearer ${signAccess({ sub: uid, level: 'FREE' })}`, 'Content-Type': 'application/json' };
+    const pid = 'proj_super_fix2';
+    mem._projects.set(pid, { id: pid, userId: uid, bible: null, format: 'LIVE' });
+    mem._scripts.push({ id: 'superfix2_v1', projectId: pid, epNo: 1, version: 1, title: 't', wordCount: 400, content: mk(20, '原稿'), score: 70 });
+    const MP = require('../dist/lib/model-proxy.js');
+    const orig = MP.callText;
+    MP.callText = async () => ({ text: mk(20, '改写后'), costFen: 0 });
+    try {
+      const r = await fetch(base + `/api/generate/projects/${pid}/fix`, {
+        method: 'POST', headers: h,
+        body: JSON.stringify({ fix: { rule: 'format.length', dimLabel: '格式', advice: '补字数' }, epNo: 1 }),
+      });
+      assert.strictEqual(r.status, 200);
+      assert.strictEqual(mem._accounts.get(uid).balance, 0);
+    } finally {
+      MP.callText = orig;
+    }
+  });
+
+  it('普通 FREE 用户 /fix 仍被小南等级门 403（不回归）', async () => {
+    const uid = 'u_plain_fix3';
+    mem._seedUser({ id: uid, level: 'FREE', balance: 0 });
+    const h = { Authorization: `Bearer ${signAccess({ sub: uid, level: 'FREE' })}`, 'Content-Type': 'application/json' };
+    const pid = 'proj_plain_fix3';
+    mem._projects.set(pid, { id: pid, userId: uid, bible: null, format: 'LIVE' });
+    mem._scripts.push({ id: 'plainfix3_v1', projectId: pid, epNo: 1, version: 1, title: 't', wordCount: 400, content: mk(20, '原稿'), score: 70 });
+    const r = await fetch(base + `/api/generate/projects/${pid}/fix`, {
+      method: 'POST', headers: h,
+      body: JSON.stringify({ fix: { rule: 'format.length', dimLabel: '格式', advice: '补字数' }, epNo: 1 }),
+    });
+    assert.strictEqual(r.status, 403, '普通 FREE 仍受小南等级门保护');
+  });
 });
 
 describe('生成前内容合规拦截（三级审核第一级，串行）', { concurrency: 1 }, () => {
@@ -558,6 +688,36 @@ describe('十二模式闭环闸门（P0：无未知模式、等级强校验、�
     assert.strictEqual(longIp.unlocked, false, '长系列IP为专业模式');
     const branded = j.modes.find((m) => m.id === 'branded_skit');
     assert.strictEqual(branded.unlocked, true, '软广高级可用');
+  });
+
+  // ===== 内部账户（超管/杨光指定的管理员）建项目：模式/轨道/项目数墙全放行，成年授权红线不豁免 =====
+  const staffH = (uid) => {
+    mem._seedUser({ id: uid, level: 'FREE', balance: 0, isAdmin: true });
+    return { 'Content-Type': 'application/json', Authorization: `Bearer ${signAccess({ sub: uid, level: 'FREE' })}` };
+  };
+  it('内部账户 FREE 副管理员：付费模式 + 专业级「爆款逆向」轨道直接放行', async () => {
+    const r = await postProj(staffH('m_staff1'), { title: '逆向批量内部测试', mode: 'hit_lab', track: 'hit_reverse' });
+    assert.strictEqual(r.status, 200, '副管理员不受 MODE_LOCKED/TRACK_LOCKED 限制');
+  });
+  it('内部账户 FREE：建第 3 个项目不触 REACH_PROJECT_LIMIT；同场景普通 FREE 仍 403', async () => {
+    const h = staffH('m_staff2');
+    for (let i = 0; i < 2; i++) {
+      const rr = await postProj(h, { title: `内部本${i}`, mode: 'tags' });
+      assert.strictEqual(rr.status, 200);
+    }
+    const third = await postProj(h, { title: '内部本3', mode: 'tags' });
+    assert.strictEqual(third.status, 200, '免费档 2 项目上限对内部账户不生效');
+    const h2 = mk('m_normal_limit', 'FREE');
+    await postProj(h2, { title: '普通本1', mode: 'tags' });
+    await postProj(h2, { title: '普通本2', mode: 'tags' });
+    const blocked = await postProj(h2, { title: '普通本3', mode: 'tags' });
+    assert.strictEqual(blocked.status, 403);
+    assert.strictEqual((await blocked.json()).error, 'REACH_PROJECT_LIMIT');
+  });
+  it('合规红线不豁免：内部账户碰 xscript 未完成成年授权仍 403 MATURE_CONSENT_REQUIRED', async () => {
+    const r = await postProj(staffH('m_staff_x'), { title: 'X', mode: 'xscript' });
+    assert.strictEqual(r.status, 403);
+    assert.strictEqual((await r.json()).error, 'MATURE_CONSENT_REQUIRED');
   });
 });
 

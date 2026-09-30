@@ -4,6 +4,7 @@ import { z } from 'zod';
 import { authRequired, AuthRequest } from '../middleware/auth';
 import { prisma as defaultPrisma } from '../lib/prisma';
 import { consumeValueAdded, refundValueAdded } from '../lib/billing';
+import { staffOf, staffChargeTx, staffRefundTx } from '../lib/staff-billing';
 import { withBillingTransaction } from '../lib/prisma-tx';
 import { VALUE_ADDED, ValueAddedKey, EngineTier } from '../config/pricing';
 import { callImage, callText, STABILITY_SUFFIX } from '../lib/model-proxy';
@@ -51,8 +52,9 @@ export function createValueAddedRouter(prisma: PrismaLike | any) {
     const v = (typeof h === 'string' ? h.trim() : '') || b.trim();
     return v ? `t${contentHash(v.slice(0, 200))}` : '';
   };
-  async function charge(userId: string, key: ValueAddedKey, refId: string): Promise<{ charged: boolean; idem: string }> {
+  async function charge(userId: string, key: ValueAddedKey, refId: string, staff: boolean): Promise<{ charged: boolean; idem: string }> {
     return await withBillingTransaction(prisma, userId, async (tx) => {
+      if (staff) return staffChargeTx(tx, userId, refId, 'staff-va');
       const raw = tx.raw as any;
       const charges = await raw.ledgerEntry.findMany({ where: { userId, reason: key, refType: 'value_added', refId } });
       const refunds = await raw.ledgerEntry.findMany({ where: { userId, reason: `${key}:REFUND`, refType: 'value_added', refId } });
@@ -64,7 +66,11 @@ export function createValueAddedRouter(prisma: PrismaLike | any) {
   }
   /** 仅在“确实扣成功后、下游服务失败”时退款；余额不足等扣费阶段失败不退（本就没扣）。
    *  传与 charge 相同的 refId/idem，refund: 前缀由 billing 内部统一管理。 */
-  async function refund(userId: string, key: ValueAddedKey, refId: string, idem: string) {
+  async function refund(userId: string, key: ValueAddedKey, refId: string, idem: string, staff: boolean) {
+    if (staff) {
+      await withBillingTransaction(prisma, userId, (tx) => staffRefundTx(tx, userId, refId, idem));
+      return;
+    }
     await withBillingTransaction(prisma, userId, (tx) => refundValueAdded(tx, userId, key, refId, idem));
   }
 
@@ -82,10 +88,11 @@ export function createValueAddedRouter(prisma: PrismaLike | any) {
     const project = await prisma.project.findFirst({ where: { id: p.data.projectId, userId: req.userId! } });
     if (!project) return res.status(404).json({ error: '项目不存在' });
     const refId = `poster:${req.userId}:${project.id}:${p.data.tier}:${idemWindow()}:${nonceOf(req) || contentHash(p.data.style ?? '')}`;
+    const staff = await staffOf(prisma, req.userId!);
     let idem = '';
     let charged = false;
     try {
-      const r0 = await charge(req.userId!, key, refId);
+      const r0 = await charge(req.userId!, key, refId, staff);
       if (!r0.charged) return res.status(409).json({ error: 'IDEMPOTENT_REPLAY', message: '相同海报请求刚已提交，请勿重复操作' });
       idem = r0.idem; charged = true;
       // v2.148 画风编码注入：项目 bible 存有画风编号时，把英文画风 prompt 段置前（比自由文本 style 更稳的画风一致性）
@@ -96,11 +103,11 @@ export function createValueAddedRouter(prisma: PrismaLike | any) {
       // 模型返回的 URL 可能临时过期，转存 TOS 拿永久地址（未配置 TOS 时原样返回）
       const permanentImages = await Promise.all(images.map((img) => uploadImageToTos(img)));
       const poster = await prisma.poster.create({
-        data: { projectId: project.id, tier: p.data.tier, imageUrl: permanentImages[0] ?? null, pointsCost: VALUE_ADDED[key].points },
+        data: { projectId: project.id, tier: p.data.tier, imageUrl: permanentImages[0] ?? null, pointsCost: staff ? 0 : VALUE_ADDED[key].points },
       });
-      res.json({ ok: true, posterId: poster.id, images: permanentImages, realCostFen: costFen, points: VALUE_ADDED[key].points });
+      res.json({ ok: true, posterId: poster.id, images: permanentImages, realCostFen: costFen, points: staff ? 0 : VALUE_ADDED[key].points, staff });
     } catch (e) {
-      if (charged) await refund(req.userId!, key, refId, idem).catch(() => {}); // 下游失败：已扣积分原样退回
+      if (charged) await refund(req.userId!, key, refId, idem, staff).catch(() => {}); // 下游失败：付费退积分 / staff 落 0 元 REFUND
       res.status(400).json({ error: (e as Error).message });
     }
   });
@@ -124,11 +131,12 @@ export function createValueAddedRouter(prisma: PrismaLike | any) {
     if (!p.success) return res.status(400).json({ error: '参数错误' });
     const useProject = !!(p.data.projectAId);
     const refId = `pk:${req.userId}:${idemWindow()}:${nonceOf(req) || contentHash(JSON.stringify({ ...p.data, clientToken: undefined }))}`;
+    const staff = await staffOf(prisma, req.userId!);
     let idem = '';
     let charged = false;
-    const giveBack = () => { if (charged) return refund(req.userId!, 'PK_BATTLE', refId, idem).catch(() => {}); };
+    const giveBack = () => { if (charged) return refund(req.userId!, 'PK_BATTLE', refId, idem, staff).catch(() => {}); };
     try {
-      const r0 = await charge(req.userId!, 'PK_BATTLE', refId);
+      const r0 = await charge(req.userId!, 'PK_BATTLE', refId, staff);
       if (!r0.charged) return res.status(409).json({ error: 'IDEMPOTENT_REPLAY', message: '相同PK请求刚已提交，请勿重复操作' });
       idem = r0.idem; charged = true;
 
@@ -178,7 +186,7 @@ export function createValueAddedRouter(prisma: PrismaLike | any) {
           projectAId: p.data.projectAId || null,
           projectBId: p.data.projectBId || null,
           result: { structured: result, titleA, titleB, mode: useProject ? 'project' : 'script' } as any,
-          pointsCost: VALUE_ADDED.PK_BATTLE.points,
+          pointsCost: staff ? 0 : VALUE_ADDED.PK_BATTLE.points,
         },
       });
       // 即时回传最新段位/排名（v2.68）：让用户每局都看到战力成长
@@ -188,7 +196,7 @@ export function createValueAddedRouter(prisma: PrismaLike | any) {
       ]);
       const board = buildRankBoard(allBattles as any, req.userId!, { [req.userId!]: { penName: (me as any)?.penName ?? null, nickname: (me as any)?.nickname ?? null } }, 20);
       const nextTier = board.mine ? nextTierProgress(board.mine.power) : null;
-      res.json({ ok: true, battleId: battle.id, titleA, titleB, result, analysis: result.xiaonanCommentZh, points: VALUE_ADDED.PK_BATTLE.points, mine: board.mine, nextTier });
+      res.json({ ok: true, battleId: battle.id, titleA, titleB, result, analysis: result.xiaonanCommentZh, points: staff ? 0 : VALUE_ADDED.PK_BATTLE.points, staff, mine: board.mine, nextTier });
     } catch (e) {
       await giveBack();
       res.status(400).json({ error: (e as Error).message });
@@ -222,16 +230,17 @@ export function createValueAddedRouter(prisma: PrismaLike | any) {
     const question = String(req.body?.question ?? '').slice(0, 2000);
     if (!question) return res.status(400).json({ error: '请输入问题' });
     const refId = `xn:${req.userId}:${idemWindow()}:${nonceOf(req) || contentHash(question)}`;
+    const staff = await staffOf(prisma, req.userId!);
     let idem = '';
     let charged = false;
     try {
-      const r0 = await charge(req.userId!, 'XIAONAN_DEEP', refId);
+      const r0 = await charge(req.userId!, 'XIAONAN_DEEP', refId, staff);
       if (!r0.charged) return res.status(409).json({ error: 'IDEMPOTENT_REPLAY', message: '相同问题刚已提交，请勿重复发送' });
       idem = r0.idem; charged = true;
       const r = await callText(EngineTier.STANDARD, 'designer', `你是短剧编剧策划小南，专业、口语化地回答：${question}`);
-      res.json({ ok: true, answer: r.text, points: VALUE_ADDED.XIAONAN_DEEP.points });
+      res.json({ ok: true, answer: r.text, points: staff ? 0 : VALUE_ADDED.XIAONAN_DEEP.points, staff });
     } catch (e) {
-      if (charged) await refund(req.userId!, 'XIAONAN_DEEP', refId, idem).catch(() => {});
+      if (charged) await refund(req.userId!, 'XIAONAN_DEEP', refId, idem, staff).catch(() => {});
       res.status(400).json({ error: (e as Error).message });
     }
   });

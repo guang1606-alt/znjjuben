@@ -1,6 +1,7 @@
 import { asyncRouter } from '../lib/async-router';
 import { z } from 'zod';
 import { authRequired, AuthRequest } from '../middleware/auth';
+import { isAdminUser } from '../middleware/admin';
 import { prisma as defaultPrisma } from '../lib/prisma';
 import { EngineTier, MemberLevel, MEMBERSHIP, episodePoints, FEN_PER_POINT, resolveEpisodeCharge, activeProjectLimit, VALUE_ADDED, vaPointsForLevel } from '../config/pricing';
 import { freeze, settle, unfreeze, consumeFlexible, refundFlexible } from '../lib/billing';
@@ -230,18 +231,21 @@ generateRouter.post('/projects', authRequired, async (req: AuthRequest, res) => 
   const projScan = await scanWithStore([d.title, ...(d.tags ?? [])].join('\n'), prisma);
   if (projScan.level === 'block') return res.status(422).json({ error: projScan.blockReason!, hits: projScan.blocked });
   // 会员等级决定“同时可进行的项目数”：统计未归档项目，超限拦截并引导升级（用户可删除/归档旧项目释放额度）
-  const owner = await prisma.user.findUnique({ where: { id: req.userId! }, select: { level: true } });
+  const owner = await prisma.user.findUnique({ where: { id: req.userId! }, select: { level: true, phone: true, isAdmin: true } });
+  // 内部账户（超级管理员/杨光指定的管理员）：创作全免费且不受会员权益墙限制（成年分级授权除外，见下）
+  const isStaff = isAdminUser(owner as { phone?: string | null; isAdmin?: boolean } | null);
   // 模式闭环闸门（P0）：未知模式拒绝；会员等级不足拒绝并给升级方向；成年向必须已完成分级授权
   const ownerLevel = (owner?.level ?? MemberLevel.FREE) as MemberLevel;
   const canonMode = canonicalModeId(d.mode);
   if (!canonMode) return res.status(400).json({ error: `未知创作模式：${d.mode}` });
+  // 合规红线：X剧本成年分级授权对任何身份都不豁免（内部账户也必须完成问卷与免责授权）
   if (requiresMatureConsent(d.mode)) {
     const admission = await verifyMatureAdmission(req.userId!);
     if (!admission.pass) {
       return res.status(403).json({ error: 'MATURE_CONSENT_REQUIRED', reasons: admission.reasons, message: 'X剧本需专业会员、单独开通并完成成年分级问卷与免责授权（授权30天有效）' });
     }
   }
-  if (!modeAvailable(canonMode, ownerLevel)) {
+  if (!isStaff && !modeAvailable(canonMode, ownerLevel)) {
     const need = unlockLevel(canonMode);
     return res.status(403).json({
       error: 'MODE_LOCKED', needLevel: need,
@@ -250,7 +254,7 @@ generateRouter.post('/projects', authRequired, async (req: AuthRequest, res) => 
   }
   // v2.14 轨道级闸门：名场面工作台的“爆款逆向批量”轨道需专业版（名场面拓展高级即可）
   const canonTrack = d.track ? canonicalHitLabTrack(d.track) : undefined;
-  if (canonMode === 'hit_lab' && !trackAvailable(canonMode, canonTrack, ownerLevel)) {
+  if (!isStaff && canonMode === 'hit_lab' && !trackAvailable(canonMode, canonTrack, ownerLevel)) {
     const needTrack = trackUnlockLevel(canonMode, canonTrack);
     return res.status(403).json({
       error: 'TRACK_LOCKED', needLevel: needTrack, track: 'hit_reverse',
@@ -260,7 +264,7 @@ generateRouter.post('/projects', authRequired, async (req: AuthRequest, res) => 
   const projLimit = activeProjectLimit(owner?.level);
   const mine = await prisma.project.findMany({ where: { userId: req.userId! }, select: { status: true } });
   const activeCount = mine.filter((x: any) => x.status !== 'archived').length;
-  if (activeCount >= projLimit) {
+  if (!isStaff && activeCount >= projLimit) {
     return res.status(403).json({
       error: 'REACH_PROJECT_LIMIT', activeCount, limit: projLimit,
       message: `当前会员最多同时进行 ${projLimit} 个剧本项目，升级会员可解锁更多，或先删除/归档旧项目`,
@@ -1575,12 +1579,12 @@ generateRouter.post('/projects/:id/clone', authRequired, async (req: AuthRequest
   if (!src) return res.status(404).json({ error: '源项目不存在' });
   const newTitle = (req.body?.title || '').trim() || `${src.title} - 副本`;
   if (newTitle.length > 80) return res.status(400).json({ error: '标题不超过 80 字' });
-  // 项目数量限制
-  const owner = await prisma.user.findUnique({ where: { id: req.userId! }, select: { level: true } });
+  // 项目数量限制（内部账户不限项目数）
+  const owner = await prisma.user.findUnique({ where: { id: req.userId! }, select: { level: true, phone: true, isAdmin: true } });
   const limit = activeProjectLimit(owner?.level);
   const mine = await prisma.project.findMany({ where: { userId: req.userId! }, select: { status: true } });
   const activeCount = mine.filter((x: any) => x.status !== 'archived').length;
-  if (activeCount >= limit) {
+  if (!isAdminUser(owner as { phone?: string | null; isAdmin?: boolean } | null) && activeCount >= limit) {
     return res.status(403).json({ error: 'REACH_PROJECT_LIMIT', activeCount, limit, message: `当前会员最多同时进行 ${limit} 个剧本项目` });
   }
   // 分级备案沿用源项目判定（format/mode 不变）
@@ -1935,15 +1939,19 @@ generateRouter.post('/projects/:id/fix', authRequired, async (req: AuthRequest, 
   const targetScript = latestMap.get(target.epNo);
   if (!targetScript) return res.status(400).json({ error: '定位不到可优化的分集' });
   // 会员等级差异化定价（永不跌破成本×2）
-  const user = await prisma.user.findUnique({ where: { id: req.userId! }, select: { level: true } });
+  const user = await prisma.user.findUnique({ where: { id: req.userId! }, select: { level: true, phone: true, isAdmin: true } });
   const level = (user?.level as MemberLevel) ?? MemberLevel.FREE;
+  // 内部账户（超管/杨光指定的管理员）：小南全部能力免费可用，等级门直接放行
+  const isStaff = isAdminUser(user as { phone?: string | null; isAdmin?: boolean } | null);
   // v2.54 小南能力硬闸门：台词/格式润色需基础会员，人设/剧情/节奏等深度优化需高级会员。
   // 安全：能力判定只信服务端规则号 fix.rule（dimLabel 仅展示用，可被客户端伪造，不参与降级判定）。
-  const fixGate = assistantGate(level, fixActionByDim(fix.dimLabel || '', fix.rule));
-  if (!fixGate.allowed) {
-    return res.status(403).json({ error: 'ASSISTANT_LEVEL_REQUIRED', needLevel: fixGate.needLevel, upsell: fixGate.upsell });
+  if (!isStaff) {
+    const fixGate = assistantGate(level, fixActionByDim(fix.dimLabel || '', fix.rule));
+    if (!fixGate.allowed) {
+      return res.status(403).json({ error: 'ASSISTANT_LEVEL_REQUIRED', needLevel: fixGate.needLevel, upsell: fixGate.upsell });
+    }
   }
-  const points = vaPointsForLevel('TARGETED_FIX', level);
+  const points = isStaff ? 0 : vaPointsForLevel('TARGETED_FIX', level);
   const costFen = VALUE_ADDED.TARGETED_FIX.costFen;
   // 人物名（尽量从圣经取，取不到也不阻塞）
   // v2.194 c196：旧码读 bible.cast——该字段生产从不落库（人物字段是 characters，pipeline
@@ -1962,19 +1970,44 @@ generateRouter.post('/projects/:id/fix', authRequired, async (req: AuthRequest, 
   //  - 序号=该目标版本上已提交次数(含已退款失败尝试)+1，在事务内计数：失败退款后允许再试（新键），
   //    成功后版本已更新（目标脚本变化）；并发重复请求在 Serializable 下取到同一序号→同键，只有一笔扣款成功。
   //  - 幂等命中(false)直接 409 短路，绝不再次调用模型/落库/退款（此前重放可免费反复跑模型+骗取退款）。
-  const baseIdem = `fix:${req.userId}:${targetScript.id}:${fix.rule}:v${targetScript.version}`;
-  const chargeResult = await withBillingTransaction(prisma, req.userId!, async (tx) => {
-    const raw = tx.raw as any;
-    const prior = await raw.ledgerEntry.findMany({
-      where: { userId: req.userId!, reason: 'TARGETED_FIX', refType: 'value_added', refId: `fix:${targetScript.id}` },
+  let idemKey: string;
+  if (isStaff) {
+    // 内部账户 0 元通道：不碰余额/冻结、不校验毛利，只写一条 amount=0 的 STAFF_FREE 审计流水。
+    // 幂等计数与付费路径同构（同目标版本+规则，按已存在尝试数递增）：重放 409，失败尝试后换新键可再试。
+    const staffCharge = await withBillingTransaction(prisma, req.userId!, async (tx) => {
+      const raw = tx.raw as any;
+      const prior = await raw.ledgerEntry.findMany({
+        where: { userId: req.userId!, reason: 'STAFF_FREE', refType: 'value_added', refId: `fix:${targetScript.id}` },
+      });
+      const key = `staff-fix:${req.userId}:${targetScript.id}:${fix.rule}:v${targetScript.version}:a${prior.length + 1}`;
+      if (await tx.ledgerExists(key)) return { charged: false, idemKey: key };
+      const acc = await tx.getAccount(req.userId!);
+      await tx.writeLedger({
+        userId: req.userId!, direction: 'OUT', bucket: 'RECHARGE', amount: 0,
+        reason: 'STAFF_FREE', refType: 'value_added', refId: `fix:${targetScript.id}`,
+        idempotencyKey: key, balanceAfter: acc?.balance ?? 0,
+      });
+      return { charged: true, idemKey: key };
     });
-    const idemKey = `${baseIdem}:a${prior.length + 1}`;
-    const charged = await consumeFlexible(tx, req.userId!, points, costFen, 'TARGETED_FIX', `fix:${targetScript.id}`, idemKey);
-    return { charged, idemKey };
-  });
-  const { charged, idemKey } = chargeResult;
-  if (!charged) {
-    return res.status(409).json({ error: 'IDEMPOTENT_REPLAY', message: '该版本的这一项优化正在处理或已处理，请勿重复提交' });
+    if (!staffCharge.charged) {
+      return res.status(409).json({ error: 'IDEMPOTENT_REPLAY', message: '该版本的这一项优化正在处理或已处理，请勿重复提交' });
+    }
+    idemKey = staffCharge.idemKey;
+  } else {
+    const baseIdem = `fix:${req.userId}:${targetScript.id}:${fix.rule}:v${targetScript.version}`;
+    const chargeResult = await withBillingTransaction(prisma, req.userId!, async (tx) => {
+      const raw = tx.raw as any;
+      const prior = await raw.ledgerEntry.findMany({
+        where: { userId: req.userId!, reason: 'TARGETED_FIX', refType: 'value_added', refId: `fix:${targetScript.id}` },
+      });
+      const key = `${baseIdem}:a${prior.length + 1}`;
+      const charged = await consumeFlexible(tx, req.userId!, points, costFen, 'TARGETED_FIX', `fix:${targetScript.id}`, key);
+      return { charged, idemKey: key };
+    });
+    if (!chargeResult.charged) {
+      return res.status(409).json({ error: 'IDEMPOTENT_REPLAY', message: '该版本的这一项优化正在处理或已处理，请勿重复提交' });
+    }
+    idemKey = chargeResult.idemKey;
   }
   // 调用润色岗（黑盒模型，用户看不到具体API）
   let result;
@@ -1985,16 +2018,23 @@ generateRouter.post('/projects/:id/fix', authRequired, async (req: AuthRequest, 
     });
     result = await callText(project.engineTier || EngineTier.STANDARD, 'polisher', prompt, { maxTokens: 2200 });
   } catch (e: any) {
-    await withBillingTransaction(prisma, req.userId!, (tx) =>
-      refundFlexible(tx, req.userId!, points, 'TARGETED_FIX', `fix:${targetScript.id}`, idemKey));
-    return res.status(502).json({ error: 'MODEL_FAIL', message: '模型服务暂时不可用，已退回积分，请稍后重试' });
+    // 内部账户 0 元通道无款可退（STAFF_FREE 流水留存即失败尝试计数，换新键可重试）
+    if (!isStaff) {
+      await withBillingTransaction(prisma, req.userId!, (tx) =>
+        refundFlexible(tx, req.userId!, points, 'TARGETED_FIX', `fix:${targetScript.id}`, idemKey));
+    }
+    return res.status(502).json({ error: 'MODEL_FAIL', message: isStaff ? '模型服务暂时不可用，请稍后重试' : '模型服务暂时不可用，已退回积分，请稍后重试' });
   }
   const rewritten = (result?.text || '').trim();
   // 沙盘（未配密钥）或结果不可用：不产出假文本，自动退款
   if (!result || result.sandbox || !isUsableRewrite(rewritten, targetScript.content)) {
-    await withBillingTransaction(prisma, req.userId!, (tx) =>
-      refundFlexible(tx, req.userId!, points, 'TARGETED_FIX', `fix:${targetScript.id}`, idemKey));
-    return res.status(503).json({ error: result?.sandbox ? 'SANDBOX' : 'UNUSABLE', message: result?.sandbox ? '当前为无密钥沙盘，配置模型后即可一键优化，积分已原路退回' : '本次改写未达可用标准，已退回积分，请重试' });
+    if (!isStaff) {
+      await withBillingTransaction(prisma, req.userId!, (tx) =>
+        refundFlexible(tx, req.userId!, points, 'TARGETED_FIX', `fix:${targetScript.id}`, idemKey));
+    }
+    return res.status(503).json({ error: result?.sandbox ? 'SANDBOX' : 'UNUSABLE', message: result?.sandbox
+      ? (isStaff ? '当前为无密钥沙盘，配置模型后即可一键优化' : '当前为无密钥沙盘，配置模型后即可一键优化，积分已原路退回')
+      : '本次改写未达可用标准，已退回积分，请重试' });
   }
   // 落新版本，旧版保留用于对比
   // c203 D1（资金 P0）：幂等键含 rule+尝试序号，拦不住跨规则并发——两笔请求都已扣款、都调完模型，
@@ -2002,8 +2042,10 @@ generateRouter.post('/projects/:id/fix', authRequired, async (req: AuthRequest, 
   // 模型返回期间另一笔改写可能已经落了新版本。若仍用陈旧 version 落库，必撞
   // @@unique([projectId,epNo,version])（P2002）裸 500：败者扣了钱、没交付、无退款路径。
   // 铁律：扣费之后、模型成功之后的任何落库失败，只要交付物唯一性无法保证，一律退款 + 明确错误码，绝不 500 吞钱。
-  const refundCharge = () => withBillingTransaction(prisma, req.userId!, (tx) =>
-    refundFlexible(tx, req.userId!, points, 'TARGETED_FIX', `fix:${targetScript.id}`, idemKey));
+  const refundCharge = () => isStaff
+    ? Promise.resolve() // 内部账户 0 元通道无款可退
+    : withBillingTransaction(prisma, req.userId!, (tx) =>
+      refundFlexible(tx, req.userId!, points, 'TARGETED_FIX', `fix:${targetScript.id}`, idemKey));
   const newest = await prisma.script.findFirst({
     where: { projectId: project.id, epNo: targetScript.epNo },
     orderBy: { version: 'desc' }, select: { version: true },
@@ -2262,14 +2304,16 @@ generateRouter.post('/projects/:id/fix', authRequired, async (req: AuthRequest, 
     if (e?.code === 'P2002') {
       return res.status(409).json({
         error: 'VERSION_ADVANCED',
-        message: '该集刚被另一项优化更新为新版本，本次改写未生效，积分已原路退回。请刷新后基于最新版重试。',
+        message: isStaff
+          ? '该集刚被另一项优化更新为新版本，本次改写未生效。请刷新后基于最新版重试。'
+          : '该集刚被另一项优化更新为新版本，本次改写未生效，积分已原路退回。请刷新后基于最新版重试。',
       });
     }
-    return res.status(502).json({ error: 'SAVE_FAILED', message: '新版本保存失败，积分已原路退回，请稍后重试' });
+    return res.status(502).json({ error: 'SAVE_FAILED', message: isStaff ? '新版本保存失败，请稍后重试' : '新版本保存失败，积分已原路退回，请稍后重试' });
   }
   res.json({
     epNo: targetScript.epNo, oldVersion: targetScript.version, newVersion,
-    pointsCharged: points, targetScore: target.score, wordCount: rewritten.length,
+    pointsCharged: points, staff: isStaff, targetScore: target.score, wordCount: rewritten.length,
     script: { id: saved.id, content: rewritten },
     // c202 改写幅度观测（零成本纯函数）：让前端能告诉用户“这次是微调还是大幅重写”，并引导看逐行对比；只观测不阻断
     rewriteSpan: assessRewrite(targetScript.content, rewritten),
@@ -2364,16 +2408,19 @@ generateRouter.post('/episodes', authRequired, async (req: AuthRequest, res) => 
   if (user.banned) return res.status(403).json({ error: '账号已封禁' });
 
   const level = user.level as MemberLevel;
+  // 内部账户（超级管理员杨光本人 / 杨光指定的管理员）：全链路创作免费，
+  // 不读积分余额、不依赖 Membership 赠送额度、不走毛利熔断——身份判定函数层直接短路。
+  const isStaff = isAdminUser(user);
   const tier = parsed.data.engineTier ?? EngineTier.ECONOMY;
   const allowed = (MEMBERSHIP[level] as { engines: readonly EngineTier[] }).engines;
-  if (!allowed.includes(tier)) return res.status(403).json({ error: '当前会员等级不可用该引擎，请升级' });
+  if (!isStaff && !allowed.includes(tier)) return res.status(403).json({ error: '当前会员等级不可用该引擎，请升级' });
 
   const project = await prisma.project.findFirst({ where: { id: projectId, userId: user.id } });
   if (!project) return res.status(404).json({ error: '项目不存在' });
   // v2.14 归一模式 + 轨道二次校验（防止建项目后越权调用专业轨道）
   const projCanonMode = canonicalModeId((project as Record<string, unknown>).mode as string);
   const epTrack = parsed.data.track ? canonicalHitLabTrack(parsed.data.track) : undefined;
-  if (projCanonMode === 'hit_lab' && !trackAvailable(projCanonMode, epTrack, level)) {
+  if (!isStaff && projCanonMode === 'hit_lab' && !trackAvailable(projCanonMode, epTrack, level)) {
     return res.status(403).json({ error: 'TRACK_LOCKED', needLevel: trackUnlockLevel(projCanonMode, epTrack), track: 'hit_reverse', message: '「爆款逆向批量」为专业版轨道' });
   }
   // 三级审核第一级：创意 brief 生成前机器拦截，必须在免费额度判定与冻结积分之前，避免误扣/误耗
@@ -2445,21 +2492,22 @@ generateRouter.post('/episodes', authRequired, async (req: AuthRequest, res) => 
 
   // 免费档：每日2集免费补贴（跨项目计数），超过引导付费；不扣积分
   const isFree = level === MemberLevel.FREE;
-  // v2.32 私有风格学习（上传参考剧本）为付费能力：免费档引导升级
-  if (isFree && parsed.data.customStyleText)
+  // v2.32 私有风格学习（上传参考剧本）为付费能力：免费档引导升级（内部账户免费放行）
+  if (isFree && !isStaff && parsed.data.customStyleText)
     return res.status(402).json({ error: '上传参考剧本学习风格为会员能力，开通基础会员即可使用', needPay: true, upgrade: 'BASIC' });
   // 免费额度的原子占坑移到 generationTask 建单之后（行锁+计数+占坑行同事务），见下方 FREE_LIMIT 检查
   // 每月赠送集只抵【经济档】；标准/旗舰必须扣积分（不赔钱铁律，resolveEpisodeCharge 纯函数锁死）
-  const listPoints = isFree ? 0 : episodePoints(level, tier);
-  const activeMembership = isFree ? null : await prisma.membership.findFirst({
+  // 内部账户：points 恒 0、不查 Membership，赠送额度/余额/Membership 数据存在与否都不影响免费
+  const listPoints = (isFree || isStaff) ? 0 : episodePoints(level, tier);
+  const activeMembership = (isFree || isStaff) ? null : await prisma.membership.findFirst({
     where: { userId: user.id, level, expireAt: { gt: new Date() } },
     orderBy: { expireAt: 'desc' },
   });
   const charge = resolveEpisodeCharge(level, tier, activeMembership
     ? { level: activeMembership.level as MemberLevel, quotaTotal: activeMembership.quotaTotal, quotaUsed: activeMembership.quotaUsed, expireAt: activeMembership.expireAt }
     : null);
-  let points = isFree ? 0 : charge.points;
-  let paidViaQuota = false; // 事务内原子占赠送集成功后置 true
+  let points = isStaff ? 0 : (isFree ? 0 : charge.points);
+  let paidViaQuota = false; // 事务内原子占赠送集成功后置 true（staff 恒 false）
 
   const task = await prisma.generationTask.create({
     data: { projectId, stage: 'draft', engineTier: tier, status: 'QUEUED', pointsCost: points },
@@ -2468,7 +2516,7 @@ generateRouter.post('/episodes', authRequired, async (req: AuthRequest, res) => 
   // 免费档每日补贴原子占坑：行锁串行化同用户并发 → 计数（已完成剧本 + 在途任务）→ 超限拒绝。
   // 在途 QUEUED/RUNNING 任务即“占坑行”，保证两个并发请求不会同时看到 used=1 而各自放行（刷第3集）；
   // 生成失败任务置 FAILED 后自动释放占坑（FAILED 不参与计数），不误伤用户正常重试。
-  if (isFree) {
+  if (isFree && !isStaff) {
     const FREE_LIMIT_ERR = 'FREE_DAILY_LIMIT';
     try {
       await withBillingTransaction(prisma, user.id, async (tx) => {
@@ -2520,7 +2568,7 @@ generateRouter.post('/episodes', authRequired, async (req: AuthRequest, res) => 
   const globalTimeout = setTimeout(() => abortController.abort(), GLOBAL_TIMEOUT_MS);
 
   try {
-    if (!isFree) {
+    if (!isFree && !isStaff) {
       await withBillingTransaction(prisma, user.id, async (tx) => {
         if (charge.useQuota && activeMembership) {
           // 原子占坑：仅当仍有剩余赠送集时 +1，防并发超发；抢不到则回落为正常积分计费
@@ -2532,7 +2580,7 @@ generateRouter.post('/episodes', authRequired, async (req: AuthRequest, res) => 
       });
     }
     await prisma.generationTask.update({ where: { id: task.id }, data: { status: 'RUNNING' } });
-    send({ stage: 'frozen', points, free: isFree, viaQuota: paidViaQuota, quotaRemainAfter: paidViaQuota ? charge.quotaRemainBefore - 1 : charge.quotaRemainBefore });
+    send({ stage: 'frozen', points, free: isFree, viaQuota: paidViaQuota, staff: isStaff, quotaRemainAfter: paidViaQuota ? charge.quotaRemainBefore - 1 : charge.quotaRemainBefore });
 
     const fallbackBible: Bible = { worldview: '', characters: {}, timeline: [], foreshadow: [] };
     const bible = (project.bible as unknown as Bible) ?? fallbackBible;
@@ -3144,8 +3192,9 @@ generateRouter.post('/episodes', authRequired, async (req: AuthRequest, res) => 
       }).catch(() => null);
     }
 
-    // 付费档毛利熔断；免费档为获客补贴（单日3集封顶），只记成本不熔断
-    if (!isFree && !paidViaQuota && totalCostFen > 0) assertMargin(points * FEN_PER_POINT, totalCostFen);
+    // 付费档毛利熔断；免费档为获客补贴（单日3集封顶），只记成本不熔断；
+    // 内部账户由杨光承担成本做测试/运营，不熔断（realCostFen 照常落 ModelCallLog 可观测烧钱）
+    if (!isStaff && !isFree && !paidViaQuota && totalCostFen > 0) assertMargin(points * FEN_PER_POINT, totalCostFen);
 
     const epNo = await prisma.script.count({ where: { projectId } });
     // v2.80 屈辱-打脸跨集账本：终稿提取本集羞辱雷（供 qcReport.humiliation 落库，下一集欠账记账）
@@ -3357,7 +3406,7 @@ generateRouter.post('/episodes', authRequired, async (req: AuthRequest, res) => 
     await prisma.modelCallLog.create({
       data: { taskId: task.id, role: 'writer', engineTier: tier, costFen: totalCostFen, priceFen: points * FEN_PER_POINT },
     });
-    if (!isFree && !paidViaQuota && points > 0) {
+    if (!isStaff && !isFree && !paidViaQuota && points > 0) {
       await withBillingTransaction(prisma, user.id, (tx) => settle(tx, user.id, points, task.id, `settle:${task.id}`));
     }
     await prisma.generationTask.update({ where: { id: task.id }, data: { status: 'DONE', finishedAt: new Date() } });
@@ -3367,7 +3416,7 @@ generateRouter.post('/episodes', authRequired, async (req: AuthRequest, res) => 
       board: ((p.trendingBoard as never[]) ?? boardStore.getFresh() as never[]),
       seriesSeason: (p.seriesSeason as 2 | 3) ?? undefined,
     });
-    send({ stage: 'done', pointsCharged: points, realCostFen: totalCostFen, fellbacks: result.fellbacks, free: isFree, viaQuota: paidViaQuota, taskId: task.id, antiAi, market: result.market, audience: result.audience, hooks: result.hooks, beats: result.beats, sandbox: result.sandbox, opportunity, aiLabel: isAIGC ? aiDisclaimer('zh') : null,
+    send({ stage: 'done', pointsCharged: points, realCostFen: totalCostFen, fellbacks: result.fellbacks, free: isFree, viaQuota: paidViaQuota, staff: isStaff, taskId: task.id, antiAi, market: result.market, audience: result.audience, hooks: result.hooks, beats: result.beats, sandbox: result.sandbox, opportunity, aiLabel: isAIGC ? aiDisclaimer('zh') : null,
       postScan: { level: postScan.level, blocked: postBlocked, warnings: postWarns },
       modeGate: result.modeGate ? { mode: result.modeGate.mode, score: result.modeGate.score, blocked: result.modeGate.blocked, warnings: result.modeGate.warnings } : null,
       craftLint: result.craftLint ? { avg: result.craftLint.avg, p0: result.craftLint.p0, p1: result.craftLint.p1, issues: result.craftLint.issues.map((i) => ({ rule: i.rule, dim: i.dim, level: i.level, score: i.score, advice: i.advice })) } : null,
@@ -3651,7 +3700,7 @@ generateRouter.post('/episodes', authRequired, async (req: AuthRequest, res) => 
     // 用 abortController.signal.aborted 作为权威判定（不依赖错误消息字符串匹配）
     const isCancelled = abortController.signal.aborted || (err as Error).message === 'CANCELLED';
     console.error('[generate] episode failed:', (err as Error).message, (err as Error).stack?.split('\n').slice(0, 3).join(' | '));
-    if (!isFree) {
+    if (!isStaff && !isFree) {
       await withBillingTransaction(prisma, user.id, async (tx) => {
         if (paidViaQuota && activeMembership) {
           // 生成失败/取消：退还已占赠送集（条件 decrement 防减成负数）

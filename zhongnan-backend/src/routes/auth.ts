@@ -46,7 +46,7 @@ export function createAuthRouter(prisma: PrismaLike | any) {
         grantBonus(t, inviter.id, INVITE.BOTH_REWARD_POINTS, 'INVITE_REGISTER', `invreg:${inviter.id}:${user.id}`));
     }
     const payload = { sub: user.id, level: user.level };
-    res.json({ accessToken: signAccess(payload), refreshToken: signRefresh(payload), user: { id: user.id, level: user.level, isAdmin: isAdminUser(user), isSuperAdmin: isSuperAdminUser(user) } });
+    res.json({ accessToken: signAccess(payload), refreshToken: signRefresh(payload), user: { id: user.id, level: user.level, isAdmin: isAdminUser(user), staff: isAdminUser(user), isSuperAdmin: isSuperAdminUser(user) } });
   });
   const loginSchema = z.object({ phone: z.string(), password: z.string() });
   authRouter.post('/login', async (req, res) => {
@@ -57,7 +57,7 @@ export function createAuthRouter(prisma: PrismaLike | any) {
       return res.status(401).json({ error: '手机号或密码错误' }); // 不区分“用户不存在/密码错”，防枚举
     if (user.banned) return res.status(403).json({ error: '账号已封禁' });
     const payload = { sub: user.id, level: user.level };
-    res.json({ accessToken: signAccess(payload), refreshToken: signRefresh(payload), user: { id: user.id, level: user.level, isAdmin: isAdminUser(user), isSuperAdmin: isSuperAdminUser(user) } });
+    res.json({ accessToken: signAccess(payload), refreshToken: signRefresh(payload), user: { id: user.id, level: user.level, isAdmin: isAdminUser(user), staff: isAdminUser(user), isSuperAdmin: isSuperAdminUser(user) } });
   });
   authRouter.post('/refresh', async (req, res) => {
     try {
@@ -84,6 +84,8 @@ export function createAuthRouter(prisma: PrismaLike | any) {
       avatarUrl: u.avatarUrl ?? null, level: u.level, levelExpireAt: u.levelExpireAt ?? null,
       engineTier: u.engineTier, inviteCode: u.inviteCode, isPartner: u.isPartner, extraStorageBytes: u.extraStorageBytes ?? 0,
       isAdmin: isAdminUser(u), // 管理员身份标记（含主账号与历史副管理员；2026-09-29 起不代表后台权力）
+      // 内部账户：超管手机号硬命中 + 杨光指定的副管理员。生成/增值服务全免费（后端 isStaff 短路的镜像）
+      staff: isAdminUser(u),
       isSuperAdmin: u.phone === SUPER_ADMIN_PHONE, // c199 前端据此显示/隐藏「开设账号」入口（副管理员不可见）
       // 2026-09-29「超管一人独大」：前端后台入口/管理按钮统一以此为准；isAdmin 仅身份展示用
       canAdmin: isSuperAdminUser(u),

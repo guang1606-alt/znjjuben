@@ -228,7 +228,10 @@
   async function pitchDecide() {
     if (!state.pitchRoom) return alert(T().openPitchFirst);
     // c197：恢复已决议房后按钮仍在；每次点击都带新幂等令牌、服务端必扣 20 积分，故必须有状态感知的二次确认防误触
-    if (state.lastVerdict && !window.confirm(T().redecideConfirm)) return;
+    // 内部账户（超管/副管理员）重新决议 0 扣费，确认语不展示积分数
+    if (state.lastVerdict && !window.confirm(window.znIsStaff && window.znIsStaff()
+      ? (en() ? 'This room already has a verdict. Re-deciding is free for staff. Continue?' : '本房已形成决议。内部账户重新决议免费，确定继续吗？')
+      : T().redecideConfirm)) return;
     try {
       const j = await post(`/api/room/pitch/${state.pitchRoom}/decide`, {
         relation: $('pitchRel').value.trim(), conflict: $('pitchConf').value.trim(),
@@ -375,7 +378,9 @@
     state.pickedScript = {
       scriptId: pick.scriptId,
       label: pick.label || (pick.epNo ? `EP${pick.epNo}${pick.version ? ' v' + pick.version : ''}` : ''),
-      note: T().rereadNote,
+      note: (window.znIsStaff && window.znIsStaff())
+        ? (en() ? 'Latest episode loaded. Opening a room and AI reads are free for staff.' : '已带入最新版分集。内部账户建立围读室与 AI 围读均免费。')
+        : T().rereadNote,
     };
     if (pick.format === 'AIGC' || pick.scriptMode === 'AIGC') $('readFormat').value = 'AIGC';
     else if (pick.format === 'LIVE' || pick.scriptMode === 'LIVE') $('readFormat').value = 'LIVE';
@@ -495,7 +500,10 @@
     if (!state.readRoom) return alert(T().needRoom2);
     // c199：与 c197 决议二次确认同族——恢复历史房或重跑时结论已存在，再点按钮是一次新的 30 积分扣费，
     // 必须状态感知地明示；首次围读（含 xn_xn 建室自动触发）state.lastRead 为空，不打扰。
-    if (state.lastRead && !window.confirm(T().readAgainConfirm)) return;
+    // 内部账户 AI 围读 0 扣费，确认语不展示积分数
+    if (state.lastRead && !window.confirm(window.znIsStaff && window.znIsStaff()
+      ? (en() ? 'This room already has a read result. Another AI read is free for staff. Continue?' : '本房已出过一份围读结论。内部账户重新围读免费，确定继续吗？')
+      : T().readAgainConfirm)) return;
     const btn = $('readAiBtn'); btn.disabled = true;
     try {
       const j = await post(`/api/room/read/${state.readRoom}/ai-read`, { mode: $('readFormat').value, clientToken: idemToken() });
@@ -516,7 +524,7 @@
       const when = new Date(r.updatedAt).toLocaleString(en() ? 'en-US' : 'zh-CN', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' });
       const extras = [
         r.kind === 'READ' && r.readMode ? modeName(r.readMode) : '',
-        r.pointsCost > 0 ? t.histPoints(r.pointsCost) : '',
+        r.pointsCost > 0 ? t.histPoints(r.pointsCost) : (window.znIsStaff && window.znIsStaff() ? (en() ? 'Staff free' : '内部免费') : ''),
       ].filter(Boolean).join('｜');
       // c197：参与房与自己的房同列表展示，用角色徽标区分（老缓存无 role 字段时不显示）
       const badge = r.role === 'member'

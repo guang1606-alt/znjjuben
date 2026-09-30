@@ -20,6 +20,7 @@ import { consumeValueAdded, refundValueAdded } from '../lib/billing';
 import { withBillingTransaction } from '../lib/prisma-tx';
 import { scanWithStore } from '../lib/safety-store';
 import { prisma as defaultPrisma } from '../lib/prisma';
+import { staffOf, staffChargeTx, staffRefundTx } from '../lib/staff-billing';
 import {
   interviewTurn, buildBrief, emptyMaterials, readyCheck, gapReport,
   InterviewMaterials, Lang, TurnOutcome,
@@ -42,8 +43,9 @@ export function createInterviewRouter(prisma: PrismaLike) {
     const v = (typeof h === 'string' ? h.trim() : '') || b.trim();
     return v ? `t${contentHash(v.slice(0, 200))}` : '';
   };
-  async function charge(userId: string, key: ValueAddedKey, refId: string): Promise<{ charged: boolean; idem: string }> {
+  async function charge(userId: string, key: ValueAddedKey, refId: string, staff: boolean): Promise<{ charged: boolean; idem: string }> {
     return await withBillingTransaction(prisma, userId, async (tx) => {
+      if (staff) return staffChargeTx(tx, userId, refId, 'staff-iv');
       const raw = tx.raw as any;
       const charges = await raw.ledgerEntry.findMany({ where: { userId, reason: key, refType: 'value_added', refId } });
       const refunds = await raw.ledgerEntry.findMany({ where: { userId, reason: `${key}:REFUND`, refType: 'value_added', refId } });
@@ -53,7 +55,11 @@ export function createInterviewRouter(prisma: PrismaLike) {
       return { charged: true, idem };
     });
   }
-  async function refund(userId: string, key: ValueAddedKey, refId: string, idem: string) {
+  async function refund(userId: string, key: ValueAddedKey, refId: string, idem: string, staff: boolean) {
+    if (staff) {
+      await withBillingTransaction(prisma, userId, (tx) => staffRefundTx(tx, userId, refId, idem));
+      return;
+    }
     await withBillingTransaction(prisma, userId, (tx) => refundValueAdded(tx, userId, key, refId, idem));
   }
 
@@ -85,23 +91,23 @@ export function createInterviewRouter(prisma: PrismaLike) {
   /** 一轮采访的公共执行：扫描→扣费→AI→落库（含模型调用日志）；失败退款 */
   async function runTurn(
     req: AuthRequest, res: any,
-    args: { userId: string; sessionId?: string; text: string; lang: Lang; tier: EngineTier; title?: string },
+    args: { userId: string; sessionId?: string; text: string; lang: Lang; tier: EngineTier; title?: string; staff: boolean },
     prev: { materials: InterviewMaterials; transcript: { q: string; a: string }[]; lastQuestion: string },
   ) {
     const refId = `iv:${args.userId}:${args.sessionId ?? 'new'}:${idemWindow()}:${nonceOf(req) || contentHash(args.text)}`;
     let idem = '';
     let charged = false;
     try {
-      const r0 = await charge(args.userId, 'INTERVIEW_TURN', refId);
+      const r0 = await charge(args.userId, 'INTERVIEW_TURN', refId, args.staff);
       if (!r0.charged) return res.status(409).json({ error: 'IDEMPOTENT_REPLAY', message: '相同回答刚已提交，请勿重复发送' });
       idem = r0.idem; charged = true;
 
       const out: TurnOutcome = await interviewTurn(args.tier, args.text, prev.materials, prev.lastQuestion, prev.transcript, args.lang);
 
-      // 模型调用观测（taskId 空 = 非剧集管线调用；priceFen 记增值定价）
+      // 模型调用观测（taskId 空 = 非剧集管线调用；priceFen 记增值定价，内部账户向用户收 0 → priceFen=0，真实 costFen 照常）
       if (out.costFen > 0) {
         await prisma.modelCallLog.create({
-          data: { taskId: null, role: 'designer', engineTier: args.tier, costFen: Math.max(1, Math.round(out.costFen)), priceFen: VALUE_ADDED.INTERVIEW_TURN.points * FEN_PER_POINT },
+          data: { taskId: null, role: 'designer', engineTier: args.tier, costFen: Math.max(1, Math.round(out.costFen)), priceFen: args.staff ? 0 : VALUE_ADDED.INTERVIEW_TURN.points * FEN_PER_POINT },
         }).catch(() => {});
       }
 
@@ -125,11 +131,11 @@ export function createInterviewRouter(prisma: PrismaLike) {
         ok: true, sessionId: sid, question: out.question, materials: out.materials,
         transcript, turnCount, ready: readyCheck(out.materials, turnCount, args.lang),
         gaps: gapReport(out.materials, args.lang), aiExtract: out.aiExtract, aiQuestion: out.aiQuestion,
-        points: VALUE_ADDED.INTERVIEW_TURN.points,
+        points: args.staff ? 0 : VALUE_ADDED.INTERVIEW_TURN.points, staff: args.staff,
       });
     } catch (e) {
-      if (charged) await refund(args.userId, 'INTERVIEW_TURN', refId, idem).catch(() => {});
-      res.status(400).json({ error: (e as Error).message || '采访服务暂不可用，积分已退回' });
+      if (charged) await refund(args.userId, 'INTERVIEW_TURN', refId, idem, args.staff).catch(() => {});
+      res.status(400).json({ error: (e as Error).message || (args.staff ? '采访服务暂不可用，请稍后重试' : '采访服务暂不可用，积分已退回') });
     }
   }
 
@@ -148,6 +154,7 @@ export function createInterviewRouter(prisma: PrismaLike) {
     return runTurn(req, res, {
       userId: req.userId!, text: p.data.idea, lang: normLang(p.data.lang),
       tier: p.data.engineTier ?? EngineTier.STANDARD, title: p.data.title,
+      staff: await staffOf(prisma, req.userId!),
     }, { materials: emptyMaterials(), transcript: [], lastQuestion: '' });
   });
 
@@ -168,6 +175,7 @@ export function createInterviewRouter(prisma: PrismaLike) {
     return runTurn(req, res, {
       userId: req.userId!, sessionId: s.id, text: p.data.text,
       lang: normLang(s.lang), tier: p.data.engineTier ?? EngineTier.STANDARD,
+      staff: await staffOf(prisma, req.userId!),
     }, { materials: asMaterials(s.materials), transcript: asTranscript(s.transcript), lastQuestion: asTranscript(s.transcript).slice(-1)[0]?.q ?? '' });
   });
 

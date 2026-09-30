@@ -10,6 +10,7 @@ import { z } from 'zod';
 import { authRequired, AuthRequest } from '../middleware/auth';
 import { prisma as defaultPrisma } from '../lib/prisma';
 import { consumeFlexible, refundFlexible } from '../lib/billing';
+import { staffOf, staffChargeTx, staffRefundTx } from '../lib/staff-billing';
 import { withBillingTransaction } from '../lib/prisma-tx';
 import {
   VALUE_ADDED, vaPointsForLevel, MemberLevel,
@@ -47,10 +48,19 @@ export function createTeardownRouter(prisma: PrismaLike | any) {
     return v ? `t${contentHash(v.slice(0, 200))}` : '';
   };
   type TeardownKey = 'TEARDOWN_ANALYZE' | 'TEARDOWN_OUTLINE';
-  async function charge(userId: string, level: MemberLevel, key: TeardownKey, refId: string): Promise<{ points: number; idem: string }> {
-    const points = vaPointsForLevel(key, level);
-    const cost = VALUE_ADDED[key].costFen;
+  async function charge(userId: string, level: MemberLevel, key: TeardownKey, refId: string, staff: boolean): Promise<{ points: number; idem: string }> {
     return await withBillingTransaction(prisma, userId, async (tx) => {
+      if (staff) {
+        // 内部账户 0 元通道：不碰余额/毛利，只写 STAFF_FREE 审计流水；幂等撞车与付费路径同构抛 409
+        const r = await staffChargeTx(tx, userId, refId, 'staff-td');
+        if (!r.charged) {
+          const e = new Error('IDEMPOTENT_REPLAY') as Error & { code: string };
+          e.code = 'IDEMPOTENT_REPLAY'; throw e;
+        }
+        return { points: 0, idem: r.idem };
+      }
+      const points = vaPointsForLevel(key, level);
+      const cost = VALUE_ADDED[key].costFen;
       const raw = tx.raw as any;
       const charges = await raw.ledgerEntry.findMany({ where: { userId, reason: key, refType: 'value_added', refId } });
       const refunds = await raw.ledgerEntry.findMany({ where: { userId, reason: `${key}:REFUND`, refType: 'value_added', refId } });
@@ -63,7 +73,12 @@ export function createTeardownRouter(prisma: PrismaLike | any) {
       return { points, idem };
     });
   }
-  async function refund(userId: string, points: number, key: TeardownKey, refId: string, idem: string) {
+  async function refund(userId: string, points: number, key: TeardownKey, refId: string, idem: string, staff: boolean) {
+    if (staff) {
+      // 0 元配对退款（amount=0 也要留痕，使同 refId 可再次提交），先于 `if (!points) return`
+      await withBillingTransaction(prisma, userId, (tx) => staffRefundTx(tx, userId, refId, idem));
+      return;
+    }
     if (!points) return;
     // 传与 charge 相同的 refId/idem，refund: 前缀由 billing 内部统一管理（原扣款不存在则拒绝退款）
     await withBillingTransaction(prisma, userId, (tx) =>
@@ -94,11 +109,12 @@ export function createTeardownRouter(prisma: PrismaLike | any) {
     const userId = req.userId!;
     let level: MemberLevel;
     try { level = await levelOf(userId); } catch (e: any) { if (e?.code === 'BANNED') return res.status(403).json({ error: '账号已封禁' }); throw e; }
+    const staff = await staffOf(prisma, userId);
     const refId = `analyze:${userId}:${idemWindow()}:${nonceOf(req) || contentHash(`${p.data.sourceType}|${p.data.sourceUrl ?? ''}|${text}`)}`;
     let idem = '';
     let charged = false; let points = 0;
     try {
-      const r0 = await charge(userId, level, 'TEARDOWN_ANALYZE', refId);
+      const r0 = await charge(userId, level, 'TEARDOWN_ANALYZE', refId, staff);
       idem = r0.idem; points = r0.points; charged = true;
       const report = teardown(text, { type: p.data.sourceType as TeardownSource, url: p.data.sourceUrl }, p.data.lang === 'en' ? 'en' : 'zh');
       const rec = await prisma.teardownRecord.create({
@@ -108,10 +124,10 @@ export function createTeardownRouter(prisma: PrismaLike | any) {
           report: report as object, pickedTags: [], state: 'ANALYZED', pointsCost: points,
         },
       });
-      res.json({ recordId: rec.id, points, report, directions: adaptDirections(report) });
+      res.json({ recordId: rec.id, points, staff, report, directions: adaptDirections(report) });
     } catch (e: any) {
       if (e?.code === 'IDEMPOTENT_REPLAY') return res.status(409).json({ error: 'IDEMPOTENT_REPLAY', message: '相同内容刚已提交，请勿重复拆解' });
-      if (charged) await refund(userId, points, 'TEARDOWN_ANALYZE', refId, idem).catch(() => {});
+      if (charged) await refund(userId, points, 'TEARDOWN_ANALYZE', refId, idem, staff).catch(() => {});
       if (e?.code === 'INSUFFICIENT') return res.status(400).json({ error: '积分不足，请先充值' });
       throw e;
     }
@@ -131,21 +147,22 @@ export function createTeardownRouter(prisma: PrismaLike | any) {
     if (rec.userId !== userId) return res.status(403).json({ error: '无权操作他人记录' });
     let level: MemberLevel;
     try { level = await levelOf(userId); } catch (e: any) { if (e?.code === 'BANNED') return res.status(403).json({ error: '账号已封禁' }); throw e; }
+    const staff = await staffOf(prisma, userId);
     const refId = `outline:${rec.id}:${idemWindow()}:${nonceOf(req) || contentHash(`${p.data.direction}|${p.data.pickedTags.join(',')}`)}`;
     let idem = '';
     let charged = false; let points = 0;
     try {
-      const r0 = await charge(userId, level, 'TEARDOWN_OUTLINE', refId);
+      const r0 = await charge(userId, level, 'TEARDOWN_OUTLINE', refId, staff);
       idem = r0.idem; points = r0.points; charged = true;
       const outline = buildAdaptOutline(rec.report as any, p.data.pickedTags, p.data.direction, (rec.report as any).lang === 'en' ? 'en' : 'zh');
       await prisma.teardownRecord.update({
         where: { id: rec.id },
         data: { pickedTags: p.data.pickedTags, direction: p.data.direction, outline: outline as object, state: 'OUTLINED', pointsCost: { increment: points } },
       });
-      res.json({ outline, points });
+      res.json({ outline, points, staff });
     } catch (e: any) {
       if (e?.code === 'IDEMPOTENT_REPLAY') return res.status(409).json({ error: 'IDEMPOTENT_REPLAY', message: '相同选择刚已提交，请勿重复生成' });
-      if (charged) await refund(userId, points, 'TEARDOWN_OUTLINE', refId, idem).catch(() => {});
+      if (charged) await refund(userId, points, 'TEARDOWN_OUTLINE', refId, idem, staff).catch(() => {});
       if (e?.code === 'INSUFFICIENT') return res.status(400).json({ error: '积分不足，请先充值' });
       throw e;
     }

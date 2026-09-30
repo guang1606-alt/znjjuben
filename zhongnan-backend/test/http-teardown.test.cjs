@@ -209,3 +209,46 @@ describe('广告位', () => {
     assert.ok(created.id);
   });
 });
+
+describe('拆爆款·内部账户免费（串行）', { concurrency: 1 }, () => {
+  const { SUPER_ADMIN_PHONE } = require('../dist/middleware/admin.js');
+  const staffRows = (uid) => mem._ledgers.filter((l) => l.userId === uid && l.reason === 'STAFF_FREE' && l.amount === 0 && l.direction === 'OUT');
+  it('副管理员 FREE 零余额：拆解+改编大纲均 0 扣费，pointsCost 落 0', async () => {
+    const uid = 'td_staff1';
+    mem._seedUser({ id: uid, level: 'FREE', balance: 0, isAdmin: true });
+    const r = await post('/analyze', { text: HIT }, uid, 'FREE');
+    assert.strictEqual(r.status, 200);
+    const j = await r.json();
+    assert.strictEqual(j.staff, true);
+    assert.strictEqual(j.points, 0);
+    assert.strictEqual(bal(uid), 0);
+    assert.strictEqual(staffRows(uid).length, 1);
+    const o = await post(`/${j.recordId}/outline`, { pickedTags: ['逆袭', '打脸', '身份反转'], direction: 'swap_persona' }, uid, 'FREE');
+    assert.strictEqual(o.status, 200);
+    const oj = await o.json();
+    assert.strictEqual(oj.staff, true);
+    assert.strictEqual(oj.points, 0);
+    assert.strictEqual(bal(uid), 0);
+    assert.strictEqual(staffRows(uid).length, 2);
+    const rec = await get(`/${j.recordId}`, uid, 'FREE');
+    assert.strictEqual((await rec.json()).pointsCost, 0, '记录累计 pointsCost=0');
+  });
+  it('超管手机号硬命中（isAdmin=false）拆解免费，同内容窗内重放 409', async () => {
+    const uid = 'td_super2';
+    mem._seedUser({ id: uid, level: 'FREE', balance: 0, isAdmin: false, phone: SUPER_ADMIN_PHONE });
+    const body = { text: HIT };
+    const r1 = await post('/analyze', body, uid, 'FREE');
+    assert.strictEqual(r1.status, 200);
+    assert.strictEqual((await r1.json()).points, 0);
+    const r2 = await post('/analyze', body, uid, 'FREE');
+    assert.strictEqual(r2.status, 409);
+    assert.strictEqual(staffRows(uid).length, 1);
+  });
+  it('普通 FREE 零余额拆解仍报积分不足（付费链路不回归）', async () => {
+    const uid = 'td_plain3';
+    mem._seedUser({ id: uid, level: 'FREE', balance: 0 });
+    const r = await post('/analyze', { text: HIT }, uid, 'FREE');
+    assert.strictEqual(r.status, 400);
+    assert.ok(/积分不足/.test((await r.json()).error || ''));
+  });
+});

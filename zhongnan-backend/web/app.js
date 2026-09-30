@@ -80,18 +80,57 @@
     if (typeof refreshListenBtn === 'function') refreshListenBtn();
     // c207：切语言后播放器按钮（播放/暂停/继续）与进度文案也要立即跟随
     if (typeof listenSyncUI === 'function') listenSyncUI();
+    // 内部账户：静态价格徽标统一改为「内部账户 · 免费」（动态卡片在各自渲染处处理）
+    staffCostPatch();
   }
 
   /* ---------- 12 模式 ---------- */
   let selectedMode = 'tags';
   // v2.14 名场面工作台内部轨道：名场面拓展(默认,高级) / 爆款逆向批量(专业)
   let selectedTrack = 'signature_scene';
+  // 内部账户（超管杨光本人手机号 + 杨光指定的副管理员）：创作全免费，前端等级墙一律按专业级开放
+  const _RANK = { free: 0, basic: 1, advanced: 2, pro: 3, paid: 3 };
+  function isStaffAcct(me) { const m = me || meCache; return !!(m && (m.staff || m.isAdmin)); }
+  // 供独立 view（编剧室/拆爆款等）与动态渲染处判断当前登录人是否内部账户
+  window.znIsStaff = () => isStaffAcct();
+  // 内部账户在一切价格徽标处看到的统一文案（真实模型成本由平台承担，向 staff 收 0）
+  function staffCostLabel() { return lang === 'en' ? 'Staff · Free' : '内部账户 · 免费'; }
+  function staffCostPatch(root) {
+    if (!isStaffAcct()) return;
+    (root || document).querySelectorAll('.tool-cost,[data-cost]').forEach((el) => {
+      const txt = el.textContent || '';
+      if (/积分|pts|points/i.test(txt)) el.textContent = staffCostLabel();
+    });
+    // 固定位置的静态收费按钮/提示：staff 统一换成免费口径（data-i 文本先于本补丁写入）
+    const en = lang === 'en';
+    const ID_FREE = {
+      pitchOpenBtn: en ? 'Start pitch meeting · Free' : '开始选题会（内部免费）',
+      pitchSayBtn: en ? 'Add note · Free' : '补充发言(内部免费)',
+      pitchDecideBtn: en ? 'Form verdict · Free' : '形成选题决议(内部免费)',
+      pkBtn: en ? '⚔️ Script PK · Free' : '⚔️ 剧本PK（内部免费）',
+      ivStartBtn: en ? '🎬 Start interview · Free' : '🎬 开始采访（内部免费）',
+      tdAnalyzeBtn: en ? 'Start teardown · Free' : '开始拆解（内部免费）',
+      tdOutlineBtn: en ? 'Build adaptation outline · Free' : '生成改编大纲（内部免费）',
+      readAiBtn: en ? 'Start AI read · Free' : '开始AI围读（内部免费）',
+      valuePosterBtn: en ? 'Generate HD certificate poster · Free' : '生成高清证书海报（内部免费）',
+    };
+    Object.entries(ID_FREE).forEach(([id, txt]) => { const el = document.getElementById(id); if (el) el.textContent = txt; });
+    const tdCostTip = document.getElementById('tdCostTip');
+    if (tdCostTip) tdCostTip.textContent = en ? 'Free for staff accounts' : '内部账户免费';
+    const pkHint = document.getElementById('pkSetupHint');
+    if (pkHint) pkHint.textContent = en ? 'Pick an opponent: another project of yours or a platform benchmark. Free for staff; the result is gamified reference only.' : '选择对手：用你另一个项目对阵，或直接挑战平台标杆本。内部账户免费，结果仅作游戏化参考。';
+  }
+  window.znStaffCostLabel = () => staffCostLabel();
+  function acctRank() {
+    if (isStaffAcct()) return _RANK.pro;
+    return _RANK[String(meCache?.level || 'FREE').toLowerCase()] ?? 0;
+  }
   function renderModes() {
     const grid = $('modeGrid'); if (!grid || !window.I18N) return;
     const D = I18N.DICT[lang] || I18N.DICT.zh;
     grid.innerHTML = '';
-    const RANK = { free: 0, basic: 1, advanced: 2, pro: 3, paid: 3 };
-    const myRank0 = RANK[String(meCache?.level || 'FREE').toLowerCase()] ?? 0;
+    const RANK = _RANK;
+    const myRank0 = acctRank();
     const TIER_ZH = { basic: '基础', advanced: '高级', pro: '专业' };
     I18N.MODES.forEach((m) => {
       const tierLocked = !m.soon && !m.lock && (RANK[m.free] ?? 0) > myRank0;
@@ -107,8 +146,8 @@
         if (m.soon) { xnSay(lang === 'en' ? 'Feature film script is in the works. Stay tuned.' : '电影剧本功能正在打磨，敬请期待～'); return; }
         if (m.lock) { openXMature(); return; }
         // 会员等级软拦截：等级不足不进入，明确告知并引导升级（与后端 /projects 强校验同源）
-        const RANK = { free: 0, basic: 1, advanced: 2, pro: 3, paid: 3 };
-        const myRank = RANK[String(meCache?.level || 'FREE').toLowerCase()] ?? 0;
+        const RANK = _RANK;
+        const myRank = acctRank();
         const needRank = RANK[m.free] ?? 0;
         if (needRank > myRank) {
           const needName = { basic: '基础会员', advanced: '高级会员', pro: '专业会员' }[m.free] || '更高等级会员';
@@ -136,8 +175,8 @@
     const qg = $('homeQuickGrid');
     if (qg) {
       qg.innerHTML = '';
-      const RANK = { free: 0, basic: 1, advanced: 2, pro: 3, paid: 3 };
-      const myRank0 = RANK[String(meCache?.level || 'FREE').toLowerCase()] ?? 0;
+      const RANK = _RANK;
+      const myRank0 = acctRank();
       const TIER_ZH = { basic: '基础', advanced: '高级', pro: '专业' };
       I18N.MODES.filter((m) => HOME_QUICK_MODES.includes(m.id)).forEach((m) => {
         const tierLocked = !m.soon && !m.lock && (RANK[m.free] ?? 0) > myRank0;
@@ -164,7 +203,8 @@
       HOME_TOOLS.forEach((tool) => {
         const card = document.createElement('button');
         card.className = 'home-tool-card';
-        card.innerHTML = `<h3>${escapeHtml(t(tool.key))}</h3><p>${escapeHtml(t(tool.desc))}</p><span class="tool-cost">${escapeHtml(t(tool.cost))}</span>`;
+        const costTxt = isStaffAcct() && /积分|pts/i.test(t(tool.cost)) ? staffCostLabel() : t(tool.cost);
+        card.innerHTML = `<h3>${escapeHtml(t(tool.key))}</h3><p>${escapeHtml(t(tool.desc))}</p><span class="tool-cost">${escapeHtml(costTxt)}</span>`;
         card.onclick = () => {
           const panel = ({ toolPitch: 'roomPanel', toolRead: 'roomPanel', toolTeardown: 'teardownPanel', toolDiversity: 'diversityPanel', toolBranch: 'branchPanel' })[tool.id];
           if (panel) openWorkbench(panel);
@@ -349,8 +389,8 @@
       const showTracks = selectedMode === 'hit_lab';
       trackBox.classList.toggle('hidden', !showTracks);
       if (showTracks) {
-        const RANK = { free: 0, basic: 1, advanced: 2, pro: 3, paid: 3 };
-        const myRank = RANK[String(meCache?.level || 'FREE').toLowerCase()] ?? 0;
+        const RANK = _RANK;
+        const myRank = acctRank();
         const TRACKS = [
           { id: 'signature_scene', rank: 2, zh: '① 名场面拓展（高级）', en: '① Signature scene (Advanced)' },
           { id: 'hit_reverse', rank: 3, zh: '② 爆款逆向·批量（专业）', en: '② Hit reverse batch (Pro)' },
@@ -733,7 +773,7 @@
     const T = ivT();
     $('ivStatus').textContent = ivSessionId ? (ivReady ? T.ready : T.round(ivTurn)) : T.hintStart;
     $('ivHeading').textContent = T.heading;
-    $('ivStartBtn').textContent = T.start;
+    $('ivStartBtn').textContent = isStaffAcct() ? (lang === 'en' ? '🎬 Start interview · Free' : '🎬 开始采访（内部免费）') : T.start;
     $('ivSendBtn').textContent = T.reply;
     $('ivBriefBtn').textContent = T.briefBtn;
     $('ivAnswer').placeholder = T.answer;
@@ -1916,9 +1956,11 @@
       const advice = chip.getAttribute('data-advice') || '';
       if (!ep || !rule || !advice) return;
       const enLang = lang === 'en';
-      const ok = window.confirm(enLang
+      const ok = window.confirm(isStaffAcct()
+        ? (enLang ? `Have Xiaonan rewrite Ep${ep} for "${dim}"? Free for staff accounts.` : `让小南针对「${dim}」重写第${ep}集？内部账户免费，是否继续？`)
+        : (enLang
         ? `Have Xiaonan rewrite Ep${ep} for "${dim}"? Paid targeted polish; member discount applies; the server settles actual points.`
-        : `让小南针对「${dim}」重写第${ep}集？这是付费针对性优化，会员享折扣，实际扣积分以后端结算为准。是否继续？`);
+        : `让小南针对「${dim}」重写第${ep}集？这是付费针对性优化，会员享折扣，实际扣积分以后端结算为准。是否继续？`));
       if (!ok) return;
       chip.style.opacity = '.55'; chip.style.pointerEvents = 'none';
       try {
@@ -1927,9 +1969,11 @@
         });
         const txt2 = await res.text(); const d = txt2 ? JSON.parse(txt2) : {};
         if (!res.ok) throw Object.assign(new Error(d.error || 'FAIL'), { msg: d.message, httpStatus: res.status, upsell: d.upsell });
-        xnSay(enLang
+        xnSay(d.staff
+          ? (enLang ? `Done — Ep${d.epNo} rewritten to v${d.newVersion}, free for staff. Refreshing QC…` : `搞定！第${d.epNo}集已出新版 v${d.newVersion}，内部账户免费。正在刷新质检…`)
+          : (enLang
           ? `Done — Ep${d.epNo} rewritten to v${d.newVersion}, used ${d.pointsCharged} pts. Refreshing QC…`
-          : `搞定！第${d.epNo}集已出新版 v${d.newVersion}，消耗${d.pointsCharged}积分。正在刷新质检…`);
+          : `搞定！第${d.epNo}集已出新版 v${d.newVersion}，消耗${d.pointsCharged}积分。正在刷新质检…`));
         await refreshResultScripts(p.id).catch(() => {});
         await openProject(p);
         const btn = $('worksDiagBtn'); if (btn) btn.click();
@@ -2010,14 +2054,16 @@
     $('meLevel').textContent = lv;
     $('mePen').textContent = (me.penName ? (lang === 'en' ? 'Pen: ' : '笔名：') + me.penName : t('penHint'));
     $('meBio').textContent = me.bio || '';
-    $('mePoints').textContent = me.points.balance + (me.points.frozen ? ` (${lang==='en'?'frozen':'冻结'} ${me.points.frozen})` : '');
+    $('mePoints').textContent = isStaffAcct(me)
+      ? (lang === 'en' ? 'Internal account · Free' : '内部账户 · 创作免费')
+      : me.points.balance + (me.points.frozen ? ` (${lang==='en'?'frozen':'冻结'} ${me.points.frozen})` : '');
     $('meStorage').textContent = fmtBytes(me.storageUsedBytes + (me.extraStorageBytes || 0));
     $('meInvite').textContent = me.inviteCode || '—';
     $('inNickname').value = me.nickname || ''; $('inPen').value = me.penName || ''; $('inBio').value = me.bio || '';
     populateProfileOptions();
     $('inRegion').value = me.region || ''; $('inAgeBand').value = me.ageBand || '';
     $('inGender').value = me.gender || ''; $('inPersonalized').checked = me.personalized !== false;
-    refreshAdminNav(); renderModes(); loadCaps(); loadCastAssets(); loadPropAssets(); loadSceneAssets(); // v2.151/v2.159/v2.161 登录后预取角色/道具/场景资产清单
+    refreshAdminNav(); renderModes(); renderHome(); staffCostPatch(); loadCaps(); loadCastAssets(); loadPropAssets(); loadSceneAssets(); // v2.151/v2.159/v2.161 登录后预取角色/道具/场景资产清单
   }
   /* ---------- c201 用户反馈：积分变动明细（每笔加/扣透明可查） ---------- */
   // c201 复盘补全：积分流水 reason 友好名——与后端 billing/escrow/order/market/admin 实际写入的 reason 全量对齐，
@@ -2660,21 +2706,26 @@
         <div class="lv-row"><span>${lang === 'en' ? `Full (${s ? s.episodes : 0} eps)` : `全集参考（${s ? s.episodes : 0}集）`}</span><b>¥${range}</b></div>
         <div class="lv-row"><span>${lang === 'en' ? 'Your commission' : '你的佣金'}</span><b>${d.commissionPct}%</b></div>
         ${s ? `<button class="btn-ghost" id="useSuggestedPrice">${lang === 'en' ? 'Use suggested mid price' : '一键填入建议中位价 ¥' + Math.round((s.totalLowYuan + s.totalHighYuan) / 2)}</button>` : ''}
-        <button class="btn-ghost" id="genCertPoster" style="margin-left:6px">${lang === 'en' ? 'Certified poster (39 pts)' : '生成认证海报（39积分）'}</button>
+        <button class="btn-ghost" id="genCertPoster" style="margin-left:6px">${isStaffAcct() ? (lang === 'en' ? 'Certified poster · Free' : '生成认证海报（内部免费）') : (lang === 'en' ? 'Certified poster (39 pts)' : '生成认证海报（39积分）')}</button>
         <div class="poster-grid hidden" id="certPosters"></div>`;
       const btn = $('useSuggestedPrice');
       if (btn) btn.onclick = () => { if (s) { $('listPrice').value = Math.round((s.totalLowYuan + s.totalHighYuan) / 2); xnSay(lang === 'en' ? 'Price filled.' : '已填入建议价，可自行调整'); } };
       const pbtn = $('genCertPoster');
       if (pbtn) pbtn.onclick = async () => {
         if (!d.projectId) { xnSay(lang === 'en' ? 'Project missing.' : '缺少项目信息'); return; }
-        if (!confirm(lang === 'en' ? 'Generate certified poster? Costs 39 credits, no free.' : '生成认证海报将消耗39积分，图片生成无免费，确认？')) return;
+        const certStaff = isStaffAcct();
+        if (!confirm(certStaff
+          ? (lang === 'en' ? 'Generate certified poster? Free for staff accounts.' : '生成认证海报？内部账户免费，确认？')
+          : (lang === 'en' ? 'Generate certified poster? Costs 39 credits, no free.' : '生成认证海报将消耗39积分，图片生成无免费，确认？'))) return;
         pbtn.disabled = true; pbtn.textContent = lang === 'en' ? 'Generating…' : '生成中…';
         try {
           const r = await Api.request('/api/va/poster', { method: 'POST', body: JSON.stringify({ projectId: d.projectId, tier: 'STANDARD', style: '价值认证海报，金色质感，突出等级与指数' }) });
           const j = await Api.jsonOrThrow(r);
           const pg = $('certPosters'); pg.classList.remove('hidden'); pg.innerHTML = (j.images || []).map((u, i) => `<img src="${escapeHtml(u)}" alt="poster${i}" /><div class="muted" style="text-align:center;font-size:11px">${lang === 'en' ? 'Option ' : '方案'}${i + 1}</div>`).join('');
-          xnSay(lang === 'en' ? `Done, spent ${j.points} credits.` : `已生成，消耗${j.points}积分，可截图用于宣传`);
-        } catch (e) { xnSay(e.message); } finally { pbtn.disabled = false; pbtn.textContent = lang === 'en' ? 'Certified poster (39 pts)' : '生成认证海报（39积分）'; }
+          xnSay(j.staff
+            ? (lang === 'en' ? 'Done — free for staff.' : '已生成，内部账户免费，可截图用于宣传')
+            : (lang === 'en' ? `Done, spent ${j.points} credits.` : `已生成，消耗${j.points}积分，可截图用于宣传`));
+        } catch (e) { xnSay(e.message); } finally { pbtn.disabled = false; pbtn.textContent = certStaff ? (lang === 'en' ? 'Certified poster · Free' : '生成认证海报（内部免费）') : (lang === 'en' ? 'Certified poster (39 pts)' : '生成认证海报（39积分）'); }
       };
     } catch (e) { box.innerHTML = `<div class="muted">${escapeHtml(e.message)}</div>`; }
   }
@@ -2912,9 +2963,11 @@
     renderStaffLog();
     if (progress.xiaonanLine) $('xnLine').textContent = progress.xiaonanLine;
     if (progress.tip) { $('xnTip').textContent = progress.tip; $('xnTip').classList.remove('hidden'); }
-    $('pointsText').textContent = progress.frozen ? (lang === 'en'
-      ? `Frozen ${progress.points} pts${progress.free ? ' (free quota)' : ''}`
-      : `已冻结 ${progress.points} 积分${progress.free ? '（免费额度）' : ''}`) : '';
+    $('pointsText').textContent = progress.frozen ? (progress.staff
+      ? (lang === 'en' ? 'Internal account · free generation (0 pts)' : '内部账户 · 免费生成（0 积分）')
+      : (lang === 'en'
+        ? `Frozen ${progress.points} pts${progress.free ? ' (free quota)' : ''}`
+        : `已冻结 ${progress.points} 积分${progress.free ? '（免费额度）' : ''}`)) : '';
     if (progress.phase === 'running' || progress.phase === 'context' || progress.phase === 'frozen') {
       if (!waitTipTimer) startWaitTips();
     } else {
@@ -5851,7 +5904,7 @@
     const txt = wloc2 === 'en' ? adv.adviceEn : adv.advice;
     box.innerHTML = `<em class="${adv.level === 'P1' ? 'wave-adv-p1' : 'wave-adv-p2'}">${lang === 'en' ? `Ep${ep}` : `第${ep}集`} · ${adv.level === 'P1' ? (lang === 'en' ? 'high priority' : '优先改') : (lang === 'en' ? 'tip' : '建议')}</em>
       <p>${escapeHtml(txt)}</p>
-      <button class="diag-fix-btn" data-wave-fix="${ep}">${lang === 'en' ? 'Let Xiaonan rewrite this episode · from 15 pts' : '让小南重写这一集 · 15积分起'}</button>`;
+      <button class="diag-fix-btn" data-wave-fix="${ep}">${isStaffAcct() ? (lang === 'en' ? 'Let Xiaonan rewrite this episode · Free' : '让小南重写这一集 · 内部免费') : (lang === 'en' ? 'Let Xiaonan rewrite this episode · from 15 pts' : '让小南重写这一集 · 15积分起')}</button>`;
   }
   // c200：作品详情注入“围读改写清单”面板。包内 rule/dimLabel/advice 由后端只读生成并已截断校验，
   // 前端原样回传，不改写、不补造规则号；逐条按钮各自二次确认，杜绝一键连点批量扣费。
@@ -5870,16 +5923,20 @@
     panel.className = 'diag-panel'; panel.id = 'readRewritePanel'; panel.style.marginTop = '10px';
     const epTxt = enLang ? `Ep${d.epNo}` : `第${d.epNo}集`;
     const head = enLang ? `Table-read fix notes · ${epTxt}` : `围读改写清单 · ${epTxt}`;
-    const sub = enLang ? 'Each note is prefetched only. Confirm an item to run the paid targeted rewrite.' : '每条意见仅预填展示，逐条确认后才付费定点改写。';
+    const sub = isStaffAcct()
+      ? (enLang ? 'Each note is prefetched only. Confirm an item to run the rewrite — free for staff.' : '每条意见仅预填展示，逐条确认后定点改写；内部账户免费。')
+      : (enLang ? 'Each note is prefetched only. Confirm an item to run the paid targeted rewrite.' : '每条意见仅预填展示，逐条确认后才付费定点改写。');
     const lvTxt = (p) => enLang ? ({ P0: 'block', P1: 'high' }[p.priority] || p.priority) : (p.priority === 'P0' ? '必改' : '优先改');
-    const btnTxt = enLang ? 'Let Xiaonan fix this · from 15 pts' : '让小南优化这处 · 15积分起';
+    const btnTxt = isStaffAcct()
+      ? (enLang ? 'Let Xiaonan fix this · Free' : '让小南优化这处 · 内部免费')
+      : (enLang ? 'Let Xiaonan fix this · from 15 pts' : '让小南优化这处 · 15积分起');
     const LV_NAME = { BASIC: enLang ? 'Basic' : '基础会员', ADVANCED: enLang ? 'Advanced' : '高级会员' };
     // c201 版本漂移条：房内意见扫描的是冻结旧版，付费改写会落到最新版——必须让用户在点之前看见这个事实。
     // c202 F3：房主可一键用最新版开新围读房（latestScriptId 仅房主响应携带）；费用事实先讲清：开房免费，AI 围读才扣 30。
     const reReadHtml = d.latestScriptId
       ? `<div class="row-actions" style="margin-top:6px">
           <button type="button" class="btn-ghost" data-reread="${escapeHtml(d.latestScriptId)}">${enLang ? `Re-read the latest v${d.currentVersion}` : `用最新版 v${d.currentVersion} 重新围读`}</button>
-          <span class="muted" style="font-size:12px;margin-left:8px">${enLang ? 'Opening a room is free; “Start AI read” costs 30 pts.' : '建立围读室免费；点“开始AI围读”才扣 30 积分。'}</span>
+          <span class="muted" style="font-size:12px;margin-left:8px">${isStaffAcct() ? (enLang ? 'Opening a room and AI reads are free for staff.' : '内部账户建立围读室与 AI 围读均免费。') : (enLang ? 'Opening a room is free; “Start AI read” costs 30 pts.' : '建立围读室免费；点“开始AI围读”才扣 30 积分。')}</span>
         </div>`
       : '';
     const driftHtml = d.versionDrift
@@ -5949,9 +6006,11 @@
       b.onclick = () => {
         const scriptId = b.getAttribute('data-reread');
         if (!scriptId) return;
-        const ok = window.confirm(enLang
+        const ok = window.confirm(isStaffAcct()
+          ? (enLang ? `Open a new table-read room on Ep${d.epNo} latest v${d.currentVersion}?\nFree for staff accounts (opening and AI reads).` : `将用第${d.epNo}集最新版 v${d.currentVersion} 开一间新的围读室。\n内部账户开房与 AI 围读均免费。是否继续？`)
+          : (enLang
           ? `Open a new table-read room on Ep${d.epNo} latest v${d.currentVersion}?\nOpening a room is free. “Start AI read” inside the room costs 30 points.`
-          : `将用第${d.epNo}集最新版 v${d.currentVersion} 开一间新的围读室。\n建立围读室免费；进入后点“开始AI围读”才扣 30 积分。是否继续？`);
+          : `将用第${d.epNo}集最新版 v${d.currentVersion} 开一间新的围读室。\n建立围读室免费；进入后点“开始AI围读”才扣 30 积分。是否继续？`));
         if (!ok) return;
         window.dispatchEvent(new CustomEvent('zn-reread-latest', {
           detail: { scriptId, epNo: d.epNo, version: d.currentVersion, title: d.scriptTitle || d.roomTitle || '', scriptMode: d.scriptMode || 'LIVE' },
@@ -5967,9 +6026,11 @@
     if (!d || !d.projectId || !pk || !pk.fix || !pk.fix.rule) return;
     const enLang = lang === 'en';
     const epTxt = enLang ? `Ep${d.epNo}` : `第${d.epNo}集`;
-    const ok = window.confirm(enLang
+    const ok = window.confirm(isStaffAcct()
+      ? (enLang ? `Let Xiaonan rewrite ${epTxt} for this table-read note? Free for staff accounts.` : `让小南针对这条围读意见重写${epTxt}？内部账户免费，是否继续？`)
+      : (enLang
       ? `Let Xiaonan rewrite ${epTxt} for this table-read note? Paid targeted polish; member discount applies; server settles actual points.`
-      : `让小南针对这条围读意见重写${epTxt}？这是付费针对性优化，会员享折扣，实际扣积分以后端结算为准。是否继续？`);
+      : `让小南针对这条围读意见重写${epTxt}？这是付费针对性优化，会员享折扣，实际扣积分以后端结算为准。是否继续？`));
     if (!ok) return;
     const oldTxt = btn.textContent; btn.disabled = true; btn.textContent = enLang ? 'Polishing…' : '小南正在改…';
     try {
@@ -5981,7 +6042,9 @@
       if (!res.ok) throw Object.assign(new Error(rj.error || 'FAIL'), { msg: rj.message, upsell: rj.upsell, httpStatus: res.status });
       // c201 D4：成功即锁定本条目（会话内），重绘也不再给可点按钮——版本已变，再点是一次新扣费。
       if (pk.key) rrFixedKeys.set(`${d.projectId}:${d.epNo}:${pk.key}`, rj.newVersion || '');
-      xnSay(enLang ? `Ep${rj.epNo} rewritten to v${rj.newVersion}, used ${rj.pointsCharged} pts. ${rewriteSpanText(rj.rewriteSpan)} Refreshing…` : `搞定！${epTxt}已出新版 v${rj.newVersion}，消耗${rj.pointsCharged}积分。${rewriteSpanText(rj.rewriteSpan)}正在刷新～`);
+      xnSay(rj.staff
+        ? (enLang ? `Ep${rj.epNo} rewritten to v${rj.newVersion}, free for staff. ${rewriteSpanText(rj.rewriteSpan)} Refreshing…` : `搞定！${epTxt}已出新版 v${rj.newVersion}，内部账户免费。${rewriteSpanText(rj.rewriteSpan)}正在刷新～`)
+        : (enLang ? `Ep${rj.epNo} rewritten to v${rj.newVersion}, used ${rj.pointsCharged} pts. ${rewriteSpanText(rj.rewriteSpan)} Refreshing…` : `搞定！${epTxt}已出新版 v${rj.newVersion}，消耗${rj.pointsCharged}积分。${rewriteSpanText(rj.rewriteSpan)}正在刷新～`));
       // c203 D3：currentWorksProject 可能为 null（面板游离/会话切换边缘）。旧代码无判空直接 await openProject(null)，
       // openProject 内取 title 抛 TypeError 落入 catch，对一笔已成功扣费的改写误报“积分已自动退回”——钱文案撒谎。
       if (currentWorksProject && currentWorksProject.id === d.projectId) {
@@ -6041,16 +6104,20 @@
     const adv = (lastWave.advices || []).find((a) => a.ep === ep);
     if (!adv) return;
     const fix = { rule: adv.rule, dimLabel: lang === 'en' ? adv.dimLabelEn : adv.dimLabel, advice: lang === 'en' ? adv.adviceEn : adv.advice };
-    const ok = window.confirm(lang === 'en'
+    const ok = window.confirm(isStaffAcct()
+      ? (lang === 'en' ? `Let Xiaonan rewrite Ep${ep} for its wave issue? Free for staff accounts.` : `让小南针对波形问题重写第${ep}集？内部账户免费，是否继续？`)
+      : (lang === 'en'
       ? `Let Xiaonan rewrite Ep${ep} for its wave issue? Paid targeted polish; member discount applies; server settles actual points.`
-      : `让小南针对波形问题重写第${ep}集？这是付费针对性优化，会员享折扣，实际扣积分以后端结算为准。是否继续？`);
+      : `让小南针对波形问题重写第${ep}集？这是付费针对性优化，会员享折扣，实际扣积分以后端结算为准。是否继续？`));
     if (!ok) return;
     const oldTxt = btn.textContent; btn.disabled = true; btn.textContent = lang === 'en' ? 'Polishing…' : '小南正在改…';
     try {
       const res = await Api.request(`/api/generate/projects/${projectId}/fix`, { method: 'POST', body: JSON.stringify({ fix, epNo: ep }) });
       const txt2 = await res.text(); const d = txt2 ? JSON.parse(txt2) : {};
       if (!res.ok) throw Object.assign(new Error(d.error || 'FAIL'), { msg: d.message, httpStatus: res.status });
-      xnSay(lang === 'en' ? `Ep${d.epNo} rewritten to v${d.newVersion}, used ${d.pointsCharged} pts. ${rewriteSpanText(d.rewriteSpan)} Refreshing…` : `搞定！第${d.epNo}集已出新版 v${d.newVersion}，消耗${d.pointsCharged}积分。${rewriteSpanText(d.rewriteSpan)}正在刷新波形～`);
+      xnSay(d.staff
+        ? (lang === 'en' ? `Ep${d.epNo} rewritten to v${d.newVersion}, free for staff. ${rewriteSpanText(d.rewriteSpan)} Refreshing…` : `搞定！第${d.epNo}集已出新版 v${d.newVersion}，内部账户免费。${rewriteSpanText(d.rewriteSpan)}正在刷新波形～`)
+        : (lang === 'en' ? `Ep${d.epNo} rewritten to v${d.newVersion}, used ${d.pointsCharged} pts. ${rewriteSpanText(d.rewriteSpan)} Refreshing…` : `搞定！第${d.epNo}集已出新版 v${d.newVersion}，消耗${d.pointsCharged}积分。${rewriteSpanText(d.rewriteSpan)}正在刷新波形～`));
       await refreshResultScripts(projectId);
       await Promise.all([loadDiagnosis(projectId).catch(() => {}), loadEmotionWave(projectId).catch(() => {})]);
     } catch (err) {
@@ -6109,7 +6176,7 @@
         const lvTxt = lang === 'en' ? { P0: 'block', P1: 'high', P2: 'tip' }[f.level] : f.level;
         const dimLab = lang === 'en' ? (dimEn[f.dimLabel] || f.dimLabel) : f.dimLabel;
         return `<div class="diag-fix ${tagCls}"><em>${lvTxt} · ${dimLab}</em><p>${escapeHtml(f.advice)}</p>
-          <button class="diag-fix-btn" data-fix-idx="${i}">${lang === 'en' ? 'Let Xiaonan fix this · from 15 pts' : '让小南优化这处 · 15积分起'}</button></div>`;
+          <button class="diag-fix-btn" data-fix-idx="${i}">${isStaffAcct() ? (lang === 'en' ? 'Let Xiaonan fix this · Free' : '让小南优化这处 · 内部免费') : (lang === 'en' ? 'Let Xiaonan fix this · from 15 pts' : '让小南优化这处 · 15积分起')}</button></div>`;
       }).join('')
       : `<div class="diag-ok">${lang === 'en' ? 'No major issues found. Nice.' : '未发现明显硬伤，保持这个质感。'}</div>`;
     return { bars, fixHtml };
@@ -6886,7 +6953,8 @@
     if (!currentProjectId) return;
     const btn = $('valuePosterBtn'); btn.disabled = true;
     const old = btn.textContent;
-    btn.textContent = lang === 'en' ? 'Generating (39 pts)…' : '高清生成中（扣39积分）…';
+    const hdStaff = isStaffAcct();
+    btn.textContent = hdStaff ? (lang === 'en' ? 'Generating (free)…' : '高清生成中（内部免费）…') : (lang === 'en' ? 'Generating (39 pts)…' : '高清生成中（扣39积分）…');
     try {
       const r = await Api.jsonOrThrow(await Api.request('/api/va/poster', { method: 'POST', body: JSON.stringify({ projectId: currentProjectId, tier: 'STANDARD', clientToken: idemToken() }) }));
       const urls = (r.images || []).filter((u) => /^https?:\/\//.test(u) || u.startsWith('data:image/'));
@@ -6894,7 +6962,7 @@
         const wrap = document.createElement('div'); wrap.className = 'vc-poster-out';
         wrap.innerHTML = `<p class="muted">${lang === 'en' ? 'HD certificate posters (pick one to save/share):' : '高清证书海报（选一张保存/分享）：'}</p><div class="vc-poster-grid">${urls.map((u) => `<img src="${escapeHtml(u)}" alt="poster"/>`).join('')}</div>`;
         $('valueBody').appendChild(wrap);
-        xnSay(lang === 'en' ? `Done, ${r.points} points used.` : `生成完成，已扣 ${r.points} 积分～`);
+        xnSay(r.staff ? (lang === 'en' ? 'Done — free for staff.' : '生成完成，内部账户免费～') : (lang === 'en' ? `Done, ${r.points} points used.` : `生成完成，已扣 ${r.points} 积分～`));
       }
     } catch (e) {
       xnSay((e && e.message) ? e.message : (lang === 'en' ? 'Generation failed, points refunded.' : '生成失败，积分已退回～'));
@@ -7207,18 +7275,22 @@
     const idx = Number(btn.getAttribute('data-fix-idx'));
     const fix = diagnosis?.topFixes?.[idx];
     if (!fix || !projectId) return;
-    const ok = window.confirm(lang === 'en'
+    const ok = window.confirm(isStaffAcct()
+      ? (lang === 'en' ? `Let Xiaonan locate and rewrite the weakest episode for: "${fix.advice}"?\nFree for staff accounts.` : `让小南针对「${fix.advice}」自动定位并重写最差的那一集？\n内部账户免费，是否继续？`)
+      : (lang === 'en'
       ? `Let Xiaonan locate and rewrite the weakest episode for: "${fix.advice}"?\nThis is a paid targeted polish (member discount applies; actual points are settled by the server).`
-      : `让小南针对「${fix.advice}」自动定位并重写最差的那一集？\n这是付费针对性优化，会员享折扣，实际扣积分以后端结算为准。是否继续？`);
+      : `让小南针对「${fix.advice}」自动定位并重写最差的那一集？\n这是付费针对性优化，会员享折扣，实际扣积分以后端结算为准。是否继续？`));
     if (!ok) return;
     const oldTxt = btn.textContent; btn.disabled = true; btn.textContent = lang === 'en' ? 'Polishing…' : '小南正在改…';
     try {
       const res = await Api.request(`/api/generate/projects/${projectId}/fix`, { method: 'POST', body: JSON.stringify({ fix }) });
       const txt = await res.text(); const d = txt ? JSON.parse(txt) : {};
       if (!res.ok) throw Object.assign(new Error(d.error || 'FAIL'), { msg: d.message, httpStatus: res.status });
-      xnSay(lang === 'en'
+      xnSay(d.staff
+        ? (lang === 'en' ? `EP${d.epNo} rewritten to v${d.newVersion}, free for staff. ${rewriteSpanText(d.rewriteSpan)} Re-scoring…` : `搞定！第${d.epNo}集已出新版 v${d.newVersion}，内部账户免费。${rewriteSpanText(d.rewriteSpan)} 小南重新打分中～`)
+        : (lang === 'en'
         ? `EP${d.epNo} rewritten to v${d.newVersion}, used ${d.pointsCharged} pts. ${rewriteSpanText(d.rewriteSpan)} Re-scoring…`
-        : `搞定！第${d.epNo}集已出新版 v${d.newVersion}，消耗${d.pointsCharged}积分。${rewriteSpanText(d.rewriteSpan)} 小南重新打分中～`);
+        : `搞定！第${d.epNo}集已出新版 v${d.newVersion}，消耗${d.pointsCharged}积分。${rewriteSpanText(d.rewriteSpan)} 小南重新打分中～`));
       const inWorksDiag = !!btn.closest('#worksDiag');
       if (inWorksDiag) {
         if (currentWorksProject) await openProject(currentWorksProject);
