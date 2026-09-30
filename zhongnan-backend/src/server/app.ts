@@ -123,6 +123,11 @@ export function createApp(routers: AppRouters = {}, preErrorRouter?: Router | Ro
       res.status(500).json({ error: 'INTERNAL_ERROR', task });
     }
   });
+  // v2.213 未知路由 404 统一 JSON 化：/api/* 未匹配路由不再穿透到 Express 默认 HTML 404，
+  // 前端 fetch 失效端点拿到明确 NOT_FOUND 而非 "Cannot GET" 文本；挂载在所有 API/扩展路由之后
+  app.use('/api', (_req, res) => {
+    res.status(404).json({ error: 'NOT_FOUND' });
+  });
   // 前端静态站点（零构建，web/ 目录）：必须在所有 API 与扩展路由之后，只做最后兜底，绝不吞 /api 与测试路由
   const webDir = path.join(__dirname, '../../web');
   app.use(express.static(webDir));
@@ -131,6 +136,8 @@ export function createApp(routers: AppRouters = {}, preErrorRouter?: Router | Ro
     if (!/text\/html/.test(req.headers.accept || '')) return next();
     res.sendFile(path.join(webDir, 'index.html'), (err) => err && next());
   });
+  // 注意：此处不再加终局 404 —— 测试/扩展会在 createApp 返回后追加注册路由（如 /_test/*），
+  // 终局 catch-all 会抢在它们之前吞掉请求；非 API 未知路径维持 Express 默认 404 即可。
   // 统一兜底错误处理，绝不把堆栈抛给前端
   app.use((err: Error, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
     console.error('[unhandled]', err);
