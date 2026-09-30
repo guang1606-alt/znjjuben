@@ -3117,6 +3117,7 @@
   // v2.229 消费侧分页：v2.215 契约 { items, total, ... } 全量消费，>50 条不再静默截断（后端 defaultLimit 50 / maxLimit 100）
   let mkPage = 1;
   const MK_PAGE_SIZE = 50;
+  const BOARD_LIMIT = 50; // v2.231 榜单页大小对齐后端 maxLimit（此前不传 limit 吃默认 20）
   function znPagerState(total, page, pageSize) {
     const pages = Math.max(1, Math.ceil((Number(total) || 0) / pageSize));
     return { pages, hasPrev: page > 1, hasNext: page < pages };
@@ -3204,10 +3205,18 @@
   async function loadBoard(type) {
     curBoard = type;
     document.querySelectorAll('.board-tab').forEach((b) => b.classList.toggle('active', b.dataset.board === type));
-    if (type === 'all') { loadListings(); return; }
+    if (type === 'all') { $('mkBoardMeta').classList.add('hidden'); loadListings(); return; }
     let data = { items: [] }, failed = false;
-    try { const res = await fetch('/api/market/board?type=' + type); if (!res.ok) failed = true; else data = await res.json(); } catch { failed = true; }
+    try { const res = await fetch('/api/market/board?type=' + type + '&limit=' + BOARD_LIMIT); if (!res.ok) failed = true; else data = await res.json(); } catch { failed = true; }
     const list = data.items || [];
+    // v2.231 消费 total 真总数：共 X 条上榜 + 截断可见化（limit 50 / take 500 硬帽，v2.156 铁律）
+    const total = Number(data.total) || list.length;
+    const meta = $('mkBoardMeta');
+    const showMeta = !failed && list.length > 0;
+    meta.classList.toggle('hidden', !showMeta);
+    meta.innerHTML = showMeta
+      ? t('boardTotal', { total }) + (total > list.length ? ' · ' + t('boardTrunc', { shown: list.length }) : '')
+      : '';
     const grid = $('mkGrid'), empty = $('mkEmpty');
     empty.innerHTML = failed ? znErrorHtml(t('loadFail')) : znEmptyHtml(t('mkEmpty'));
     $('mkPager').classList.add('hidden');

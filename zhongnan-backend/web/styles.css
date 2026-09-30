@@ -1351,6 +1351,7 @@ summary:hover{color:var(--accent-strong)}
 .board-tab{padding:6px 15px;border-radius:16px;border:1px solid var(--line);background:var(--panel);color:var(--text-2);font-size:13px;cursor:pointer;transition:all .15s}
 .board-tab:hover{border-color:var(--cinnabar);color:var(--cinnabar)}
 .board-tab.active{background:var(--cinnabar);color:#fbf7ec;border-color:var(--cinnabar)}
+.board-meta{font-size:12px;color:var(--text-3,var(--muted,#888));margin:-6px 0 10px}
 .sold-badge{display:inline-block;background:#7d827c;color:#fff;font-size:10px;padding:1px 6px;border-radius:4px;margin-left:4px;vertical-align:middle}
 [data-theme="dark"] .board-tab{background:var(--panel);border-color:var(--line);color:var(--text-2)}
 [data-theme="dark"] .board-tab:hover{border-color:var(--cinnabar);color:var(--cinnabar)}
