@@ -100,7 +100,11 @@ function setup(handler = async () => response([])) {
     'openAuth', 'xnSay', 'renderProgress', 'renderResult', 'showFail', 'renderAigcDash',
     'populateProfileOptions', 'loadCaps', 'openListen', 'openListenSeries', 'resetPanels',
     'failGenerationSession', 'alert', 'openModal', 'renderDpPage', 'renderDpSummary',
+    'toastError', 'toastOk', 'toastInfo',
   ]) c[name] = (...args) => { calls.push([name, ...args]); };
+  // v2.202 交互统一：原生 confirm/prompt 已替换为 uiConfirm/uiPrompt，注入等价 stub（确认=true、输入='x'）
+  c.uiConfirm = async () => true;
+  c.uiPrompt = async () => 'x';
   for (const name of [
     'brandBriefPayload', 'trendBriefPayload', 'branchBriefPayload', 'hookPayload', 'beatPayload',
     'castAssetPayload', 'propAssetPayload', 'sceneAssetPayload', 'aigcPayload', 'sourceTextPayload',

@@ -1596,6 +1596,99 @@
   function toastOk(msg, title)   { return toast({ kind: 'ok',    title: title || '成功', body: msg }); }
   function toastInfo(msg, title) { return toast({ kind: 'info',  title: title || '', body: msg }); }
 
+  /* ---------- v2.202 通用模态对话框 ---------- */
+  // 交互统一：原生 confirm/prompt 在移动端观感差、样式不可控、与 toast/modal 体系割裂。
+  // uiConfirm(opts) -> Promise<boolean>；uiPrompt(opts) -> Promise<string|null>
+  // 全部用 DOM API 构建（不走 HTML 字符串拼接，杜绝用户内容注入），Esc / 遮罩点击 / 按钮统一 resolve 后清理 DOM。
+  function _uiLangEn() { return typeof lang === 'string' && lang === 'en'; }
+  function _uiModalShell(o) {
+    const overlay = document.createElement('div');
+    overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.55);z-index:9999;display:flex;align-items:center;justify-content:center;padding:16px';
+    const modal = document.createElement('div');
+    modal.setAttribute('role', 'dialog');
+    modal.setAttribute('aria-modal', 'true');
+    modal.style.cssText = 'background:var(--bg,#fff);color:var(--fg,#222);border-radius:12px;box-shadow:0 8px 32px rgba(0,0,0,0.3);padding:18px;max-width:420px;width:100%;max-height:80vh;overflow-y:auto';
+    if (o.title) {
+      const h = document.createElement('h3');
+      h.style.cssText = 'margin:0 0 8px;font-size:16px';
+      h.textContent = String(o.title);
+      modal.appendChild(h);
+    }
+    let bodyEl = null;
+    if (o.body) {
+      bodyEl = document.createElement('div');
+      bodyEl.style.cssText = 'font-size:13px;line-height:1.7;margin-bottom:14px;white-space:pre-wrap;word-break:break-word';
+      bodyEl.textContent = String(o.body);
+      modal.appendChild(bodyEl);
+    }
+    const row = document.createElement('div');
+    row.style.cssText = 'display:flex;gap:8px;justify-content:flex-end';
+    const cancelBtn = document.createElement('button');
+    cancelBtn.type = 'button';
+    cancelBtn.className = 'ui-dlg-cancel';
+    cancelBtn.textContent = String(o.cancelText || (_uiLangEn() ? 'Cancel' : '取消'));
+    cancelBtn.style.cssText = 'font-size:13px;padding:8px 16px;border:1px solid var(--muted,#888);background:transparent;color:var(--fg,#222);border-radius:6px;cursor:pointer';
+    const okBtn = document.createElement('button');
+    okBtn.type = 'button';
+    okBtn.className = 'ui-dlg-ok';
+    okBtn.textContent = String(o.okText || (_uiLangEn() ? 'OK' : '确定'));
+    okBtn.style.cssText = 'font-size:13px;padding:8px 16px;border:none;border-radius:6px;cursor:pointer;color:#fff;background:' + (o.danger ? '#c62828' : 'var(--jade,#2e7d32)');
+    row.appendChild(cancelBtn);
+    row.appendChild(okBtn);
+    modal.appendChild(row);
+    overlay.appendChild(modal);
+    return { overlay, modal, bodyEl, okBtn, cancelBtn };
+  }
+  function _uiReducedMotion() {
+    try { return window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches; } catch { return true; }
+  }
+  function uiConfirm(opts) {
+    const o = typeof opts === 'string' ? { body: opts } : (opts || {});
+    return new Promise((resolve) => {
+      const { overlay, modal, okBtn, cancelBtn } = _uiModalShell(o);
+      let closed = false;
+      const escHandler = (e) => { if (e.key === 'Escape' && !closed) close(false); };
+      const close = (result) => { if (closed) return; closed = true; document.removeEventListener('keydown', escHandler); overlay.remove(); resolve(result); };
+      document.addEventListener('keydown', escHandler);
+      okBtn.onclick = () => close(true);
+      cancelBtn.onclick = () => close(false);
+      overlay.onclick = (e) => { if (e.target === overlay) close(false); };
+      document.body.appendChild(overlay);
+      if (!_uiReducedMotion() && modal.animate) {
+        modal.animate([{ opacity: 0, transform: 'scale(0.96)' }, { opacity: 1, transform: 'scale(1)' }], { duration: 150, easing: 'ease-out' });
+      }
+      okBtn.focus();
+    });
+  }
+  function uiPrompt(opts) {
+    const o = typeof opts === 'string' ? { value: opts } : (opts || {});
+    return new Promise((resolve) => {
+      const { overlay, modal, bodyEl, okBtn, cancelBtn } = _uiModalShell(o);
+      const input = document.createElement('input');
+      input.type = o.type || 'text';
+      input.value = o.value != null ? String(o.value) : '';
+      if (o.placeholder != null) input.placeholder = String(o.placeholder);
+      input.style.cssText = 'width:100%;box-sizing:border-box;font-size:14px;padding:9px 10px;margin-bottom:14px;border:1px solid var(--muted,#888);border-radius:6px;background:transparent;color:var(--fg,#222);outline:none';
+      if (bodyEl) bodyEl.after(input); else modal.insertBefore(input, modal.lastElementChild);
+      let closed = false;
+      const escHandler = (e) => { if (e.key === 'Escape' && !closed) close(null); };
+      const close = (result) => { if (closed) return; closed = true; document.removeEventListener('keydown', escHandler); overlay.remove(); resolve(result); };
+      document.addEventListener('keydown', escHandler);
+      const submit = () => { close(input.type === 'password' ? input.value : input.value.trim()); };
+      input.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); submit(); } });
+      okBtn.onclick = submit;
+      cancelBtn.onclick = () => close(null);
+      overlay.onclick = (e) => { if (e.target === overlay) close(null); };
+      document.body.appendChild(overlay);
+      if (!_uiReducedMotion() && modal.animate) {
+        modal.animate([{ opacity: 0, transform: 'scale(0.96)' }, { opacity: 1, transform: 'scale(1)' }], { duration: 150, easing: 'ease-out' });
+      }
+      input.focus();
+      if (input.value && input.type !== 'password') input.select();
+    });
+  }
+  /* ---------- v2.202 通用模态对话框 结束 ---------- */
+
   // v2.186 注册全局 API 钩子：AUTH_REQUIRED 自动跳登录 + 网络错误 toast + 5xx toast
   if (typeof Api !== 'undefined' && Api.onAuthRequired) {
     Api.onAuthRequired(() => {
@@ -2065,7 +2158,7 @@
           e.stopPropagation();
           const act = btn.getAttribute('data-act');
           if (act === 'rename') {
-            const newTitle = (prompt(lang === 'en' ? 'New title:' : '输入新标题：', p.title) || '').trim();
+            const newTitle = ((await uiPrompt({ body: lang === 'en' ? 'New title:' : '输入新标题：', value: p.title })) || '').trim();
             if (!newTitle || newTitle === p.title) return;
             try {
               const r = await Api.request(`/api/generate/projects/${p.id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ title: newTitle }) });
@@ -2074,7 +2167,7 @@
               loadWorks();
             } catch (err) { xnSay((err && err.message) || (lang === 'en' ? 'Rename failed.' : '重命名失败')); }
           } else if (act === 'clone') {
-            const newTitle = (prompt(lang === 'en' ? 'Title for the cloned project:' : '克隆项目的新标题：', `${p.title} - 副本`) || '').trim();
+            const newTitle = ((await uiPrompt({ body: lang === 'en' ? 'Title for the cloned project:' : '克隆项目的新标题：', value: `${p.title} - 副本` })) || '').trim();
             if (!newTitle) return;
             try {
               const r = await Api.request(`/api/generate/projects/${p.id}/clone`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ title: newTitle }) });
@@ -2091,7 +2184,7 @@
               loadWorks();
             } catch (err) { xnSay((err && err.message) || (lang === 'en' ? 'Archive failed.' : '归档失败')); }
           } else if (act === 'delete') {
-            if (!confirm(lang === 'en' ? `Delete "${p.title}"? This can be undone later.` : `确定删除"${p.title}"吗？（软删除，可恢复）`)) return;
+            if (!(await uiConfirm({ body: lang === 'en' ? `Delete "${p.title}"? This can be undone later.` : `确定删除"${p.title}"吗？（软删除，可恢复）`, danger: true, okText: lang === 'en' ? 'Delete' : '删除' }))) return;
             try {
               const r = await Api.request(`/api/generate/projects/${p.id}`, { method: 'DELETE' });
               await Api.jsonOrThrow(r);
@@ -2261,11 +2354,11 @@
       const advice = chip.getAttribute('data-advice') || '';
       if (!ep || !rule || !advice) return;
       const enLang = lang === 'en';
-      const ok = window.confirm(isStaffAcct()
+      const ok = await uiConfirm({ body: isStaffAcct()
         ? (enLang ? `Have Xiaonan rewrite Ep${ep} for "${dim}"? Free for staff accounts.` : `让小南针对「${dim}」重写第${ep}集？内部账户免费，是否继续？`)
         : (enLang
         ? `Have Xiaonan rewrite Ep${ep} for "${dim}"? Paid targeted polish; member discount applies; the server settles actual points.`
-        : `让小南针对「${dim}」重写第${ep}集？这是付费针对性优化，会员享折扣，实际扣积分以后端结算为准。是否继续？`));
+        : `让小南针对「${dim}」重写第${ep}集？这是付费针对性优化，会员享折扣，实际扣积分以后端结算为准。是否继续？`), okText: enLang ? 'Continue' : '继续' });
       if (!ok) return;
       chip.style.opacity = '.55'; chip.style.pointerEvents = 'none';
       try {
@@ -2810,7 +2903,7 @@
       };
       const delBtn = c.querySelector('.del-post');
       if (delBtn) delBtn.onclick = async () => {
-        if (!confirm(lang==='en' ? 'Delete this post?' : '确定删除这条帖子吗？')) return;
+        if (!(await uiConfirm({ body: lang==='en' ? 'Delete this post?' : '确定删除这条帖子吗？', danger: true, okText: lang==='en' ? 'Delete' : '删除' }))) return;
         const r = await Api.request(`/api/community/posts/${p.id}`, { method: 'DELETE' });
         if (r.ok) { xnSay(lang==='en'?'Deleted':'已删除'); loadFeed(); }
         else xnSay((await r.json().catch(() => ({}))).error || 'error');
@@ -2966,9 +3059,9 @@
       if (pbtn) pbtn.onclick = async () => {
         if (!d.projectId) { xnSay(lang === 'en' ? 'Project missing.' : '缺少项目信息'); return; }
         const certStaff = isStaffAcct();
-        if (!confirm(certStaff
+        if (!(await uiConfirm({ body: certStaff
           ? (lang === 'en' ? 'Generate certified poster? Free for staff accounts.' : '生成认证海报？内部账户免费，确认？')
-          : (lang === 'en' ? 'Generate certified poster? Costs 39 credits, no free.' : '生成认证海报将消耗39积分，图片生成无免费，确认？'))) return;
+          : (lang === 'en' ? 'Generate certified poster? Costs 39 credits, no free.' : '生成认证海报将消耗39积分，图片生成无免费，确认？'), okText: lang === 'en' ? 'Continue' : '继续' }))) return;
         pbtn.disabled = true; pbtn.textContent = lang === 'en' ? 'Generating…' : '生成中…';
         try {
           const r = await Api.request('/api/va/poster', { method: 'POST', body: JSON.stringify({ projectId: d.projectId, tier: 'STANDARD', style: '价值认证海报，金色质感，突出等级与指数' }) });
@@ -3092,12 +3185,12 @@
     $('mineBox').querySelectorAll('[data-refund]').forEach((b) => b.onclick = async () => { await dealAction(`/api/market/purchases/${b.getAttribute('data-refund')}/refund`); $('mkMineBtn').click(); });
     $('mineBox').querySelectorAll('[data-view-purchase]').forEach((b) => b.onclick = () => viewPurchasedScript(b.getAttribute('data-view-purchase')));
     $('mineBox').querySelectorAll('[data-delist]').forEach((b) => b.onclick = async () => {
-      if (!confirm(lang === 'en' ? 'Delist this script? It will be removed from the marketplace.' : '确认下架该剧本？下架后将从交易广场移除。')) return;
+      if (!(await uiConfirm({ body: lang === 'en' ? 'Delist this script? It will be removed from the marketplace.' : '确认下架该剧本？下架后将从交易广场移除。', danger: true, okText: lang === 'en' ? 'Delist' : '下架' }))) return;
       const r = await Api.request(`/api/market/listings/${b.getAttribute('data-delist')}/delist`, { method: 'PATCH' });
       if (r.ok) { xnSay(lang === 'en' ? 'Delisted' : '已下架'); $('mkMineBtn').click(); } else { xnSay((await r.json()).error || '失败'); }
     });
     $('mineBox').querySelectorAll('[data-relist]').forEach((b) => b.onclick = async () => {
-      const newPrice = prompt(lang === 'en' ? 'New price in yuan (leave empty to keep current):' : '输入新售价（元），留空保持原价：');
+      const newPrice = await uiPrompt({ body: lang === 'en' ? 'New price in yuan (leave empty to keep current):' : '输入新售价（元），留空保持原价：' });
       if (newPrice === null) return;
       const body = {};
       if (newPrice.trim()) { const yuan = Number(newPrice); if (!Number.isFinite(yuan) || yuan < 1) { xnSay(lang === 'en' ? 'Invalid price' : '价格不合法'); return; } body.priceFen = Math.round(yuan * 100); }
@@ -4176,7 +4269,7 @@
       overlay.onclick = (e) => { if (e.target === overlay) close(null); };
       modal.querySelector('.dash-batch-confirm').onclick = () => {
         const selectedFields = [...modal.querySelectorAll('.dash-batch-fields input[type=checkbox]:checked')].map((c) => c.value);
-        if (!selectedFields.length) { alert(t('dashThinBatchDialogEmpty')); return; }
+        if (!selectedFields.length) { toastInfo(t('dashThinBatchDialogEmpty')); return; }
         // 按选中字段过滤 patches——只保留选中字段；过滤后空 patch 的条目跳过
         const filteredPatches = patches.map((p) => {
           const patch = {};
@@ -4573,7 +4666,7 @@
           const u = (d.willUpdate || []).length, s = (d.willSkip || []).length;
           // c179 复盘修复：u===0 时（资产全部已手填或不可规则补全）直接 alert，跳过 modal + 实际补全请求
           if (u === 0) {
-            alert(t('dashThinBatchNoop', { s }));
+            toastInfo(t('dashThinBatchNoop', { s }));
             restore();
             return;
           }
@@ -4590,13 +4683,13 @@
           // 4) 结果预览：补 N 条 + 涉及字段清单
           const updatedFields = (j.updated || []).flatMap((x) => x.filled || []);
           const uniqFields = [...new Set(updatedFields)];
-          alert(t('dashThinBatchDoneWithFields', {
+          toastOk(t('dashThinBatchDoneWithFields', {
             u: (j.updated || []).length, s: (j.skipped || []).length,
             fields: uniqFields.length ? uniqFields.map(fieldName).join('、') : '-',
           }));
           castAssetsLoaded = false; openCastLibrary(); // 刷新族库
         } catch (err) {
-          alert(t('dashThinBatchFail') + (err && err.message ? `：${err.message}` : ''));
+          toastError(t('dashThinBatchFail') + (err && err.message ? `：${err.message}` : ''));
         } finally { restore(); }
       };
     });
@@ -4628,13 +4721,13 @@
         ${adviceHtml(h)}`;
       card.querySelector('.cast-lib-edit').onclick = () => renderCastLibEditor(a);
       card.querySelector('.cast-lib-del').onclick = async () => {
-        if (!confirm(t('castLibDeleteConfirm', { n: a.name }))) return;
+        if (!(await uiConfirm({ body: t('castLibDeleteConfirm', { n: a.name }), danger: true, okText: lang === 'en' ? 'Delete' : '删除' }))) return;
         try {
           const r = await Api.request(`/api/generate/character-assets/${a.id}`, { method: 'DELETE' });
           if (!r.ok && r.status !== 404) throw new Error('del');
           castAssetsLoaded = false; loadCastAssets(true);
           openCastLibrary();
-        } catch { alert(t('castLibFail')); }
+        } catch { toastError(t('castLibFail')); }
       };
       // v2.169 补全闭环：从 dashboard 跳来时高亮该资产 + 滚到可视区（5 秒后清除），一次性消费 dashJumpTarget
       if (dashJumpTarget && dashJumpTarget.family === 'cast' && dashJumpTarget.id === a.id) {
@@ -4693,7 +4786,7 @@
         // v2.155 修复：整档覆盖语义下 tags 不提交会被静默清空——编辑表单必须随档提交（逗号/、/，分隔，≤8×20字就地截断）
         tags: $('castLibEditTags').value.split(/[，,、]/).map((s) => s.trim()).filter(Boolean).map((s) => s.slice(0, 20)).slice(0, 8),
       };
-      if (!body.name || !body.persona) { alert(t('castLibInvalid')); return; }
+      if (!body.name || !body.persona) { toastInfo(t('castLibInvalid')); return; }
       saveButton.disabled = true;
       try {
         const r = await Api.request('/api/generate/character-assets', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
@@ -4705,7 +4798,7 @@
         if (_si) _si.value = '';
         castAssetsLoaded = false; loadCastAssets(true);
         openCastLibrary();
-      } catch (e) { alert(e.message || t('castLibFail')); }
+      } catch (e) { toastError(e.message || t('castLibFail')); }
       finally { saveButton.disabled = false; }
     };
   }
@@ -4818,7 +4911,7 @@
           const d = await Api.jsonOrThrow(dryRes);
           const u = (d.willUpdate || []).length, s = (d.willSkip || []).length;
           if (u === 0) {
-            alert(t('dashThinBatchNoop', { s }));
+            toastInfo(t('dashThinBatchNoop', { s }));
             restore();
             return;
           }
@@ -4832,13 +4925,13 @@
           const j = await Api.jsonOrThrow(res);
           const updatedFields = (j.updated || []).flatMap((x) => x.filled || []);
           const uniqFields = [...new Set(updatedFields)];
-          alert(t('dashThinBatchDoneWithFields', {
+          toastOk(t('dashThinBatchDoneWithFields', {
             u: (j.updated || []).length, s: (j.skipped || []).length,
             fields: uniqFields.length ? uniqFields.map(fieldName).join('、') : '-',
           }));
           propAssetsLoaded = false; openPropLibrary();
         } catch (err) {
-          alert(t('dashThinBatchFail') + (err && err.message ? `：${err.message}` : ''));
+          toastError(t('dashThinBatchFail') + (err && err.message ? `：${err.message}` : ''));
         } finally { restore(); }
       };
     });
@@ -4868,13 +4961,13 @@
         ${adviceHtml(h)}`;
       card.querySelector('.prop-lib-edit').onclick = () => renderPropLibEditor(a);
       card.querySelector('.prop-lib-del').onclick = async () => {
-        if (!confirm(t('propLibDeleteConfirm', { n: a.name }))) return;
+        if (!(await uiConfirm({ body: t('propLibDeleteConfirm', { n: a.name }), danger: true, okText: lang === 'en' ? 'Delete' : '删除' }))) return;
         try {
           const r = await Api.request(`/api/generate/prop-assets/${a.id}`, { method: 'DELETE' });
           if (!r.ok && r.status !== 404) throw new Error('del');
           propAssetsLoaded = false; loadPropAssets(true);
           openPropLibrary();
-        } catch { alert(t('propLibFail')); }
+        } catch { toastError(t('propLibFail')); }
       };
       // v2.169 补全闭环：从 dashboard 跳来时高亮该资产 + 滚到可视区（5 秒后清除），一次性消费 dashJumpTarget
       if (dashJumpTarget && dashJumpTarget.family === 'prop' && dashJumpTarget.id === a.id) {
@@ -4933,7 +5026,7 @@
         visualAnchor: $('propLibEditAnchor').value.trim() || null,
         tags: $('propLibEditTags').value.split(/[，,、]/).map((s) => s.trim()).filter(Boolean).map((s) => s.slice(0, 20)).slice(0, 8),
       };
-      if (!body.name || !body.meaning) { alert(t('propLibInvalid')); return; }
+      if (!body.name || !body.meaning) { toastInfo(t('propLibInvalid')); return; }
       saveButton.disabled = true;
       try {
         const r = await Api.request('/api/generate/prop-assets', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
@@ -4945,7 +5038,7 @@
         if (_si) _si.value = '';
         propAssetsLoaded = false; loadPropAssets(true);
         openPropLibrary();
-      } catch (e) { alert(e.message || t('propLibFail')); }
+      } catch (e) { toastError(e.message || t('propLibFail')); }
       finally { saveButton.disabled = false; }
     };
   }
@@ -5058,7 +5151,7 @@
           const d = await Api.jsonOrThrow(dryRes);
           const u = (d.willUpdate || []).length, s = (d.willSkip || []).length;
           if (u === 0) {
-            alert(t('dashThinBatchNoop', { s }));
+            toastInfo(t('dashThinBatchNoop', { s }));
             restore();
             return;
           }
@@ -5072,13 +5165,13 @@
           const j = await Api.jsonOrThrow(res);
           const updatedFields = (j.updated || []).flatMap((x) => x.filled || []);
           const uniqFields = [...new Set(updatedFields)];
-          alert(t('dashThinBatchDoneWithFields', {
+          toastOk(t('dashThinBatchDoneWithFields', {
             u: (j.updated || []).length, s: (j.skipped || []).length,
             fields: uniqFields.length ? uniqFields.map(fieldName).join('、') : '-',
           }));
           sceneAssetsLoaded = false; openSceneLibrary();
         } catch (err) {
-          alert(t('dashThinBatchFail') + (err && err.message ? `：${err.message}` : ''));
+          toastError(t('dashThinBatchFail') + (err && err.message ? `：${err.message}` : ''));
         } finally { restore(); }
       };
     });
@@ -5108,13 +5201,13 @@
         ${adviceHtml(h)}`;
       card.querySelector('.scene-lib-edit').onclick = () => renderSceneLibEditor(a);
       card.querySelector('.scene-lib-del').onclick = async () => {
-        if (!confirm(t('sceneLibDeleteConfirm', { n: a.name }))) return;
+        if (!(await uiConfirm({ body: t('sceneLibDeleteConfirm', { n: a.name }), danger: true, okText: lang === 'en' ? 'Delete' : '删除' }))) return;
         try {
           const r = await Api.request(`/api/generate/scene-assets/${a.id}`, { method: 'DELETE' });
           if (!r.ok && r.status !== 404) throw new Error('del');
           sceneAssetsLoaded = false; loadSceneAssets(true);
           openSceneLibrary();
-        } catch { alert(t('sceneLibFail')); }
+        } catch { toastError(t('sceneLibFail')); }
       };
       // v2.169 补全闭环：从 dashboard 跳来时高亮该资产 + 滚到可视区（5 秒后清除），一次性消费 dashJumpTarget
       if (dashJumpTarget && dashJumpTarget.family === 'scene' && dashJumpTarget.id === a.id) {
@@ -5173,7 +5266,7 @@
         visualAnchor: $('sceneLibEditAnchor').value.trim() || null,
         tags: $('sceneLibEditTags').value.split(/[，,、]/).map((s) => s.trim()).filter(Boolean).map((s) => s.slice(0, 20)).slice(0, 8),
       };
-      if (!body.name || !body.meaning) { alert(t('sceneLibInvalid')); return; }
+      if (!body.name || !body.meaning) { toastInfo(t('sceneLibInvalid')); return; }
       saveButton.disabled = true;
       try {
         const r = await Api.request('/api/generate/scene-assets', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
@@ -5185,7 +5278,7 @@
         if (_si) _si.value = '';
         sceneAssetsLoaded = false; loadSceneAssets(true);
         openSceneLibrary();
-      } catch (e) { alert(e.message || t('sceneLibFail')); }
+      } catch (e) { toastError(e.message || t('sceneLibFail')); }
       finally { saveButton.disabled = false; }
     };
   }
@@ -5261,7 +5354,7 @@
           const ej = await pr.json().catch(() => ({}));
           if (!isPrivateSessionCurrent(account)) return;
           if (ej.error === 'REACH_PROJECT_LIMIT') {
-            alert((ej.message || '项目数已达当前会员上限') + '\n免费2 / 基础10 / 高级30 / 专业100，升级会员或清理旧项目即可继续');
+            toastError((ej.message || '项目数已达当前会员上限') + ' 免费2/基础10/高级30/专业100，升级会员或清理旧项目即可继续');
             return;
           }
           if (ej.error === 'MATURE_CONSENT_REQUIRED') { openXMature().catch(() => {}); return; }
@@ -6366,14 +6459,14 @@
     });
     // c202 F3：漂移条“用最新版重新围读”——确认费用事实后跨页把 scriptId 交给编剧室（房间由 /read/open 再做归属校验）
     panel.querySelectorAll('[data-reread]').forEach((b) => {
-      b.onclick = () => {
+      b.onclick = async () => {
         const scriptId = b.getAttribute('data-reread');
         if (!scriptId) return;
-        const ok = window.confirm(isStaffAcct()
+        const ok = await uiConfirm({ body: isStaffAcct()
           ? (enLang ? `Open a new table-read room on Ep${d.epNo} latest v${d.currentVersion}?\nFree for staff accounts (opening and AI reads).` : `将用第${d.epNo}集最新版 v${d.currentVersion} 开一间新的围读室。\n内部账户开房与 AI 围读均免费。是否继续？`)
           : (enLang
           ? `Open a new table-read room on Ep${d.epNo} latest v${d.currentVersion}?\nOpening a room is free. “Start AI read” inside the room costs 30 points.`
-          : `将用第${d.epNo}集最新版 v${d.currentVersion} 开一间新的围读室。\n建立围读室免费；进入后点“开始AI围读”才扣 30 积分。是否继续？`));
+          : `将用第${d.epNo}集最新版 v${d.currentVersion} 开一间新的围读室。\n建立围读室免费；进入后点“开始AI围读”才扣 30 积分。是否继续？`), okText: enLang ? 'Continue' : '继续' });
         if (!ok) return;
         window.dispatchEvent(new CustomEvent('zn-reread-latest', {
           detail: { scriptId, epNo: d.epNo, version: d.currentVersion, title: d.scriptTitle || d.roomTitle || '', scriptMode: d.scriptMode || 'LIVE' },
@@ -6389,11 +6482,11 @@
     if (!d || !d.projectId || !pk || !pk.fix || !pk.fix.rule) return;
     const enLang = lang === 'en';
     const epTxt = enLang ? `Ep${d.epNo}` : `第${d.epNo}集`;
-    const ok = window.confirm(isStaffAcct()
+    const ok = await uiConfirm({ body: isStaffAcct()
       ? (enLang ? `Let Xiaonan rewrite ${epTxt} for this table-read note? Free for staff accounts.` : `让小南针对这条围读意见重写${epTxt}？内部账户免费，是否继续？`)
       : (enLang
       ? `Let Xiaonan rewrite ${epTxt} for this table-read note? Paid targeted polish; member discount applies; server settles actual points.`
-      : `让小南针对这条围读意见重写${epTxt}？这是付费针对性优化，会员享折扣，实际扣积分以后端结算为准。是否继续？`));
+      : `让小南针对这条围读意见重写${epTxt}？这是付费针对性优化，会员享折扣，实际扣积分以后端结算为准。是否继续？`), okText: enLang ? 'Continue' : '继续' });
     if (!ok) return;
     const oldTxt = btn.textContent; btn.disabled = true; btn.textContent = enLang ? 'Polishing…' : '小南正在改…';
     try {
@@ -6467,11 +6560,11 @@
     const adv = (lastWave.advices || []).find((a) => a.ep === ep);
     if (!adv) return;
     const fix = { rule: adv.rule, dimLabel: lang === 'en' ? adv.dimLabelEn : adv.dimLabel, advice: lang === 'en' ? adv.adviceEn : adv.advice };
-    const ok = window.confirm(isStaffAcct()
+    const ok = await uiConfirm({ body: isStaffAcct()
       ? (lang === 'en' ? `Let Xiaonan rewrite Ep${ep} for its wave issue? Free for staff accounts.` : `让小南针对波形问题重写第${ep}集？内部账户免费，是否继续？`)
       : (lang === 'en'
       ? `Let Xiaonan rewrite Ep${ep} for its wave issue? Paid targeted polish; member discount applies; server settles actual points.`
-      : `让小南针对波形问题重写第${ep}集？这是付费针对性优化，会员享折扣，实际扣积分以后端结算为准。是否继续？`));
+      : `让小南针对波形问题重写第${ep}集？这是付费针对性优化，会员享折扣，实际扣积分以后端结算为准。是否继续？`), okText: lang === 'en' ? 'Continue' : '继续' });
     if (!ok) return;
     const oldTxt = btn.textContent; btn.disabled = true; btn.textContent = lang === 'en' ? 'Polishing…' : '小南正在改…';
     try {
@@ -7423,10 +7516,10 @@
   });
   // 单集导出：输入集号，复用 downloadFromServer 的 ep 参数
   const dlEpBtn = $('dlEpBtn');
-  if (dlEpBtn) dlEpBtn.onclick = () => {
+  if (dlEpBtn) dlEpBtn.onclick = async () => {
     if (!currentProjectId) { xnSay(lang === 'en' ? 'Generate a script first.' : '请先生成剧本再导出哦～'); return; }
     const latestEp = currentScripts.length ? currentScripts[currentScripts.length - 1].epNo : 1;
-    const input = prompt(lang === 'en' ? `Export which episode? (1-${latestEp})` : `导出第几集？（1-${latestEp}）`, String(latestEp));
+    const input = await uiPrompt({ body: lang === 'en' ? `Export which episode? (1-${latestEp})` : `导出第几集？（1-${latestEp}）`, value: String(latestEp) });
     if (!input) return;
     const epNo = parseInt(input.trim(), 10);
     if (!Number.isFinite(epNo) || epNo < 1) { xnSay(lang === 'en' ? 'Invalid episode number.' : '集号无效'); return; }
@@ -7657,11 +7750,11 @@
     const idx = Number(btn.getAttribute('data-fix-idx'));
     const fix = diagnosis?.topFixes?.[idx];
     if (!fix || !projectId) return;
-    const ok = window.confirm(isStaffAcct()
+    const ok = await uiConfirm({ body: isStaffAcct()
       ? (lang === 'en' ? `Let Xiaonan locate and rewrite the weakest episode for: "${fix.advice}"?\nFree for staff accounts.` : `让小南针对「${fix.advice}」自动定位并重写最差的那一集？\n内部账户免费，是否继续？`)
       : (lang === 'en'
       ? `Let Xiaonan locate and rewrite the weakest episode for: "${fix.advice}"?\nThis is a paid targeted polish (member discount applies; actual points are settled by the server).`
-      : `让小南针对「${fix.advice}」自动定位并重写最差的那一集？\n这是付费针对性优化，会员享折扣，实际扣积分以后端结算为准。是否继续？`));
+      : `让小南针对「${fix.advice}」自动定位并重写最差的那一集？\n这是付费针对性优化，会员享折扣，实际扣积分以后端结算为准。是否继续？`), okText: lang === 'en' ? 'Continue' : '继续' });
     if (!ok) return;
     const oldTxt = btn.textContent; btn.disabled = true; btn.textContent = lang === 'en' ? 'Polishing…' : '小南正在改…';
     try {
@@ -8111,12 +8204,12 @@
     loadAdmSafety();
   }
   async function delAdmSafety(id) {
-    if (!window.confirm(lang === 'en' ? 'Delete this custom rule?' : '删除该自定义规则？')) return;
+    if (!(await uiConfirm({ body: lang === 'en' ? 'Delete this custom rule?' : '删除该自定义规则？', danger: true, okText: lang === 'en' ? 'Delete' : '删除' }))) return;
     await admApi(`/safety/rules/${encodeURIComponent(id)}`, { method: 'DELETE' });
     loadAdmSafety();
   }
   async function resetAdmSafety() {
-    if (!window.confirm(lang === 'en' ? 'Reset to built-in rules?' : '恢复为默认规则库？所有自定义与停用将清空')) return;
+    if (!(await uiConfirm({ body: lang === 'en' ? 'Reset to built-in rules?' : '恢复为默认规则库？所有自定义与停用将清空', danger: true, okText: lang === 'en' ? 'Reset' : '重置' }))) return;
     await admApi('/safety/reset', { method: 'POST', body: '{}' });
     xnSay(lang === 'en' ? 'Reset done.' : '已恢复默认规则库'); loadAdmSafety();
   }
@@ -8161,10 +8254,10 @@
     $('admUserTable').querySelectorAll('tbody tr').forEach((tr) => {
       const uid = tr.getAttribute('data-uid');
       tr.querySelector('[data-act="level"]').onchange = (e) => admSetLevel(uid, e.target.value);
-      tr.querySelector('[data-act="points"]').onclick = () => {
+      tr.querySelector('[data-act="points"]').onclick = async () => {
         const delta = parseInt(tr.querySelector('[data-act="delta"]').value, 10);
         if (!delta) { xnSay(lang === 'en' ? 'Enter a non-zero number.' : '请输入非零积分变动'); return; }
-        const reason = window.prompt(lang === 'en' ? 'Reason (logged):' : '调整原因（记入流水）：', '后台调整');
+        const reason = await uiPrompt({ body: lang === 'en' ? 'Reason (logged):' : '调整原因（记入流水）：', value: '后台调整' });
         if (!reason) return;
         admApi('/users/' + uid + '/points', { method: 'POST', body: JSON.stringify({ delta, reason }) })
           .then(() => { xnSay(t('admOk')); loadAdmUsers(); }).catch((e) => xnSay(e.message));
@@ -8175,8 +8268,8 @@
         admApi('/users/' + uid + '/ban', { method: 'POST', body: JSON.stringify({ banned }) })
           .then(() => { xnSay(t('admOk')); loadAdmUsers(); }).catch((e) => xnSay(e.message));
       };
-      tr.querySelector('[data-act="resetpw"]').onclick = () => {
-        const np = window.prompt(lang === 'en' ? 'New password (6-64):' : '为该用户设置新密码（6-64 位）：');
+      tr.querySelector('[data-act="resetpw"]').onclick = async () => {
+        const np = await uiPrompt({ body: lang === 'en' ? 'New password (6-64):' : '为该用户设置新密码（6-64 位）：', type: 'password' });
         if (!np) return;
         admApi('/users/' + uid + '/reset-password', { method: 'POST', body: JSON.stringify({ newPassword: np }) })
           .then(() => xnSay(t('admOk'))).catch((e) => xnSay(e.message));
@@ -8351,7 +8444,7 @@
           <button class="btn-ghost" data-pvdel="${p.id}">删除</button>
         </div></div>`).join('') : '<span class="muted">暂无自定义供应商，岗位全部走三档引擎组合</span>';
     $('pvList').querySelectorAll('[data-pvdel]').forEach((b) => b.onclick = async () => {
-      if (!confirm('删除该供应商？相关岗位路由将自动解绑回退。')) return;
+      if (!(await uiConfirm({ body: '删除该供应商？相关岗位路由将自动解绑回退。', danger: true, okText: '删除' }))) return;
       await admApi('/model/providers/' + b.getAttribute('data-pvdel'), { method: 'DELETE' });
       xnSay('已删除并解绑路由'); await loadProviders(); await loadAdmPortfolio();
     });
@@ -8445,7 +8538,7 @@
       const id = b.closest('[data-kid]').getAttribute('data-kid'), act = b.getAttribute('data-kn');
       try {
         if (act === 'reject') {
-          const reason = window.prompt(lang === 'en' ? 'Reject reason:' : '驳回原因（可空）：', '');
+          const reason = await uiPrompt({ body: lang === 'en' ? 'Reject reason:' : '驳回原因（可空）：', value: '' });
           await admApi(`/knowledge/${id}/reject`, { method: 'POST', body: JSON.stringify({ reason: reason || '人工驳回' }) });
         } else { await admApi(`/knowledge/${id}/approve`, { method: 'POST' }); xnSay(lang === 'en' ? 'Synced to skills.' : '已吸收并同步到创作技能'); }
         loadAdmKnowledge();
