@@ -23,8 +23,12 @@ describe('交流广场 HTTP 闭环', { concurrency: 1 }, () => {
   it('未登录发帖 401；列表公开可读', async () => {
     const r = await post('/api/community/posts', { section: 'news', title: 't', body: 'b' }, null);
     assert.strictEqual(r.status, 401);
-    const list = await (await fetch(base + '/api/community/posts')).json();
-    assert.ok(Array.isArray(list));
+    // v2.230 分页统一契约：裸数组退役，{ items, total, page, pageSize, limit, offset } 六键
+    const j0 = await (await fetch(base + '/api/community/posts')).json();
+    assert.ok(Array.isArray(j0.items), '列表键应为 items');
+    assert.strictEqual(j0.total, 0, '空库 total 应为 0');
+    assert.strictEqual(j0.page, 1);
+    assert.strictEqual(j0.pageSize, 50, '默认 pageSize 50');
   });
   it('非法分区 400 / 标题或正文长度不合法 400', async () => {
     const r1 = await post('/api/community/posts', { section: 'nope', title: 't', body: 'b' }, 'u1');
@@ -41,7 +45,7 @@ describe('交流广场 HTTP 闭环', { concurrency: 1 }, () => {
     assert.strictEqual(r.status, 200);
     const j = await r.json();
     assert.ok(j.id);
-    const list = await (await fetch(base + '/api/community/posts?section=experience')).json();
+    const list = (await (await fetch(base + '/api/community/posts?section=experience')).json()).items;
     assert.strictEqual(list.length, 1);
     assert.strictEqual(list[0].user.nickname, '老王');
   });
@@ -52,7 +56,7 @@ describe('交流广场 HTTP 闭环', { concurrency: 1 }, () => {
     const pa = mem._posts.find((p) => p.id === a.id); pa.hidden = true;
     await post(`/api/community/posts/${b.id}/like`, {}, 'u1');
     await post(`/api/community/posts/${b.id}/like`, {}, 'u2');
-    const list = await (await fetch(base + '/api/community/posts?section=review')).json();
+    const list = (await (await fetch(base + '/api/community/posts?section=review')).json()).items;
     assert.strictEqual(list.length, 1, '隐藏帖不得出现');
     assert.strictEqual(list[0].id, b.id);
     assert.strictEqual(list[0].likes, 2);
@@ -98,7 +102,40 @@ describe('交流广场 HTTP 闭环', { concurrency: 1 }, () => {
     const r = await fetch(base + `/api/community/posts/${p.id}`, { method: 'DELETE', headers: H('u1') });
     assert.strictEqual(r.status, 200);
     // 列表不再出现
-    const list = await (await fetch(base + '/api/community/posts?section=news')).json();
+    const list = (await (await fetch(base + '/api/community/posts?section=news')).json()).items;
     assert.ok(!list.some((x) => x.id === p.id));
+  });
+
+  // v2.230 分页统一契约：六键全回显、第 2 页可达、total 为过滤后真总数、偏移式别名等价、无效值走默认
+  it('分页契约：六键回显 + 翻页可达 + total 真总数 + 偏移式别名 + 无效值默认', async () => {
+    const before = await (await fetch(base + '/api/community/posts?section=review&pageSize=100')).json();
+    const n0 = before.total;
+    for (let i = 0; i < 3; i++) await post('/api/community/posts', { section: 'review', title: `P${i}`, body: 'pp' }, 'u1');
+    const r1 = await fetch(base + '/api/community/posts?section=review&page=1&pageSize=2');
+    assert.strictEqual(r1.status, 200);
+    const j1 = await r1.json();
+    for (const k of ['items', 'total', 'page', 'pageSize', 'limit', 'offset']) assert.ok(k in j1, `响应应含 ${k}`);
+    assert.strictEqual(j1.page, 1);
+    assert.strictEqual(j1.pageSize, 2);
+    assert.strictEqual(j1.limit, 2, 'limit 恒等于 pageSize');
+    assert.strictEqual(j1.offset, 0);
+    assert.strictEqual(j1.items.length, 2);
+    assert.strictEqual(j1.total, n0 + 3, 'total 应为该分区过滤后真总数');
+    const j2 = await (await fetch(base + '/api/community/posts?section=review&page=2&pageSize=2')).json();
+    assert.strictEqual(j2.page, 2);
+    assert.strictEqual(j2.offset, 2);
+    assert.strictEqual(j2.items.length, Math.min(2, j2.total - 2));
+    assert.notStrictEqual(j1.items[0].id, j2.items[0].id, '第 2 页应与第 1 页内容不同');
+    // 偏移式别名：limit/offset 换算回页码式回显
+    const j3 = await (await fetch(base + '/api/community/posts?section=review&limit=2&offset=2')).json();
+    assert.strictEqual(j3.page, 2);
+    assert.strictEqual(j3.offset, 2);
+    // 无效值走默认（page 1 / pageSize 50），越界页 items 空、total 不变
+    const j4 = await (await fetch(base + '/api/community/posts?section=review&page=0&pageSize=-5')).json();
+    assert.strictEqual(j4.page, 1);
+    assert.strictEqual(j4.pageSize, 50);
+    const j5 = await (await fetch(base + '/api/community/posts?section=review&page=999')).json();
+    assert.strictEqual(j5.items.length, 0);
+    assert.strictEqual(j5.total, j1.total, '越界页 total 不变');
   });
 });

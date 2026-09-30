@@ -3,6 +3,7 @@
  */
 import { asyncRouter } from '../lib/async-router';
 import { prisma as defaultPrisma } from '../lib/prisma';
+import { parsePageParams } from '../lib/pagination';
 import { authRequired, AuthRequest } from '../middleware/auth';
 import { scanWithStore } from '../lib/safety-store';
 
@@ -31,15 +32,22 @@ export function createCommunityRouter(prisma: PrismaLike | any) {
   });
 
   // 广场列表公开可读（未登录也能浏览），只出未隐藏帖，按热度、时间倒序
+  // v2.230 分页统一契约（v2.215 六键）：裸数组 + take 50 静默截断退役，>50 帖第 2 页可达
   communityRouter.get('/posts', async (req, res) => {
     const section = String(req.query.section ?? '');
-    const list = await prisma.post.findMany({
-      where: { hidden: false, ...(SECTIONS.includes(section) ? { section } : {}) },
-      orderBy: [{ likes: 'desc' }, { createdAt: 'desc' }],
-      take: 50,
-      select: { id: true, userId: true, section: true, title: true, body: true, likes: true, createdAt: true, user: { select: { nickname: true, avatarUrl: true } } },
-    });
-    res.json(list);
+    const { page, pageSize, limit, offset } = parsePageParams(req.query, { defaultLimit: 50, maxLimit: 100 });
+    const where = { hidden: false, ...(SECTIONS.includes(section) ? { section } : {}) };
+    const [total, items] = await Promise.all([
+      prisma.post.count({ where }),
+      prisma.post.findMany({
+        where,
+        orderBy: [{ likes: 'desc' }, { createdAt: 'desc' }],
+        take: pageSize,
+        skip: offset,
+        select: { id: true, userId: true, section: true, title: true, body: true, likes: true, createdAt: true, user: { select: { nickname: true, avatarUrl: true } } },
+      }),
+    ]);
+    res.json({ items, total, page, pageSize, limit, offset });
   });
 
   communityRouter.post('/posts/:id/like', authRequired, async (req: AuthRequest, res) => {

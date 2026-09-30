@@ -3041,17 +3041,24 @@
   /* ---------- 交流广场 ---------- */
   const SQ_SECTIONS = ['', 'experience', 'team', 'review', 'news'];
   let curSection = '';
+  // v2.230 消费侧分页：后端 GET /api/community/posts 纳入 v2.215 六键契约，>50 帖不再静默截断
+  let sqPage = 1;
+  const SQ_PAGE_SIZE = 50;
   function renderSqTabs() {
     $('sqTabs').innerHTML = SQ_SECTIONS.map((s) =>
       `<button data-sec="${s}" class="${s === curSection ? 'on' : ''}">${t(s === '' ? 'secAll' : 'sec' + s[0].toUpperCase() + s.slice(1))}</button>`).join('');
-    $('sqTabs').querySelectorAll('[data-sec]').forEach((b) => b.onclick = () => { curSection = b.getAttribute('data-sec'); renderSqTabs(); loadFeed(); });
+    $('sqTabs').querySelectorAll('[data-sec]').forEach((b) => b.onclick = () => { curSection = b.getAttribute('data-sec'); sqPage = 1; renderSqTabs(); loadFeed(); });
   }
   async function loadFeed() {
     renderSqTabs();
-    let list = [], failed = false;
-    try { const res = await fetch('/api/community/posts' + (curSection ? '?section=' + curSection : '')); if (!res.ok) failed = true; else { const j = await res.json(); if (Array.isArray(j)) list = j; } } catch { failed = true; }
+    let list = [], total = 0, failed = false;
+    try {
+      const res = await fetch('/api/community/posts?section=' + curSection + '&page=' + sqPage + '&pageSize=' + SQ_PAGE_SIZE);
+      if (!res.ok) failed = true;
+      else { const j = await res.json(); if (Array.isArray(j.items)) { list = j.items; total = Number(j.total) || list.length; } }
+    } catch { failed = true; }
     const empty = $('sqEmpty'), feed = $('sqFeed');
-    empty.textContent = failed ? t('loadFail') : t('sqEmpty');
+    empty.innerHTML = failed ? znErrorHtml(t('loadFail')) : znEmptyHtml(t('sqEmpty'));
     empty.classList.toggle('hidden', list.length > 0); feed.innerHTML = '';
     list.forEach((p) => {
       const c = document.createElement('div'); c.className = 'post-card';
@@ -3079,6 +3086,20 @@
       };
       feed.appendChild(c);
     });
+    renderSqPager(total, failed);
+  }
+  // v2.230 交流广场翻页器（与 market 橱窗 renderMkPager 同构，复用 znPagerState）
+  function renderSqPager(total, failed) {
+    const pager = $('sqPager');
+    const show = !failed && total > SQ_PAGE_SIZE;
+    pager.classList.toggle('hidden', !show);
+    if (!show) return;
+    const { pages, hasPrev, hasNext } = znPagerState(total, sqPage, SQ_PAGE_SIZE);
+    pager.innerHTML = `<button class="btn-ghost" id="sqPrevPage"${hasPrev ? '' : ' disabled'}>‹ ${lang === 'en' ? 'Prev' : '上一页'}</button>`
+      + `<span>${t('admTotal')} ${total} · ${t('admPage')} ${sqPage}/${pages}</span>`
+      + `<button class="btn-ghost" id="sqNextPage"${hasNext ? '' : ' disabled'}>${lang === 'en' ? 'Next' : '下一页'} ›</button>`;
+    $('sqPrevPage').onclick = () => { sqPage--; loadFeed(); };
+    $('sqNextPage').onclick = () => { sqPage++; loadFeed(); };
   }
   $('sqSubmit').onclick = async () => {
     if (!Api.isAuthed()) { openAuth('login'); return; }

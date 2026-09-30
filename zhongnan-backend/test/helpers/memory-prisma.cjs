@@ -265,12 +265,13 @@ function createMemoryPrisma() {
     async create({ data }) { const p = { id: `post_${++seq}`, likes: 0, hidden: false, createdAt: new Date(), ...data }; posts.push(p); return p; },
     async findUnique({ where }) { return posts.find((p) => p.id === where.id) ?? null; },
     async update({ where, data }) { const p = posts.find((x) => x.id === where.id); if (!p) throw new Error('POST_NOT_FOUND'); Object.assign(p, data); return p; },
-    async findMany({ where = {}, orderBy, take, select } = {}) {
+    async findMany({ where = {}, orderBy, take, skip, select } = {}) {
       let r = posts.filter((p) => Object.entries(where).every(([k, v]) => p[k] === v));
       if (orderBy) {
         const keys = Array.isArray(orderBy) ? orderBy : [orderBy];
         r = [...r].sort((a, b) => { for (const o of keys) { const k = Object.keys(o)[0]; const dir = o[k] === 'asc' ? 1 : -1; const c = cmp(a[k], b[k]); if (c !== 0) return c * dir; } return 0; });
       }
+      if (skip) r = r.slice(skip);
       if (take) r = r.slice(0, take);
       if (select) return r.map((p) => {
         const o = {};
@@ -278,6 +279,9 @@ function createMemoryPrisma() {
         return o;
       });
       return r;
+    },
+    async count({ where = {} } = {}) {
+      return posts.filter((p) => Object.entries(where).every(([k, v]) => p[k] === v)).length;
     },
     async updateMany({ where, data }) {
       let count = 0;
