@@ -2,7 +2,7 @@
 
 > 面向前端（`web/` 原生 JS 站点及后续独立前端/移动端）的后端 API 契约与适配说明。
 > 后端每次破坏性契约变更都会在此登记：变更内容 → 迁移对照 → 前端已同步点。
-> 版本对齐 `package.json`，当前基线：**v2.221.0**。
+> 版本对齐 `package.json`，当前基线：**v2.222.0**。
 
 ---
 
@@ -109,6 +109,7 @@
 
 | 版本 | 变更 |
 |---|---|
+| v2.222.0 | 独立 view js 接入统一加载/空态（纯前端，无 API 变更）：room-view（编剧室历史 骨架屏+znEmptyHtml）、teardown-view（拆解记录 骨架屏+znEmptyHtml）、diversity-view（多样性对比 骨架屏）、branch-view（节点检视空态 znEmptyHtml）共 6 处旧纯文本/muted 写法收口；run-tests.cjs 默认 `--test-concurrency=4` 根治高负载 flaky（PENDING #13） |
 | v2.221.0 | 加载/空态统一（纯前端，无 API 变更）：新增 `znSkeletonHtml/znSkeleton/znEmptyHtml/znEmpty` 统一帮助函数（window 暴露，独立 view js 可复用）；14 处加载态改骨架屏（复活此前零使用的 `.skeleton/.sk-list` 体系，shimmer 改中性灰 light/dark 自适应）；10 处空态统一 `.zn-empty`（图标+文案+可选引导，`role=status`）；CSS 常量零变更、HTML 结构由帮助函数统一产出 |
 | v2.220.0 | 模态统一收口（纯前端交互/a11y，无 API 变更）：18 个 `.modal-mask` 弹窗幂等补 `role=dialog`/`aria-modal`；openModal 焦点入模态、closeModalEl 焦点恢复；全局 Esc 关最上层可见模态（dpModal 专属 Esc 移除）；workbench ESC 退级对打开模态让位（hasOverlay 补 `.modal-mask:not(.hidden)`）；listenModal 关闭清理经 `setModalCloseHook` 钩子（listenFinish 只停播清态，旧双轨点击监听移除）；openAuth/closeAuth 走收口入口（登录弹窗开即聚焦） |
 | v2.219.0 | 前后端能力对齐：web 端补齐 4 处「后端有、前端无入口」——广告位管理标签页（/api/ads/admin/* CRUD）、全量投稿渠道展开（/api/submission/channels）、用户行操作 admin-flag、知识条目归档/恢复；后端 API 无变更 |

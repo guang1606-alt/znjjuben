@@ -68,12 +68,12 @@
 - 风险点：farm_states 存在 **645 行孤儿数据**（student_id 在 users 表无对应行），加 FK 前迁移脚本会先删除这些行
 - 待确认：① 是否认可直接硬删 645 行（建议先 `alembic upgrade head` 前导出备份：`CREATE TABLE farm_states_orphan_bak AS SELECT * FROM farm_states WHERE student_id NOT IN (SELECT id FROM users)`）；② 确认后再执行迁移。**执行前不要跑 autogenerate**（#11 漂移未完全清零）
 
-## 13.【低】zhongnan 全量测试偶发 flaky（高负载时段，样本未捕获）
-- 现象：2026-10-01 期间全量 `npm test` 偶发 5~11 条失败（3 次），复跑即全绿；失败样本未落盘，`not ok` 明细抓取不到，无法定位具体用例
-- 已排除：非本次改动引入——连续 8 次全量全绿（5468 条），新增/改动相关单文件均稳定；失败集中出现在系统高负载时段（v2.217 轮曾发现上会话遗留挂起的 `node --test` 进程与全量并行互扰，已杀；多会话同机各跑各的测试也可能互扰，参见养正 #10 同类问题）
-- 疑因：run-tests.cjs 无 per-test 超时、文件级并行（node --test 默认并发），负载敏感型用例（时间窗/超时类）在高 load 下偶发变慢失败
-- 建议（可选）：① 全量跑前确认无其他 `node --test` 进程（`ps aux | grep "node --test"`）；② 若再复现，先落盘完整输出（`npm test 2>&1 > /tmp/zn-test.log`）再定位；③ 根治可考虑给 run-tests.cjs 加 `--test-concurrency=4` 限并发或对时间敏感用例放宽断言
-- 转观察项，不阻塞业务
+## 13.【已根治】zhongnan 全量测试偶发 flaky（高负载时段）→ v2.222.0 并发上限
+- 现象：2026-10-01 期间全量 `npm test` 偶发失败（3 次 5~11 条，1 次 36 条），复跑即全绿；失败模式均为 `fetch failed`（每文件自起 HTTP 服务器的测试在启动竞争中连接被拒）
+- 根因确认：node --test 默认**文件级全并发**，全量同时拉起几十个测试服务器端口，高负载时段监听竞争
+- 根治（v2.222.0）：`scripts/run-tests.cjs` 默认注入 `--test-concurrency=4` 限文件级并发（显式传参可覆盖）；实测全量 5493 条 0 失败、时长 35s 与此前持平
+- 遗留习惯（仍有效）：跑前 `ps aux | grep "node --test"` 确认无遗留进程；失败样本落盘 `npm test > /tmp/xxx.log 2>&1`
+- 闭环，不再需要观察
 
 ## 14.【低】v2.219.0 前后端对齐审计：确认不补入口的后端能力清单（待拍板）
 - 背景：v2.219.0 对齐审计发现以下后端端点**有实现、无前端入口**，经研判均属刻意保留/低价值/旧别名，本轮不补入口；登记于此供用户拍板是否需要
