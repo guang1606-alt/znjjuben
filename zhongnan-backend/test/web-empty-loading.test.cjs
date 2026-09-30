@@ -220,3 +220,73 @@ describe('v2.224 错误态第二轮扫尾（muted 当错误用清零 + listen/PK
     assert.ok(errCalls >= 12, `znErrorHtml 调用应 ≥12，实际 ${errCalls}`);
   });
 });
+
+/**
+ * v2.238 三态扫尾第三弹：作品列表静默失败根治 + 资产三族 notice 混用清零 + 导演交付包裸错误码收口
+ * 背景：
+ *  1) loadWorks 此前无 try/catch，切视图入口（v==='works'）调用点亦无 .catch —— 请求失败时 grid 已清空、
+ *     面板全白零提示（静默失败）；#worksEmpty 与三族 #castLibEmpty/#propLibEmpty/#sceneLibEmpty 均为 .notice 元素，
+ *     needLogin/加载失败/真空态三语义全用 textContent 混写（v2.229 mkEmpty / v2.230 sqEmpty 收口的同族漏网）。
+ *  2) 导演交付包 openDirectorPack 手动 !r.ok + r.json() 取 j.error 直接 textContent —— 绕过 v2.226
+ *     jsonOrThrow 脱敏层，500 会把 INTERNAL_ERROR 裸码糊用户脸上（违反契约速查「前端遇到 INTERNAL_ERROR
+ *     应显示本地友好文案」）；dpBody 四处 textContent 无 role/样式。
+ */
+describe('v2.238 作品列表/资产三族/导演交付包 三态收口', () => {
+  const html = fs.readFileSync(path.join(WEB, 'index.html'), 'utf8');
+  const fnRegion = (startMark, endMark) => {
+    const s = src.indexOf(startMark);
+    const e = s >= 0 ? src.indexOf(endMark, s) : -1;
+    return s >= 0 && e > s ? src.slice(s, e) : '';
+  };
+
+  it('loadWorks 失败不再静默：内部 try/catch + 失败走 znErrorHtml(loadFail)', () => {
+    const region = fnRegion('async function loadWorks()', '// c202 版本逐行对比');
+    assert.ok(region, '应定位到 loadWorks 函数体');
+    assert.ok(/}\s*catch/.test(region), 'loadWorks 应有 try/catch（此前请求失败后面板全白零提示）');
+    assert.ok(/znErrorHtml\(t\('loadFail'\)\)/.test(region), '失败态应走 znErrorHtml(loadFail)（role=alert 即时播报）');
+  });
+
+  it('worksEmpty：needLogin/worksEmpty 两空态收口为 znEmptyHtml', () => {
+    const region = fnRegion('async function loadWorks()', '// c202 版本逐行对比');
+    assert.doesNotMatch(region, /empty\.textContent = t\(/, 'worksEmpty 不应再 textContent 混写');
+    assert.ok(/znEmptyHtml\(t\('needLogin'\)\)/.test(region), 'needLogin 应走 znEmptyHtml');
+    assert.ok(/znEmptyHtml\(t\('worksEmpty'\)\)/.test(region), 'worksEmpty 应走 znEmptyHtml');
+  });
+
+  it('资产三族：needLogin / 加载失败 / 空态全收口，notice 混用清零', () => {
+    assert.doesNotMatch(src, /e\.textContent = t\('needLogin'\)/, '三族未登录提示不应再 textContent（e = LibEmpty 元素）');
+    assert.ok((src.match(/znEmptyHtml\(t\('needLogin'\)\)/g) || []).length >= 4, 'works + 三族共 4 处 needLogin 应全部 znEmptyHtml');
+    for (const fam of ['cast', 'prop', 'scene']) {
+      assert.doesNotMatch(src, new RegExp(`textContent = t\\('${fam}LibFail'\\)`), `${fam}LibFail 不应再 textContent`);
+      assert.ok(src.includes(`znErrorHtml(t('${fam}LibFail'))`), `${fam}LibFail 应走 znErrorHtml`);
+    }
+    assert.doesNotMatch(src, /empty\.textContent = thinFiltered/, '三族空态（thin 过滤/搜索/真空）不应再 textContent');
+    assert.strictEqual((src.match(/znEmptyHtml\(thinFiltered/g) || []).length, 3, '三族空态应各 1 处 znEmptyHtml(thinFiltered…)');
+  });
+
+  it('index.html：worksEmpty + 三族 LibEmpty 摘 notice 类（与 zn-empty/zn-error 双 padding 冲突）；mkEmpty/sqEmpty 不回退', () => {
+    for (const id of ['worksEmpty', 'castLibEmpty', 'propLibEmpty', 'sceneLibEmpty', 'mkEmpty', 'sqEmpty']) {
+      const tag = html.match(new RegExp(`<div[^>]*id="${id}"[^>]*>`));
+      assert.ok(tag, `#${id} 应存在`);
+      assert.ok(!/class="[^"]*\bnotice\b/.test(tag[0]), `#${id} 不应再挂 notice 类`);
+    }
+  });
+
+  it('导演交付包：jsonOrThrow 统一脱敏（不再手动 !r.ok 取 j.error 裸上屏）+ 四处 textContent 清零', () => {
+    const region = fnRegion('const openDirectorPack = async', "if ($('dpBtn'))");
+    assert.ok(region, '应定位到 openDirectorPack');
+    assert.doesNotMatch(region, /!r\.ok/, '应改走 Api.jsonOrThrow（v2.226 脱敏层），不再手动解析 j.error 裸上屏');
+    assert.ok(/Api\.jsonOrThrow\(r\)/.test(region), '应使用 jsonOrThrow（INTERNAL_ERROR 回落本地友好文案）');
+    assert.doesNotMatch(region, /\.textContent = t\('dpEmpty'\)/, 'dpEmpty 空态不应再 textContent');
+    assert.doesNotMatch(region, /\.textContent = err\.message/, 'catch 不应再 textContent 裸错误');
+    assert.ok(/znError\('dpBody'/.test(region), 'catch 失败应走 znError(dpBody)（role=alert）');
+    assert.ok(/znEmpty\('dpBody', t\('dpEmpty'\)\)/.test(region), '无页空态应走 znEmpty(dpBody)');
+  });
+
+  it('renderDpPage 页缺失兜底同样收口 znEmpty', () => {
+    const region = fnRegion('const renderDpPage = ', 'const renderDpSummary');
+    assert.ok(region, '应定位到 renderDpPage');
+    assert.doesNotMatch(region, /body\.textContent = t\('dpEmpty'\)/, 'renderDpPage 空态不应再 textContent');
+    assert.ok(/znEmpty\(body, t\('dpEmpty'\)\)/.test(region), 'renderDpPage 空态应走 znEmpty(body)');
+  });
+});

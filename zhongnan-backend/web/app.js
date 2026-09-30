@@ -2270,14 +2270,16 @@
       let t;
       ws.addEventListener('input', () => { clearTimeout(t); t = setTimeout(loadWorks, 250); });
     }
-    if (!Api.isAuthed()) { empty.textContent = t('needLogin'); empty.classList.remove('hidden'); $('worksCount').textContent = ''; return; }
+    if (!Api.isAuthed()) { empty.innerHTML = znEmptyHtml(t('needLogin')); empty.classList.remove('hidden'); $('worksCount').textContent = ''; return; }
     const q = ($('worksSearch')?.value || '').trim();
+    // v2.238 静默失败根治：此前无 try/catch，切视图入口调用点亦无 .catch——请求失败时 grid 已清空、面板全白零提示
+    try {
     const res = await Api.request('/api/generate/projects' + (q ? `?q=${encodeURIComponent(q)}` : ''));
     const list = await Api.jsonOrThrow(res);
     if (!isPrivateSessionCurrent(account)) return;
     $('worksCount').textContent = t('worksCount', { n: list.length });
     empty.classList.toggle('hidden', list.length > 0);
-    if (!list.length) empty.textContent = t('worksEmpty');
+    if (!list.length) empty.innerHTML = znEmptyHtml(t('worksEmpty'));
     list.forEach((p) => {
       const c = document.createElement('div'); c.className = 'work-card';
       c.innerHTML = `<h3>${escapeHtml(p.title)}</h3>
@@ -2334,6 +2336,12 @@
       });
       grid.appendChild(c);
     });
+    } catch {
+      if (!isPrivateSessionCurrent(account)) return;
+      $('worksCount').textContent = '';
+      empty.classList.remove('hidden');
+      empty.innerHTML = znErrorHtml(t('loadFail'));
+    }
   }
   // c202 版本逐行对比（零扣费、确定性）：渲染/请求/文案辅助，供作品详情与 fix 成功后自动展开
   const DIFF_LEVEL_LABEL = {
@@ -4842,7 +4850,7 @@
   async function openCastLibrary() {
     const modal = $('castLibModal');
     if (!modal) return;
-    if (!Api.isAuthed()) { openModal(modal.id); $('castLibGrid').innerHTML = ''; $('castLibConflicts').innerHTML = ''; $('castLibEdit').classList.add('hidden'); const e = $('castLibEmpty'); e.classList.remove('hidden'); e.textContent = t('needLogin'); return; }
+    if (!Api.isAuthed()) { openModal(modal.id); $('castLibGrid').innerHTML = ''; $('castLibConflicts').innerHTML = ''; $('castLibEdit').classList.add('hidden'); const e = $('castLibEmpty'); e.classList.remove('hidden'); e.innerHTML = znEmptyHtml(t('needLogin')); return; }
     const account = capturePrivateSession();
     openModal(modal.id);
     $('castLibEdit').classList.add('hidden');
@@ -4878,7 +4886,7 @@
       // v2.185 c180 同口径：也清 dashConflictScroll，防残留导致下次开库误触发滚动高亮
       dashJumpTarget = null;
       dashConflictScroll = null;
-      grid.innerHTML = ''; empty.classList.remove('hidden'); empty.textContent = t('castLibFail');
+      grid.innerHTML = ''; empty.classList.remove('hidden'); empty.innerHTML = znErrorHtml(t('castLibFail'));
     }
   }
   // v2.165 资产实时引用明细（三面板共用）：usage = { [assetId]: [{projectId, projectTitle, status}] }，与 usedCount 历史累计立项次数互补；空壳被引用时加红色预警
@@ -5003,7 +5011,7 @@
     });
     grid.innerHTML = '';
     empty.classList.toggle('hidden', assets.length > 0);
-    if (!assets.length) { empty.textContent = thinFiltered ? t('dashThinNoResult') : (String($('castLibSearch')?.value ?? '').trim() ? t('libSearchNoResult') : t('castLibEmpty')); return; }
+    if (!assets.length) { empty.innerHTML = znEmptyHtml(thinFiltered ? t('dashThinNoResult') : (String($('castLibSearch')?.value ?? '').trim() ? t('libSearchNoResult') : t('castLibEmpty'))); return; }
     assets.forEach((a) => {
       const h = hMap.get(a.id) || { score: 0, level: 'thin', advice: [] };
       const sigs = (a.signatureLines || []).slice(0, 2);
@@ -5115,7 +5123,7 @@
   async function openPropLibrary() {
     const modal = $('propLibModal');
     if (!modal) return;
-    if (!Api.isAuthed()) { openModal(modal.id); $('propLibGrid').innerHTML = ''; $('propLibConflicts').innerHTML = ''; $('propLibEdit').classList.add('hidden'); const e = $('propLibEmpty'); e.classList.remove('hidden'); e.textContent = t('needLogin'); return; }
+    if (!Api.isAuthed()) { openModal(modal.id); $('propLibGrid').innerHTML = ''; $('propLibConflicts').innerHTML = ''; $('propLibEdit').classList.add('hidden'); const e = $('propLibEmpty'); e.classList.remove('hidden'); e.innerHTML = znEmptyHtml(t('needLogin')); return; }
     const account = capturePrivateSession();
     openModal(modal.id);
     $('propLibEdit').classList.add('hidden');
@@ -5150,7 +5158,7 @@
       // v2.185 c180 同口径：也清 dashConflictScroll，防残留导致下次开库误触发滚动高亮
       dashJumpTarget = null;
       dashConflictScroll = null;
-      grid.innerHTML = ''; empty.classList.remove('hidden'); empty.textContent = t('propLibFail');
+      grid.innerHTML = ''; empty.classList.remove('hidden'); empty.innerHTML = znErrorHtml(t('propLibFail'));
     }
   }
   function renderPropLibrary(assets, health, listTotal, usage) {
@@ -5245,7 +5253,7 @@
     });
     grid.innerHTML = '';
     empty.classList.toggle('hidden', assets.length > 0);
-    if (!assets.length) { empty.textContent = thinFiltered ? t('dashThinNoResult') : (String($('propLibSearch')?.value ?? '').trim() ? t('libSearchNoResult') : t('propLibEmpty')); return; }
+    if (!assets.length) { empty.innerHTML = znEmptyHtml(thinFiltered ? t('dashThinNoResult') : (String($('propLibSearch')?.value ?? '').trim() ? t('libSearchNoResult') : t('propLibEmpty'))); return; }
     assets.forEach((a) => {
       const h = hMap.get(a.id) || { score: 0, level: 'thin', advice: [] };
       const card = document.createElement('div');
@@ -5355,7 +5363,7 @@
   async function openSceneLibrary() {
     const modal = $('sceneLibModal');
     if (!modal) return;
-    if (!Api.isAuthed()) { openModal(modal.id); $('sceneLibGrid').innerHTML = ''; $('sceneLibConflicts').innerHTML = ''; $('sceneLibEdit').classList.add('hidden'); const e = $('sceneLibEmpty'); e.classList.remove('hidden'); e.textContent = t('needLogin'); return; }
+    if (!Api.isAuthed()) { openModal(modal.id); $('sceneLibGrid').innerHTML = ''; $('sceneLibConflicts').innerHTML = ''; $('sceneLibEdit').classList.add('hidden'); const e = $('sceneLibEmpty'); e.classList.remove('hidden'); e.innerHTML = znEmptyHtml(t('needLogin')); return; }
     const account = capturePrivateSession();
     openModal(modal.id);
     $('sceneLibEdit').classList.add('hidden');
@@ -5390,7 +5398,7 @@
       // v2.185 c180 同口径：也清 dashConflictScroll，防残留导致下次开库误触发滚动高亮
       dashJumpTarget = null;
       dashConflictScroll = null;
-      grid.innerHTML = ''; empty.classList.remove('hidden'); empty.textContent = t('sceneLibFail');
+      grid.innerHTML = ''; empty.classList.remove('hidden'); empty.innerHTML = znErrorHtml(t('sceneLibFail'));
     }
   }
   function renderSceneLibrary(assets, health, listTotal, usage) {
@@ -5485,7 +5493,7 @@
     });
     grid.innerHTML = '';
     empty.classList.toggle('hidden', assets.length > 0);
-    if (!assets.length) { empty.textContent = thinFiltered ? t('dashThinNoResult') : (String($('sceneLibSearch')?.value ?? '').trim() ? t('libSearchNoResult') : t('sceneLibEmpty')); return; }
+    if (!assets.length) { empty.innerHTML = znEmptyHtml(thinFiltered ? t('dashThinNoResult') : (String($('sceneLibSearch')?.value ?? '').trim() ? t('libSearchNoResult') : t('sceneLibEmpty'))); return; }
     assets.forEach((a) => {
       const h = hMap.get(a.id) || { score: 0, level: 'thin', advice: [] };
       const card = document.createElement('div');
@@ -7895,7 +7903,7 @@
   const renderDpPage = () => {
     const body = $('dpBody'); if (!body) return;
     const p = dpPages[dpActive];
-    if (!p) { body.textContent = t('dpEmpty'); return; }
+    if (!p) { znEmpty(body, t('dpEmpty')); return; }
     body.innerHTML = '';
     if (p.type === 'wave' && p.wave && p.wave.textLines) {
       p.wave.textLines.forEach((ln) => { const d = document.createElement('div'); d.className = 'dp-line dp-wave'; d.textContent = ln; body.appendChild(d); });
@@ -7920,12 +7928,12 @@
     openModal('dpModal');
     try {
       const r = await Api.request(`/api/generate/projects/${projectId}/director-pack`);
-      if (!r.ok) { let m = t('dpEmpty'); try { const j = await r.json(); m = j.error || m; } catch {} if (isCurrentProject()) $('dpBody').textContent = m; return; }
-      const data = await r.json();
+      // v2.238：统一走 jsonOrThrow（v2.226 脱敏层）——不再手动判响应码取 error 字段裸上屏，INTERNAL_ERROR 回落本地友好文案
+      const data = await Api.jsonOrThrow(r);
       if (!isCurrentProject()) return;
       dpPages = data.pages || []; dpActive = 0; dpEpisodeCount = data.episodeCount || 0;
       const tabs = $('dpTabs'); tabs.innerHTML = '';
-      if (!dpPages.length) { $('dpBody').textContent = t('dpEmpty'); return; }
+      if (!dpPages.length) { znEmpty('dpBody', t('dpEmpty')); return; }
       dpPages.forEach((p, i) => {
         const b = document.createElement('button'); b.className = 'dp-tab' + (i === 0 ? ' active' : '');
         b.textContent = p.title; b.onclick = () => { dpActive = i; tabs.querySelectorAll('.dp-tab').forEach((x, j) => x.classList.toggle('active', j === i)); renderDpPage(); };
@@ -7933,7 +7941,7 @@
       });
       renderDpSummary();
       renderDpPage();
-    } catch (err) { if (isCurrentProject()) $('dpBody').textContent = err.message || t('dpEmpty'); }
+    } catch (err) { if (isCurrentProject()) znError('dpBody', (err && err.message) || t('dpEmpty')); }
   };
   if ($('dpBtn')) $('dpBtn').onclick = openDirectorPack;
   if ($('dpCopy')) $('dpCopy').onclick = () => { const p = dpPages[dpActive]; if (!p) return; const txt = (p.type === 'wave' && p.wave && p.wave.textLines ? p.wave.textLines.join('\n') + '\n' : '') + p.lines.join('\n'); copy(txt, lang === 'en' ? 'Page copied' : '当前页已复制'); };
