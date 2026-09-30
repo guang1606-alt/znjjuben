@@ -1,5 +1,5 @@
 /**
- * v2.221 加载/空态统一：znSkeleton/znEmpty 收口 —— 守卫 web/app.js 与 web/styles.css
+ * v2.221 加载/空态统一 + v2.223 错误态统一（znSkeleton/znEmpty/znError）—— 守卫 web/app.js 与 web/styles.css
  * 背景：styles.css v3.0 的 .skeleton/.sk-list 骨架屏体系此前零使用（死样式），
  *  加载态散落 <div class="muted">加载中…</div>、空态 .muted/.notice 混拼。
  * 本文件静态断言统一收口实现不被回退（读源码断言，不起服务器，跑得快）。
@@ -126,5 +126,61 @@ describe('v2.221 styles.css 配套', () => {
     assert.doesNotMatch(css, /rgba\(255,255,255,\.10\) 50%/, '旧亮色渐变应移除');
     assert.ok(/@media \(prefers-reduced-motion: reduce\) \{ \.skeleton::after \{ animation: none;/.test(css),
       'reduced-motion 下应停 shimmer');
+  });
+});
+
+describe('v2.223 错误态统一：znErrorHtml/znError', () => {
+  const region = extractMarkedRegion('v2.221 加载/空态统一');
+
+  it('znErrorHtml/znError 齐备并 window 暴露，role=alert + _znEsc 转义', () => {
+    assert.ok(region, '统一帮助函数区域应存在');
+    assert.ok(/function znErrorHtml\s*\(/.test(region), '应定义 znErrorHtml(');
+    assert.ok(/function znError\s*\(/.test(region), '应定义 znError(');
+    assert.ok(/window\.znErrorHtml = znErrorHtml;/.test(region) && /window\.znError = znError;/.test(region),
+      '应 window 暴露供独立 view js 复用');
+    assert.ok(/role="alert"/.test(region), '错误态应有 role=alert（即时播报）');
+    assert.ok(/_znEsc\(text\)/.test(region) && /_znEsc\(hint\)/.test(region), 'text/hint 应走 _znEsc');
+  });
+
+  it('调用点规模：app.js 错误态 znErrorHtml ≥5 处', () => {
+    const errCalls = (src.match(/znErrorHtml\(/g) || []).length - 1; // 扣定义
+    assert.ok(errCalls >= 5, `znErrorHtml 调用应 ≥5，实际 ${errCalls}`);
+  });
+
+  it('旧错误态写法已清除（notice err / muted 当错误用 / 内联 danger hack）', () => {
+    assert.doesNotMatch(src, /<div class="notice err">/, 'notice err 应收口为 znErrorHtml');
+    assert.doesNotMatch(src, /<p class="muted">\$\{escapeHtml\(\(e && e\.message\)/, 'modal 内 p.muted 当错误用应收口');
+    assert.doesNotMatch(src, /style="border-color:var\(--danger/, '内联 danger 边框 hack 应收口');
+  });
+
+  it('旧加载/空态残留已清除（第二轮收口）', () => {
+    assert.doesNotMatch(src, /<div class="muted">\$\{lang === 'en' \? 'Evaluating value…'/, '价值预览加载态应收口为骨架屏');
+    assert.doesNotMatch(src, /<p class="muted">\$\{lang === 'en' \? 'Evaluating…'/, '价值卡加载态应收口为骨架屏');
+    assert.doesNotMatch(src, /<div class="muted">\$\{lang === 'en' \? 'No episodes yet — value reference unavailable/,
+      '价值预览空态应收口为 znEmptyHtml（文案+引导）');
+    assert.doesNotMatch(src, /segBox\.textContent = lang === 'en' \? 'No playable episodes yet\.'/, '朗读片单空态应收口');
+    assert.doesNotMatch(src, /<span class="muted">暂无自定义供应商/, '供应商列表空态应收口');
+  });
+});
+
+describe('v2.223 view js 错误态接入 + styles.css 配套', () => {
+  it('teardown-view 历史失败态走 znErrorHtml（旧 p.muted 错误写法清除）', () => {
+    const s = fs.readFileSync(path.join(WEB, 'teardown-view.js'), 'utf8');
+    assert.doesNotMatch(s, /<p class="muted">\$\{esc\(r\.data\.message/, '接口失败态 p.muted 应收口');
+    assert.doesNotMatch(s, /<p class="muted">\$\{esc\(t\.histFail\)\}/, 'catch 失败态 p.muted 应收口');
+    assert.ok(/znErrorHtml\(/.test(s), 'teardown-view 应调用 znErrorHtml');
+  });
+
+  it('room-view 历史失败态走 znErrorHtml（旧 td-hist-card 冒充记录卡片清除）', () => {
+    const s = fs.readFileSync(path.join(WEB, 'room-view.js'), 'utf8');
+    assert.doesNotMatch(s, /<div class="td-hist-card">\$\{esc\(errMsg\(e\)\)\}<\/div>/, '失败态不应冒充历史记录卡片');
+    assert.ok(/znErrorHtml\(/.test(s), 'room-view 应调用 znErrorHtml');
+  });
+
+  it('.zn-error 样式齐备（图标/文案/引导，--danger 主题令牌）', () => {
+    assert.ok(/\.zn-error \{/.test(css), '应有 .zn-error');
+    assert.ok(/\.zn-error-ico/.test(css) && /\.zn-error-txt/.test(css) && /\.zn-error-hint/.test(css),
+      '应有 图标/文案/引导 三子元素样式');
+    assert.ok(/\.zn-error[^}]*var\(--danger/.test(css), '应使用 --danger 主题令牌（含回退）');
   });
 });

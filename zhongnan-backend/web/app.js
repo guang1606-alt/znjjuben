@@ -1412,7 +1412,18 @@
     const host = typeof el === 'string' ? $(el) : el;
     if (host) host.innerHTML = znEmptyHtml(text, hint);
   }
+  // v2.223 错误态统一：与 .zn-empty 同构的 .zn-error（⚠ + 文案 + 可选细节 hint），role=alert 即时播报
+  function znErrorHtml(text, hint) {
+    return `<div class="zn-error" role="alert"><span class="zn-error-ico" aria-hidden="true">⚠</span>`
+      + `<span class="zn-error-txt">${_znEsc(text)}</span>`
+      + (hint ? `<span class="zn-error-hint">${_znEsc(hint)}</span>` : '') + `</div>`;
+  }
+  function znError(el, text, hint) {
+    const host = typeof el === 'string' ? $(el) : el;
+    if (host) host.innerHTML = znErrorHtml(text, hint);
+  }
   window.znSkeleton = znSkeleton; window.znEmpty = znEmpty; window.znEmptyHtml = znEmptyHtml; window.znSkeletonHtml = znSkeletonHtml;
+  window.znError = znError; window.znErrorHtml = znErrorHtml;
   /* ---------- v2.221 加载/空态统一 结束 ---------- */
   // 模态输入框：替代 window.prompt。resolve(value|null)；Enter=确定，Esc=取消
   function askText(label, def) {
@@ -2398,7 +2409,7 @@
           : '剧本过长，暂不支持在线逐行对比，可展开最新版查看全文。'}</div>`;
         return;
       }
-      box.innerHTML = `<div class="notice err">${lang === 'en' ? 'Version comparison failed. Try again later.' : '版本对比失败，请稍后重试。'}</div>`;
+      box.innerHTML = znErrorHtml(lang === 'en' ? 'Version comparison failed. Try again later.' : '版本对比失败，请稍后重试。');
     }
   }
 
@@ -2561,7 +2572,7 @@
         wd.innerHTML = `<div class="diag-head"><div class="diag-total"><b style="color:${diagColor(sc.total || 0)}">${sc.total ?? '—'}</b><span>${levelTag(sc.level || '')}</span>
             <small>${lang === 'en' ? `${d.counts.episodeCount} ep` : `共${d.counts.episodeCount}集`}</small></div></div>
             <div class="diag-bars">${bars}</div><div class="diag-fixes">${fixHtml}</div>${qcHtml}`;
-      } catch (e) { if (isCurrentProject()) wd.innerHTML = `<div class="notice err">${lang === 'en' ? 'Diagnosis failed.' : '诊断失败，请稍后重试。'}</div>`; }
+      } catch (e) { if (isCurrentProject()) wd.innerHTML = znErrorHtml(lang === 'en' ? 'Diagnosis failed.' : '诊断失败，请稍后重试。'); }
     };
   }
 
@@ -3194,12 +3205,12 @@
     const box = $('listValue');
     if (!scriptId) { box.classList.add('hidden'); return; }
     box.classList.remove('hidden');
-    box.innerHTML = `<div class="muted">${lang === 'en' ? 'Evaluating value…' : '正在评估剧本价值…'}</div>`;
+    box.innerHTML = znSkeletonHtml();
     try {
       const res = await Api.request('/api/market/listings/value-preview', { method: 'POST', body: JSON.stringify({ scriptId }) });
       const d = await Api.jsonOrThrow(res);
       if (!d.value) {
-        box.innerHTML = `<div class="muted">${lang === 'en' ? 'No episodes yet — value reference unavailable. Create episodes first for a certified badge.' : '该剧本暂无分集，无法生成价值参考；先生成分集后上架可获得认证徽章。'}</div>`;
+        box.innerHTML = znEmptyHtml(lang === 'en' ? 'No episodes yet — value reference unavailable.' : '该剧本暂无分集，无法生成价值参考。', lang === 'en' ? 'Create episodes first for a certified badge.' : '先生成分集后上架可获得认证徽章。');
         return;
       }
       const v = d.value, s = d.suggested;
@@ -6069,7 +6080,7 @@
       const pl = await Api.jsonOrThrow(pr);
       if (token !== listenReqSeq) return; // 用户已切到别的弹窗/剧集
       listenSeries.list = Array.isArray(pl.episodes) ? pl.episodes : [];
-      if (!listenSeries.list.length) { segBox.textContent = lang === 'en' ? 'No playable episodes yet.' : '暂无可朗读的分集。'; return; }
+      if (!listenSeries.list.length) { znEmpty(segBox, lang === 'en' ? 'No playable episodes yet.' : '暂无可朗读的分集。'); return; }
       // 续听定位：片单中最近一次保存过进度的集。
       // c209 修复：改版/重新生成会让最新版换 scriptId，旧进度 id 已不在片单里——直接加载必 404，
       // 连播入口整个废掉。id 失效时回退第一集；id 仍有效但段数对不上由 renderListen 内部回退从头。
@@ -7608,14 +7619,14 @@
     if (!currentProjectId) { xnSay(lang === 'en' ? 'Generate a script first.' : '先生成剧本再看价值～'); return; }
     openModal('valueModal');
     const body = $('valueBody'); $('valueActions').classList.add('hidden');
-    body.innerHTML = `<p class="muted">${lang === 'en' ? 'Evaluating…' : '正在评估剧本价值…'}</p>`;
+    body.innerHTML = znSkeletonHtml();
     try {
       const j = await Api.jsonOrThrow(await Api.request(`/api/generate/projects/${currentProjectId}/value-card?lang=${lang}`));
       valueCardCache = j.card;
       renderValueCard(j.card);
       $('valueActions').classList.remove('hidden');
     } catch (e) {
-      body.innerHTML = `<p class="muted">${escapeHtml((e && e.message) ? e.message : (lang === 'en' ? 'Failed to evaluate.' : '评估失败～'))}</p>`;
+      body.innerHTML = znErrorHtml((e && e.message) ? e.message : (lang === 'en' ? 'Failed to evaluate.' : '评估失败～'));
     }
   }
   function renderValueCard(c) {
@@ -7711,7 +7722,7 @@
           <p class="muted sd-tip">${en ? 'Defaults are adjustable in 🎣 Hook Console before generating.' : '这些都是系统默认，可在下方「🎣 钩子编排」里手动调整。'}</p>
         </div>`;
     } catch (e) {
-      body.innerHTML = `<p class="muted">${escapeHtml((e && e.message) ? e.message : (en ? 'Failed to load defaults.' : '智能默认加载失败，不影响正常生成。'))}</p>`;
+      body.innerHTML = znErrorHtml((e && e.message) ? e.message : (en ? 'Failed to load defaults.' : '智能默认加载失败，不影响正常生成。'));
     }
   };
 
@@ -8641,7 +8652,7 @@
     // v2.51 国产替补铁规自检 + 自动迭代提示
     const sc = j.backupSelfCheck || { ok: true, issues: [], upgradeHints: [], manualNeeded: [] };
     const bkIssues = sc.issues.length
-      ? `<div class="notice" style="border-color:var(--danger,#e5484d);color:var(--danger,#e5484d)">国产替补自检未过：<br>${sc.issues.map((i) => `· ${escapeHtml(i.role)}：${escapeHtml(i.problem)}${i.suggest.length ? ' → 建议：' + i.suggest.map(escapeHtml).join('/') : ''}`).join('<br>')}</div>`
+      ? znErrorHtml('国产替补自检未过', sc.issues.map((i) => `${i.role}：${i.problem}${i.suggest.length ? ' → 建议：' + i.suggest.join('/') : ''}`).join('；'))
       : '<div class="notice">国产最强替补自检 ✅ 三档八岗每岗第一替补均为该岗中国国内最强 API（v2.52 策展排序），海外首选断供时不降配兜底。</div>';
     const bkUp = sc.upgradeHints && sc.upgradeHints.length
       ? `<div class="notice">自动迭代候选（需联网横评+真实账单确认后换型）：<br>${sc.upgradeHints.map((h) => `· ${escapeHtml(h.role)}：${escapeHtml(h.note)}`).join('<br>')}</div>` : '';
@@ -8671,7 +8682,7 @@
     const tbl = (title, list) => `<h4 style="margin:10px 0 4px">${title}（${list.length}）</h4>
       <table class="adm-table"><thead><tr><th>厂商/产品</th><th>用于哪些功能/岗位</th><th>属性</th><th>官方申请入口与说明</th></tr></thead><tbody>${list.map(row).join('')}</tbody></table>`;
     const cov = j.coverage && (j.coverage.missing.length || j.coverage.extra.length)
-      ? `<div class="notice" style="border-color:var(--danger,#e5484d)">目录覆盖异常：缺 ${j.coverage.missing.join(',') || '无'} / 多 ${j.coverage.extra.join(',') || '无'}</div>`
+      ? znErrorHtml('目录覆盖异常', `缺 ${j.coverage.missing.join(',') || '无'} / 多 ${j.coverage.extra.join(',') || '无'}`)
       : '<div class="notice">目录覆盖自检 ✅ 模型目录每个型号都有申请入口</div>';
     box.innerHTML = cov + '<div style="margin:6px 0 10px"><button class="btn-primary" id="apiDirDocx">下载设计版 Word 清单（封面/预留填写位/签署位）</button></div>' + tbl('一、文本大模型（10 岗位流水线）', j.text) + tbl('二、图片大模型（海报/分镜，全部收费）', j.image) + tbl('三、基础设施 API（登录/支付/存储/审核/语音等）', j.infra);
     const dl = $('apiDirDocx'); if (dl) dl.onclick = () => { admDownload('/model/api-directory/docx', 'zhongnanji-api-directory.docx'); };
@@ -8695,7 +8706,7 @@
         <div class="row-actions">
           <button class="btn-ghost" data-pvedit="${p.id}">编辑</button>
           <button class="btn-ghost" data-pvdel="${p.id}">删除</button>
-        </div></div>`).join('') : '<span class="muted">暂无自定义供应商，岗位全部走三档引擎组合</span>';
+        </div></div>`).join('') : znEmptyHtml('暂无自定义供应商', '岗位全部走三档引擎组合');
     $('pvList').querySelectorAll('[data-pvdel]').forEach((b) => b.onclick = async () => {
       if (!(await uiConfirm({ body: '删除该供应商？相关岗位路由将自动解绑回退。', danger: true, okText: '删除' }))) return;
       await admApi('/model/providers/' + b.getAttribute('data-pvdel'), { method: 'DELETE' });

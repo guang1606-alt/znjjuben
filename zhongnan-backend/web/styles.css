@@ -1648,6 +1648,11 @@ summary:hover{color:var(--accent-strong)}
 .zn-empty-ico { font-size: 1.7rem; line-height: 1; opacity: .45; }
 .zn-empty-txt { font-size: .9rem; }
 .zn-empty-hint { font-size: .8rem; opacity: .75; max-width: 32em; }
+/* v2.223 错误态：与 .zn-empty 同构，--danger 主题令牌（三主题各自定义） */
+.zn-error { display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 28px 14px; text-align: center; color: var(--danger, #b1443a); }
+.zn-error-ico { font-size: 1.7rem; line-height: 1; opacity: .7; }
+.zn-error-txt { font-size: .9rem; }
+.zn-error-hint { font-size: .8rem; opacity: .85; max-width: 32em; color: var(--text-2); }
 
 /* —— 3. View-Stack 视图切换过渡 —— */
 .view-stack { position: relative; }

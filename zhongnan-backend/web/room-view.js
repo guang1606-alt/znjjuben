@@ -566,7 +566,7 @@
       const j = await get('/api/room/mine');
       state.histRooms = j.rooms || [];
       renderHistory();
-    } catch (e) { box.innerHTML = `<div class="td-hist-card">${esc(errMsg(e))}</div>`; }
+    } catch (e) { box.innerHTML = znErrorHtml(T().histFail, errMsg(e)); }
   }
   async function resumeRoom(rec) {
     if (!needAuth()) return;

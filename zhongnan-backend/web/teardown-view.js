@@ -157,7 +157,7 @@
     znSkeleton(box);
     try {
       const r = await raw('/api/teardown/mine');
-      if (!r.ok) { box.innerHTML = `<p class="muted">${esc(r.data.message || r.data.error || t.histFail)}</p>`; return; }
+      if (!r.ok) { box.innerHTML = znErrorHtml(r.data.message || r.data.error || t.histFail); return; }
       const list = r.data.list || [];
       if (!list.length) { box.innerHTML = znEmptyHtml(t.histEmpty); return; }
       const locale = en() ? 'en-GB' : 'zh-CN';
@@ -172,7 +172,7 @@
       box.querySelectorAll('.td-hist-card').forEach((c) => c.addEventListener('click', () => openRecord(c.dataset.id)));
     } catch (e) {
       if (needLogin(e)) { box.classList.add('hidden'); return; }
-      box.innerHTML = `<p class="muted">${esc(t.histFail)}</p>`;
+      box.innerHTML = znErrorHtml(t.histFail);
     }
   }
   async function openRecord(id) {
