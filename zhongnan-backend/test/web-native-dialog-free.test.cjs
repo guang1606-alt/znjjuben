@@ -186,3 +186,36 @@ describe('G 轮：web 视图文件零原生弹窗', () => {
     });
   }
 });
+
+describe('H 轮：模态滚动锁 + toast 层级 + 图标按钮可达性', () => {
+  it('H1-模态打开锁背景滚动，关闭恢复（计数式支持叠层）', () => {
+    const modalRegion = extractMarkedRegion('v2.202 通用模态对话框');
+    const batchRegion = extractMarkedRegion('v2.205 批量补全对话框');
+    assert.ok(/function _uiModalLock\(/.test(src), '应有 _uiModalLock 定义');
+    assert.ok(/function _uiModalUnlock\(/.test(src), '应有 _uiModalUnlock 定义');
+    assert.ok(/overflow = 'hidden'/.test(src), '锁定期 body overflow hidden');
+    assert.ok(/overflow = ''/.test(src), '归零后应恢复 body overflow');
+    const locks = (modalRegion.match(/_uiModalLock\(\)/g) || []).length;
+    const unlocks = (modalRegion.match(/_uiModalUnlock\(\)/g) || []).length;
+    assert.ok(locks >= 2, `uiConfirm/uiPrompt 打开时应加锁，实测 ${locks} 处`);
+    assert.ok(unlocks >= 2, `uiConfirm/uiPrompt 关闭时应解锁，实测 ${unlocks} 处`);
+    assert.ok(/_uiModalLock\(\)/.test(batchRegion), '批量补全对话框打开时应加锁');
+    assert.ok(/_uiModalUnlock\(\)/.test(batchRegion), '批量补全对话框关闭时应解锁');
+  });
+
+  it('H2-toast 层级高于模态遮罩（z-index >= 10000）', () => {
+    const css = fs.readFileSync(path.join(WEB, 'styles.css'), 'utf8');
+    const m = css.match(/\.toast-stack \{[^}]*?z-index:\s*(\d+)/);
+    assert.ok(m, '.toast-stack 应声明 z-index');
+    const z = parseInt(m[1], 10);
+    assert.ok(z >= 10000, `.toast-stack z-index 应 >= 10000（遮罩为 9999，toast 不得被盖住），实测 ${z}`);
+  });
+
+  it('H3-标签移除控件键盘可达（role=button + tabindex + aria-label + 键盘触发）', () => {
+    assert.ok(/role="button"/.test(src), '移除控件应声明 role="button"');
+    assert.ok(/tabindex="0"/.test(src), '移除控件应可聚焦（tabindex="0"）');
+    assert.ok(/aria-label=/.test(src), '移除控件应有 aria-label');
+    const m = src.match(/c\.querySelector\('i'\)[\s\S]{0,400}/);
+    assert.ok(m && /keydown|addEventListener\('keydown'/.test(m[0]), '移除控件应支持键盘 Enter/Space 触发');
+  });
+});

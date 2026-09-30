@@ -1069,8 +1069,12 @@
     tagChosen.forEach((name) => {
       const c = document.createElement('span'); c.className = 'tag-chip';
       const label = outLocale() === 'en' ? tagEnLabel(name) : name;
-      c.innerHTML = `${escapeHtml(label)}<i title="remove">×</i>`;
-      c.querySelector('i').onclick = () => removeTag(name);
+      // v2.207 移除控件键盘可达：role=button + 可聚焦 + aria-label + Enter/Space 触发
+      const rmLabel = outLocale() === 'en' ? 'Remove tag' : '移除标签';
+      c.innerHTML = `${escapeHtml(label)}<i role="button" tabindex="0" title="${rmLabel}" aria-label="${rmLabel}: ${escapeHtml(label)}">×</i>`;
+      const x = c.querySelector('i');
+      x.onclick = () => removeTag(name);
+      x.onkeydown = (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); removeTag(name); } };
       box.appendChild(c);
     });
   }
@@ -1648,6 +1652,17 @@
   function _uiReducedMotion() {
     try { return window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches; } catch { return true; }
   }
+  // v2.207 模态打开期间锁定背景滚动（计数式：对话框叠层时只归零恢复，避免提前解锁）
+  function _uiModalLock() {
+    const n = (parseInt(document.body.dataset.uiModalLock || '0', 10) || 0) + 1;
+    document.body.dataset.uiModalLock = String(n);
+    document.body.style.overflow = 'hidden';
+  }
+  function _uiModalUnlock() {
+    const n = Math.max(0, (parseInt(document.body.dataset.uiModalLock || '0', 10) || 0) - 1);
+    document.body.dataset.uiModalLock = String(n);
+    if (n === 0) { document.body.style.overflow = ''; delete document.body.dataset.uiModalLock; }
+  }
   // 焦点圈定（WAI-ARIA dialog）：Tab 在模态内首个↔末个元素循环，Shift+Tab 反向，焦点不逃逸到背景页
   function _uiTrapTab(e, modal) {
     const items = Array.from(modal.querySelectorAll('button, input, select, textarea, [tabindex]:not([tabindex="-1"])'))
@@ -1668,11 +1683,13 @@
     return new Promise((resolve) => {
       const prevFocus = document.activeElement;
       const { overlay, modal, okBtn, cancelBtn } = _uiModalShell(o);
+      _uiModalLock();
       let closed = false;
       const close = (result) => {
         if (closed) return; closed = true;
         document.removeEventListener('keydown', keyHandler);
         resolve(result);
+        _uiModalUnlock();
         try { if (prevFocus && prevFocus.focus) prevFocus.focus(); } catch {}
         // 退场淡出只作视觉余韵，不阻塞 resolve；onfinish/oncancel + 超时兜底保证 DOM 必被清理
         const finish = () => { overlay.remove(); };
@@ -1703,6 +1720,7 @@
     return new Promise((resolve) => {
       const prevFocus = document.activeElement;
       const { overlay, modal, bodyEl, okBtn, cancelBtn } = _uiModalShell(o);
+      _uiModalLock();
       const input = document.createElement('input');
       input.type = o.type || 'text';
       input.value = o.value != null ? String(o.value) : '';
@@ -1714,6 +1732,7 @@
         if (closed) return; closed = true;
         document.removeEventListener('keydown', keyHandler);
         resolve(result);
+        _uiModalUnlock();
         try { if (prevFocus && prevFocus.focus) prevFocus.focus(); } catch {}
         // 退场淡出只作视觉余韵，不阻塞 resolve；onfinish/oncancel + 超时兜底保证 DOM 必被清理
         const finish = () => { overlay.remove(); };
@@ -4297,6 +4316,7 @@
         okText: t('dashThinBatchDialogConfirm'),
         cancelText: t('dashThinBatchDialogCancel'),
       });
+      _uiModalLock();
       const fieldsLabel = document.createElement('div');
       fieldsLabel.style.cssText = 'font-size:12px;margin-bottom:4px;color:var(--muted,#888)';
       fieldsLabel.textContent = t('dashThinBatchDialogFields');
@@ -4336,6 +4356,7 @@
         if (closed) return; closed = true;
         document.removeEventListener('keydown', keyHandler);
         resolve(result);
+        _uiModalUnlock();
         try { if (prevFocus && prevFocus.focus) prevFocus.focus(); } catch {}
         // 退场淡出只作视觉余韵，不阻塞 resolve；onfinish/oncancel + 超时兜底保证 DOM 必被清理
         const finish = () => { overlay.remove(); };
