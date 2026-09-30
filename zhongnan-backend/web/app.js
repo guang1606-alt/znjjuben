@@ -1388,8 +1388,37 @@
   });
 
   /* ---------- 视图切换（v2.186 升级：fade+slide 过渡 + nav active 指示器）---------- */
+  /* v2.200：接入导航栈 + 面包屑渲染，解决平级切换无层级/无返回链问题 */
   const VIEWS = ['home', 'studio', 'toolbox', 'works', 'vip', 'square', 'market', 'admin'];
+  // view → 中英 label 映射（用于面包屑显示，与 i18n 字典对齐）
+  const _VIEW_LABEL = {
+    home: { zh: '首页', en: 'Home' },
+    studio: { zh: '创作专区', en: 'Create' },
+    toolbox: { zh: '工具箱', en: 'Toolbox' },
+    works: { zh: '我的作品', en: 'Works' },
+    vip: { zh: '会员充值', en: 'VIP' },
+    square: { zh: '交流广场', en: 'Square' },
+    market: { zh: '剧本交易', en: 'Market' },
+    admin: { zh: '管理后台', en: 'Admin' },
+  };
+  // 全局导航栈实例（来自 web/nav-stack.js，浏览器与单测共用纯函数）
+  const _navStack = (typeof ZnNavStack === 'object' && ZnNavStack && ZnNavStack.createNavStack)
+    ? ZnNavStack.createNavStack()
+    : null;
   let _switchAnimToken = 0;
+  function _viewLabel(v) {
+    const m = _VIEW_LABEL[v];
+    if (!m) return v;
+    return lang === 'en' ? m.en : m.zh;
+  }
+  function _renderBreadcrumb() {
+    if (!_navStack) return;
+    const el = $('breadcrumb');
+    if (!el) return;
+    _navStack.renderBreadcrumb(el, { onJump: (view) => switchView(view) });
+    // 父级显示控制：根视图（仅 1 层）时隐藏面包屑条，避免首页冗余
+    el.style.display = _navStack.canPop() ? '' : 'none';
+  }
   function switchView(v) {
     if (!VIEWS.includes(v)) return;
     const cur = document.querySelector('.nav-item.active');
@@ -1415,6 +1444,11 @@
       newEl.classList.add('view-in');
       setTimeout(() => { if (token === _switchAnimToken) newEl.classList.remove('view-in'); }, 360);
     }
+    // v2.200 导航栈：压栈（同 view 截断避免绕回环）+ 渲染面包屑
+    if (_navStack) {
+      _navStack.push({ view: v, label: _viewLabel(v) });
+      _renderBreadcrumb();
+    }
     if (v === 'home') renderHome();
     if (v === 'works') { loadMe(); loadWorks(); }
     if (v === 'vip') loadCatalog();
@@ -1422,6 +1456,20 @@
     if (v === 'market') loadListings();
     if (v === 'admin') enterAdmin();
   }
+  // ESC 键返回上一级（仅在栈深 > 1 时生效，避免首页 ESC 退出）
+  document.addEventListener('keydown', (e) => {
+    if (e.key !== 'Escape' && e.key !== 'Esc') return;
+    if (!_navStack || !_navStack.canPop()) return;
+    // 若当前焦点在 input/textarea/contenteditable，不拦截 ESC（让用户先退出输入）
+    const tag = (document.activeElement && document.activeElement.tagName) || '';
+    if (/INPUT|TEXTAREA|SELECT/.test(tag) || (document.activeElement && document.activeElement.isContentEditable)) return;
+    // 若有打开的 modal/overlay/workbench，先交给它们处理（不拦截）
+    const hasOverlay = document.querySelector('.modal.open, .overlay.open, #workbenchLayer:not(.hidden)');
+    if (hasOverlay) return;
+    e.preventDefault();
+    const popped = _navStack.pop();
+    if (popped && popped.view) switchView(popped.view);
+  });
 
   /* ---------- v2.186 全局 Toast（统一错误/成功/加载反馈）---------- */
   let _toastSeq = 0;

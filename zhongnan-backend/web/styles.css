@@ -131,6 +131,15 @@ h1, h2, h3, h4 { font-weight: 700; }
 .nav { display: flex; gap: 2px; margin-left: 8px; flex-shrink: 0; min-width: 0; max-width: 100%; overflow-x: auto; scrollbar-width: none; -webkit-overflow-scrolling: touch; } /* c201：换行后自身可横向滚动，不再撑破胶囊 */
 .nav::-webkit-scrollbar { display: none; }
 
+/* ================= v2.200 面包屑导航条（switchView 层级 + ESC 返回） ================= */
+.breadcrumb { display: none; align-items: center; gap: 4px; margin: 6px 0 0 10px; font-size: .78rem; color: var(--text-weak, color-mix(in srgb, var(--text) 70%, transparent)); flex-shrink: 0; min-width: 0; max-width: 100%; overflow-x: auto; scrollbar-width: none; -webkit-overflow-scrolling: touch; }
+.breadcrumb::-webkit-scrollbar { display: none; }
+.breadcrumb .crumb { display: inline-flex; align-items: center; padding: 2px 8px; border-radius: 999px; border: 1px solid transparent; background: transparent; color: inherit; font: inherit; cursor: pointer; white-space: nowrap; }
+.breadcrumb .crumb:hover { background: color-mix(in srgb, var(--accent) 8%, transparent); color: var(--accent-strong); }
+.breadcrumb .crumb-active { background: color-mix(in srgb, var(--accent) 14%, transparent); color: var(--accent-strong); font-weight: 600; cursor: default; }
+.breadcrumb .crumb-active:hover { background: color-mix(in srgb, var(--accent) 14%, transparent); }
+.breadcrumb .crumb-sep { color: var(--text-weak, color-mix(in srgb, var(--text) 50%, transparent)); margin: 0 1px; user-select: none; }
+
 /* ================= c201 用户反馈修复：toast / 模态输入 / 小菜单 / 积分明细 ================= */
 #znToastHost { position: fixed; top: 14px; left: 50%; transform: translateX(-50%); z-index: 9999; display: flex; flex-direction: column; gap: 8px; align-items: center; pointer-events: none; max-width: min(92vw, 560px); }
 .zn-toast {
