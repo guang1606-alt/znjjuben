@@ -1780,6 +1780,13 @@
     Api.onServerBusy((res, path) => {
       toastError('服务器繁忙，正在重试…' + (path ? '（' + path + '）' : ''), '服务繁忙');
     });
+    // v2.210 跨标签页会话同步：他页登录/换号 → 提示并刷新顶栏与用户态（他页登出走上面的 onAuthRequired）
+    Api.onSessionRemoteChange((snap) => {
+      const name = snap && snap.user ? (snap.user.nickname || snap.user.id) : '';
+      toastInfo('登录账号已在其他标签页切换为「' + name + '」', '账号已同步');
+      renderAuthButton();
+      loadMe().catch(() => {});
+    });
   }
   document.querySelectorAll('.nav [data-view]').forEach((b) => b.onclick = () => switchView(b.getAttribute('data-view')));
   // v2.191 编剧室/递招/素材库 等独立模块：直接打开对应工作台面板

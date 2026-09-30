@@ -24,6 +24,8 @@
     set(k, v) { localStorage.setItem(k, JSON.stringify(v)); },
     del(k) { localStorage.removeItem(k); },
   };
+  // 跨标签页同步参照：本页最后确认过的 user JSON（storage 事件据此区分「他页换号」与「同账号轮换」）
+  let lastSeenUserJson = null;
   let sessionVersion = 0;
   let authAttemptVersion = 0;
   const responseSessions = new WeakMap();
@@ -35,8 +37,13 @@
     if (accessToken) store.set(K.access, accessToken);
     if (refreshToken) store.set(K.refresh, refreshToken);
     if (user) store.set(K.user, user);
+    lastSeenUserJson = JSON.stringify(getUser());
   }
-  function clearSession() { sessionVersion++; [K.access, K.refresh, K.user].forEach((k) => store.del(k)); }
+  function clearSession() {
+    sessionVersion++;
+    [K.access, K.refresh, K.user].forEach((k) => store.del(k));
+    lastSeenUserJson = null;
+  }
   function isAuthed() { return !!getToken(); }
 
   function sessionSnapshot() {
@@ -132,6 +139,31 @@
     refreshFlight = flight;
     return flight.promise;
   }
+
+  // 跨标签页会话同步：storage 事件只在「其他标签页」修改时触发（同页写入不触发，天然区分本页操作）。
+  // 他页登出 → 立即清本页登录态并触发 onAuthRequired（sessionVersion++ 使在途请求全部 SESSION_CHANGED）；
+  // 他页登录/换号 → 触发 onSessionRemoteChange（app.js 刷新用户态；未挂钩子则下次请求自然适配）；
+  // 他页同账号 token 轮换（J 轮轮换机制的伴生场景）→ 静默：本页请求直读最新 token，无需打扰。
+  function bindCrossTabSync() {
+    if (typeof addEventListener !== 'function') return; // 非浏览器环境（node 测试/SSR）直接跳过
+    addEventListener('storage', (e) => {
+      if (!e || (e.key !== K.access && e.key !== K.refresh && e.key !== K.user)) return;
+      if (!getToken() && !getRefreshToken() && !getUser()) {
+        if (lastSeenUserJson === null) return; // 本页本就未登录，无需重复通知
+        clearSession(); // 幂等清理（保证 version 递增使在途请求失效）
+        try { if (hooks.onAuthRequired) hooks.onAuthRequired(); } catch {}
+        return;
+      }
+      const userJson = JSON.stringify(getUser());
+      if (userJson !== lastSeenUserJson) {
+        lastSeenUserJson = userJson;
+        if (userJson && userJson !== 'null') {
+          try { if (hooks.onSessionRemoteChange) hooks.onSessionRemoteChange({ user: getUser() }); } catch {}
+        }
+      }
+    });
+  }
+  bindCrossTabSync();
 
   async function request(path, opts = {}) {
     const session = sessionSnapshot();
@@ -248,6 +280,8 @@
     onAuthRequired(fn) { hooks.onAuthRequired = fn; },
     onNetworkError(fn) { hooks.onNetworkError = fn; },
     onServerBusy(fn) { hooks.onServerBusy = fn; },
+    // 他页登录/换号通知（跨标签页同步）
+    onSessionRemoteChange(fn) { hooks.onSessionRemoteChange = fn; },
     // 直接 fetch（不带鉴权，少数特殊场景如 SSE 用）
     rawFetch: fetchWithTimeout,
     DEFAULT_TIMEOUT,
