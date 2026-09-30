@@ -7322,7 +7322,7 @@
   function idemToken() { return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`; }
 
   /* ---------- 超级管理员后台 ---------- */
-  const ADM_TABS = ['users', 'stats', 'finance', 'posts', 'models', 'knowledge', 'feedback', 'safety', 'handoff', 'updates'];
+  const ADM_TABS = ['users', 'stats', 'finance', 'posts', 'models', 'knowledge', 'feedback', 'safety', 'handoff', 'updates', 'balances'];
   let admTab = 'users', admPage = 1, admInited = false;
   const lvName = (lv) => (lang === 'en' ? LEVEL_EN : LEVEL_ZH)[lv] || lv;
   async function admApi(path, opts) {
@@ -7357,8 +7357,8 @@
     $('admTabs').querySelectorAll('[data-atab]').forEach((b) => b.onclick = () => { admTab = b.getAttribute('data-atab'); renderAdmTabs(); loadAdmTab(); });
   }
   function loadAdmTab() {
-    ['Users', 'Stats', 'Finance', 'Posts', 'Models', 'Knowledge', 'Feedback', 'Safety', 'Handoff', 'Updates'].forEach((n) => $('adm' + n + 'Pane').classList.add('hidden'));
-    const map = { users: 'Users', stats: 'Stats', finance: 'Finance', posts: 'Posts', models: 'Models', knowledge: 'Knowledge', feedback: 'Feedback', safety: 'Safety', handoff: 'Handoff', updates: 'Updates' };
+    ['Users', 'Stats', 'Finance', 'Posts', 'Models', 'Knowledge', 'Feedback', 'Safety', 'Handoff', 'Updates', 'Balances'].forEach((n) => $('adm' + n + 'Pane').classList.add('hidden'));
+    const map = { users: 'Users', stats: 'Stats', finance: 'Finance', posts: 'Posts', models: 'Models', knowledge: 'Knowledge', feedback: 'Feedback', safety: 'Safety', handoff: 'Handoff', updates: 'Updates', balances: 'Balances' };
     $('adm' + map[admTab] + 'Pane').classList.remove('hidden');
     if (admTab === 'users') loadAdmUsers();
     if (admTab === 'stats') loadAdmStats();
@@ -7370,6 +7370,7 @@
     if (admTab === 'safety') loadAdmSafety();
     if (admTab === 'handoff') loadAdmHandoff();
     if (admTab === 'updates') loadAdmUpdates();
+    if (admTab === 'balances') loadAdmBalances();
   }
   function initAdmin() {
     $('admUserSearch').onclick = () => { admPage = 1; loadAdmUsers(); };
@@ -7436,6 +7437,90 @@
     // v2.187 工具优化弹窗铁律：发布更新公告面板事件绑定
     $('admUpdReload').onclick = loadAdmUpdates;
     $('admUpdSubmit').onclick = submitAdmUpdate;
+    // v2.612 供应商余额监控面板事件绑定
+    $('balReload').onclick = loadAdmBalances;
+    $('balSave').onclick = saveAdmBalance;
+    $('balRefresh').onclick = refreshAdmBalances;
+  }
+  // ── v2.612 供应商余额监控（仅超管）──
+  const BAL_COLOR = { NORMAL: '#16a34a', LOW: '#eab308', CRITICAL: '#dc2626', UNKNOWN: '#6b7280' };
+  function balBadge(level) { return `<span class="bal-badge bal-${level.toLowerCase()}" style="background:${BAL_COLOR[level] || '#6b7280'}">${level}</span>`; }
+  async function loadAdmBalances() {
+    const listEl = $('balList'); const sumEl = $('balSummary'); const sel = $('balProvider'); const missEl = $('balMissing');
+    if (listEl) listEl.innerHTML = `<div class="muted">${t('loading') || '加载中…'}</div>`;
+    if (sumEl) sumEl.textContent = '';
+    try {
+      const res = await Api.request('/api/admin/model/balances');
+      if (!res.ok) { const e = await res.json().catch(() => ({})); throw new Error(e.error || `HTTP ${res.status}`); }
+      const d = await res.json();
+      // 列表
+      const rows = Array.isArray(d.balances) ? d.balances : [];
+      if (listEl) {
+        if (rows.length === 0) listEl.innerHTML = `<div class="muted">尚无记录。可点"触发自动查询"或右侧手动填值。</div>`;
+        else listEl.innerHTML = rows.map((r) => {
+          const yuan = r.balanceYuan === null || r.balanceYuan === undefined ? '—' : `¥${Number(r.balanceYuan).toFixed(2)}`;
+          const src = r.source === 'MANUAL' ? '手动' : '自动';
+          const upd = r.updatedAt ? new Date(r.updatedAt).toLocaleString(lang === 'en' ? 'en-US' : 'zh-CN') : '';
+          const err = r.errorMsg ? `<div class="muted" style="color:#c0392b;font-size:11px;margin-top:2px">⚠ ${escapeHtml(r.errorMsg)}</div>` : '';
+          return `<div class="card row-card">
+            <div>${balBadge(r.alertLevel)} <b>${escapeHtml(r.providerName)}</b> <span class="muted">(${escapeHtml(r.vendor)})</span></div>
+            <div class="muted" style="margin-top:4px">余额 <b>${yuan}</b> · 阈值 ¥${Number(r.thresholdYuan || 0).toFixed(2)} · ${src} · ${upd}</div>
+            ${err}
+          </div>`;
+        }).join('');
+      }
+      // 汇总
+      const s = d.summary || {};
+      if (sumEl) sumEl.textContent = `汇总：合计 ¥${(s.total || 0).toFixed(2)} · CRITICAL ${s.critical?.length || 0} · LOW ${s.low?.length || 0} · UNKNOWN ${s.unknown?.length || 0} · 最严重 ${s.worstLevel || 'NORMAL'}`;
+      // 手动填值下拉：合并 missing + 已记录余额的 provider（让用户也能改既有记录）
+      const all = [
+        ...(d.missing || []).map((m) => ({ providerId: m.providerId, providerName: m.providerName, vendor: m.vendor })),
+        ...rows.map((r) => ({ providerId: r.providerId, providerName: r.providerName, vendor: r.vendor })),
+      ];
+      const seen = new Set(); const uniq = all.filter((x) => !seen.has(x.providerId) && seen.add(x.providerId));
+      if (sel) sel.innerHTML = uniq.length === 0 ? '<option value="">（先在「模型配置」里加供应商）</option>'
+        : uniq.map((p) => `<option value="${escapeHtml(p.providerId)}">${escapeHtml(p.providerName)} · ${escapeHtml(p.vendor)}</option>`).join('');
+      // missing 提示
+      if (missEl) {
+        const miss = d.missing || [];
+        const autoMiss = miss.filter((m) => m.strategy?.auto);
+        const manualMiss = miss.filter((m) => !m.strategy?.auto);
+        missEl.innerHTML = autoMiss.length || manualMiss.length
+          ? `<div class="muted" style="font-size:12px">未记录余额的供应商：${autoMiss.length} 个可自动查询、${manualMiss.length} 个需手动填值</div>`
+          : `<div class="muted" style="font-size:12px">全部供应商均已记录余额</div>`;
+      }
+    } catch (e) { if (listEl) listEl.innerHTML = `<div class="muted">${escapeHtml(e.message || '')}</div>`; }
+  }
+  async function saveAdmBalance() {
+    const pid = $('balProvider')?.value; if (!pid) { xnSay('请先选择供应商'); return; }
+    const yuan = parseFloat($('balYuan').value);
+    if (Number.isNaN(yuan)) { xnSay('余额必须是数字'); return; }
+    const threshold = $('balThreshold').value ? parseFloat($('balThreshold').value) : undefined;
+    const note = $('balNote').value.trim() || undefined;
+    try {
+      const res = await Api.request(`/api/admin/model/balances/${encodeURIComponent(pid)}`, {
+        method: 'POST', body: JSON.stringify({ balanceYuan: yuan, thresholdYuan: threshold, note }),
+      });
+      if (!res.ok) { const e = await res.json().catch(() => ({})); throw new Error(e.error || `HTTP ${res.status}`); }
+      xnSay(lang === 'en' ? 'Saved' : '已保存');
+      $('balYuan').value = ''; $('balNote').value = '';
+      await loadAdmBalances();
+    } catch (e) { xnSay(e.message || String(e)); }
+  }
+  async function refreshAdmBalances() {
+    const btn = $('balRefresh'); if (btn) { btn.disabled = true; btn.textContent = '查询中…'; }
+    try {
+      const res = await Api.request('/api/admin/model/balances/refresh', { method: 'POST', body: '{}' });
+      if (!res.ok) { const e = await res.json().catch(() => ({})); throw new Error(e.error || `HTTP ${res.status}`); }
+      const d = await res.json();
+      const arr = Array.isArray(d.results) ? d.results : [];
+      const ok = arr.filter((r) => !r.skipped && !r.error).length;
+      const fail = arr.filter((r) => r.error).length;
+      const skip = arr.filter((r) => r.skipped).length;
+      xnSay(`自动查询完成：成功 ${ok} / 失败 ${fail} / 跳过 ${skip}`);
+      await loadAdmBalances();
+    } catch (e) { xnSay(e.message || String(e)); }
+    finally { if (btn) { btn.disabled = false; btn.textContent = '触发自动查询'; } }
   }
   // ── v2.187 工具优化弹窗铁律：超管发布更新公告 ──
   async function loadAdmUpdates() {

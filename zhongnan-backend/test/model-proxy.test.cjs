@@ -407,3 +407,38 @@ test('图片健康降级：主端点 3 次调用失败后熔断，第 4 次直�
     assert.strictEqual(primaryCalls, before);
   } finally { imageCleanup(); }
 });
+
+// v2.543 推理参数自适应：Kimi K3 思考模型只接受 temperature=1，否则 400 invalid temperature
+test('pickInferenceParams：moonshot 域名（Kimi）强制 temperature=1 且不发 reasoning_effort', () => {
+  const p = MP.pickInferenceParams('https://api.moonshot.cn/v1', 'kimi-k3-thinking');
+  assert.strictEqual(p.temperature, 1);
+  assert.strictEqual(p.reasoningEffort, undefined);
+});
+test('pickInferenceParams：OpenAI o1/o3/o4 系列思考模型 temperature=1 + reasoning_effort=minimal', () => {
+  const p1 = MP.pickInferenceParams('https://api.openai.com/v1', 'o1-mini');
+  assert.strictEqual(p1.temperature, 1);
+  assert.strictEqual(p1.reasoningEffort, 'minimal');
+  const p3 = MP.pickInferenceParams('https://api.openai.com/v1', 'o3-2024');
+  assert.strictEqual(p3.temperature, 1);
+  assert.strictEqual(p3.reasoningEffort, 'minimal');
+  const p4 = MP.pickInferenceParams('https://api.openai.com/v1', 'o4-high');
+  assert.strictEqual(p4.temperature, 1);
+});
+test('pickInferenceParams：普通模型保持 0.9 + reasoning_effort=minimal（不破坏既有行为）', () => {
+  const p = MP.pickInferenceParams('https://ark.cn-beijing.volces.com/api/v3', 'doubao-seed-1-6');
+  assert.strictEqual(p.temperature, 0.9);
+  assert.strictEqual(p.reasoningEffort, 'minimal');
+  const p2 = MP.pickInferenceParams('https://api.deepseek.com/v1', 'deepseek-chat');
+  assert.strictEqual(p2.temperature, 0.9);
+  assert.strictEqual(p2.reasoningEffort, 'minimal');
+});
+test('pickInferenceParams：空 baseUrl/model 不崩溃，回退默认参数', () => {
+  const p = MP.pickInferenceParams('', '');
+  assert.strictEqual(p.temperature, 0.9);
+  assert.strictEqual(p.reasoningEffort, 'minimal');
+});
+test('pickInferenceParams：非 o1/o3/o4 开头的 OpenAI 模型（如 gpt-4o）走默认 0.9', () => {
+  const p = MP.pickInferenceParams('https://api.openai.com/v1', 'gpt-4o-mini');
+  assert.strictEqual(p.temperature, 0.9);
+  assert.strictEqual(p.reasoningEffort, 'minimal');
+});

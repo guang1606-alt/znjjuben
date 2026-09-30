@@ -2037,4 +2037,22 @@ summary:hover{color:var(--accent-strong)}
 }
 .update-banner-ok { min-width: 96px; }
 
+/* v2.612 供应商余额监控告警徽章 */
+.bal-badge {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 10px;
+  color: #fff;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+  line-height: 1.4;
+  text-shadow: 0 1px 1px rgba(0,0,0,0.15);
+  vertical-align: middle;
+}
+.bal-normal   { background: #16a34a; }
+.bal-low      { background: #eab308; color: #1f2937; text-shadow: none; }
+.bal-critical { background: #dc2626; }
+.bal-unknown  { background: #6b7280; }
+
 

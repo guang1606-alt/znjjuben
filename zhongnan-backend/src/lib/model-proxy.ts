@@ -128,6 +128,24 @@ interface Candidate { baseUrl: string; model: string; key: string; inY: number; 
 const TRANSIENT_HTTP = new Set([429, 408]); // 429 限流 / 408 请求超时：瞬态可重试；5xx 一并按瞬态处理
 function isTransientStatus(status: number): boolean { return TRANSIENT_HTTP.has(status) || (status >= 500 && status <= 599); }
 
+/**
+ * 按供应商 baseUrl/model 自适应推理参数。
+ * 现实 bug：Kimi K3 思考模型只接受 temperature=1（其他值 400 invalid temperature），
+ *   且不支持 reasoning_effort 参数；OpenAI o1/o3/o4 系列思考模型同样强制 temperature=1，
+ *   但支持 reasoning_effort。其他模型保持 temperature=0.9 + reasoning_effort='minimal'。
+ * 此前写死 0.9 + reasoning_effort 导致 audience 岗路由到 Kimi K3 必 400 直接失败。
+ */
+export interface InferenceParams { temperature: number; reasoningEffort?: string }
+export function pickInferenceParams(baseUrl: string, model: string): InferenceParams {
+  const u = (baseUrl || '').toLowerCase();
+  const m = (model || '').toLowerCase();
+  // Kimi 系列思考模型（K3/K2.6-thinking）只接受 temperature=1 且不支持 reasoning_effort 参数
+  if (u.includes('moonshot')) return { temperature: 1 };
+  // OpenAI o1/o3/o4 系列思考模型必须 temperature=1，且支持 reasoning_effort
+  if (u.includes('openai.com') && /^(o1|o3|o4)[\-.]/.test(m)) return { temperature: 1, reasoningEffort: 'minimal' };
+  return { temperature: 0.9, reasoningEffort: 'minimal' };
+}
+
 /** 单候选端点调用：瞬态错误同模型退避重试（3 次），请求级错误（400/401/403 等）立即上抛不重试 */
 async function tryCandidate(
   c: Candidate, prompt: string, maxTokens: number, timeoutMs: number, signal?: AbortSignal,
@@ -144,11 +162,12 @@ async function tryCandidate(
     }
     try {
       const url = `${c.baseUrl.replace(/\/$/, '')}/chat/completions`;
+      const ip = pickInferenceParams(c.baseUrl, c.model);
       const body = JSON.stringify({
         model: c.model,
         messages: [{ role: 'user', content: prompt }],
-        temperature: 0.9, max_tokens: maxTokens,
-        reasoning_effort: 'minimal',
+        temperature: ip.temperature, max_tokens: maxTokens,
+        ...(ip.reasoningEffort ? { reasoning_effort: ip.reasoningEffort } : {}),
       });
       const transport = __injectedTransport ?? httpsPost;
       const resp = await transport(url, {

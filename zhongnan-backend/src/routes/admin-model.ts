@@ -23,6 +23,8 @@ import { z } from 'zod';
 import { runWeeklyModelAudit, runDailyModelReview, ackModelReview, MODEL_REVIEW_KIND, MODEL_REVIEW_ACK_KIND } from '../services/auto-learning';
 import { modelReviewStatus } from '../config/model-review';
 import { AuditInput } from '../engine/model-audit';
+import { classifyAlertLevel, pickBalanceQueryStrategy, summarizeBalances, ProviderBalanceRow } from '../lib/balance-policy';
+import { probeDeepseekBalance, probeMoonshotBalance } from '../lib/balance-probe';
 
 export function createAdminModelRouter(prisma: any) {
   const adminModelRouter = asyncRouter();
@@ -235,6 +237,143 @@ export function createAdminModelRouter(prisma: any) {
       res.end(buf);
     } catch (e: any) {
       res.status(500).json({ error: `清单生成失败：${String(e?.message ?? e)}` });
+    }
+  });
+
+  /* ====================== v2.612 API 余额监控（仅超管） ====================== */
+
+  /**
+   * vendor 推断：从 provider.modality + baseUrl 推断厂商名（小写归一）。
+   *  · baseUrl 含 'deepseek.com' → deepseek（可自动查）
+   *  · baseUrl 含 'moonshot.cn' → moonshot（可自动查）
+   *  · 其余按 baseUrl 关键字猜测（volcengine/aliyun/minimax），未知一律标 'unknown'（手动填值）
+   */
+  function inferVendor(p: { baseUrl?: string; modality?: string; model?: string }): string {
+    const base = (p.baseUrl || '').toLowerCase();
+    const model = (p.model || '').toLowerCase();
+    if (base.includes('deepseek.com')) return 'deepseek';
+    if (base.includes('moonshot.cn') || base.includes('kimi')) return 'moonshot';
+    if (base.includes('volces') || base.includes('volcengine') || base.includes('ark.cn') || model.includes('doubao')) return 'volcengine';
+    if (base.includes('aliyun') || base.includes('dashscope') || model.includes('qwen')) return 'aliyun';
+    if (base.includes('minimax') || base.includes('minimaxi')) return 'minimax';
+    return 'unknown';
+  }
+
+  // 取每个 provider 最新一条 ProviderBalance（按 providerId 去重、updatedAt desc）
+  async function listLatestBalances(): Promise<any[]> {
+    const all = await prisma.providerBalance.findMany({ orderBy: { updatedAt: 'desc' } });
+    const seen = new Set<string>(); const out: any[] = [];
+    for (const b of all) {
+      if (!seen.has(b.providerId)) { seen.add(b.providerId); out.push(b); }
+    }
+    return out;
+  }
+
+  // GET /balances：列表（按 providerId 去重取最新）+ 当前告警状态汇总
+  adminModelRouter.get('/balances', authRequired, requireAdmin, requireSuperAdmin, async (_req, res) => {
+    try {
+      const [providers, balances] = await Promise.all([loadProviders(prisma), listLatestBalances()]);
+      const providerById = new Map(providers.map((p) => [p.id, p]));
+      const rows: any[] = balances.map((b) => {
+        const p = providerById.get(b.providerId);
+        return {
+          providerId: b.providerId,
+          providerName: b.providerName || p?.name || b.providerId,
+          vendor: b.vendor,
+          balanceYuan: b.balanceYuan,
+          thresholdYuan: b.thresholdYuan,
+          alertLevel: b.alertLevel,
+          source: b.source,
+          errorMsg: b.errorMsg,
+          lastQueriedAt: b.lastQueriedAt,
+          updatedAt: b.updatedAt,
+        };
+      });
+      const summary = summarizeBalances(rows.map((r): ProviderBalanceRow => ({
+        providerId: r.providerId, providerName: r.providerName, vendor: r.vendor,
+        balanceYuan: r.balanceYuan, thresholdYuan: r.thresholdYuan, alertLevel: r.alertLevel,
+      })));
+      // 附：未配置余额记录但支持自动查询的供应商（提示去手动填值/触发刷新）
+      const knownIds = new Set(balances.map((b) => b.providerId));
+      const missing: any[] = [];
+      for (const p of providers) {
+        if (knownIds.has(p.id)) continue;
+        const vendor = inferVendor(p);
+        missing.push({ providerId: p.id, providerName: p.name, vendor, strategy: pickBalanceQueryStrategy(vendor) });
+      }
+      res.json({ balances: rows, summary, missing });
+    } catch (e) {
+      res.status(500).json({ error: (e as Error).message });
+    }
+  });
+
+  // POST /balances/refresh：触发自动查询（仅遍历 deepseek/moonshot 的 provider，其余跳过）
+  // 注意：必须在 /:providerId 之前声明，否则 'refresh' 会被 :providerId 捕获
+  adminModelRouter.post('/balances/refresh', authRequired, requireAdmin, requireSuperAdmin, async (_req, res) => {
+    try {
+      const providers = await loadProviders(prisma);
+      const results: any[] = [];
+      for (const p of providers) {
+        const vendor = inferVendor(p);
+        const strat = pickBalanceQueryStrategy(vendor);
+        if (!strat.auto || !p.apiKey) {
+          results.push({ providerId: p.id, providerName: p.name, vendor, skipped: true, reason: !strat.auto ? 'manual' : 'no_api_key' });
+          continue;
+        }
+        const probe = vendor === 'deepseek' ? await probeDeepseekBalance(p.apiKey) : await probeMoonshotBalance(p.apiKey);
+        const threshold = 5; // 自动查询沿用默认阈值；手动可后改
+        const alertLevel = classifyAlertLevel(probe.balanceYuan, threshold);
+        const row = await prisma.providerBalance.create({
+          data: {
+            providerId: p.id, vendor,
+            providerName: p.name,
+            balanceYuan: probe.balanceYuan,
+            thresholdYuan: threshold,
+            rawJson: probe.raw as any,
+            source: 'AUTO',
+            alertLevel,
+            errorMsg: probe.error ?? null,
+            lastQueriedAt: new Date(),
+          },
+        });
+        results.push({ providerId: p.id, providerName: p.name, vendor, balanceYuan: probe.balanceYuan, alertLevel, error: probe.error, rowId: row.id });
+      }
+      res.json({ ok: true, results });
+    } catch (e) {
+      res.status(500).json({ error: (e as Error).message });
+    }
+  });
+
+  // POST /balances/:providerId：手动填值（source=MANUAL），刷新 alertLevel
+  adminModelRouter.post('/balances/:providerId', authRequired, requireAdmin, requireSuperAdmin, async (req: AuthRequest, res) => {
+    try {
+      const providerId = String(req.params.providerId);
+      const body = (req.body || {}) as { balanceYuan?: number; thresholdYuan?: number; note?: string };
+      if (body.balanceYuan === undefined || body.balanceYuan === null || typeof body.balanceYuan !== 'number' || Number.isNaN(body.balanceYuan)) {
+        return res.status(400).json({ error: 'balanceYuan 必填且为数字' });
+      }
+      const providers = await loadProviders(prisma);
+      const p = providers.find((x) => x.id === providerId);
+      if (!p) return res.status(404).json({ error: 'PROVIDER_NOT_FOUND' });
+      const vendor = inferVendor(p);
+      const threshold = typeof body.thresholdYuan === 'number' && body.thresholdYuan >= 0 ? body.thresholdYuan : 5;
+      const alertLevel = classifyAlertLevel(body.balanceYuan, threshold);
+      const row = await prisma.providerBalance.create({
+        data: {
+          providerId, vendor,
+          providerName: p.name,
+          balanceYuan: body.balanceYuan,
+          thresholdYuan: threshold,
+          rawJson: body.note ? { note: body.note, manual: true, by: req.userId || 'admin' } : { manual: true, by: req.userId || 'admin' },
+          source: 'MANUAL',
+          alertLevel,
+          errorMsg: null,
+          lastQueriedAt: new Date(),
+        },
+      });
+      res.json({ ok: true, balance: row });
+    } catch (e) {
+      res.status(500).json({ error: (e as Error).message });
     }
   });
 

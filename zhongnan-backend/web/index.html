@@ -1224,6 +1224,32 @@
           <div id="admUpdList" class="feed" style="margin-top:8px"></div>
         </div>
       </section>
+      <!-- v2.612 供应商余额监控（仅超管）：deepseek/moonshot 自动查；volcengine/aliyun/minimax 手动填值 -->
+      <section class="panel hidden" id="admBalancesPane">
+        <div class="adm-toolbar" style="flex-wrap:wrap;gap:8px">
+          <b>供应商余额监控</b>
+          <span class="muted" id="balSummary"></span>
+          <span class="spacer"></span>
+          <button class="btn-ghost" id="balReload">刷新列表</button>
+          <button class="btn-primary" id="balRefresh">触发自动查询</button>
+        </div>
+        <div class="notice" style="margin:8px 0">仅 deepseek/moonshot 支持自动查询；volcengine/aliyun/minimax/未知厂商请在右侧"手动填值"录入。告警色：绿 NORMAL / 黄 LOW / 红 CRITICAL / 灰 UNKNOWN。</div>
+        <div class="adm-grid2">
+          <div class="subpanel">
+            <b>已记录余额（按供应商取最新）</b>
+            <div id="balList" class="feed" style="margin-top:8px"></div>
+          </div>
+          <div class="subpanel">
+            <b>手动填值</b>
+            <div class="field"><label>供应商</label><select id="balProvider" class="mini-select"></select></div>
+            <div class="field"><label>余额（元）</label><input id="balYuan" type="number" min="0" step="0.01" placeholder="如 12.34" /></div>
+            <div class="field"><label>告警阈值（元，默认 5）</label><input id="balThreshold" type="number" min="0" step="0.1" placeholder="5" /></div>
+            <div class="field"><label>备注（选填）</label><input id="balNote" maxlength="120" placeholder="如：充值前快照" /></div>
+            <button class="btn-primary" id="balSave">保存手动值</button>
+            <div id="balMissing" style="margin-top:12px"></div>
+          </div>
+        </div>
+      </section>
     </div>
   </main>
   <!-- 登录/注册模态 -->
