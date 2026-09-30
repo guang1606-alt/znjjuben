@@ -88,3 +88,4 @@
   8. `GET /api/generate/va/xiaonan`（小南 VA 明细）——前端以字段方式消费聚合口，明细口暂未用
   9. `GET /api/generate/modes`（模式清单）——前端 I18N.MODES 本地渲染（模式属产品定义，刻意本地化），接口口暂未消费
 - 操作建议：1~5、8、9 维持现状；6、7 下轮审计确认无外部依赖后删除旧别名（或补 deprecation 提示）
+- 更正（2026-10-01，v2.221.0）：第 6/7 项经细读实现，**并非旧别名，而是语义不同的独立能力**——`/self-learn/run`=手动喂信号学习轮（signals 可空仅执行淘汰快照，测试 http-knowledge.test.cjs 依赖 3 处），`/run-auto`=自动采集全闭环；`/self-learn/report`=即时分布快照，`/reports`=历史报告列表；`/builtin-skill-pack`=纯 JSON 内置技能包，`/builtin-skill-bundle`=SKILL.md+references 文件映射。结论：**全部保留，不删除、不加 deprecation**；前端暂无入口维持现状（与 1~5、8、9 同口径）

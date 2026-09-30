@@ -1630,7 +1630,8 @@ summary:hover{color:var(--accent-strong)}
 }
 .skeleton::after {
   content: ""; position: absolute; inset: 0; transform: translateX(-100%);
-  background: linear-gradient(90deg, transparent 0%, rgba(255,255,255,.06) 40%, rgba(255,255,255,.10) 50%, rgba(255,255,255,.06) 60%, transparent 100%);
+  /* v2.221 中性灰 shimmer：原 rgba(255,255,255,…) 亮色渐变在 light 主题下不可见 */
+  background: linear-gradient(90deg, transparent 0%, rgba(128,128,128,.08) 40%, rgba(128,128,128,.16) 50%, rgba(128,128,128,.08) 60%, transparent 100%);
   animation: shimmer 1.4s infinite;
 }
 .skeleton.s-line { height: 14px; margin: 6px 0; border-radius: 6px; }
@@ -1642,6 +1643,11 @@ summary:hover{color:var(--accent-strong)}
 @media (prefers-reduced-motion: reduce) { .skeleton::after { animation: none; opacity: 0; } }
 .sk-list { display: flex; flex-direction: column; gap: 10px; padding: 12px 0; }
 .sk-list.s-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 12px; }
+/* —— 2.x v2.221 统一空态（znEmptyHtml：图标+文案+可选引导）—— */
+.zn-empty { display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 28px 14px; text-align: center; color: var(--text-2); }
+.zn-empty-ico { font-size: 1.7rem; line-height: 1; opacity: .45; }
+.zn-empty-txt { font-size: .9rem; }
+.zn-empty-hint { font-size: .8rem; opacity: .75; max-width: 32em; }
 
 /* —— 3. View-Stack 视图切换过渡 —— */
 .view-stack { position: relative; }

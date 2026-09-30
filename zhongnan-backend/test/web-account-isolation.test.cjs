@@ -122,6 +122,8 @@ function setup(handler = async () => response([])) {
     'viewPurchasedScript',
     // 合并（剧本1）后 renderAuthButton 依赖身份标签函数（v2.193），一并注入真实实现
     'userRoleLabel', 'isStaffAcct',
+    // v2.221 加载/空态统一：loadWorks/openProject 等依赖 znSkeleton/znEmpty*，一并注入真实实现
+    '_znEsc', 'znSkeletonHtml', 'znSkeleton', 'znEmptyHtml', 'znEmpty',
     'loadMe', 'loadCastAssets', 'loadPropAssets', 'loadSceneAssets', 'latestScriptsByEpisode',
     'refreshResultScripts', 'handleEvent', 'startGenerate', 'openDirectorPack', 'openMaterials',
   ]) {

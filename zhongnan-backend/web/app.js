@@ -1384,6 +1384,36 @@
     } catch { /* 无 DOM 环境忽略 */ }
   }
   window.znToast = znToast; // 供独立 view（room/branch 等）复用
+  /* ---------- v2.221 加载/空态统一 ----------
+   * 背景：styles.css v3.0 已内置 .skeleton/.sk-list 骨架屏体系但 JS 侧零使用（死样式）；
+   * 加载态散落 <div class="muted">加载中…</div>、空态 .muted/.notice 混拼，视觉语言不统一。
+   * 收口：znSkeletonHtml/znSkeleton（骨架屏，列表/网格两形态）+ znEmptyHtml/znEmpty（空态：图标+文案+可选引导）。
+   * window 暴露供独立 view js（room/branch/diversity 等）复用。 */
+  function _znEsc(s) {
+    try { const d = document.createElement('div'); d.textContent = String(s == null ? '' : s); return d.innerHTML; }
+    catch { return String(s == null ? '' : s); }
+  }
+  function znSkeletonHtml(kind) {
+    const bar = kind === 'grid' ? 'skeleton s-card' : 'skeleton s-line';
+    const n = kind === 'grid' ? 6 : 4;
+    let bars = ''; for (let i = 0; i < n; i++) bars += `<div class="${bar}"></div>`;
+    return `<div class="sk-list${kind === 'grid' ? ' s-grid' : ''}" role="status" aria-busy="true">${bars}</div>`;
+  }
+  function znSkeleton(el, kind) {
+    const host = typeof el === 'string' ? $(el) : el;
+    if (host) host.innerHTML = znSkeletonHtml(kind);
+  }
+  function znEmptyHtml(text, hint) {
+    return `<div class="zn-empty" role="status"><span class="zn-empty-ico" aria-hidden="true">◌</span>`
+      + `<span class="zn-empty-txt">${_znEsc(text)}</span>`
+      + (hint ? `<span class="zn-empty-hint">${_znEsc(hint)}</span>` : '') + `</div>`;
+  }
+  function znEmpty(el, text, hint) {
+    const host = typeof el === 'string' ? $(el) : el;
+    if (host) host.innerHTML = znEmptyHtml(text, hint);
+  }
+  window.znSkeleton = znSkeleton; window.znEmpty = znEmpty; window.znEmptyHtml = znEmptyHtml; window.znSkeletonHtml = znSkeletonHtml;
+  /* ---------- v2.221 加载/空态统一 结束 ---------- */
   // 模态输入框：替代 window.prompt。resolve(value|null)；Enter=确定，Esc=取消
   function askText(label, def) {
     return new Promise((resolve) => {
@@ -2380,13 +2410,13 @@
     const stalePanel = document.getElementById('readRewritePanel'); if (stalePanel) stalePanel.remove(); // c200：切作品即清围读面板，防 A 房意见挂到 B 项目
     const detail = $('worksDetail'); detail.classList.remove('hidden');
     $('worksDetailTitle').textContent = p.title;
-    $('epsList').innerHTML = lang === 'en' ? 'Loading…' : '加载中…';
+    znSkeleton('epsList');
     const res = await Api.request(`/api/generate/projects/${p.id}/scripts`);
     const eps = await Api.jsonOrThrow(res);
     if (!isCurrentProject()) return;
     if (!eps.length) {
-      $('epsList').innerHTML = `<div class="notice">${lang === 'en' ? 'No finished episodes yet.' : '暂无成稿分集。'}</div>`
-        + (p.bible?.adaptationDraft?.brief ? `<button type="button" class="btn-primary" id="worksResumeDraft">${lang === 'en' ? 'Continue adaptation' : '继续改编创作'}</button>` : '');
+      const resumeBtn = p.bible?.adaptationDraft?.brief ? `<button type="button" class="btn-primary" id="worksResumeDraft">${lang === 'en' ? 'Continue adaptation' : '继续改编创作'}</button>` : '';
+      $('epsList').innerHTML = znEmptyHtml(lang === 'en' ? 'No finished episodes yet.' : '暂无成稿分集。') + resumeBtn;
       if (p.bible?.adaptationDraft?.brief) $('worksResumeDraft').onclick = () => resumeAdaptationProject(p);
       return;
     }
@@ -2825,12 +2855,12 @@
 
     async function loadMine() {
       const box = $('fbMineList');
-      box.innerHTML = `<div class="muted">${esc(t('fbLoading'))}</div>`;
+      znSkeleton(box);
       try {
         const r = await Api.request('/api/feedback/mine');
         const list = await Api.jsonOrThrow(r);
         if (!Array.isArray(list) || list.length === 0) {
-          box.innerHTML = `<div class="muted">${esc(t('fbEmpty'))}</div>`;
+          znEmpty(box, t('fbEmpty'));
           return;
         }
         const locale = lang === 'en' ? 'en-US' : 'zh-CN';
@@ -2958,7 +2988,7 @@
       const k = key();
       if (cache[k]) { pre.textContent = cache[k]; return; }
       const seq = ++reqSeq;
-      pre.textContent = t('smpLoading');
+      znSkeleton(pre);
       try {
         const r = await Api.request(`/api/generate/sample-script?format=${fmt}&lang=${curLang()}`);
         const d = await Api.jsonOrThrow(r);
@@ -3083,7 +3113,7 @@
   async function openListingDetail(id) {
     const body = $('detailBody');
     openModal('detailModal');
-    body.innerHTML = `<div class="muted">${lang === 'en' ? 'Loading…' : '加载中…'}</div>`;
+    znSkeleton(body);
     try {
       const res = await fetch('/api/market/listings/' + id);
       if (!res.ok) { const e = await res.json().catch(() => ({})); body.innerHTML = `<div class="muted">${e.error || 'error'}</div>`; return; }
@@ -3293,7 +3323,7 @@
         const lowVal = l.status === 'ON_SHELF' && ((l.valueGrade === 'C' || l.valueGrade === 'NA' || !l.valueGrade) && (!l.valueEpisodes || l.valueEpisodes < 5));
         const hint = lowVal ? `<div class="seller-hint">${lang === 'en' ? '💡 Expand episodes to raise value grade & price' : '💡 建议扩充分集至5集以上，提升价值等级与售价'}</div>` : '';
         return `<div class="deal-row"><span>${escapeHtml(l.title)} ${grade}${boardBadge} · ${l.pricePoints}${t('points')} · ${statusText}${gain}</span>${delistBtn || relistBtn ? `<span>${delistBtn}${relistBtn}</span>` : ''}</div>${hint}`;
-      }).join('') : `<div class="muted">${lang === 'en' ? 'No listings yet' : '暂无上架剧本'}</div>`;
+      }).join('') : znEmptyHtml(lang === 'en' ? 'No listings yet' : '暂无上架剧本');
       // v2.78 上榜荣誉横幅
       const honors = dash.honors && dash.honors.length ? dash.honors.map((h) => {
         const boardNames = h.boards.map((b) => b === 'rating' ? (lang === 'en' ? 'Rating Top10' : '好评榜TOP10') : (lang === 'en' ? 'Hot Top10' : '热销榜TOP10')).join(' · ');
@@ -4534,7 +4564,7 @@
     openModal(modal.id);
     if (!Api.isAuthed()) { body.innerHTML = `<div class="notice">${t('needLogin')}</div>`; return; }
     const account = capturePrivateSession();
-    body.innerHTML = `<div class="muted">${t('dashLoading')}</div>`;
+    znSkeleton(body);
     try {
       const res = await Api.request(`/api/generate/asset-dashboard?lang=${lang === 'en' ? 'en' : 'zh'}`);
       const data = await Api.jsonOrThrow(res);
@@ -4713,7 +4743,7 @@
     $('castLibEdit').classList.add('hidden');
     const grid = $('castLibGrid'); const empty = $('castLibEmpty');
     empty.classList.add('hidden'); $('castLibConflicts').innerHTML = '';
-    grid.innerHTML = `<div class="muted">${lang === 'en' ? 'Loading library…' : '资产库加载中…'}</div>`;
+    znSkeleton(grid, 'grid');
     // v2.163 资产库检索：搜索框非空时带 q 关键词（后端大小写不敏感子串过滤，total=命中数）
     const sq = String($('castLibSearch')?.value ?? '').trim();
     const qs = sq ? `?q=${encodeURIComponent(sq)}` : '';
@@ -4986,7 +5016,7 @@
     $('propLibEdit').classList.add('hidden');
     const grid = $('propLibGrid'); const empty = $('propLibEmpty');
     empty.classList.add('hidden'); $('propLibConflicts').innerHTML = '';
-    grid.innerHTML = `<div class="muted">${lang === 'en' ? 'Loading library…' : '资产库加载中…'}</div>`;
+    znSkeleton(grid, 'grid');
     // v2.163 资产库检索：搜索框非空时带 q 关键词（与 cast 面板同口径）
     const sq = String($('propLibSearch')?.value ?? '').trim();
     const qs = sq ? `?q=${encodeURIComponent(sq)}` : '';
@@ -5226,7 +5256,7 @@
     $('sceneLibEdit').classList.add('hidden');
     const grid = $('sceneLibGrid'); const empty = $('sceneLibEmpty');
     empty.classList.add('hidden'); $('sceneLibConflicts').innerHTML = '';
-    grid.innerHTML = `<div class="muted">${lang === 'en' ? 'Loading library…' : '资产库加载中…'}</div>`;
+    znSkeleton(grid, 'grid');
     // v2.163 资产库检索：搜索框非空时带 q 关键词（与 cast/prop 面板同口径）
     const sq = String($('sceneLibSearch')?.value ?? '').trim();
     const qs = sq ? `?q=${encodeURIComponent(sq)}` : '';
@@ -6030,7 +6060,7 @@
     listenResetSeries(); listenSeries.auto = listenAutoPref();
     const token = listenBumpReqSeq();
     const segBox = $('listenSegments');
-    segBox.innerHTML = `<div class="diag-loading">${lang === 'en' ? 'Loading episode list…' : '正在加载分集片单…'}</div>`;
+    znSkeleton(segBox);
     $('listenMeta').textContent = ''; $('listenNote').textContent = ''; $('listenTtsTip').classList.add('hidden');
     $('listenSeriesBar').classList.add('hidden'); $('listenResumeBar').classList.add('hidden');
     try {
@@ -6128,7 +6158,7 @@
     // 迟到的一集即便渲染也不得自动开口（否则会出现"弹窗关了还在念"）
     const ttsSeqAtStart = listenTts.seq;
     const segBox = $('listenSegments');
-    segBox.innerHTML = `<div class="diag-loading">${opts.loadingText || (lang === 'en' ? 'Loading…' : '加载中…')}</div>`;
+    znSkeleton(segBox);
     $('listenResumeBar').classList.add('hidden');
     try {
       const r = await Api.request(`/api/generate/scripts/${scriptId}/listen?lang=${strategyLocale() === 'en' ? 'en' : 'zh'}`);
@@ -7395,7 +7425,7 @@
           <div class="sub-meta"><span>${escapeHtml((c.kinds || []).join('·'))}</span></div>
           ${c.highlight ? `<div class="sub-hl">${escapeHtml(c.highlight)}</div>` : ''}
         </div>`;
-      }).join('') || `<div class="muted" style="padding:6px">${lang === 'en' ? 'No channels.' : '暂无渠道数据'}</div>`;
+      }).join('') || znEmptyHtml(lang === 'en' ? 'No channels.' : '暂无渠道数据');
       box.classList.remove('hidden');
       const unv = d.unverified ?? channels.filter((c) => !c.verified).length;
       subAllBtn.textContent = `${t('subHideAll')}（${channels.length} ${t('subAllCount')} · ${unv} ${t('subUnverifiedN')}）`;
@@ -7489,7 +7519,7 @@
     $('pkLoading').classList.add('hidden');
     $('pkBoard').classList.remove('hidden');
     const card = $('pkMineCard'), list = $('pkTopList'), season = $('pkBoardSeason');
-    card.textContent = lang === 'en' ? 'Loading…' : '加载中…';
+    znSkeleton(card);
     list.innerHTML = '';
     try {
       const j = await Api.jsonOrThrow(await Api.request('/api/va/pk/leaderboard'));
@@ -7500,7 +7530,7 @@
       if (!b.top.length) {
         const li = document.createElement('li');
         li.className = 'pk-empty';
-        li.textContent = lang === 'en' ? 'No battles yet — be the first on the board.' : '还没有人上榜，快去PK第一局吧～';
+        li.innerHTML = znEmptyHtml(lang === 'en' ? 'No battles yet — be the first on the board.' : '还没有人上榜，快去PK第一局吧～');
         list.appendChild(li);
       }
       b.top.forEach((e) => {
@@ -7762,7 +7792,7 @@
     const account = capturePrivateSession(), projectId = currentProjectId;
     const isCurrentProject = () => isPrivateSessionCurrent(account) && currentProjectId === projectId;
     $('dpTitle').textContent = t('dpTitle');
-    $('dpTabs').innerHTML = ''; $('dpSummary').textContent = ''; $('dpBody').textContent = t('dpLoading');
+    $('dpTabs').innerHTML = ''; $('dpSummary').textContent = ''; znSkeleton('dpBody');
     openModal('dpModal');
     try {
       const r = await Api.request(`/api/generate/projects/${projectId}/director-pack`);
@@ -7797,7 +7827,7 @@
     const isCurrentProject = () => isPrivateSessionCurrent(account) && currentProjectId === projectId;
     $('matTitle').textContent = t('matTitle');
     $('matSummary').textContent = '';
-    $('matBody').textContent = t('dpLoading');
+    znSkeleton('matBody');
     openModal('matModal');
     try {
       const r = await Api.request(`/api/export/${projectId}/materials`);
@@ -8205,7 +8235,7 @@
   function balBadge(level) { return `<span class="bal-badge bal-${level.toLowerCase()}" style="background:${BAL_COLOR[level] || '#6b7280'}">${level}</span>`; }
   async function loadAdmBalances() {
     const listEl = $('balList'); const sumEl = $('balSummary'); const sel = $('balProvider'); const missEl = $('balMissing');
-    if (listEl) listEl.innerHTML = `<div class="muted">${t('loading') || '加载中…'}</div>`;
+    if (listEl) znSkeleton(listEl);
     if (sumEl) sumEl.textContent = '';
     try {
       const res = await Api.request('/api/admin/model/balances');
@@ -8283,13 +8313,13 @@
   // ── v2.187 工具优化弹窗铁律：超管发布更新公告 ──
   async function loadAdmUpdates() {
     const listEl = $('admUpdList');
-    if (listEl) listEl.innerHTML = `<div class="muted">${t('loading') || '加载中…'}</div>`;
+    if (listEl) znSkeleton(listEl);
     try {
       // 复用 /api/updates/latest（只读最新一条）；历史全量走 /api/updates/since?version=0.0.0
       const res = await Api.request('/api/updates/since?version=0.0.0');
       const data = await Api.jsonOrThrow(res);
       const items = Array.isArray(data?.items) ? data.items : [];
-      if (items.length === 0) { if (listEl) listEl.innerHTML = `<div class="muted">${lang === 'en' ? 'No announcements yet.' : '暂无公告。'}</div>`; return; }
+      if (items.length === 0) { if (listEl) znEmpty(listEl, lang === 'en' ? 'No announcements yet.' : '暂无公告。'); return; }
       if (listEl) listEl.innerHTML = items.map((a) => {
         const title = a.titleZh || a.titleEn || `v${a.version}`;
         const body = (a.bodyZh || a.bodyEn || '').slice(0, 200);
@@ -8537,7 +8567,7 @@
       <div class="pc-body">${escapeHtml(p.body)}</div>
       <div class="pc-foot"><span class="muted">${p.section} · ${new Date(p.createdAt).toLocaleString()}</span><span class="spacer"></span>
       <button class="btn-ghost" data-hide="${p.id}" data-tohide="${p.hidden ? 0 : 1}">${p.hidden ? t('admRestore') : t('admHide')}</button></div></div>`).join('') ||
-      `<div class="notice">${lang === 'en' ? 'No posts.' : '暂无帖子'}</div>`;
+      znEmptyHtml(lang === 'en' ? 'No posts.' : '暂无帖子');
     $('admPostList').querySelectorAll('[data-hide]').forEach((b) => b.onclick = () => {
       admApi('/posts/' + b.getAttribute('data-hide') + '/hide', { method: 'POST', body: JSON.stringify({ hidden: b.getAttribute('data-tohide') === '1' }) })
         .then(() => { xnSay(t('admOk')); loadAdmPosts(); }).catch((e) => xnSay(e.message));
@@ -8623,7 +8653,7 @@
       <table class="adm-table"><thead><tr><th>岗位</th><th>首选</th><th>备选（前三）</th></tr></thead><tbody>${adviceRows}</tbody></table>
       <details><summary>图片模型端口（${j.imageCatalog.length} 家，含 GPT-image）</summary><table class="adm-table"><tbody>${imgRows}</tbody></table></details>
       <details><summary>口径 FAQ（baseUrl/单价/赚钱/黑盒）</summary><div class="notice">${faq}</div></details>
-      <details><summary>v2.53 全量 API 清单与官方申请链接（点击展开，含基础设施 API）</summary><div id="admApiDir"><div class="muted">加载中…</div></div></details>`;
+      <details><summary>v2.53 全量 API 清单与官方申请链接（点击展开，含基础设施 API）</summary><div id="admApiDir">${znSkeletonHtml()}</div></details>`;
     loadApiDirectory().catch(() => { const c = $('admApiDir'); if (c) c.textContent = '清单加载失败，可重试'; });
     // 目录型号下拉
     const opts = ['<option value="">— 自定义/中转（手填端点与单价）—</option>']
@@ -8759,7 +8789,7 @@
       ${k.status === 'ARCHIVED'
         ? '<button class="btn-ghost" data-kn="restore">' + (lang === 'en' ? 'Restore' : '恢复（转待审）') + '</button>'
         : '<button class="btn-ghost" data-kn="archive">' + (lang === 'en' ? 'Archive' : '归档') + '</button>'}
-      </div></div>`).join('') || `<div class="notice">${lang === 'en' ? 'Empty.' : '暂无知识条目'}</div>`;
+      </div></div>`).join('') || znEmptyHtml(lang === 'en' ? 'Empty.' : '暂无知识条目');
     $('admKnowList').querySelectorAll('[data-kn]').forEach((b) => b.onclick = async () => {
       const id = b.closest('[data-kid]').getAttribute('data-kid'), act = b.getAttribute('data-kn');
       try {
@@ -8850,7 +8880,7 @@
       const rows = (j.reports || []).map((r) => {
         const t = typeof r.text === 'string' ? r.text : '';
         return `<div class="post-card"><h4><span class="badge ${r.kind === 'WEEKLY_MODEL' ? 'ok' : ''}">${r.kind}</span> <span class="muted">${new Date(r.createdAt).toLocaleString()}</span></h4><pre class="auto-pre short">${escapeHtml(t.slice(0, 1200))}</pre></div>`;
-      }).join('') || '<div class="notice">暂无报告（每日03:17自主学习、每周一04:20自动盘点，也可点上方按钮立即执行）</div>';
+      }).join('') || znEmptyHtml('暂无报告', '每日03:17自主学习、每周一04:20自动盘点，也可点上方按钮立即执行');
       showAutoReport('学习 / 盘点报告（最近50条）', rows);
     } catch (e) { xnSay(e.message); }
   }
@@ -8891,7 +8921,7 @@
           <button class="btn-ghost" data-fb="reject">${lang === 'en' ? 'Decline' : '否定'}</button>
           <input data-role="manual" class="fb-manual" placeholder="${lang === 'en' ? 'Optional custom reply to user' : '可手改给用户的小南回复（留空用暖心模板）'}" />
         </div></div>`;
-    }).join('') || `<div class="notice">${lang === 'en' ? 'No tickets.' : '暂无工单'}</div>`;
+    }).join('') || znEmptyHtml(lang === 'en' ? 'No tickets.' : '暂无工单');
     $('admFbList').querySelectorAll('.fb-card').forEach((card) => bindFbCard(card));
   }
   function bindFbCard(card) {

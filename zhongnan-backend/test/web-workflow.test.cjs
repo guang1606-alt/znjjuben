@@ -45,6 +45,8 @@ function setup(names, extra = {}) {
     renderAigcDash() {}, loadDiagnosis: async () => {}, loadEmotionWave: async () => {}, loadInvestorLens: async () => {},
     ...extra };
   vm.createContext(context);
+  // v2.221 加载/空态统一：被抽取函数（openProject/switchSession 等）依赖 znSkeleton/znEmpty*，先注入真实实现
+  for (const name of ['_znEsc', 'znSkeletonHtml', 'znSkeleton', 'znEmptyHtml', 'znEmpty']) if (functions.has(name)) vm.runInContext(functions.get(name), context);
   for (const name of names) if (functions.has(name)) vm.runInContext(functions.get(name), context);
   return { context, $, flush: () => { while (timers.length) timers.shift()(); } };
 }
