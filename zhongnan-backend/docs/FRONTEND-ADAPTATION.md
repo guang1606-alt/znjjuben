@@ -2,7 +2,7 @@
 
 > 面向前端（`web/` 原生 JS 站点及后续独立前端/移动端）的后端 API 契约与适配说明。
 > 后端每次破坏性契约变更都会在此登记：变更内容 → 迁移对照 → 前端已同步点。
-> 版本对齐 `package.json`，当前基线：**v2.228.0**。
+> 版本对齐 `package.json`，当前基线：**v2.229.0**。
 
 ---
 
@@ -69,6 +69,7 @@
 - `web/app.js` 三处资产体检面板：`health.healths` → `health.items`（6 处读取）
 - `web/app.js` `loadListings()`：`Array.isArray(j)` → `Array.isArray(j.items)` + `list = j.items`
 - 体检面板调用已固定 `limit=200` 拉满（v2.156 铁律），契约变更不影响该用法
+- **v2.229 消费侧翻页补全**：`loadListings()` 传 `page/pageSize`（`MK_PAGE_SIZE=50` 对齐后端 defaultLimit）+ 消费 `total` 渲染 `#mkPager` 上/下一页翻页器（此前只看第一页，>50 条静默截断）；`mkSort` 切换重置回第 1 页；榜单 Tab 模式隐藏翻页器；admin 用户表 `renderAdmUserPager()` 纯文本页码升级为可交互上/下一页（`admPage` 此前恒为 1）
 
 ---
 
@@ -116,6 +117,7 @@
 
 | 版本 | 变更 |
 |---|---|
+| v2.229.0 | 分页契约 v2.215 消费侧覆盖对齐（后端 API 零变更）：market 橱窗 `loadListings` 补 `page/pageSize` 参数并消费 `total`（>50 条不再静默截断），`mkPage` 状态 + `znPagerState` 纯函数 + `renderMkPager` 上/下一页翻页器（disabled 态），`mkSort` 切换重置第 1 页，榜单 Tab 隐藏翻页器；admin 用户表 `renderAdmUserPager` 纯文本页码升级可交互翻页（`admPage` 此前恒为 1）；顺带收口 loadListings/loadBoard 失败态混空态为 `znErrorHtml/znEmptyHtml`（v2.224 漏网点），`#mkEmpty` 移除 `notice`/`data-i`（防语言切换覆盖 innerHTML），新增 `.zn-pager` 样式；新增 web-pagination-coverage 守卫 5 断言（先红后绿） |
 | v2.228.0 | 市场定价校验与后端 `validatePriceFen` 全对齐：新增 `priceFenFromYuan()`（≥1 元且 0.1 元整数倍），上架/重新上架两入口本地预检（粒度不符不再白跑后端 400），提示文案与后端逐字一致，未选剧本/价格非法按后端报错顺序拆分；`listPrice` `step=0.1` + placeholder 标注；新增 web-market-price 守卫 4 断言（先红后绿） |
 | v2.227.0 | 鉴权表单校验与后端 v2.212 统一密码策略全对齐：注册表单补「必含字母和数字」本地校验（此前只查 8 位，弱密码须白跑后端且 4xx 中文提示无 en 本地化），与改密/admin 开号/admin 重置同口径；`authPwd`/`inNewPw` 补 `maxlength=64` 对齐后端 `max(64)`；`authPwd` placeholder 更新完整策略；i18n `authErrPwd` 双语更新（弱口令黑名单仍留服务端单源，避免双源漂移）；新增 web-auth-policy 守卫 5 断言（先红后绿） |
 | v2.226.0 | `jsonOrThrow` 错误信息脱敏回落层（v2.216 后端 500 契约的前端配套补完）：内部裸码（`INTERNAL_ERROR`/`SERVER_BUSY`/无 body 5xx）回落本地双语友好文案（zh「服务开小差了，请稍后重试」/ en "Server hiccup — please retry later."），`e.error`/`e.httpStatus` 保留原码与状态码供分支；语言读取经 `znLangEn()` 直读 localStorage `zn_lang`（与 room-view 同源，零依赖 app.js）；业务错误码/IDEMPOTENT_REPLAY/4xx 语义零变更（`Object.assign(e,d)` 的 message 覆盖契约保留）；新增 web-api-sanitize 守卫 6 断言（先红后绿） |
