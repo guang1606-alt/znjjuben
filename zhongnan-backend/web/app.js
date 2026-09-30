@@ -7646,7 +7646,7 @@
       const r = await Api.request(`/api/export/${currentProjectId}?format=${fmt}${noWm}${epQs}`);
       if (!r.ok) {
         let msg = lang === 'en' ? 'Export failed.' : '导出失败';
-        try { const j = await r.json(); msg = j.error || msg; if (j.needUpgrade) { switchView('vip'); } } catch {}
+        try { const j = await r.json(); if (j.error && j.error !== 'INTERNAL_ERROR') msg = j.error; if (j.needUpgrade) { switchView('vip'); } } catch {}
         xnSay(msg); return;
       }
       const disp = r.headers.get('content-disposition') || '';

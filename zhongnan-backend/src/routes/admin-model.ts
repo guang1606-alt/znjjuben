@@ -4,6 +4,7 @@
  * 工厂化：createAdminModelRouter(prisma) 便于注入内存桩做 HTTP 测试；默认导出接全局 prisma。
  */
 import { asyncRouter } from '../lib/async-router';
+import { failInternal } from '../lib/http-errors';
 import { authRequired, AuthRequest } from '../middleware/auth';
 import { createRequireAdmin, requireSuperAdmin } from '../middleware/admin';
 import { prisma } from '../lib/prisma';
@@ -35,7 +36,7 @@ export function createAdminModelRouter(prisma: any) {
     try {
       res.json(await maskedConfig(prisma));
     } catch (e) {
-      res.status(500).json({ error: (e as Error).message });
+      failInternal(res, e, 'admin-model');
     }
   });
 
@@ -54,7 +55,7 @@ export function createAdminModelRouter(prisma: any) {
       await saveConfig(clean as unknown as ModelConfigData, req.userId || 'admin', prisma);
       res.json({ ok: true, masked: await maskedConfig(prisma) });
     } catch (e) {
-      res.status(500).json({ error: (e as Error).message });
+      failInternal(res, e, 'admin-model');
     }
   });
 
@@ -65,7 +66,7 @@ export function createAdminModelRouter(prisma: any) {
       const { report, reportId } = await runWeeklyModelAudit(prisma, input, req.userId || 'admin');
       res.json({ ok: true, reportId, report });
     } catch (e) {
-      res.status(500).json({ error: (e as Error).message });
+      failInternal(res, e, 'admin-model');
     }
   });
 
@@ -94,7 +95,7 @@ export function createAdminModelRouter(prisma: any) {
       const status = modelReviewStatus(ack?.createdAt ? new Date(ack.createdAt) : null, new Date());
       res.json({ status, lastAckAt: ack?.createdAt ?? null, lastReviewAt: latest?.createdAt ?? null });
     } catch (e) {
-      res.status(500).json({ error: (e as Error).message });
+      failInternal(res, e, 'admin-model');
     }
   });
 
@@ -104,7 +105,7 @@ export function createAdminModelRouter(prisma: any) {
       const r = await runDailyModelReview(prisma, {}, req.userId || 'admin');
       res.json({ ok: true, ...r });
     } catch (e) {
-      res.status(500).json({ error: (e as Error).message });
+      failInternal(res, e, 'admin-model');
     }
   });
 
@@ -114,7 +115,7 @@ export function createAdminModelRouter(prisma: any) {
       const r = await ackModelReview(prisma, req.userId || 'admin');
       res.json({ ok: true, ...r });
     } catch (e) {
-      res.status(500).json({ error: (e as Error).message });
+      failInternal(res, e, 'admin-model');
     }
   });
 
@@ -236,7 +237,7 @@ export function createAdminModelRouter(prisma: any) {
       res.setHeader('Content-Disposition', "attachment; filename*=UTF-8''zhongnanji-api-directory.docx");
       res.end(buf);
     } catch (e: any) {
-      res.status(500).json({ error: `清单生成失败：${String(e?.message ?? e)}` });
+      failInternal(res, e, 'admin-model.api-directory');
     }
   });
 
@@ -303,7 +304,7 @@ export function createAdminModelRouter(prisma: any) {
       }
       res.json({ balances: rows, summary, missing });
     } catch (e) {
-      res.status(500).json({ error: (e as Error).message });
+      failInternal(res, e, 'admin-model');
     }
   });
 
@@ -340,7 +341,7 @@ export function createAdminModelRouter(prisma: any) {
       }
       res.json({ ok: true, results });
     } catch (e) {
-      res.status(500).json({ error: (e as Error).message });
+      failInternal(res, e, 'admin-model');
     }
   });
 
@@ -373,7 +374,7 @@ export function createAdminModelRouter(prisma: any) {
       });
       res.json({ ok: true, balance: row });
     } catch (e) {
-      res.status(500).json({ error: (e as Error).message });
+      failInternal(res, e, 'admin-model');
     }
   });
 

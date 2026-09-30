@@ -5,6 +5,7 @@
  *  - 只能导出本人项目；文件名走 RFC5987 编码，兼容中文
  */
 import { asyncRouter } from '../lib/async-router';
+import { failInternal } from '../lib/http-errors';
 import { prisma as defaultPrisma } from '../lib/prisma';
 import { authRequired, AuthRequest } from '../middleware/auth';
 import { MemberLevel } from '../config/pricing';
@@ -128,7 +129,7 @@ export function createExportRouter(prisma: PrismaLike | any) {
       res.setHeader('Content-Disposition', contentDisposition(`${safeTitle}.txt`));
       return res.end('﻿' + toTxt(doc.blocks)); // BOM 保证 Windows 记事本中文不乱码
     } catch (e) {
-      res.status(500).json({ error: '导出失败：' + (e as Error).message });
+      failInternal(res, e, 'export.render');
     }
   });
 

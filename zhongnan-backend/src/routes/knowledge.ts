@@ -1,4 +1,5 @@
 import { asyncRouter } from '../lib/async-router';
+import { failInternal } from '../lib/http-errors';
 import { z } from 'zod';
 import { prisma as defaultPrisma } from '../lib/prisma';
 import { authRequired, AuthRequest } from '../middleware/auth';
@@ -178,7 +179,7 @@ export function createKnowledgeRouter(prisma: PrismaLike | any) {
       const result = await runDailyLearningCycle(prisma, {}, req.userId || 'admin');
       res.json({ ok: true, ...result, reportText: result.report.text });
     } catch (e) {
-      res.status(500).json({ error: (e as Error).message });
+      failInternal(res, e, 'knowledge.self-learn-run-auto');
     }
   });
 

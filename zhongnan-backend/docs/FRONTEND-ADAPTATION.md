@@ -2,7 +2,7 @@
 
 > 面向前端（`web/` 原生 JS 站点及后续独立前端/移动端）的后端 API 契约与适配说明。
 > 后端每次破坏性契约变更都会在此登记：变更内容 → 迁移对照 → 前端已同步点。
-> 版本对齐 `package.json`，当前基线：**v2.215.0**。
+> 版本对齐 `package.json`，当前基线：**v2.216.0**。
 
 ---
 
@@ -78,6 +78,7 @@
 
 - 所有错误均为 JSON：`{ "error": "ERROR_CODE" | "人类可读文案" }`，绝不返回 HTML 或堆栈
 - 未知 `/api/*` 路由：`404 { "error": "NOT_FOUND" }`（v2.213 起）
+- **500 一律 `{ "error": "INTERNAL_ERROR" }`**（v2.216 起）：内部异常详情（Prisma/路径/供应商错误）只进服务端日志（`failInternal()` 统一出口），前端遇到 `INTERNAL_ERROR` 应显示本地友好文案而非错误码本身
 - 统一兜底：`500 { "error": "INTERNAL_ERROR" }`
 - `/api/*` 响应带 `Cache-Control: no-store`（防 token/个人信息落中间缓存）
 
@@ -91,6 +92,7 @@
 
 | 版本 | 变更 |
 |---|---|
+| v2.216.0 | 500 错误脱敏：12 处动态异常消息直回（admin-model×10/knowledge/export）统一为 `INTERNAL_ERROR`；详情只进服务端日志；前端导出失败提示对 `INTERNAL_ERROR` 回落本地文案 |
 | v2.215.0 | 分页统一契约（见上）；`healths`→`items`；`/market/listings` 裸数组→包裹；board total 修复 |
 | v2.214.0 | 自助修改密码端点 + 资料页入口 |
 | v2.213.0 | 未知路由 404 JSON 化（`NOT_FOUND`） |
