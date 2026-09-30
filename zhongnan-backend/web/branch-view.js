@@ -115,7 +115,7 @@
       const sum = ws.reduce((s, x) => s + (Number(x) || 0), 0) || 1;
       weightRows = '<div class="br-fld"><b>' + t.weightTitle + '</b>' + (n.to || []).map((tx, i) => {
         const pct = ((Number(ws[i]) || 0) / sum * 100).toFixed(0);
-        return `<div class="br-wrow"><span>${esc(graph.nodes[tx]?.label || tx)}</span><input class="br-w" data-i="${i}" type="number" min="0" step="1" value="${Number(ws[i]) ?? 1}"/><em>${pct}%</em></div>`;
+        return `<div class="br-wrow"><span>${esc(graph.nodes[tx]?.label || tx)}</span><input class="br-w" type="number" min="0" step="1" value="${Number(ws[i]) ?? 1}"/><em>${pct}%</em></div>`;
       }).join('') + `<button class="chip" id="brApplyW">${t.applyW}</button></div>`;
     }
     const kindBlock = n.type === 'choice' ? `<label class="br-fld">${t.kind}<select id="brInKind">

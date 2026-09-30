@@ -19,7 +19,7 @@
         <span class="ad-body"><b>${esc(cur.title || '')}</b>${cur.sponsorName ? `<small>${esc(cur.sponsorName)}</small>` : ''}</span>
         <em class="ad-badge">${esc(cur.badge || '广告')}</em>
       </a>
-      ${list.length > 1 ? `<div class="ad-dots">${list.map((_, i) => `<i data-i="${i}" class="${i === idx ? 'on' : ''}"></i>`).join('')}</div>` : ''}`;
+      ${list.length > 1 ? `<div class="ad-dots">${list.map((_, i) => `<i data-idx="${i}" class="${i === idx ? 'on' : ''}"></i>`).join('')}</div>` : ''}`;
     const card = box.querySelector('.ad-card');
     card?.addEventListener('click', () => {
       window.Api?.request(`/api/ads/${cur.id}/click`, { method: 'POST' }).catch(() => {});

@@ -81,6 +81,8 @@
     if (typeof listenSyncUI === 'function') listenSyncUI();
     // 内部账户：静态价格徽标统一改为「内部账户 · 免费」（动态卡片在各自渲染处处理）
     staffCostPatch();
+    // v2.232 subAllBtn 展开/收起态文案自愈（按钮已去 data-i，展开态切语言由此复原）
+    syncSubAllLabel();
   }
 
   /* ---------- 12 模式 ---------- */
@@ -2057,8 +2059,8 @@
       const all = targets();
       shown = q ? all.filter((t) => t.k.toLowerCase().includes(q.toLowerCase())) : all;
       cur = 0;
-      list.innerHTML = shown.slice(0, 12).map((t, i) => `<div class="qs-item${i === 0 ? ' on' : ''}" data-i="${i}">${escapeHtml(t.k)}</div>`).join('') || '<div class="muted" style="padding:8px">无匹配</div>';
-      list.querySelectorAll('.qs-item').forEach((el) => el.onclick = () => pick(+el.getAttribute('data-i')));
+      list.innerHTML = shown.slice(0, 12).map((t, i) => `<div class="qs-item${i === 0 ? ' on' : ''}" data-idx="${i}">${escapeHtml(t.k)}</div>`).join('') || '<div class="muted" style="padding:8px">无匹配</div>';
+      list.querySelectorAll('.qs-item').forEach((el) => el.onclick = () => pick(+el.getAttribute('data-idx')));
     }
     function pick(i) {
       const t = shown[i]; if (!t) return;
@@ -7479,13 +7481,24 @@
       ? 'Tip: platforms with pending contacts are listed for reference only; verify official entry before submitting.'
       : '提示：标"待核验"的渠道仅作题材适配参考，投稿前请务必到官方入口核验对接方式，勿轻信第三方。';
   }
-  /* v2.219 全量投稿渠道展示：GET /api/submission/channels 此前无前端入口，按需懒加载展开 */
+  /* v2.219 全量投稿渠道展示：GET /api/submission/channels 此前无前端入口，按需懒加载展开
+     v2.232 文案收口 syncSubAllLabel：按钮不再挂 data-i（展开态文案是多段 t() 拼接，静态 data-i
+     绑定会在语言切换时把它洗回「查看全部」而列表仍展开）；展开态计数入 subAllCache，切语言后可复原 */
   const subAllBtn = $('subAllBtn');
+  let subAllCache = null;
+  function syncSubAllLabel() {
+    if (!subAllBtn) return;
+    const box = $('submissionAllList');
+    if (!box || box.classList.contains('hidden')) { subAllBtn.textContent = t('subShowAll'); return; }
+    subAllBtn.textContent = subAllCache
+      ? `${t('subHideAll')}（${subAllCache.channels} ${t('subAllCount')} · ${subAllCache.unv} ${t('subUnverifiedN')}）`
+      : t('subShowAll');
+  }
   if (subAllBtn) subAllBtn.onclick = async () => {
     const box = $('submissionAllList');
     if (!box.classList.contains('hidden')) {
       box.classList.add('hidden');
-      subAllBtn.textContent = t('subShowAll');
+      syncSubAllLabel();
       return;
     }
     try {
@@ -7504,7 +7517,8 @@
       }).join('') || znEmptyHtml(lang === 'en' ? 'No channels.' : '暂无渠道数据');
       box.classList.remove('hidden');
       const unv = d.unverified ?? channels.filter((c) => !c.verified).length;
-      subAllBtn.textContent = `${t('subHideAll')}（${channels.length} ${t('subAllCount')} · ${unv} ${t('subUnverifiedN')}）`;
+      subAllCache = { channels: channels.length, unv };
+      syncSubAllLabel();
     } catch (e) { xnSay(e.message); }
   };
 
