@@ -525,7 +525,7 @@
   function renderHistory() {
     const t = T(); const box = $('roomHistoryBox');
     const list = state.histRooms;
-    if (!list.length) { box.innerHTML = `<div class="td-hist-card">${t.histEmpty}</div>`; return; }
+    if (!list.length) { box.innerHTML = znEmptyHtml(t.histEmpty); return; }
     box.innerHTML = list.map((r) => {
       const when = new Date(r.updatedAt).toLocaleString(en() ? 'en-US' : 'zh-CN', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' });
       const extras = [
@@ -561,7 +561,7 @@
     }
     state.historyOpen = true;
     box.classList.remove('hidden');
-    box.innerHTML = `<div class="td-hist-card">${T().histLoading}</div>`;
+    znSkeleton(box);
     try {
       const j = await get('/api/room/mine');
       state.histRooms = j.rooms || [];

@@ -104,7 +104,7 @@
   }
   function renderInspector() {
     const box = $('brInspector'); if (!box || !graph) return; const t = T();
-    if (!selected || !graph.nodes[selected]) { box.innerHTML = `<div class="muted">${t.insEmpty}</div>`; return; }
+    if (!selected || !graph.nodes[selected]) { box.innerHTML = znEmptyHtml(t.insEmpty); return; }
     const id = selected, n = graph.nodes[id];
     const others = Object.keys(graph.nodes).filter((x) => x !== id && !(n.to || []).includes(x));
     const kind = n.kind || 'fixed';

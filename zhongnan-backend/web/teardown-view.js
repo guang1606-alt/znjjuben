@@ -154,12 +154,12 @@
   async function loadHistory() {
     const box = $('tdHistoryBox'); const t = T();
     box.classList.remove('hidden');
-    box.innerHTML = `<p class="muted">${esc(t.histLoading)}</p>`;
+    znSkeleton(box);
     try {
       const r = await raw('/api/teardown/mine');
       if (!r.ok) { box.innerHTML = `<p class="muted">${esc(r.data.message || r.data.error || t.histFail)}</p>`; return; }
       const list = r.data.list || [];
-      if (!list.length) { box.innerHTML = `<p class="muted">${esc(t.histEmpty)}</p>`; return; }
+      if (!list.length) { box.innerHTML = znEmptyHtml(t.histEmpty); return; }
       const locale = en() ? 'en-GB' : 'zh-CN';
       box.innerHTML = list.map((x) => {
         const title = x.title || `${t.srcName[x.sourceType] || x.sourceType || ''} · ${t.histFallback(x.wordCount || 0)}`;

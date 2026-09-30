@@ -54,6 +54,13 @@ if (!files.length) { console.error('未找到测试文件'); process.exit(1); }
 // 若新增测试确有残留句柄导致不退出，应修句柄本身；应急可 FORCE_EXIT=1 临时绕过。
 const nodeArgs = ['--test'];
 if (process.env.FORCE_EXIT === '1') nodeArgs.push('--test-force-exit');
+// v2.222（PENDING #13 根治）：默认限文件级并发为 4。全量跑时每个测试文件自起 HTTP
+// 服务器（createApp + listen），node --test 默认全并发会同时拉起几十个服务端口，
+// 高负载时段出现启动竞争 → fetch failed（2026-10-01 实录：单轮 36 条失败，单文件复跑全绿）。
+// 显式传 --test-concurrency 可覆盖本默认值；单文件跑不受影响。
+if (!options.some((o) => o === '--test-concurrency' || o.startsWith('--test-concurrency='))) {
+  options.push('--test-concurrency', '4');
+}
 const r = spawnSync(process.execPath, [...nodeArgs, ...options, ...files], {
   stdio: 'inherit',
   env: process.env,

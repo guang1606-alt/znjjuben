@@ -79,6 +79,41 @@ describe('v2.221 调用点收口规模', () => {
   });
 });
 
+describe('v2.222 独立 view js 接入统一帮助函数', () => {
+  // view js 均在 app.js 之后加载（index.html 脚本序），window.znSkeleton/znEmpty* 可直接用
+  const viewSrc = {};
+  for (const f of ['room-view.js', 'teardown-view.js', 'diversity-view.js', 'branch-view.js']) {
+    viewSrc[f] = fs.readFileSync(path.join(WEB, f), 'utf8');
+  }
+
+  it('room-view 历史记录：加载走骨架屏、空态走 znEmptyHtml（旧 td-hist-card 纯文本写法收口）', () => {
+    const s = viewSrc['room-view.js'];
+    assert.doesNotMatch(s, /<div class="td-hist-card">\$\{T\(\)\.histLoading\}<\/div>/, 'histLoading 纯文本卡片应收口');
+    assert.doesNotMatch(s, /<div class="td-hist-card">\$\{t\.histEmpty\}<\/div>/, 'histEmpty 纯文本卡片应收口');
+    assert.ok(/znSkeleton\(/.test(s), 'room-view 应调用 znSkeleton');
+    assert.ok(/znEmptyHtml\(/.test(s), 'room-view 应调用 znEmptyHtml');
+  });
+
+  it('teardown-view 拆解记录：加载/空态收口（旧 p.muted 写法清除）', () => {
+    const s = viewSrc['teardown-view.js'];
+    assert.doesNotMatch(s, /<p class="muted">\$\{esc\(t\.histLoading\)\}<\/p>/, 'histLoading p.muted 应收口');
+    assert.doesNotMatch(s, /<p class="muted">\$\{esc\(t\.histEmpty\)\}<\/p>/, 'histEmpty p.muted 应收口');
+    assert.ok(/znSkeleton\(/.test(s) && /znEmptyHtml\(/.test(s), 'teardown-view 应接入 znSkeleton/znEmptyHtml');
+  });
+
+  it('diversity-view 对比中加载态走骨架屏（旧 muted 拼接清除）', () => {
+    const s = viewSrc['diversity-view.js'];
+    assert.doesNotMatch(s, /<div class="muted">\$\{T\(\)\.comparing\}<\/div>/, 'comparing muted 应收口');
+    assert.ok(/znSkeleton\(/.test(s), 'diversity-view 应调用 znSkeleton');
+  });
+
+  it('branch-view 检视空态走 znEmptyHtml（旧 muted 空态清除）', () => {
+    const s = viewSrc['branch-view.js'];
+    assert.doesNotMatch(s, /<div class="muted">\$\{t\.insEmpty\}<\/div>/, 'insEmpty muted 空态应收口');
+    assert.ok(/znEmptyHtml\(/.test(s), 'branch-view 应调用 znEmptyHtml');
+  });
+});
+
 describe('v2.221 styles.css 配套', () => {
   it('.zn-empty 空态样式齐备', () => {
     assert.ok(/\.zn-empty \{/.test(css), '应有 .zn-empty');
