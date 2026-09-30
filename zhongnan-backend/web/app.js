@@ -20,14 +20,12 @@
 
   /* ---------- 持久化偏好 ---------- */
   const LS = { g: (k, d) => localStorage.getItem(k) || d, s: (k, v) => localStorage.setItem(k, v) };
-  const THEMES = ['tech', 'light', 'dark', 'eye', 'auto'];
+  const THEMES = ['tech', 'light'];
   let theme = LS.g('zn_theme', 'tech');
-  const mq = window.matchMedia ? window.matchMedia('(prefers-color-scheme: dark)') : null;
+  if (!THEMES.includes(theme)) { theme = 'tech'; LS.s('zn_theme', theme); }
 
   function applyTheme() {
-    const eff = theme === 'auto' ? (mq && mq.matches ? 'dark' : 'light') : theme;
-    document.documentElement.setAttribute('data-theme', eff);
-    document.documentElement.setAttribute('data-theme-mode', theme);
+    document.documentElement.setAttribute('data-theme', theme);
   }
   function applyLang() {
     // c204 复盘修复：localStorage 可能是脏值（旧版本/手滑/带引号的 '"en"'），直接拿去索引双语表
@@ -56,7 +54,6 @@
     // 通知独立 view（编剧室/拆爆款/多版本/分支）按新语言重渲染静态文案
     document.dispatchEvent(new CustomEvent('zn-lang', { detail: lang }));
   }
-  if (mq && mq.addEventListener) mq.addEventListener('change', () => theme === 'auto' && applyTheme());
 
   /* ---------- 静态文案 ---------- */
   function renderStaticText() {

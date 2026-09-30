@@ -2,7 +2,7 @@
    终南集·AGI编剧大师 · 设计系统 v3.0
    美学方向：东方电影编辑部 · 卷宗质感
    宣纸暖底 / 黛青 / 鎏金 / 朱砂；标题衬线宋体
-   三主题：浅色（宣纸）· 深色（影院墨）· 护眼（米黄卷宗）
+   两主题：浅色（宣纸）· 墨夜
    契约：仅改视觉，不改动任何 class/id/--accent 变量名
    ============================================================ */
 :root {
@@ -34,30 +34,8 @@
   --shadow-lg: 0 30px 60px -28px rgba(40, 32, 16, .34), 0 6px 14px rgba(40, 32, 16, .08);
   --grid: #e9e1cd;
 }
-/* ---------- 深色：影院墨 ---------- */
-[data-theme='dark'] {
-  --bg: #0b1211; --panel: #111a19; --panel-2: #182321;
-  --text: #e8e2d2; --text-2: #93a099; --line: #283431;
-  --accent: #4ab5a8; --accent-strong: #6fc8be; --accent-weak: #11302d;
-  --gold: #b08e4c; --gold-deep: #c79a55; --gold-soft: #2a2415;
-  --cinnabar: #b8554a; --danger: #b8554a; --ok: #5aa57c;
-  --ring: rgba(74, 181, 168, .24);
-  --shadow: 0 12px 32px -16px rgba(0, 0, 0, .5), 0 2px 6px rgba(0, 0, 0, .3);
-  --shadow-lg: 0 30px 60px -24px rgba(0, 0, 0, .66), 0 6px 14px rgba(0, 0, 0, .36);
-  --grid: #1d2725;
-}
-/* ---------- 护眼：米黄卷宗 ---------- */
-[data-theme='eye'] {
-  --bg: #ece5d0; --panel: #f7f1e0; --panel-2: #e4dcc3;
-  --text: #34311f; --text-2: #6f694c; --line: #d8cdaf;
-  --accent: #4a6b30; --accent-strong: #34501f; --accent-weak: #dde2c8;
-  --gold: #7e5e1f; --gold-deep: #5a4416; --gold-soft: #e8dcc0;
-  --cinnabar: #8c3a2e; --danger: #8c3a2e; --ok: #4d7a45;
-  --ring: rgba(74, 107, 48, .18);
-  --grid: #ddd4ba;
-}
 /* 旧变量别名：让历史组件自动随主题换色（原代码到处 fallback 的 --card/--muted/--border 等） */
-:root, [data-theme='light'], [data-theme='dark'], [data-theme='eye'] {
+:root {
   --card: var(--panel); --input: var(--panel); --surface: var(--panel); --surface-2: var(--panel-2);
   --txt: var(--text); --text-1: var(--text); --text-3: color-mix(in srgb, var(--text-2) 78%, transparent); --text-strong: var(--text);
   --muted: var(--text-2); --border: var(--line); --hover: var(--panel-2);
@@ -81,7 +59,6 @@ body::before {
   content: ""; position: fixed; inset: 0; z-index: 0; pointer-events: none; opacity: .045;
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
 }
-[data-theme='dark'] body::before { opacity: .07; }
 .topbar, .wrap, .site-footer, .modal-mask { position: relative; z-index: 1; }
 button { font: inherit; cursor: pointer; }
 .hidden { display: none !important; }
@@ -293,7 +270,6 @@ textarea { background: var(--panel); color: var(--text); border: 1px solid var(-
   background: linear-gradient(180deg, color-mix(in srgb, var(--panel) 96%, #ffffff 4%), var(--panel));
   border: 1px solid var(--line); border-radius: var(--radius); padding: 22px; box-shadow: var(--shadow); margin-top: 16px;
 }
-[data-theme='dark'] .panel { background: var(--panel); }
 .pbar { height: 11px; border-radius: 999px; background: var(--panel-2); overflow: hidden; border: 1px solid color-mix(in srgb, var(--line) 70%, transparent); }
 .pbar > i { display: block; height: 100%; width: 0; border-radius: 999px;
   background: linear-gradient(90deg, var(--accent), color-mix(in srgb, var(--accent) 55%, var(--gold)));
@@ -369,7 +345,6 @@ textarea { background: var(--panel); color: var(--text); border: 1px solid var(-
 
 /* ================= 登录 / 模态 ================= */
 .modal-mask{position:fixed;inset:0;background:rgba(38,32,18,.42);backdrop-filter:blur(4px);display:flex;align-items:center;justify-content:center;z-index:60;padding:20px}
-[data-theme='dark'] .modal-mask{background:rgba(4,9,8,.62)}
 .modal{position:relative;width:min(420px,100%);background:var(--panel);border:1px solid var(--line);border-top:3px solid var(--gold);border-radius:18px;padding:24px;box-shadow:var(--shadow-lg)}
 .modal-x{position:absolute;top:11px;right:15px;background:none;border:none;font-size:22px;color:var(--text-2);cursor:pointer;line-height:1}
 .modal-x:hover{color:var(--cinnabar)}
@@ -921,7 +896,6 @@ button:disabled{opacity:.5;cursor:not-allowed}
   letter-spacing:.18em;text-transform:uppercase;
   border:1px solid color-mix(in srgb,var(--accent) 25%,transparent);
 }
-[data-theme='dark'] .eyebrow{background:color-mix(in srgb,var(--accent) 22%,transparent);color:var(--accent)}
 .eyebrow.gold{background:var(--gold-soft);color:var(--gold-deep);border-color:color-mix(in srgb,var(--gold) 35%,transparent)}
 /* trailing icon：Button-in-Button 圆形 wrapper */
 .mode-go{
@@ -1104,8 +1078,6 @@ summary:hover{color:var(--accent-strong)}
 /* ================= 剧本价值证书 ================= */
 .vc-cert{border-radius:14px;padding:19px;background:linear-gradient(150deg,#fdf8ea,#f6efd9 60%,#f2ead2);border:1px solid var(--line);margin-bottom:10px;position:relative;overflow:hidden}
 .vc-cert::before{content:"";position:absolute;inset:6px;border:1px solid color-mix(in srgb,var(--gold) 35%,transparent);border-radius:10px;pointer-events:none}
-[data-theme='dark'] .vc-cert{background:linear-gradient(150deg,#201c12,#1a1f18 60%,#16201e);border-color:#3a3524}
-[data-theme='dark'] .vc-cert::before{border-color:color-mix(in srgb,var(--gold) 30%,transparent)}
 .vc-head{display:flex;align-items:center;gap:14px;margin-bottom:10px;position:relative}
 .vc-grade{width:58px;height:58px;flex:none;border-radius:14px;display:flex;align-items:center;justify-content:center;font-family:var(--serif);font-size:1.6rem;font-weight:800;color:#fbf7ec;box-shadow:0 4px 12px rgba(0,0,0,.14)}
 .vc-g-S{background:linear-gradient(135deg,var(--gold),var(--cinnabar))}
@@ -1154,7 +1126,6 @@ summary:hover{color:var(--accent-strong)}
 .field-row3 select{width:100%;padding:7px 8px;border-radius:8px;border:1px solid var(--line);background:var(--panel);font-size:13px}
 .pf-toggle{display:flex;align-items:flex-start;gap:8px;font-size:12px;color:var(--text-2);margin:4px 0 8px;line-height:1.55;cursor:pointer}
 .pf-toggle input{margin-top:2px}
-[data-theme="dark"] .field-row3 select{background:var(--panel-2);border-color:var(--line);color:var(--text)}
 
 /* ================= 交易广场价值证书接入 ================= */
 .list-value{background:linear-gradient(135deg,#fbf5e6,#f5efdd);border:1px solid #e6dabb;border-radius:10px;padding:11px 13px;margin-bottom:10px;font-size:13px;color:#332d17}
@@ -1166,11 +1137,11 @@ summary:hover{color:var(--accent-strong)}
 .lv-row b{color:#332d17}
 .list-value .btn-ghost{margin-top:8px;background:#fff;border:1px solid #d8cfae;color:#8a6d1f;border-radius:8px;padding:6px 11px;font-size:12px;cursor:pointer}
 .list-value .btn-ghost:hover{background:#fbf4dd;border-color:var(--gold);color:var(--gold-deep)}
-[data-theme="dark"] .list-value,[data-theme="tech"] .list-value{background:linear-gradient(135deg,#241f14,#1b211c);border-color:#3d3620;color:#f0e6c8}
-[data-theme="dark"] .list-value .muted,[data-theme="tech"] .list-value .muted{color:#c5bda9}
-[data-theme="dark"] .lv-row,[data-theme="tech"] .lv-row{border-top-color:#3a3420}
-[data-theme="dark"] .lv-row b,[data-theme="tech"] .lv-row b{color:#f0e6c8}
-[data-theme="dark"] .list-value .btn-ghost,[data-theme="tech"] .list-value .btn-ghost{background:#1b211c;border-color:#60532f;color:#e0c277}
+[data-theme="tech"] .list-value{background:linear-gradient(135deg,#241f14,#1b211c);border-color:#3d3620;color:#f0e6c8}
+[data-theme="tech"] .list-value .muted{color:#c5bda9}
+[data-theme="tech"] .lv-row{border-top-color:#3a3420}
+[data-theme="tech"] .lv-row b{color:#f0e6c8}
+[data-theme="tech"] .list-value .btn-ghost{background:#1b211c;border-color:#60532f;color:#e0c277}
 
 /* 买家详情页 + 认证海报 */
 .d-head{display:flex;align-items:center;gap:12px;margin-bottom:12px}
@@ -1190,9 +1161,6 @@ summary:hover{color:var(--accent-strong)}
 .board-tab:hover{border-color:var(--cinnabar);color:var(--cinnabar)}
 .board-tab.active{background:var(--cinnabar);color:#fbf7ec;border-color:var(--cinnabar)}
 .sold-badge{display:inline-block;background:#7d827c;color:#fff;font-size:10px;padding:1px 6px;border-radius:4px;margin-left:4px;vertical-align:middle}
-[data-theme="dark"] .board-tab{background:var(--panel);border-color:var(--line);color:var(--text-2)}
-[data-theme="dark"] .board-tab:hover{border-color:var(--cinnabar);color:var(--cinnabar)}
-[data-theme="dark"] .board-tab.active{background:var(--cinnabar);color:#fbf7ec;border-color:var(--cinnabar)}
 
 /* 卖家工作台 */
 .seller-dashboard{background:var(--panel-2);border:1px solid var(--line);border-radius:10px;padding:12px;margin-bottom:8px}
@@ -1205,13 +1173,10 @@ summary:hover{color:var(--accent-strong)}
 .seller-stat.gold b{color:var(--gold-deep)}
 .seller-stat.warn b{color:#c57428}
 .seller-hint{font-size:12px;color:var(--gold-deep);background:color-mix(in srgb,var(--gold) 11%,var(--panel));border-radius:6px;padding:4px 8px;margin:2px 0 6px}
-[data-theme="dark"] .seller-hint{background:#2a2410;color:var(--gold)}
 
 /* 上榜荣誉 */
 .honor-banner{background:linear-gradient(135deg,var(--gold-soft),color-mix(in srgb,var(--gold) 22%,var(--gold-soft)));color:var(--gold-deep);font-size:14px;font-weight:600;padding:10px 14px;border-radius:10px;margin-bottom:10px;border:1px solid color-mix(in srgb,var(--gold) 35%,transparent)}
-[data-theme="dark"] .honor-banner{background:linear-gradient(135deg,#3a2f14,#2a2310);color:var(--gold);border-color:#5a4a1e}
 .board-badge{display:inline-block;font-size:11px;background:var(--gold-soft);color:var(--gold-deep);border-radius:4px;padding:1px 5px;margin-left:4px}
-[data-theme="dark"] .board-badge{background:#3a2f14;color:var(--gold)}
 
 /* ================= 响应式：平板 / 手机（桌面不受影响） ================= */
 @media (max-width: 1024px) {
