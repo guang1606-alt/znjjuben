@@ -2,7 +2,7 @@
 
 > 面向前端（`web/` 原生 JS 站点及后续独立前端/移动端）的后端 API 契约与适配说明。
 > 后端每次破坏性契约变更都会在此登记：变更内容 → 迁移对照 → 前端已同步点。
-> 版本对齐 `package.json`，当前基线：**v2.216.0**。
+> 版本对齐 `package.json`，当前基线：**v2.217.0**。
 
 ---
 
@@ -87,11 +87,13 @@
 - `Authorization: Bearer <accessToken>`；access 过期用 refresh 静默续期并重试一次
 - token 持久化键：`zn_token` / `zn_refresh` / `zn_user`（localStorage）
 - 自助修改密码：`POST /api/auth/change-password`（v2.214，前端资料页入口）
+- **429 限流响应**（v2.217 起）：登录 / 注册 / 改密三类端点在触发暴力防护时返回 `429 { "error": "<中文提示>" }`——前端无需按状态码分支，`jsonOrThrow` 统一展示 error 文案即可
 
 ### 版本历史（前端相关变更登记）
 
 | 版本 | 变更 |
 |---|---|
+| v2.217.0 | 注册与改密暴力防护：`/register` 同 IP 15min 成功注册 5 个后 429「注册过于频繁」（失败探测不计数）；`/change-password` 当前密码连错 5 次 429「尝试过于频繁」，成功改密清零。前端无 API 变更，仅新增 429 场景 |
 | v2.216.0 | 500 错误脱敏：12 处动态异常消息直回（admin-model×10/knowledge/export）统一为 `INTERNAL_ERROR`；详情只进服务端日志；前端导出失败提示对 `INTERNAL_ERROR` 回落本地文案 |
 | v2.215.0 | 分页统一契约（见上）；`healths`→`items`；`/market/listings` 裸数组→包裹；board total 修复 |
 | v2.214.0 | 自助修改密码端点 + 资料页入口 |

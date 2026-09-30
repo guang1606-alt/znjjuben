@@ -18,6 +18,12 @@ export function createAuthRouter(prisma: PrismaLike | any) {
   const authRouter = asyncRouter();
   // 登录失败限流（每路由实例独立，测试互不污染）：IP+手机号 15 分钟窗口内 5 次失败即锁定
   const loginThrottle = createLoginThrottle();
+  // v2.217 注册限流（防批量注册刷邀请积分）：同 IP 15 分钟窗口内成功注册达 5 个即锁定。
+  // 语义与登录限流相反——成功才计数：失败探测（400/409）无收益不计数，刷号必须成功注册。
+  const registerThrottle = createLoginThrottle();
+  // v2.217 改密节流（防持有 access token 的攻击者暴力猜当前密码）：同用户 15 分钟内
+  // 当前密码验证失败 5 次即锁定；成功改密清零。语义与登录限流一致。
+  const pwThrottle = createLoginThrottle();
   const phoneSchema = z.object({
     phone: z.string().regex(/^1[3-9]\d{9}$/, '手机号格式不正确'),
     password: z.string().min(8, '密码至少8位').max(64),
@@ -25,6 +31,8 @@ export function createAuthRouter(prisma: PrismaLike | any) {
   });
   /** 手机号注册（密码登录版；微信/抖音走 oauth 回调，结构相同） */
   authRouter.post('/register', async (req, res) => {
+    const ipKey = req.ip ?? 'unknown';
+    if (registerThrottle.isLocked(ipKey)) return res.status(429).json({ error: '注册过于频繁，请稍后再试' });
     const parsed = phoneSchema.safeParse(req.body);
     if (!parsed.success) return res.status(400).json({ error: parsed.error.issues[0].message });
     const { phone, password, inviteCode } = parsed.data;
@@ -49,6 +57,8 @@ export function createAuthRouter(prisma: PrismaLike | any) {
       return u;
     });
     // 注册奖励：双方各得积分（受赠送上限约束，幂等）
+    // v2.217 账号创建成功才计入注册限流（失败探测不计）
+    registerThrottle.recordFailure(ipKey);
     if (inviter) {
       await withBillingTransaction(prisma, user.id, (t) =>
         grantBonus(t, user.id, INVITE.BOTH_REWARD_POINTS, 'INVITE_REGISTER', `invreg:${user.id}`));
@@ -169,13 +179,19 @@ export function createAuthRouter(prisma: PrismaLike | any) {
   authRouter.post('/change-password', authRequired, async (req: AuthRequest, res) => {
     const p = changePwSchema.safeParse(req.body);
     if (!p.success) return res.status(400).json({ error: p.error.issues[0].message });
+    const pwKey = `pw:${req.userId}`;
+    if (pwThrottle.isLocked(pwKey)) return res.status(429).json({ error: '尝试过于频繁，请稍后再试' });
     const u = await prisma.user.findUnique({ where: { id: req.userId! } });
     if (!u) return res.status(404).json({ error: '用户不存在' });
     if (!u.passwordHash) return res.status(400).json({ error: '当前账号未设置密码，请使用第三方登录' });
-    if (!(await verifyPassword(u.passwordHash, p.data.currentPassword))) return res.status(400).json({ error: '当前密码错误' });
+    if (!(await verifyPassword(u.passwordHash, p.data.currentPassword))) {
+      pwThrottle.recordFailure(pwKey); // v2.217 当前密码猜错计数（持 token 暴力猜密防护）
+      return res.status(400).json({ error: '当前密码错误' });
+    }
     const pw = passwordStrength(p.data.newPassword);
     if (!pw.ok) return res.status(400).json({ error: `新密码${pw.problems[0]}` });
     await prisma.user.update({ where: { id: u.id }, data: { passwordHash: await hashPassword(p.data.newPassword) } });
+    pwThrottle.clear(pwKey); // v2.217 成功改密清零
     res.json({ ok: true });
   });
   return authRouter;
