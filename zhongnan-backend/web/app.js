@@ -2650,9 +2650,9 @@
   /* ---------- 会员充值（目录只认服务端） ---------- */
   async function loadCatalog() {
     const res = await fetch('/api/order/catalog');
-    if (!res.ok) { const g = $('plansGrid'); if (g) g.innerHTML = `<div class="muted">${t('loadFail')}</div>`; return; }
+    if (!res.ok) { znError('plansGrid', t('loadFail')); return; }
     const cat = await res.json().catch(() => null);
-    if (!cat || !Array.isArray(cat.plans)) { const g = $('plansGrid'); if (g) g.innerHTML = `<div class="muted">${t('loadFail')}</div>`; return; }
+    if (!cat || !Array.isArray(cat.plans)) { znError('plansGrid', t('loadFail')); return; }
     const paymentUnavailable = cat.paymentAvailable === false;
     const disabled = paymentUnavailable ? ' disabled' : '';
     const purchaseLabel = paymentUnavailable ? (lang === 'en' ? 'Online payment unavailable' : '在线支付暂未开通') : t('subscribe');
@@ -2907,7 +2907,7 @@
       } catch (e) {
         // token 过期且 refresh 失败时 Api 层已清登录态：必须引导重新登录，不能只甩一行英文错误码
         if (e && e.code === 'AUTH_REQUIRED') { $('feedbackModal').classList.add('hidden'); openAuth('login'); return; }
-        box.innerHTML = `<div class="muted">${esc(e.message || 'error')}</div>`;
+        box.innerHTML = znErrorHtml(e.message || (lang === 'en' ? 'Failed to load, please retry later' : '加载失败，请稍后重试'));
       }
     }
 
@@ -3127,7 +3127,13 @@
     znSkeleton(body);
     try {
       const res = await fetch('/api/market/listings/' + id);
-      if (!res.ok) { const e = await res.json().catch(() => ({})); body.innerHTML = `<div class="muted">${e.error || 'error'}</div>`; return; }
+      if (!res.ok) {
+        // v2.216 契约：INTERNAL_ERROR 是脱敏码，对用户回落本地友好文案而非甩错误码
+        const e = await res.json().catch(() => ({}));
+        const errText = (!e.error || e.error === 'INTERNAL_ERROR')
+          ? (lang === 'en' ? 'Failed to load, please retry later' : '加载失败，请稍后重试') : e.error;
+        body.innerHTML = znErrorHtml(errText); return;
+      }
       const d = await res.json();
       const v = d.value; const snap = d.valueSnapshot;
       const gradeColor = { S: '#d4a017', A: '#c0392b', B: '#2e7d32', C: '#5d6d7e', NA: '#888' }[(v && v.grade) || (snap && snap.grade) || 'NA'] || '#888';
@@ -6061,7 +6067,7 @@
       renderListen(d, {});
       if (d.projectId && d.neighbors && d.neighbors.epCount > 1) listenHydratePlaylist(d.projectId); // 懒拉片单选集，失败静默
     } catch (e) {
-      segBox.textContent = e.message || (lang === 'en' ? 'Failed to load.' : '加载失败');
+      segBox.innerHTML = znErrorHtml(e.message || (lang === 'en' ? 'Failed to load.' : '加载失败'));
     }
   }
   // c208 整剧连播入口：先拿轻量片单 → 定位续听集（有进度进进度，无则第一集）→ 自动开播
@@ -6089,7 +6095,7 @@
       if (saved && listenSeries.list.some((e) => e.scriptId === saved.scriptId)) { target = saved.scriptId; startIdx = saved.idx; }
       await listenLoadEpisode(target, { autostart: true, startAt: 'idx', startIdx, crossNext: false });
     } catch (e) {
-      if (token === listenReqSeq) segBox.textContent = e.message || (lang === 'en' ? 'Failed to load.' : '加载失败');
+      if (token === listenReqSeq) segBox.innerHTML = znErrorHtml(e.message || (lang === 'en' ? 'Failed to load.' : '加载失败'));
     }
   }
   // c206 修复：时长原来写死中文"分/秒"，英文界面也显示中文；按当前界面语言出格式
@@ -6180,7 +6186,7 @@
       const stillWanted = ttsSeqAtStart === listenTts.seq;
       renderListen(d, { autostart: !!opts.autostart && stillWanted, startAt: opts.startAt || 'first', startIdx: opts.startIdx, crossNext: opts.crossNext });
     } catch (e) {
-      if (token === listenReqSeq) { listenTts.loading = false; segBox.textContent = e.message || (lang === 'en' ? 'Failed to load.' : '加载失败'); }
+      if (token === listenReqSeq) { listenTts.loading = false; segBox.innerHTML = znErrorHtml(e.message || (lang === 'en' ? 'Failed to load.' : '加载失败')); }
     }
   }
   // 单集打开后懒拉片单，只用于补选集下拉；拉不到时上一集/下一集按钮仍有 neighbors 可用
@@ -7552,7 +7558,7 @@
         list.appendChild(li);
       });
     } catch (e) {
-      card.textContent = (e && e.message) ? e.message : (lang === 'en' ? 'Failed to load board.' : '榜单加载失败～');
+      card.innerHTML = znErrorHtml((e && e.message) || (lang === 'en' ? 'Failed to load board.' : '榜单加载失败～'));
     }
   }
   function renderMineCard(card, mine, nextTier) {
@@ -8665,7 +8671,7 @@
       <details><summary>图片模型端口（${j.imageCatalog.length} 家，含 GPT-image）</summary><table class="adm-table"><tbody>${imgRows}</tbody></table></details>
       <details><summary>口径 FAQ（baseUrl/单价/赚钱/黑盒）</summary><div class="notice">${faq}</div></details>
       <details><summary>v2.53 全量 API 清单与官方申请链接（点击展开，含基础设施 API）</summary><div id="admApiDir">${znSkeletonHtml()}</div></details>`;
-    loadApiDirectory().catch(() => { const c = $('admApiDir'); if (c) c.textContent = '清单加载失败，可重试'; });
+    loadApiDirectory().catch(() => znError('admApiDir', '清单加载失败，可重试'));
     // 目录型号下拉
     const opts = ['<option value="">— 自定义/中转（手填端点与单价）—</option>']
       .concat(j.textCatalog.map((m) => `<option value="${m.id}">${escapeHtml(m.vendor)}·${escapeHtml(m.name)}（入${m.inYuanPerMTok}/出${m.outYuanPerMTok}）</option>`))

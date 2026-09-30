@@ -184,3 +184,39 @@ describe('v2.223 view js 错误态接入 + styles.css 配套', () => {
     assert.ok(/\.zn-error[^}]*var\(--danger/.test(css), '应使用 --danger 主题令牌（含回退）');
   });
 });
+
+describe('v2.224 错误态第二轮扫尾（muted 当错误用清零 + listen/PK榜/超管目录收口）', () => {
+  it('muted 当错误用清零（loadCatalog×2 / 反馈箱 / 买家详情）', () => {
+    assert.doesNotMatch(src, /<div class="muted">\$\{t\('loadFail'\)\}/,
+      'loadCatalog 失败态 muted 应收口为 znError');
+    assert.doesNotMatch(src, /<div class="muted">\$\{esc\(e\.message \|\| 'error'\)\}/,
+      '反馈箱 catch muted 应收口为 znErrorHtml');
+    assert.doesNotMatch(src, /<div class="muted">\$\{e\.error \|\| 'error'\}/,
+      '买家详情失败态 muted 应收口为 znErrorHtml');
+  });
+
+  it('listen 弹窗 3 处失败态 textContent 收口为 znErrorHtml（保留 token 防竞态）', () => {
+    assert.doesNotMatch(src, /segBox\.textContent = e\.message \|\|/,
+      'segBox 失败态 textContent 应收口为 znErrorHtml');
+  });
+
+  it('PK 榜失败态 textContent 收口为 znErrorHtml', () => {
+    assert.doesNotMatch(src, /card\.textContent = \(e && e\.message\)/,
+      'PK 榜失败态应走 znErrorHtml');
+  });
+
+  it('超管 API 目录失败态收口为 znError（骨架屏占位替换）', () => {
+    assert.doesNotMatch(src, /c\.textContent = '清单加载失败，可重试'/,
+      'admApiDir 失败态应走 znError');
+  });
+
+  it('买家详情 INTERNAL_ERROR 回落本地友好文案（v2.216 契约速查落实）', () => {
+    assert.ok(/INTERNAL_ERROR/.test(src.slice(src.indexOf('openListingDetail'), src.indexOf('openListingDetail') + 3000)),
+      '买家详情失败分支应对 INTERNAL_ERROR 显示本地文案而非错误码');
+  });
+
+  it('znErrorHtml 调用规模扩至 ≥12 处', () => {
+    const errCalls = (src.match(/znErrorHtml\(/g) || []).length - 1;
+    assert.ok(errCalls >= 12, `znErrorHtml 调用应 ≥12，实际 ${errCalls}`);
+  });
+});
