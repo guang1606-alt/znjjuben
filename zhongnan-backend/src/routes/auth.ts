@@ -159,6 +159,25 @@ export function createAuthRouter(prisma: PrismaLike | any) {
       personalized: (u as any).personalized !== false,
     });
   });
+  // v2.214 自助修改密码：验证当前密码 → 新密码过统一强度策略（v2.212）→ 重哈希落库。
+  // 成功后前端清空本地会话、用新密码重新登录；其他设备存量 refresh token 由 TTL 自然过期
+  // （不引入 passwordChangedAt 字段，避免迁移依赖；access token 本身短时效，风险可控）。
+  const changePwSchema = z.object({
+    currentPassword: z.string().min(1, '请输入当前密码').max(64),
+    newPassword: z.string().min(8, '新密码至少8位').max(64),
+  });
+  authRouter.post('/change-password', authRequired, async (req: AuthRequest, res) => {
+    const p = changePwSchema.safeParse(req.body);
+    if (!p.success) return res.status(400).json({ error: p.error.issues[0].message });
+    const u = await prisma.user.findUnique({ where: { id: req.userId! } });
+    if (!u) return res.status(404).json({ error: '用户不存在' });
+    if (!u.passwordHash) return res.status(400).json({ error: '当前账号未设置密码，请使用第三方登录' });
+    if (!(await verifyPassword(u.passwordHash, p.data.currentPassword))) return res.status(400).json({ error: '当前密码错误' });
+    const pw = passwordStrength(p.data.newPassword);
+    if (!pw.ok) return res.status(400).json({ error: `新密码${pw.problems[0]}` });
+    await prisma.user.update({ where: { id: u.id }, data: { passwordHash: await hashPassword(p.data.newPassword) } });
+    res.json({ ok: true });
+  });
   return authRouter;
 }
 

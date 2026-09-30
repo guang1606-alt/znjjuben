@@ -280,6 +280,11 @@
         } catch { /* 后端不可达不阻塞本地登出 */ }
       }
     },
+    async changePassword(currentPassword, newPassword) {
+      // v2.214 自助改密：后端复用统一密码策略；成功后由调用方清会话强制重新登录
+      const res = await request('/api/auth/change-password', { method: 'POST', body: JSON.stringify({ currentPassword, newPassword }) });
+      return jsonOrThrow(res);
+    },
   };
 
   return {

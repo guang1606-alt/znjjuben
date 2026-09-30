@@ -2589,6 +2589,21 @@
       await Api.jsonOrThrow(res); $('profileEdit').classList.add('hidden'); xnSay(t('editOk')); loadMe(); renderAuthButton();
     } catch (e) { xnSay(e.message); }
   };
+  // v2.214 自助修改密码：客户端预校验与后端统一密码策略一致；成功后清会话，旧密码即刻失效，强制用新密码重新登录
+  $('changePwBtn').onclick = async () => {
+    const cur = $('inCurPw').value, nw = $('inNewPw').value;
+    if (!cur) { xnSay(t('curPw')); return; }
+    if (nw.length < 8 || !/[a-zA-Z]/.test(nw) || !/[0-9]/.test(nw)) { xnSay(t('pwClientErr')); return; }
+    try {
+      await Api.auth.changePassword(cur, nw);
+      Api.clearSession();
+      meCache = null; capsCache = null; refreshAdminNav(); renderAuthButton();
+      $('inCurPw').value = ''; $('inNewPw').value = '';
+      $('profileEdit').classList.add('hidden');
+      xnSay(t('pwChangeOk'));
+      setTimeout(() => openAuth('login'), 1000);
+    } catch (e) { xnSay(e.message); }
+  };
   function fmtBytes(n) { if (!n) return '0 MB'; const mb = n / (1024 * 1024); return mb >= 1 ? mb.toFixed(1) + ' MB' : (n / 1024).toFixed(0) + ' KB'; }
 
   /* ---------- 会员充值（目录只认服务端） ---------- */
