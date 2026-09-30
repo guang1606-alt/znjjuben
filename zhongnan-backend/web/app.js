@@ -3249,11 +3249,22 @@
       };
     } catch (e) { box.innerHTML = `<div class="muted">${escapeHtml(e.message)}</div>`; }
   }
+  // v2.228 对齐后端 validatePriceFen（market.ts：≥1 元且为 0.1 元(1积分)整数倍），
+  // 上架/重新上架两入口本地同口径预检，粒度不符（如 10.55）不再白跑后端 400
+  function priceFenFromYuan(text) {
+    const yuan = Number(text);
+    if (!Number.isFinite(yuan) || yuan < 1) return null;
+    const fen = Math.round(yuan * 100);
+    return fen % 10 === 0 ? fen : null;
+  }
   $('listSubmit').onclick = async () => {
-    const scriptId = $('listScript').value; const yuan = parseFloat($('listPrice').value); const sample = $('listSample').value.trim();
-    if (!scriptId || !(yuan >= 1)) { xnSay(lang === 'en' ? 'Price min 1.' : '售价最低 1 元'); return; }
+    const scriptId = $('listScript').value;
+    const fen = priceFenFromYuan($('listPrice').value);
+    if (!scriptId) { xnSay(lang === 'en' ? 'Pick a script first.' : '请选择剧本'); return; }
+    if (fen === null) { xnSay(lang === 'en' ? 'Price min ¥1, in 0.1-yuan (1 credit) steps.' : '价格不低于 1 元，且需为 0.1 元(1积分)的整数倍'); return; }
+    const sample = $('listSample').value.trim();
     try {
-      const res = await Api.request('/api/market/listings', { method: 'POST', body: JSON.stringify({ scriptId, priceFen: Math.round(yuan * 100), sample }) });
+      const res = await Api.request('/api/market/listings', { method: 'POST', body: JSON.stringify({ scriptId, priceFen: fen, sample }) });
       await Api.jsonOrThrow(res); $('listModal').classList.add('hidden'); $('listPrice').value = ''; $('listSample').value = '';
       xnSay(t('listedOk')); loadListings();
     } catch (e) { xnSay(e.message); }
@@ -3368,7 +3379,11 @@
       const newPrice = await uiPrompt({ body: lang === 'en' ? 'New price in yuan (leave empty to keep current):' : '输入新售价（元），留空保持原价：' });
       if (newPrice === null) return;
       const body = {};
-      if (newPrice.trim()) { const yuan = Number(newPrice); if (!Number.isFinite(yuan) || yuan < 1) { xnSay(lang === 'en' ? 'Invalid price' : '价格不合法'); return; } body.priceFen = Math.round(yuan * 100); }
+      if (newPrice.trim()) {
+        const fen = priceFenFromYuan(newPrice);
+        if (fen === null) { xnSay(lang === 'en' ? 'Price min ¥1, in 0.1-yuan (1 credit) steps.' : '价格不低于 1 元，且需为 0.1 元(1积分)的整数倍'); return; }
+        body.priceFen = fen;
+      }
       const r = await Api.request(`/api/market/listings/${b.getAttribute('data-relist')}/relist`, { method: 'PATCH', body: JSON.stringify(body) });
       if (r.ok) { xnSay(lang === 'en' ? 'Relisted' : '已重新上架'); $('mkMineBtn').click(); } else { xnSay((await r.json()).error || '失败'); }
     });
