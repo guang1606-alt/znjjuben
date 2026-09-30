@@ -7339,6 +7339,34 @@
       ? 'Tip: platforms with pending contacts are listed for reference only; verify official entry before submitting.'
       : '提示：标"待核验"的渠道仅作题材适配参考，投稿前请务必到官方入口核验对接方式，勿轻信第三方。';
   }
+  /* v2.219 全量投稿渠道展示：GET /api/submission/channels 此前无前端入口，按需懒加载展开 */
+  const subAllBtn = $('subAllBtn');
+  if (subAllBtn) subAllBtn.onclick = async () => {
+    const box = $('submissionAllList');
+    if (!box.classList.contains('hidden')) {
+      box.classList.add('hidden');
+      subAllBtn.textContent = t('subShowAll');
+      return;
+    }
+    try {
+      const r = await Api.request('/api/submission/channels');
+      const d = await Api.jsonOrThrow(r);
+      const channels = d.channels || [];
+      box.innerHTML = channels.map((c) => {
+        const verifiedBadge = c.verified
+          ? `<span class="chip" style="background:#e8f5e9;color:#2e7d32">${lang === 'en' ? 'Verified' : '已核验'}</span>`
+          : `<span class="chip" style="background:#fff3e0;color:#e65100">${lang === 'en' ? 'Contact pending' : '待核验'}</span>`;
+        return `<div class="sub-card">
+          <div class="sub-head"><b>${escapeHtml(c.name)}</b><span class="muted">${escapeHtml(c.region === 'overseas' ? (lang === 'en' ? 'Overseas' : '海外') : (lang === 'en' ? 'Domestic' : '国内'))}</span>${verifiedBadge}</div>
+          <div class="sub-meta"><span>${escapeHtml((c.kinds || []).join('·'))}</span></div>
+          ${c.highlight ? `<div class="sub-hl">${escapeHtml(c.highlight)}</div>` : ''}
+        </div>`;
+      }).join('') || `<div class="muted" style="padding:6px">${lang === 'en' ? 'No channels.' : '暂无渠道数据'}</div>`;
+      box.classList.remove('hidden');
+      const unv = d.unverified ?? channels.filter((c) => !c.verified).length;
+      subAllBtn.textContent = `${t('subHideAll')}（${channels.length} ${t('subAllCount')} · ${unv} ${t('subUnverifiedN')}）`;
+    } catch (e) { xnSay(e.message); }
+  };
 
   function showFail(msg, refunded) {
     $('progressPanel').classList.add('hidden'); $('failPanel').classList.remove('hidden');
@@ -8013,7 +8041,7 @@
   function idemToken() { return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`; }
 
   /* ---------- 超级管理员后台 ---------- */
-  const ADM_TABS = ['users', 'stats', 'finance', 'posts', 'models', 'knowledge', 'feedback', 'safety', 'handoff', 'updates', 'balances'];
+  const ADM_TABS = ['users', 'stats', 'finance', 'posts', 'models', 'knowledge', 'feedback', 'safety', 'handoff', 'updates', 'balances', 'ads'];
   let admTab = 'users', admPage = 1, admInited = false;
   const lvName = (lv) => (lang === 'en' ? LEVEL_EN : LEVEL_ZH)[lv] || lv;
   async function admApi(path, opts) {
@@ -8048,8 +8076,8 @@
     $('admTabs').querySelectorAll('[data-atab]').forEach((b) => b.onclick = () => { admTab = b.getAttribute('data-atab'); renderAdmTabs(); loadAdmTab(); });
   }
   function loadAdmTab() {
-    ['Users', 'Stats', 'Finance', 'Posts', 'Models', 'Knowledge', 'Feedback', 'Safety', 'Handoff', 'Updates', 'Balances'].forEach((n) => $('adm' + n + 'Pane').classList.add('hidden'));
-    const map = { users: 'Users', stats: 'Stats', finance: 'Finance', posts: 'Posts', models: 'Models', knowledge: 'Knowledge', feedback: 'Feedback', safety: 'Safety', handoff: 'Handoff', updates: 'Updates', balances: 'Balances' };
+    ['Users', 'Stats', 'Finance', 'Posts', 'Models', 'Knowledge', 'Feedback', 'Safety', 'Handoff', 'Updates', 'Balances', 'Ads'].forEach((n) => $('adm' + n + 'Pane').classList.add('hidden'));
+    const map = { users: 'Users', stats: 'Stats', finance: 'Finance', posts: 'Posts', models: 'Models', knowledge: 'Knowledge', feedback: 'Feedback', safety: 'Safety', handoff: 'Handoff', updates: 'Updates', balances: 'Balances', ads: 'Ads' };
     $('adm' + map[admTab] + 'Pane').classList.remove('hidden');
     if (admTab === 'users') loadAdmUsers();
     if (admTab === 'stats') loadAdmStats();
@@ -8062,6 +8090,7 @@
     if (admTab === 'handoff') loadAdmHandoff();
     if (admTab === 'updates') loadAdmUpdates();
     if (admTab === 'balances') loadAdmBalances();
+    if (admTab === 'ads') loadAdmAds();
   }
   function initAdmin() {
     $('admUserSearch').onclick = () => { admPage = 1; loadAdmUsers(); };
@@ -8114,6 +8143,11 @@
     $('fbType').onchange = loadAdmFeedback;
     $('fbTodoBtn').onclick = toggleTodoView;
     $('fbTodoSort').onchange = loadAdmTodos;
+    // v2.219 广告位管理
+    $('adReload').onclick = loadAdmAds;
+    $('adNewBtn').onclick = () => openAdForm(null);
+    $('adSave').onclick = saveAd;
+    $('adCancel').onclick = () => { $('adFormBox').classList.add('hidden'); adEditingId = null; };
     // 合规规则库
     $('sfReload').onclick = loadAdmSafety;
     $('sfAdd').onclick = addAdmSafetyRule;
@@ -8395,6 +8429,7 @@
           <button data-act="points" class="btn-ghost">${t('admAdjust')}</button>
           <button data-act="ban" class="btn-ghost">${u.banned ? t('admUnban') : t('admBan')}</button>
           <button data-act="resetpw" class="btn-ghost">${t('admResetPw')}</button>
+          <button data-act="adminflag" class="btn-ghost">${u.isAdmin ? t('admUnsetAdmin') : t('admSetAdmin')}</button>
         </td></tr>`;
     }).join('');
     $('admUserTable').innerHTML = head + '<tbody>' + rows + '</tbody>';
@@ -8422,6 +8457,12 @@
         if (np.length < 8 || !/[a-zA-Z]/.test(np) || !/\d/.test(np)) { xnSay(lang === 'en' ? '8+ characters with letters and numbers.' : '至少 8 位，且需同时包含字母和数字'); return; }
         admApi('/users/' + uid + '/reset-password', { method: 'POST', body: JSON.stringify({ newPassword: np }) })
           .then(() => xnSay(t('admOk'))).catch((e) => xnSay(e.message));
+      };
+      // v2.219 管理员标记（isAdmin）：主账号「一人独大」口径下唯一的副管理员授予/回收口
+      tr.querySelector('[data-act="adminflag"]').onclick = () => {
+        const grant = tr.querySelector('[data-act="adminflag"]').textContent === t('admSetAdmin');
+        admApi('/users/' + uid + '/admin-flag', { method: 'POST', body: JSON.stringify({ isAdmin: grant }) })
+          .then(() => { xnSay(t('admAdminFlagOk')); loadAdmUsers(); }).catch((e) => xnSay(e.message));
       };
     });
   }
@@ -8676,12 +8717,15 @@
     const status = $('knFilter').value;
     let list = [];
     try { list = await admApi('/knowledge' + (status ? '?status=' + status : '')); } catch (e) { xnSay(e.message); return; }
-    const stBadge = { PENDING: 'warn', APPROVED: 'ok', REJECTED: 'bad' };
+    const stBadge = { PENDING: 'warn', APPROVED: 'ok', REJECTED: 'bad', ARCHIVED: '' };
     $('admKnowList').innerHTML = list.map((k) => `<div class="post-card" data-kid="${k.id}">
       <h4>[${k.kind}] ${escapeHtml(k.title)} <span class="badge ${stBadge[k.status] || ''}">${k.status}</span> <span class="muted">${knCatName(k.category)}</span></h4>
       ${k.conflictNote ? `<div class="warn-text">${escapeHtml(k.conflictNote)}</div>` : ''}
       <div class="pc-foot"><span class="muted">${new Date(k.createdAt).toLocaleString()}</span><span class="spacer"></span>
       ${k.status === 'PENDING' ? '<button class="btn-ghost" data-kn="approve">' + (lang === 'en' ? 'Approve & sync' : '通过并同步技能') + '</button><button class="btn-ghost" data-kn="reject">' + (lang === 'en' ? 'Reject' : '驳回') + '</button>' : ''}
+      ${k.status === 'ARCHIVED'
+        ? '<button class="btn-ghost" data-kn="restore">' + (lang === 'en' ? 'Restore' : '恢复（转待审）') + '</button>'
+        : '<button class="btn-ghost" data-kn="archive">' + (lang === 'en' ? 'Archive' : '归档') + '</button>'}
       </div></div>`).join('') || `<div class="notice">${lang === 'en' ? 'Empty.' : '暂无知识条目'}</div>`;
     $('admKnowList').querySelectorAll('[data-kn]').forEach((b) => b.onclick = async () => {
       const id = b.closest('[data-kid]').getAttribute('data-kid'), act = b.getAttribute('data-kn');
@@ -8689,6 +8733,13 @@
         if (act === 'reject') {
           const reason = await uiPrompt({ body: lang === 'en' ? 'Reject reason:' : '驳回原因（可空）：', value: '' });
           await admApi(`/knowledge/${id}/reject`, { method: 'POST', body: JSON.stringify({ reason: reason || '人工驳回' }) });
+        } else if (act === 'archive') {
+          const reason = await uiPrompt({ body: lang === 'en' ? 'Archive reason (optional):' : '归档原因（可空）：', value: '' });
+          await admApi(`/knowledge/${id}/archive`, { method: 'POST', body: JSON.stringify({ reason: reason || undefined }) });
+          xnSay(lang === 'en' ? 'Archived.' : '已归档');
+        } else if (act === 'restore') {
+          await admApi(`/knowledge/${id}/restore`, { method: 'POST' });
+          xnSay(lang === 'en' ? 'Restored to pending.' : '已恢复并转入待审');
         } else { await admApi(`/knowledge/${id}/approve`, { method: 'POST' }); xnSay(lang === 'en' ? 'Synced to skills.' : '已吸收并同步到创作技能'); }
         loadAdmKnowledge();
       } catch (e) { xnSay(e.message); }
@@ -8846,6 +8897,108 @@
     const box = $('admTodoList');
     box.classList.toggle('hidden');
     if (!box.classList.contains('hidden')) loadAdmTodos();
+  }
+
+  /* ---------- v2.219 广告位管理：/api/ads/admin/* 前端入口补齐 ----------
+   * 此前后端完整 CRUD（list/create/update/delete）仅 API 可操作，运营无法自助管理广告。
+   * 表单新建/编辑复用；删除直接执行（与 providers 删除同一风格）；slot 下拉由接口 slots 动态填充。 */
+  let adSlots = [], adRows = [], adEditingId = null;
+  const adAdm = async (path, opts) => { const r = await Api.request('/api/ads' + path, opts); return Api.jsonOrThrow(r); };
+  const toLocalInput = (v) => { if (!v) return ''; const d = new Date(v); if (isNaN(d.getTime())) return ''; const p = (n) => String(n).padStart(2, '0'); return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}`; };
+  function adSlotName(s) { const hit = (adSlots || []).find((x) => x.id === s); return hit ? hit.name : s; }
+  function fillAdSlotSel(sel) {
+    $('adSlot').innerHTML = (adSlots || []).map((s) => `<option value="${escapeHtml(s.id)}">${escapeHtml(s.name)}</option>`).join('');
+    if (sel) $('adSlot').value = sel;
+  }
+  function fmtAdRange(a) {
+    const has = (v) => v && new Date(v).toString() !== 'Invalid Date';
+    if (!has(a.startAt) && !has(a.endAt)) return t('admAds_long');
+    const fmt = (v) => has(v) ? new Date(v).toLocaleDateString() : '—';
+    return `${fmt(a.startAt)} → ${fmt(a.endAt)}`;
+  }
+  async function loadAdmAds() {
+    let d;
+    try { d = await adAdm('/admin/list'); } catch (e) { xnSay(e.message); return; }
+    adSlots = d.slots || []; adRows = d.list || [];
+    if (!$('adFormBox').classList.contains('hidden')) fillAdSlotSel($('adSlot').value);
+    $('admAdList').innerHTML = adRows.map((a) => `
+      <div class="fb-card" data-aid="${escapeHtml(a.id)}">
+        <div class="fb-head">
+          <b>${escapeHtml(a.title)}</b>
+          <span class="badge">${escapeHtml(adSlotName(a.slot))}</span>
+          <span class="badge ${a.active ? '' : 'bad'}">${a.active ? t('admAds_on') : t('admAds_off')}</span>
+          <span class="muted">${t('admAds_clicks')} ${a.clicks ?? 0} · ${t('admAds_sortN')} ${a.sort ?? 0} · ¥${((a.priceFenDay || 0) / 100).toFixed(2)}/${t('admAds_day')}</span>
+          <span class="spacer"></span><span class="muted">${fmtAdRange(a)}</span>
+        </div>
+        ${a.imageUrl ? `<div class="fb-img-row"><img src="${escapeHtml(a.imageUrl)}" class="fb-img-thumb-mini" alt=""/></div>` : ''}
+        ${a.linkUrl ? `<div class="muted" style="font-size:12px;word-break:break-all">${escapeHtml(a.linkUrl)}</div>` : ''}
+        <div class="fb-acts">
+          <button class="btn-ghost" data-ad="edit">${lang === 'en' ? 'Edit' : '编辑'}</button>
+          <button class="btn-ghost" data-ad="del">${t('admAds_del')}</button>
+        </div>
+      </div>`).join('') || `<div class="notice">${t('admAds_empty')}</div>`;
+    $('admAdList').querySelectorAll('.fb-card').forEach((card) => {
+      const id = card.getAttribute('data-aid');
+      card.querySelector('[data-ad="edit"]').onclick = () => openAdForm(id);
+      card.querySelector('[data-ad="del"]').onclick = async () => {
+        if (!(await uiConfirm({ body: t('admAds_delConfirm'), danger: true, okText: t('admAds_del') }))) return;
+        try { await adAdm(`/admin/${id}/delete`, { method: 'POST' }); xnSay(t('admAds_deleted')); loadAdmAds(); }
+        catch (e) { xnSay(e.message); }
+      };
+    });
+  }
+  function openAdForm(id) {
+    adEditingId = id || null;
+    if (id) {
+      const a = (adRows || []).find((x) => x.id === id);
+      if (!a) return;
+      fillAdSlotSel(a.slot);
+      $('adTitle').value = a.title || '';
+      $('adImageUrl').value = a.imageUrl || '';
+      $('adLinkUrl').value = a.linkUrl || '';
+      $('adBadge').value = a.badge || '';
+      $('adSponsor').value = a.sponsorName || '';
+      $('adPrice').value = a.priceFenDay ?? 0;
+      $('adSort').value = a.sort ?? 0;
+      $('adActive').value = a.active ? '1' : '0';
+      $('adStart').value = toLocalInput(a.startAt);
+      $('adEnd').value = toLocalInput(a.endAt);
+      $('adFormHint').textContent = `${t('admAds_editing')} #${a.id}`;
+    } else {
+      fillAdSlotSel();
+      ['adTitle', 'adImageUrl', 'adLinkUrl', 'adSponsor'].forEach((k) => { $(k).value = ''; });
+      $('adBadge').value = lang === 'en' ? 'AD' : '广告';
+      $('adPrice').value = 0; $('adSort').value = 0; $('adActive').value = '1';
+      $('adStart').value = ''; $('adEnd').value = '';
+      $('adFormHint').textContent = '';
+    }
+    const box = $('adFormBox');
+    box.classList.remove('hidden');
+    box.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  }
+  async function saveAd() {
+    const title = $('adTitle').value.trim();
+    if (!title) { xnSay(t('admAds_needTitle')); return; }
+    const body = {
+      slot: $('adSlot').value, title,
+      imageUrl: $('adImageUrl').value.trim() || null,
+      linkUrl: $('adLinkUrl').value.trim() || null,
+      badge: $('adBadge').value.trim() || null,
+      sponsorName: $('adSponsor').value.trim() || null,
+      priceFenDay: Math.max(0, parseInt($('adPrice').value, 10) || 0),
+      sort: Math.max(0, parseInt($('adSort').value, 10) || 0),
+      active: $('adActive').value === '1',
+      startAt: $('adStart').value ? new Date($('adStart').value).toISOString() : null,
+      endAt: $('adEnd').value ? new Date($('adEnd').value).toISOString() : null,
+    };
+    try {
+      if (adEditingId) await adAdm(`/admin/${adEditingId}/update`, { method: 'POST', body: JSON.stringify(body) });
+      else await adAdm('/admin/create', { method: 'POST', body: JSON.stringify(body) });
+      xnSay(t('admAds_saved'));
+      $('adFormBox').classList.add('hidden');
+      adEditingId = null;
+      loadAdmAds();
+    } catch (e) { xnSay(e.message); }
   }
 
   /* ---------- v2.186 工具优化弹窗铁律：UpdateBanner 全局组件 ----------

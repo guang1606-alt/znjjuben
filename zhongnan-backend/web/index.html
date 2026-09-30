@@ -539,6 +539,8 @@
           </div>
           <div class="submission-list" id="submissionList"></div>
           <div class="notice" id="submissionNotice" style="font-size:12px"></div>
+          <div style="margin-top:6px"><button class="btn-ghost" id="subAllBtn" data-i="subShowAll" style="font-size:12px"></button></div>
+          <div class="submission-list hidden" id="submissionAllList" style="margin-top:6px"></div>
         </div>
         <div class="notice warn hidden" id="sandboxTip" data-i="sandboxTip"></div>
         <div class="notice warn hidden" id="complianceTip"></div>
@@ -1155,6 +1157,36 @@
         <div id="admTodoList" class="feed hidden"></div>
         <div id="admFbList" class="feed"></div>
       </section>
+      </section>
+      <!-- v2.219 广告位管理：/api/ads/admin/* 能力补齐前端入口（此前仅 API 可操作） -->
+      <section class="panel hidden" id="admAdsPane">
+        <div class="adm-toolbar" style="flex-wrap:wrap;gap:8px">
+          <b data-i="admAds_title">广告位管理</b>
+          <span class="spacer"></span>
+          <button class="btn-ghost" id="adReload" data-i="reload"></button>
+          <button class="btn-primary" id="adNewBtn" data-i="admAds_new"></button>
+        </div>
+        <div class="subpanel hidden" id="adFormBox" style="margin:10px 0">
+          <div class="grid two" style="gap:10px">
+            <div class="field"><label data-i="admAds_slot"></label><select id="adSlot" class="mini-select"></select></div>
+            <div class="field"><label data-i="admAds_fTitle"></label><input id="adTitle" class="mini-input" maxlength="80"/></div>
+            <div class="field"><label data-i="admAds_image"></label><input id="adImageUrl" class="mini-input" maxlength="500" placeholder="https://"/></div>
+            <div class="field"><label data-i="admAds_link"></label><input id="adLinkUrl" class="mini-input" maxlength="500" placeholder="https://"/></div>
+            <div class="field"><label data-i="admAds_badge"></label><input id="adBadge" class="mini-input" maxlength="20" value="广告"/></div>
+            <div class="field"><label data-i="admAds_sponsor"></label><input id="adSponsor" class="mini-input" maxlength="80"/></div>
+            <div class="field"><label data-i="admAds_price"></label><input id="adPrice" class="mini-input" type="number" min="0" step="1" value="0"/></div>
+            <div class="field"><label data-i="admAds_sort"></label><input id="adSort" class="mini-input" type="number" min="0" step="1" value="0"/></div>
+            <div class="field"><label data-i="admAds_start"></label><input id="adStart" class="mini-input" type="datetime-local"/></div>
+            <div class="field"><label data-i="admAds_end"></label><input id="adEnd" class="mini-input" type="datetime-local"/></div>
+            <div class="field"><label data-i="admAds_active"></label><select id="adActive" class="mini-select"><option value="1" data-i="admAds_on"></option><option value="0" data-i="admAds_off"></option></select></div>
+          </div>
+          <div style="display:flex;gap:8px;margin-top:10px;align-items:center">
+            <button class="btn-primary" id="adSave" data-i="save"></button>
+            <button class="btn-ghost" id="adCancel" data-i="cancel"></button>
+            <span class="muted" id="adFormHint" style="font-size:12px"></span>
+          </div>
+        </div>
+        <div id="admAdList" class="feed"></div>
       </section>
       <section class="panel hidden" id="admSafetyPane">
         <div class="adm-toolbar" style="flex-wrap:wrap;gap:8px">
