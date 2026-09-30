@@ -31,6 +31,17 @@ async function create(uid, level, sku) {
   return { status: r.status, json: await r.json().catch(() => null) };
 }
 
+// 发货单测显式创建已由渠道下单的订单；公开下单口在支付渠道接通前必须拒绝。
+async function pending(uid, level, sku) {
+  const fixtures = {
+    BASIC_M: { kind: 'MEMBER', level: 'BASIC', amountFen: 9900 },
+    PRO_Y: { kind: 'MEMBER', level: 'PRO', amountFen: 299900 },
+    PT_199: { kind: 'POINTS', amountFen: 19900, points: 1990 },
+  };
+  const order = await mem.order.create({ data: { userId: uid, status: 'PENDING', points: 0, ...fixtures[sku] } });
+  return { json: { orderId: order.id } };
+}
+
 describe('订单下单-支付回调-发货-幂等 资金链路', { concurrency: 1 }, () => {
   it('未登录下单 401', async () => {
     const r = await create(null, null, 'BASIC_M');
@@ -40,15 +51,18 @@ describe('订单下单-支付回调-发货-幂等 资金链路', { concurrency: 
     const r1 = await create('buyer', 'FREE', 'HACK_999');
     assert.strictEqual(r1.status, 400);
   });
-  it('年卡下单金额服务端锁定 2999 元、状态 PENDING', async () => {
+  it('支付未接通时目录明确不可用，下单503且不产生待支付订单', async () => {
+    const catalog = await (await fetch(base + '/api/order/catalog')).json();
+    assert.strictEqual(catalog.paymentAvailable, false);
+    assert.strictEqual(catalog.items.find((x) => x.sku === 'PRO_Y').amountFen, 299900);
+    const count = mem._orders.length;
     const r = await create('yearbuyer', 'FREE', 'PRO_Y');
-    assert.strictEqual(r.status, 200);
-    assert.strictEqual(r.json.amountFen, 299900);
-    const ord = mem._orders.find((o) => o.id === r.json.orderId);
-    assert.strictEqual(ord.status, 'PENDING');
+    assert.strictEqual(r.status, 503);
+    assert.strictEqual(r.json.code, 'PAYMENT_NOT_CONFIGURED');
+    assert.strictEqual(mem._orders.length, count);
   });
   it('月卡支付发货：升级会员、写会员周期与支付流水；重复回调幂等不重复发货', async () => {
-    const c = await create('buyer', 'FREE', 'BASIC_M');
+    const c = await pending('buyer', 'FREE', 'BASIC_M');
     const r1 = await deliver(c.json.orderId, 'WX_TRADE_1');
     assert.strictEqual(r1.skipped, false);
     assert.strictEqual(mem._users.get('buyer').level, 'BASIC');
@@ -60,7 +74,7 @@ describe('订单下单-支付回调-发货-幂等 资金链路', { concurrency: 
     assert.strictEqual(mem._memberships.filter((m) => m.orderId === c.json.orderId).length, 1, '重复回调不得重复发货');
   });
   it('年卡发货有效期≈12个月（修复年卡被误发成1个月的隐患）', async () => {
-    const c = await create('yearbuyer', 'FREE', 'PRO_Y');
+    const c = await pending('yearbuyer', 'FREE', 'PRO_Y');
     await deliver(c.json.orderId, 'WX_TRADE_2');
     const ms = mem._memberships.find((m) => m.orderId === c.json.orderId);
     const days = (ms.expireAt.getTime() - Date.now()) / 864e5;
@@ -68,7 +82,7 @@ describe('订单下单-支付回调-发货-幂等 资金链路', { concurrency: 
     assert.strictEqual(mem._users.get('yearbuyer').level, 'PRO');
   });
   it('积分包发货：余额增加1990、写充值流水；重复回调不重复到账', async () => {
-    const c = await create('pointbuyer', 'FREE', 'PT_199');
+    const c = await pending('pointbuyer', 'FREE', 'PT_199');
     await deliver(c.json.orderId, 'ZFB_TRADE_1');
     assert.strictEqual(mem._accounts.get('pointbuyer').balance, 1990);
     const inLedger = mem._ledgers.filter((l) => l.refId === c.json.orderId && l.direction === 'IN');
@@ -84,6 +98,25 @@ describe('订单下单-支付回调-发货-幂等 资金链路', { concurrency: 
     });
     assert.strictEqual(r.status, 401);
   });
+  it('仅配置测试密钥不能启用占位回调并发货', async () => {
+    const crypto = require('node:crypto');
+    const c = await pending('pointbuyer', 'FREE', 'PT_199');
+    const body = { event_type: 'TRANSACTION.SUCCESS', out_trade_no: c.json.orderId, transaction_id: 'forged-test' };
+    process.env.WECHAT_API_V3_KEY = 'fixture-key';
+    process.env.ALIPAY_NOTIFY_SECRET = 'fixture-key';
+    try {
+      const r = await fetch(base + '/api/order/notify/wechat', {
+        method: 'POST', headers: { 'Content-Type': 'application/json', 'wechatpay-signature': crypto.createHmac('sha256', 'fixture-key').update(JSON.stringify(body)).digest('hex') },
+        body: JSON.stringify(body),
+      });
+      assert.strictEqual(r.status, 401);
+      const ali = { out_trade_no: c.json.orderId, trade_no: 'forged-test', trade_status: 'TRADE_SUCCESS' };
+      const signBase = Object.keys(ali).sort().map((k) => `${k}=${ali[k]}`).join('&');
+      const ar = await fetch(base + '/api/order/notify/alipay', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...ali, sign: crypto.createHmac('sha256', 'fixture-key').update(signBase).digest('hex') }) });
+      assert.strictEqual(await ar.text(), 'fail');
+      assert.strictEqual(mem._orders.find((o) => o.id === c.json.orderId).status, 'PENDING');
+    } finally { delete process.env.WECHAT_API_V3_KEY; delete process.env.ALIPAY_NOTIFY_SECRET; }
+  });
   it('发货不存在的订单抛 ORDER_NOT_FOUND', async () => {
     await assert.rejects(() => deliver('not_exist', 't'), /ORDER_NOT_FOUND/);
   });
@@ -92,7 +125,7 @@ describe('订单下单-支付回调-发货-幂等 资金链路', { concurrency: 
     const before = mem._memberships.find((m) => m.userId === 'buyer' && m.level === 'BASIC');
     assert.ok(before, '前置：buyer 已有 BASIC 月卡');
     const expireBefore = before.expireAt.getTime();
-    const c = await create('buyer', 'BASIC', 'BASIC_M');
+    const c = await pending('buyer', 'BASIC', 'BASIC_M');
     await deliver(c.json.orderId, 'WX_TRADE_RENEW');
     const rows = mem._memberships.filter((m) => m.userId === 'buyer' && m.level === 'BASIC');
     assert.strictEqual(rows.length, 1, '续期必须更新同一行，不得新增会员行');
@@ -108,7 +141,7 @@ describe('订单下单-支付回调-发货-幂等 资金链路', { concurrency: 
     const proExpire = new Date(Date.now() + 100 * 864e5);
     mem._users.get('prohold').levelExpireAt = proExpire;
     await mem.membership.create({ data: { userId: 'prohold', level: 'PRO', expireAt: proExpire, quotaTotal: 999, orderId: 'oldpro' } });
-    const c = await create('prohold', 'PRO', 'BASIC_M');
+    const c = await pending('prohold', 'PRO', 'BASIC_M');
     await deliver(c.json.orderId, 'WX_TRADE_DOWNGRADE');
     const u = mem._users.get('prohold');
     assert.strictEqual(u.level, 'PRO', '高级会员有效期内购低档不得降级');
@@ -119,7 +152,7 @@ describe('订单下单-支付回调-发货-幂等 资金链路', { concurrency: 
     mem._seedUser({ id: 'expiredpro', level: 'PRO', balance: 0 });
     mem._users.get('expiredpro').levelExpireAt = new Date(Date.now() - 864e5);
     await mem.membership.create({ data: { userId: 'expiredpro', level: 'PRO', expireAt: new Date(Date.now() - 864e5), quotaTotal: 999, orderId: 'oldpro2' } });
-    const c = await create('expiredpro', 'PRO', 'BASIC_M');
+    const c = await pending('expiredpro', 'PRO', 'BASIC_M');
     await deliver(c.json.orderId, 'WX_TRADE_EXPIRED');
     assert.strictEqual(mem._users.get('expiredpro').level, 'BASIC');
     const days = (mem._users.get('expiredpro').levelExpireAt.getTime() - Date.now()) / 864e5;

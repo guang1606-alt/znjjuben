@@ -11,8 +11,8 @@ import { createAuthRouter } from './routes/auth';
 import { createGenerateRouter } from './routes/generate';
 import { createValueAddedRouter } from './routes/value-added';
 import { createRoomRouter } from './routes/room';
-import { createTeardownRouter } from './routes/teardown';
 import { createInterviewRouter } from './routes/interview';
+import { createTeardownRouter } from './routes/teardown';
 import { createAdsRouter } from './routes/ads';
 import { createOrderRouter } from './routes/order';
 import { createFeedbackRouter } from './routes/feedback';
@@ -36,8 +36,8 @@ const app = createApp({
   generate: createGenerateRouter(mem),
   va: createValueAddedRouter(mem),
   room: createRoomRouter(mem),
-  teardown: createTeardownRouter(mem),
   interview: createInterviewRouter(mem),
+  teardown: createTeardownRouter(mem),
   ads: createAdsRouter(mem),
   order: createOrderRouter(mem),
   feedback: createFeedbackRouter(mem),

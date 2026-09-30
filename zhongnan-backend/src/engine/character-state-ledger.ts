@@ -33,10 +33,20 @@ export const CHAR_STATE_META: Record<CharStateId, { zh: string; en: string }> = 
 
 export interface StateEvent {
   state: CharStateId;
+  /** 不能可靠识别时留空；未知人物不可替其他具名人物消账。 */
+  character?: string;
   /** onset=状态立起 / bridge=合法桥接交代 */
   kind: 'onset' | 'bridge';
   signal: string;
   lineNo: number;
+  columnNo: number;
+  snippet: string;
+}
+
+export interface ActiveCharacterState {
+  state: CharStateId;
+  character?: string;
+  onsetInEp: number;
   snippet: string;
 }
 
@@ -51,12 +61,13 @@ export interface CharacterStateLedgerResult {
   onsets: StateEvent[];
   bridges: StateEvent[];
   /** 跨集仍未桥接的状态 */
-  unresolved: { state: CharStateId; stateLabel: string; labelEn: string; onsetInEp: number; ageEp: number; snippet: string }[];
+  unresolved: (ActiveCharacterState & { stateLabel: string; labelEn: string; ageEp: number })[];
   score: number;
   issues: CslIssue[];
   /** 累积状态（调用方持久化，下一集作 prev 传入） */
   nextState: {
-    onsets: { state: CharStateId; onsetInEp: number; snippet: string }[];
+    onsets: ActiveCharacterState[];
+    /** 兼容旧消费者的类别摘要；尚有任一人物处于该状态时不列为已解决。 */
     resolved: CharStateId[];
     epNo: number;
   };
@@ -103,23 +114,52 @@ function snippetOf(line: string, index: number): string {
   return line.slice(start, Math.min(line.length, index + 30));
 }
 
+function subjectOf(line: string, index: number, names: string[]): string | undefined {
+  const before = line.slice(0, index);
+  const clause = before.split(/[。！？.!?；;,，]/).pop()!.trim().replace(/^[△▲\s]+/, '');
+  const spoken = clause.match(/^([^:：()（）]{1,40})(?:[（(][^）)]*[）)])?[:：]\s*(.*)$/);
+  const prefix = (spoken ? spoken[2] : clause).trim();
+  // 台词里的“她/他”不能当成说话人；第一人称才归属于发言者。
+  if (spoken && /^(?:我(?:又|也|再次|已经|仍然)?|I\s+(?:am|was|have|got)\s*)$/i.test(prefix)) return spoken[1].trim();
+  const explicit = names.map(name => ({ name, at: prefix.lastIndexOf(name) }))
+    .filter(x => x.at >= 0).sort((a, b) => b.at - a.at || b.name.length - a.name.length)[0];
+  if (explicit) return explicit.name;
+  const plain = prefix.replace(/(?:(?:再次|再度|仍然|已经|突然|刚刚|曾经|终于|又|也|已|仍|被|正|竟))+$/, '').trim();
+  // 无人物卡时仅识别紧邻状态词的简单具名主语，避免把代词/旁白冒充角色。
+  if (/^[\u4e00-\u9fff]{2,4}$/.test(plain) && !/^(?:她们|他们|孩子|医生|旁白|母亲|父亲|女人|男人|公司|记忆|所有人|自己)$/.test(plain)) return plain;
+  const english = plain.replace(/\s+(?:has|had|was|is|got|again|also|still)$/i, '').trim();
+  if (/^[A-Z][a-z]+(?:\s+[A-Z][a-z]+)?$/.test(english) && !/^(?:She|He|They|The|Her|His|Their|Doctor|Narrator|I)$/.test(english)) return english;
+  return undefined;
+}
+
 function scan(
-  lines: string[], kind: 'onset' | 'bridge', table: Partial<Record<CharStateId, RegExp[]>>,
+  lines: string[], kind: 'onset' | 'bridge', table: Partial<Record<CharStateId, RegExp[]>>, names: string[],
 ): StateEvent[] {
   const out: StateEvent[] = [];
+  const knownNames = names.slice();
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i];
     for (const [state, regs] of Object.entries(table) as [CharStateId, RegExp[]][]) {
       for (const re of regs) {
         re.lastIndex = 0;
-        const m = re.exec(line);
-        if (!m) continue;
-        out.push({ state, kind, signal: m[0], lineNo: i + 1, snippet: snippetOf(line, m.index ?? 0) });
-        break; // 每行每状态只记一次
+        for (const m of line.matchAll(re)) {
+          const index = m.index ?? 0;
+          const character = subjectOf(line, index, knownNames);
+          if (character && !knownNames.includes(character)) knownNames.push(character);
+          out.push({ state, character, kind, signal: m[0], lineNo: i + 1, columnNo: index + 1, snippet: snippetOf(line, index) });
+        }
       }
     }
   }
-  return out;
+  const ends = new Map<string, number>();
+  return out.sort((a, b) => a.lineNo - b.lineNo || a.columnNo - b.columnNo).filter(event => {
+    const key = `${event.lineNo}:${event.state}:${event.character ?? ''}`;
+    const start = event.columnNo - 1;
+    const previousEnd = ends.get(key);
+    ends.set(key, Math.max(previousEnd ?? 0, start + event.signal.length));
+    // 只合并重叠/相邻的“顺产生下”等复合信号，保留恢复之后再次触发的状态。
+    return previousEnd === undefined || (start > previousEnd && /\S/.test(lines[event.lineNo - 1].slice(previousEnd, start)));
+  });
 }
 
 /**
@@ -128,25 +168,51 @@ function scan(
  */
 export function characterStateLedger(
   text: string,
-  prev?: { onsets: { state: CharStateId; onsetInEp: number; snippet: string }[]; resolved: CharStateId[]; epNo: number } | null,
+  prev?: CharacterStateLedgerResult['nextState'] | null,
   lang: CslLang = 'zh',
+  characterNames: string[] = [],
 ): CharacterStateLedgerResult {
   const isZh = lang !== 'en';
   const lines = text.split('\n');
-  const onsets = scan(lines, 'onset', isZh ? ONSET_ZH : ONSET_EN);
-  const bridges = scan(lines, 'bridge', isZh ? BRIDGE_ZH : BRIDGE_EN);
+  const names = [...new Set([...characterNames, ...(prev?.onsets ?? []).flatMap(o => o.character ? [o.character] : [])])];
+  const onsetTable = isZh ? ONSET_ZH : ONSET_EN;
+  const onsets = scan(lines, 'onset', onsetTable, names);
+  const bridges = scan(lines, 'bridge', isZh ? BRIDGE_ZH : BRIDGE_EN, names);
 
   const curEp = prev ? prev.epNo + 1 : 1;
-  const resolved = new Set<CharStateId>([...(prev?.resolved ?? []), ...bridges.map((b) => b.state)]);
-  const bridgeThisEp = new Set(bridges.map((b) => b.state));
+  const keyOf = (o: { state: CharStateId; character?: string }) => `${o.state}:${o.character ?? ''}`;
+  const active = new Map<string, ActiveCharacterState>();
+  for (const old of prev?.onsets ?? []) {
+    // 旧存档没有 character，可从留存证据补全；无法识别时保留为未知人物。
+    const character = old.character ?? scan([old.snippet], 'onset', onsetTable, names).find(o => o.state === old.state)?.character;
+    const o = { ...old, character };
+    const current = active.get(keyOf(o));
+    if (!current || o.onsetInEp < current.onsetInEp) active.set(keyOf(o), o);
+  }
+  const previous = [...active.values()];
+  const resolved = new Set<CharStateId>(prev?.resolved ?? []);
+  const emptyBridges: StateEvent[] = [];
+  // 按正文出现顺序更新人物×状态，允许恢复之后在同集/后集再次触发。
+  for (const event of [...onsets, ...bridges].sort((a, b) => a.lineNo - b.lineNo || a.columnNo - b.columnNo)) {
+    const key = keyOf(event);
+    if (event.kind === 'onset') {
+      if (!active.has(key)) active.set(key, { state: event.state, character: event.character, onsetInEp: curEp, snippet: event.snippet });
+    } else if (active.delete(key)) {
+      resolved.add(event.state);
+    } else {
+      emptyBridges.push(event);
+    }
+  }
+  for (const o of active.values()) resolved.delete(o.state);
 
-  // 状态悬空：前集立起、本集无桥接、主题从未 resolved
+  // 只有同一人物尚未完成的同一次状态才累计悬空时长。
   const unresolved: CharacterStateLedgerResult['unresolved'] = [];
-  for (const o of prev?.onsets ?? []) {
-    if (resolved.has(o.state)) continue;
+  for (const o of previous) {
+    if (active.get(keyOf(o)) !== o) continue;
     const ageEp = curEp - o.onsetInEp;
     unresolved.push({
       state: o.state,
+      character: o.character,
       stateLabel: CHAR_STATE_META[o.state].zh,
       labelEn: CHAR_STATE_META[o.state].en,
       onsetInEp: o.onsetInEp,
@@ -155,23 +221,11 @@ export function characterStateLedger(
     });
   }
 
-  // nextState：已 resolved 的移出待收池；onset 池上限 40
-  const carried = (prev?.onsets ?? []).filter((o) => !resolved.has(o.state));
-  const newOnsets = onsets
-    .filter((o) => !resolved.has(o.state))
-    .map((o) => ({ state: o.state, onsetInEp: curEp, snippet: o.snippet }));
   const nextState = {
-    onsets: [...carried, ...newOnsets].slice(0, 40),
+    onsets: [...active.values()].slice(0, 40),
     resolved: [...resolved],
     epNo: curEp,
   };
-
-  // 凭空恢复：本集 bridge 但该状态从未 onset（历史 onset 池 + 本集 onset 均无）
-  const everOnset = new Set<CharStateId>([
-    ...(prev?.onsets ?? []).map((o) => o.state),
-    ...onsets.map((o) => o.state),
-  ]);
-  const emptyBridges = bridges.filter((b) => !everOnset.has(b.state));
 
   // 评分
   const sevOf = (s: CharStateId, age: number): 'high' | 'mid' | 'low' => {

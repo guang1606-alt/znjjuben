@@ -21,6 +21,7 @@ mem._seedUser({ id: 'free', level: 'FREE' });
 const M = '/api/market';
 const H = (uid, level = 'BASIC') => ({ 'Content-Type': 'application/json', Authorization: `Bearer ${signAccess({ sub: uid, level })}` });
 const post = (path, body, uid, level) => fetch(base + M + path, { method: 'POST', headers: H(uid, level), body: JSON.stringify(body ?? {}) });
+const get = (path, uid) => fetch(base + M + path, uid ? { headers: H(uid) } : {});
 const bal = (uid) => mem._accounts.get(uid).balance;
 
 async function seedScript(id, title) {
@@ -114,44 +115,51 @@ describe('剧本交易广场·担保交易状态机 HTTP 闭环', { concurrency:
     assert.strictEqual(r.status, 402);
     assert.strictEqual(mem._listings.find((l) => l.id === lid).status, 'ON_SHELF');
   });
-  it('多集仅交付各集最新版，改稿与确认后仍读取付款快照，且只有买家可查看', async () => {
-    await seedScript('s5', '多集交易');
-    await mem.script.create({ data: { projectId: 'pj_s5', epNo: 2, version: 1, title: '第二集旧稿', content: '第二集旧正文' } });
-    await mem.script.create({ data: { projectId: 'pj_s5', epNo: 1, version: 2, title: '第一集新稿', content: '第一集新正文' } });
-    await mem.script.create({ data: { projectId: 'pj_s5', epNo: 2, version: 2, title: '第二集新稿', content: '第二集新正文' } });
-    const lid = (await (await post('/listings', { projectId: 'pj_s5', priceFen: 1000 }, 'seller', 'PRO')).json()).id;
+  it('付款交付每集最新正文，已购可重取；结算后仍可读，退款及越权不可读', async () => {
+    await mem.project.create({ data: { id: 'pj_multi', userId: 'seller', title: '多集测试' } });
+    await mem.script.create({ data: { id: 'multi_1_old', projectId: 'pj_multi', epNo: 1, version: 1, title: '第一集', content: '旧版正文' } });
+    await mem.script.create({ data: { id: 'multi_1_new', projectId: 'pj_multi', epNo: 1, version: 2, title: '第一集', content: '新版正文' } });
+    await mem.script.create({ data: { id: 'multi_2', projectId: 'pj_multi', epNo: 2, version: 1, title: '第二集', content: '第二集正文' } });
+    const lid = (await (await post('/listings', { projectId: 'pj_multi', priceFen: 1000 }, 'seller', 'PRO')).json()).id;
     const bought = await post(`/listings/${lid}/buy`, {}, 'buyer');
     assert.strictEqual(bought.status, 200);
-    const delivery = await bought.json();
-    assert.deepStrictEqual(delivery.episodes.map((ep) => ep.epNo), [1, 2]);
-    assert.match(delivery.fullText, /第一集新正文/);
-    assert.match(delivery.fullText, /第二集新正文/);
-    assert.doesNotMatch(delivery.fullText, /第二集旧正文|多集交易全本正文/);
-    const pid = delivery.purchaseId;
-    const contentPath = `/purchases/${pid}/content`;
-    assert.strictEqual((await fetch(base + M + contentPath)).status, 401);
-    assert.strictEqual((await fetch(base + M + contentPath, { headers: H('seller', 'PRO') })).status, 404);
-    assert.strictEqual((await fetch(base + M + contentPath, { headers: H('poor') })).status, 404);
-    await mem.script.create({ data: { projectId: 'pj_s5', epNo: 1, version: 3, content: '付款后改写的正文' } });
-    const inEscrow = await (await fetch(base + M + contentPath, { headers: H('buyer') })).json();
-    assert.strictEqual(inEscrow.status, 'ESCROW');
-    assert.strictEqual(inEscrow.fullText, delivery.fullText);
-    const sales = await (await fetch(base + M + '/my', { headers: H('seller', 'PRO') })).json();
-    const buys = await (await fetch(base + M + '/my', { headers: H('buyer') })).json();
-    for (const row of [...sales.sales, ...buys.buys]) {
+    const payload = await bought.json();
+    assert.strictEqual(payload.episodes.length, 2);
+    assert.deepStrictEqual(payload.episodes.map((e) => e.epNo), [1, 2]);
+    assert.match(payload.fullText, /新版正文/);
+    assert.match(payload.fullText, /第二集正文/);
+    assert.doesNotMatch(payload.fullText, /旧版正文/);
+
+    const path = `/purchases/${payload.purchaseId}/content`;
+    assert.strictEqual((await get(path)).status, 401);
+    assert.strictEqual((await get(path, 'seller')).status, 404);
+    assert.strictEqual((await get(path, 'poor')).status, 404);
+    await mem.script.create({ data: { projectId: 'pj_multi', epNo: 1, version: 3, title: '第一集', content: '付款后改写的正文' } });
+    const reopened = await get(path, 'buyer');
+    assert.strictEqual(reopened.status, 200);
+    assert.strictEqual((await reopened.json()).fullText, payload.fullText);
+    const sellerOrders = await (await get('/my', 'seller')).json();
+    const buyerOrders = await (await get('/my', 'buyer')).json();
+    for (const row of [...sellerOrders.sales, ...buyerOrders.buys]) {
       assert.ok(!('contentSnapshot' in row) && !('fullText' in row));
     }
-    assert.strictEqual((await post(`/purchases/${pid}/confirm`, {}, 'buyer')).status, 200);
-    const settled = await (await fetch(base + M + contentPath, { headers: H('buyer') })).json();
-    assert.strictEqual(settled.status, 'SETTLED');
-    assert.strictEqual(settled.fullText, delivery.fullText);
+    assert.strictEqual((await post(`/purchases/${payload.purchaseId}/confirm`, {}, 'buyer')).status, 200);
+    const settled = await get(path, 'buyer');
+    assert.strictEqual(settled.status, 200);
+    assert.strictEqual((await settled.json()).status, 'SETTLED');
+
+    await seedScript('refund_access', '退款访问');
+    const refundListing = (await (await post('/listings', { scriptId: 'refund_access', priceFen: 1000 }, 'seller', 'PRO')).json()).id;
+    const refundBuy = await (await post(`/listings/${refundListing}/buy`, {}, 'buyer')).json();
+    const refundPath = `/purchases/${refundBuy.purchaseId}/content`;
+    assert.strictEqual((await get(refundPath, 'buyer')).status, 200);
+    assert.strictEqual((await post(`/purchases/${refundBuy.purchaseId}/refund`, {}, 'buyer')).status, 200);
+    assert.strictEqual((await get(refundPath, 'buyer')).status, 404);
   });
-  it('退款撤销正文访问，最新稿为空时不回退出售旧稿，空剧本不扣款', async () => {
-    const refunded = mem._purchases.find((p) => p.listingId === mem._listings.find((l) => l.scriptId === 's2').id);
-    assert.strictEqual((await fetch(base + M + `/purchases/${refunded.id}/content`, { headers: H('buyer') })).status, 404);
-    await seedScript('s6', '空稿');
-    await mem.script.create({ data: { projectId: 'pj_s6', epNo: 1, version: 2, content: '  ' } });
-    const lid = (await (await post('/listings', { scriptId: 's6', priceFen: 1000 }, 'seller', 'PRO')).json()).id;
+  it('最新稿为空时不回退出售旧稿，且不扣款、不生成订单', async () => {
+    await seedScript('empty_latest', '空稿');
+    await mem.script.create({ data: { projectId: 'pj_empty_latest', epNo: 1, version: 2, title: '空稿新版', content: '  ' } });
+    const lid = (await (await post('/listings', { scriptId: 'empty_latest', priceFen: 1000 }, 'seller', 'PRO')).json()).id;
     const before = bal('buyer');
     const r = await post(`/listings/${lid}/buy`, {}, 'buyer');
     assert.strictEqual(r.status, 409);

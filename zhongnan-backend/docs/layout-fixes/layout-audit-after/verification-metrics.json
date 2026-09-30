@@ -1,0 +1,254 @@
+{
+  "tools": [
+    {
+      "width": 390,
+      "toolId": "toolPitch",
+      "current": "roomPanel",
+      "visible": [
+        "roomPanel"
+      ],
+      "top": 9,
+      "assistant": "none",
+      "backHit": true
+    },
+    {
+      "width": 390,
+      "toolId": "toolRead",
+      "current": "roomPanel",
+      "visible": [
+        "roomPanel"
+      ],
+      "top": 9,
+      "assistant": "none",
+      "backHit": true
+    },
+    {
+      "width": 390,
+      "toolId": "toolTeardown",
+      "current": "teardownPanel",
+      "visible": [
+        "teardownPanel"
+      ],
+      "top": 9,
+      "assistant": "none",
+      "backHit": true
+    },
+    {
+      "width": 390,
+      "toolId": "toolDiversity",
+      "current": "diversityPanel",
+      "visible": [
+        "diversityPanel"
+      ],
+      "top": 9,
+      "assistant": "none",
+      "backHit": true
+    },
+    {
+      "width": 390,
+      "toolId": "toolBranch",
+      "current": "branchPanel",
+      "visible": [
+        "branchPanel"
+      ],
+      "top": 9,
+      "assistant": "none",
+      "backHit": true
+    },
+    {
+      "width": 1440,
+      "toolId": "toolPitch",
+      "current": "roomPanel",
+      "visible": [
+        "roomPanel"
+      ],
+      "top": 80,
+      "assistant": "none",
+      "backHit": true
+    },
+    {
+      "width": 1440,
+      "toolId": "toolRead",
+      "current": "roomPanel",
+      "visible": [
+        "roomPanel"
+      ],
+      "top": 80,
+      "assistant": "none",
+      "backHit": true
+    },
+    {
+      "width": 1440,
+      "toolId": "toolTeardown",
+      "current": "teardownPanel",
+      "visible": [
+        "teardownPanel"
+      ],
+      "top": 80,
+      "assistant": "none",
+      "backHit": true
+    },
+    {
+      "width": 1440,
+      "toolId": "toolDiversity",
+      "current": "diversityPanel",
+      "visible": [
+        "diversityPanel"
+      ],
+      "top": 80,
+      "assistant": "none",
+      "backHit": true
+    },
+    {
+      "width": 1440,
+      "toolId": "toolBranch",
+      "current": "branchPanel",
+      "visible": [
+        "branchPanel"
+      ],
+      "top": 80,
+      "assistant": "none",
+      "backHit": true
+    }
+  ],
+  "pages": [
+    {
+      "width": 320,
+      "view": "studio",
+      "documentWidth": 320,
+      "topbarHeight": 113
+    },
+    {
+      "width": 320,
+      "view": "works",
+      "documentWidth": 320,
+      "topbarHeight": 113
+    },
+    {
+      "width": 320,
+      "view": "vip",
+      "documentWidth": 320,
+      "topbarHeight": 113
+    },
+    {
+      "width": 320,
+      "view": "square",
+      "documentWidth": 320,
+      "topbarHeight": 113
+    },
+    {
+      "width": 320,
+      "view": "market",
+      "documentWidth": 320,
+      "topbarHeight": 113
+    },
+    {
+      "width": 390,
+      "view": "studio",
+      "documentWidth": 390,
+      "topbarHeight": 113
+    },
+    {
+      "width": 390,
+      "view": "works",
+      "documentWidth": 390,
+      "topbarHeight": 113
+    },
+    {
+      "width": 390,
+      "view": "vip",
+      "documentWidth": 390,
+      "topbarHeight": 113
+    },
+    {
+      "width": 390,
+      "view": "square",
+      "documentWidth": 390,
+      "topbarHeight": 113
+    },
+    {
+      "width": 390,
+      "view": "market",
+      "documentWidth": 390,
+      "topbarHeight": 113
+    },
+    {
+      "width": 768,
+      "view": "studio",
+      "documentWidth": 768,
+      "topbarHeight": 106.515625
+    },
+    {
+      "width": 768,
+      "view": "works",
+      "documentWidth": 768,
+      "topbarHeight": 106.515625
+    },
+    {
+      "width": 768,
+      "view": "vip",
+      "documentWidth": 768,
+      "topbarHeight": 106.515625
+    },
+    {
+      "width": 768,
+      "view": "square",
+      "documentWidth": 768,
+      "topbarHeight": 106.515625
+    },
+    {
+      "width": 768,
+      "view": "market",
+      "documentWidth": 768,
+      "topbarHeight": 106.515625
+    },
+    {
+      "width": 1440,
+      "view": "studio",
+      "documentWidth": 1440,
+      "topbarHeight": 60.75
+    },
+    {
+      "width": 1440,
+      "view": "works",
+      "documentWidth": 1440,
+      "topbarHeight": 60.75
+    },
+    {
+      "width": 1440,
+      "view": "vip",
+      "documentWidth": 1440,
+      "topbarHeight": 60.75
+    },
+    {
+      "width": 1440,
+      "view": "square",
+      "documentWidth": 1440,
+      "topbarHeight": 60.75
+    },
+    {
+      "width": 1440,
+      "view": "market",
+      "documentWidth": 1440,
+      "topbarHeight": 60.75
+    }
+  ],
+  "english": {
+    "lang": "en",
+    "brand": [
+      76,
+      76
+    ],
+    "titles": [
+      {
+        "text": "Choose a mode (12)",
+        "overflow": 0
+      },
+      {
+        "text": "Writers’ room · toolbox",
+        "overflow": 0
+      }
+    ],
+    "documentWidth": 320
+  }
+}

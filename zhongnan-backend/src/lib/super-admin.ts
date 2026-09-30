@@ -2,7 +2,7 @@
  * c198 超管主账号启动引导：保证「18891995171 = 唯一最高权限账号」在任意环境（生产/测试）开箱即用。
  *
  * 语义（全部幂等，可安全重复执行）：
- * ① 无此手机号 → 创建主账号：初始密码（env SUPER_ADMIN_INIT_PASSWORD 可覆盖，默认 yxgnono0726）
+ * ① 无此手机号 → 创建主账号：初始密码（必须显式配置 SUPER_ADMIN_INIT_PASSWORD）
  *    经 argon2id 哈希落库，会员档直接 PRO（定价体系最高档，普通账号任何档位都在其权限之下），
  *    积分账户同步建立；
  * ② 已存在但 passwordHash 为空（历史手机号注册/导入账号）→ 补设初始密码；
@@ -18,11 +18,16 @@ import { hashPassword, genInviteCode } from './auth';
 import { SUPER_ADMIN_PHONE } from '../middleware/admin';
 import { MemberLevel } from '../config/pricing';
 
-/** 主账号初始密码的环境变量名（生产可用 env 覆盖默认初始密码） */
+/** 主账号初始密码的环境变量名（必须由部署环境显式提供） */
 export const SUPER_ADMIN_INITIAL_PASSWORD_ENV = 'SUPER_ADMIN_INIT_PASSWORD';
 
-const superAdminInitialPassword = () =>
-  process.env[SUPER_ADMIN_INITIAL_PASSWORD_ENV] || 'yxgnono0726';
+const superAdminInitialPassword = () => {
+  const password = process.env[SUPER_ADMIN_INITIAL_PASSWORD_ENV];
+  if (!password || password.trim().length < 12) {
+    throw new Error('SUPER_ADMIN_INIT_PASSWORD 必须显式配置且至少12位，才能创建超管或补设密码');
+  }
+  return password;
+};
 
 type PrismaLike = typeof defaultPrisma;
 

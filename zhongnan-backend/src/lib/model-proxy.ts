@@ -12,6 +12,7 @@ import { EngineTier } from '../config/pricing';
 import { resolveText, resolveImage, loadProviders, loadRouting } from './model-config';
 import { ProviderEntry, RoleId, routeProvider } from './model-config-policy';
 import https from 'node:https';
+import http from 'node:http';
 import { URL } from 'node:url';
 
 export type Role =
@@ -90,18 +91,19 @@ export function assertMargin(priceFen: number, costFen: number) {
   if (priceFen < costFen * 2) throw new Error(`MARGIN_BREACH 售价${priceFen}分<成本${costFen}分×2`);
 }
 
-// 可注入 HTTP 传输（测试钩子）；生产默认走 node:https（veFaaS 环境内置 fetch 不稳定）
+// 可注入 HTTP 传输（测试钩子）；生产按端点协议走 node:http(s)（veFaaS 环境内置 fetch 不稳定）
 export interface MinimalResp { ok: boolean; status: number; text(): Promise<string>; json(): Promise<any> }
 type HttpTransport = (url: string, init: { method: string; headers: Record<string, string | number>; body: string; timeoutMs: number; signal?: AbortSignal }) => Promise<MinimalResp>;
 // eslint-disable-next-line @typescript-eslint/naming-convention
 let __injectedTransport: HttpTransport | null = null;
 export function __setHttpTransport(t: HttpTransport | null) { __injectedTransport = t; }
 
-function httpsPost(url: string, init: { method: string; headers: Record<string, string | number>; body: string; timeoutMs: number; signal?: AbortSignal }): Promise<MinimalResp> {
+function httpPost(url: string, init: { method: string; headers: Record<string, string | number>; body: string; timeoutMs: number; signal?: AbortSignal }): Promise<MinimalResp> {
   return new Promise<MinimalResp>((resolve, reject) => {
     const u = new URL(url);
-    const req = https.request({
-      hostname: u.hostname, port: u.port || 443, path: u.pathname + u.search,
+    if (u.protocol !== 'https:' && u.protocol !== 'http:') return reject(new Error('MODEL_FATAL_UNSUPPORTED_PROTOCOL'));
+    const transport = u.protocol === 'http:' ? http : https;
+    const req = transport.request(u, {
       method: init.method,
       headers: init.headers,
       timeout: init.timeoutMs,
@@ -169,7 +171,7 @@ async function tryCandidate(
         temperature: ip.temperature, max_tokens: maxTokens,
         ...(ip.reasoningEffort ? { reasoning_effort: ip.reasoningEffort } : {}),
       });
-      const transport = __injectedTransport ?? httpsPost;
+      const transport = __injectedTransport ?? httpPost;
       const resp = await transport(url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${c.key}`, 'Content-Length': Buffer.byteLength(body) },
@@ -293,7 +295,7 @@ async function tryImageCandidate(
     try {
       const url = `${c.baseUrl.replace(/\/$/, '')}/images/generations`;
       const body = JSON.stringify({ model: c.model, prompt, n, size });
-      const transport = __injectedTransport ?? httpsPost;
+      const transport = __injectedTransport ?? httpPost;
       const resp = await transport(url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${c.key}`, 'Content-Length': Buffer.byteLength(body) },

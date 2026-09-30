@@ -1,30 +1,19 @@
 /**
- * 统一管理员鉴权（v1.46 抽取，口径唯一；2026-09-29 收紧为「超管一人独大」）。
+ * 统一管理员鉴权。身份标记与后台操作权限分离：仅主账号手机号拥有后台操作权限。
+ * 必须挂在 authRequired 之后（依赖 req.userId）。
  *
- * 身份模型（两套独立机制，会员等级 level 与管理权限无关——PRO 只是最高会员档）：
- *  · 超级管理员（主账号）：手机号 18891995171 硬判定，全库唯一，拥有全部后台权力；
- *  · 副管理员：isAdmin === true（仅主账号能授予/撤销），是「身份标记」，默认不享有任何后台权力。
- *
- * 授权口径（产品主人 2026-09-29 拍板：超管一人独大）：
- *  所有 /api/admin/* 路由统一挂 [authRequired, requireAdmin, requireSuperAdmin]——
- *  副管理员（含历史已授予账号）访问一律 403 needSuperAdmin；账号本身保留、可正常使用产品。
- *  未来若要恢复分级，把指定路由末尾的 requireSuperAdmin 摘掉即可（机关保留、默认全锁）。
- *
- * 历史修正：
- *  c198 名实不符：旧码 SUPER_ADMIN_PHONE 误存初始密码字符串，已修正为手机号；
- *  2026-09-29 删除 role==='ADMIN' 放行条件——schema 从无 role 字段（仅内存桩有），
- *  该死条件造成测试/生产行为分叉，按「白名单硬标识、不信任易污染字段」原则移除。
+ * 主账号初始密码由 SUPER_ADMIN_INIT_PASSWORD 显式配置，启动引导仅保存哈希。
+ * 主账号唯一且权限最高：开设账号等账号生命周期操作走 requireSuperAdmin（仅手机号命中，
+ * 副管理员保留身份标记，但所有后台操作需额外通过 requireSuperAdmin。
  */
 import { AuthRequest } from './auth';
 
 export const SUPER_ADMIN_PHONE = '18891995171';
 
-/** 是否具备「管理员身份标记」（注意：身份标记 ≠ 后台权力，后台权力见 isSuperAdmin） */
 export function isAdminUser(u: { phone?: string | null; isAdmin?: boolean | null } | null | undefined): boolean {
   return !!u && (u.phone === SUPER_ADMIN_PHONE || u.isAdmin === true);
 }
 
-/** 是否唯一最高权限账号（手机号硬判定，杜绝任何字段提权） */
 export function isSuperAdminUser(u: { phone?: string | null } | null | undefined): boolean {
   return !!u && u.phone === SUPER_ADMIN_PHONE;
 }

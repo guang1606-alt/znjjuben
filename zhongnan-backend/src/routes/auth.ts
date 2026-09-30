@@ -24,6 +24,8 @@ export function createAuthRouter(prisma: PrismaLike | any) {
     const parsed = phoneSchema.safeParse(req.body);
     if (!parsed.success) return res.status(400).json({ error: parsed.error.issues[0].message });
     const { phone, password, inviteCode } = parsed.data;
+    // 主账号仅由受控引导创建；未初始化时也不可通过公开注册取得特权。
+    if (phone === SUPER_ADMIN_PHONE) return res.status(409).json({ error: '该手机号已注册' });
     const existed = await prisma.user.findUnique({ where: { phone } });
     if (existed) return res.status(409).json({ error: '该手机号已注册' });
     const inviter = inviteCode ? await prisma.user.findUnique({ where: { inviteCode } }) : null;
@@ -92,20 +94,6 @@ export function createAuthRouter(prisma: PrismaLike | any) {
       points: { balance: acct?.balance ?? 0, frozen: acct?.frozen ?? 0 },
       storageUsedBytes: (used && used._sum && used._sum.bytes) || 0,
       benefits: MEMBERSHIP[u.level as MemberLevel] ?? null,
-    });
-  });
-  // c201 用户反馈修复：个人积分流水明细（每笔加/扣透明可查；只读本人，倒序，只暴露安全字段）
-  authRouter.get('/points/ledger', authRequired, async (req: AuthRequest, res) => {
-    const rows = await prisma.ledgerEntry.findMany({
-      where: { userId: req.userId! },
-      orderBy: { id: 'desc' },
-      take: 50,
-    });
-    res.json({
-      items: rows.map((r: any) => ({
-        direction: r.direction, bucket: r.bucket ?? null, amount: r.amount,
-        reason: r.reason ?? null, balanceAfter: r.balanceAfter ?? null, createdAt: r.createdAt ?? null,
-      })),
     });
   });
   // 修改笔名/昵称/简介（笔名会成为剧本水印；长度与字符合规校验，防注入与超长）

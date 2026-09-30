@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="zh-CN" data-theme="tech" data-font="md" data-lang="zh">
+<html lang="zh-CN" data-theme="tech" data-lang="zh">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
@@ -27,7 +27,6 @@
     <div class="ctl">
       <button class="chip" id="langBtn" title="中文 / English">中 / EN</button>
       <button class="chip" id="themeBtn" data-i="theme"></button>
-      <button class="chip" id="fontBtn" data-i="font"></button>
       <button class="chip" id="feedbackEntryBtn" data-i="feedbackEntry"></button>
       <button class="btn-primary" id="loginBtn" data-i="login"></button>
     </div>
@@ -330,6 +329,7 @@
 
       <!-- 非标签模式的内联创意输入（替代阻断式 prompt，按模式自适应提示，移动端友好） -->
       <section class="panel hidden" id="modeBriefPanel">
+        <div id="draftProjectNotice" class="notice hidden" role="status"></div>
         <div class="field" style="margin:0">
           <label id="modeBriefLabel">故事创意</label>
           <div class="track-switch hidden" id="hitLabTracks" style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px"></div>
@@ -617,11 +617,10 @@
           <button class="btn-ghost" id="editProfileBtn" data-i="editProfile"></button>
         </div>
         <div class="profile-stats">
-          <div><b id="mePoints">0</b><span data-i="points"></span><button class="chip" id="pointsLedgerBtn" data-i="pointsLedger" style="font-size:.68rem;padding:1px 8px;margin-left:6px;vertical-align:2px"></button></div>
+          <div><b id="mePoints">0</b><span data-i="points"></span></div>
           <div><b id="meStorage">0 MB</b><span data-i="storage"></span></div>
           <div><b id="meInvite">—</b><span data-i="inviteCode"></span></div>
         </div>
-        <div id="pointsLedgerPane" class="points-ledger hidden" aria-label="points ledger"></div>
         <div class="profile-edit hidden" id="profileEdit">
           <div class="field"><label data-i="nickname"></label><input id="inNickname" maxlength="24" /></div>
           <div class="field"><label data-i="penName"></label><input id="inPen" maxlength="20" placeholder="中英文数字 _ · -" /></div>
@@ -648,11 +647,12 @@
     <!-- 会员充值视图 -->
     <div id="view-vip" class="hidden">
       <div class="section-title"><h2 data-i="vipTitle"></h2><small data-i="vipSub"></small></div>
+      <div class="notice hidden" id="paymentNotice" role="status"></div>
       <div class="grid plans-grid" id="plansGrid"></div>
       <div class="notice">会员等级决定同时可进行的剧本项目数：免费 2 个 · 基础 10 个 · 高级 30 个 · 专业 100 个；等级越高，拆爆款/围读/选题会等 AI 共创消耗积分越低（高级 8 折、专业 6 折），引擎组合也更强。</div>
       <div class="section-title"><h2 data-i="pointsPack"></h2></div>
       <div class="grid" id="skuGrid"></div>
-      <div class="notice" id="payNote" data-i="payNote"></div>
+      <div class="notice" id="payNote" data-i="payNote">在线支付暂未开通，请联系管理员处理充值或会员开通。</div>
     </div>
 
     <!-- 交流广场视图 -->

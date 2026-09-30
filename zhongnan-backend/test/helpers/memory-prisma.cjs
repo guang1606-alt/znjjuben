@@ -26,13 +26,7 @@ function createMemoryPrisma() {
   };
   const ledgerEntry = {
     async findUnique({ where }) { return ledgers.find((l) => l.idempotencyKey === where.idempotencyKey) ?? null; },
-    // c201：支持 orderBy:{id:'desc'} 与 take（积分流水明细接口需要），其他用法保持原行为
-    async findMany({ where = {}, orderBy, take } = {}) {
-      let rows = ledgers.filter((l) => Object.entries(where).every(([k, v]) => l[k] === v));
-      if (orderBy && orderBy.id === 'desc') rows = rows.slice().sort((a, b) => ((b.id > a.id) ? 1 : (b.id < a.id) ? -1 : 0));
-      if (take) rows = rows.slice(0, take);
-      return rows;
-    },
+    async findMany({ where = {} } = {}) { return ledgers.filter((l) => Object.entries(where).every(([k, v]) => l[k] === v)); },
     async create({ data }) { const row = { id: ++seq, ...data }; ledgers.push(row); return row; },
   };
   const user = {
@@ -72,10 +66,10 @@ function createMemoryPrisma() {
     },
     async create({ data }) {
       const id = data.id || `p_${++seq}`;
-      const p = { id, bible: null, status: 'draft', ...data, createdAt: data.createdAt ?? new Date() };
+      const p = { id, bible: null, format: 'LIVE_ACTION', engineTier: 'STANDARD', tags: [], totalEps: 0, status: 'draft', specialTopic: false, ...data, createdAt: data.createdAt ?? new Date(), updatedAt: data.updatedAt ?? new Date() };
       projects.set(id, p); return p;
     },
-    async update({ where, data }) { const p = projects.get(where.id); Object.assign(p, data); return p; },
+    async update({ where, data }) { const p = projects.get(where.id); if (!p) throw new Error('PROJECT_NOT_FOUND'); Object.assign(p, data, { updatedAt: new Date() }); return p; },
     async findMany({ where = {}, orderBy, take } = {}) {
       let r = [...projects.values()].filter((p) => {
         if (where.userId && p.userId !== where.userId) return false;
@@ -93,29 +87,21 @@ function createMemoryPrisma() {
     },
   };
   const script = {
-    async count({ where }) {
-      if (!where) return scripts.length;
-      if (where.projectId) return scripts.filter((s) => s.projectId === where.projectId).length;
-      if (where.project && where.project.userId) // 跨项目、按作者计数（测试内均为当日，日期条件从略）
-        return scripts.filter((s) => projects.get(s.projectId)?.userId === where.project.userId).length;
-      return scripts.length;
+    async count({ where = {} } = {}) {
+      const { project: projectWhere, ...scriptWhere } = where;
+      const rows = await script.findMany({ where: scriptWhere });
+      return rows.filter((s) => !projectWhere?.userId || projects.get(s.projectId)?.userId === projectWhere.userId).length;
     },
-    async create({ data }) {
-      const row = { id: `s_${++seq}`, ...data, version: data.version ?? 1, createdAt: data.createdAt ?? new Date() };
-      scripts.push(row); return row;
-    },
+    async create({ data }) { const row = { id: `s_${++seq}`, version: 1, qcPassed: false, qcReport: null, createdAt: new Date(), ...data }; scripts.push(row); return row; },
     async findUnique({ where }) { return scripts.find((s) => s.id === where.id) ?? null; },
-    async findFirst({ where = {}, include, orderBy } = {}) {
-      let r = scripts.filter((x) => (!where.id || x.id === where.id) && (!where.projectId || x.projectId === where.projectId));
-      if (orderBy) { // v2.151 角色资产沉淀按 epNo desc 取最近成稿；无 orderBy 保持插入序首个（兼容既有测试）
-        const keys = Array.isArray(orderBy) ? orderBy : [orderBy];
-        r = [...r].sort((a, b) => { for (const o of keys) { const k = Object.keys(o)[0]; const dir = o[k] === 'desc' ? -1 : 1; const c = cmp(a[k], b[k]); if (c !== 0) return c * dir; } return 0; });
-      }
+    async findFirst({ where = {}, include, orderBy, select } = {}) {
+      const r = await script.findMany({ where, orderBy });
       const s = r[0] ?? null;
-      if (s && include?.project) s.project = projects.get(s.projectId) ?? null;
-      return s;
+      if (!s) return null;
+      if (select) return projectRow(s, select);
+      return include?.project ? { ...s, project: projects.get(s.projectId) ?? null } : s;
     },
-    async findMany({ where = {}, orderBy, take } = {}) {
+    async findMany({ where = {}, orderBy, take, select } = {}) {
       // v2.186：通用 where 过滤，支持 Prisma 操作符 lt/lte/gt/gte/in/not/equals
       const matchOp = (val, op) => {
         if (op == null) return val == null;
@@ -140,9 +126,10 @@ function createMemoryPrisma() {
         if (k === 'NOT') return true; // 简化：测试场景不走 NOT
         return matchOp(x[k], v);
       }));
-      const ob = Array.isArray(orderBy) ? orderBy : (orderBy ? [orderBy] : [{ epNo: 'asc' }]);
+      const ob = Array.isArray(orderBy) ? orderBy : (orderBy ? [orderBy] : []);
       r = [...r].sort((a, b) => { for (const o of ob) { const k = Object.keys(o)[0]; const dir = o[k] === 'desc' ? -1 : 1; if ((a[k] ?? 0) < (b[k] ?? 0)) return -1 * dir; if ((a[k] ?? 0) > (b[k] ?? 0)) return 1 * dir; } return 0; });
-      return typeof take === 'number' ? r.slice(0, take) : r;
+      if (typeof take === 'number') r = r.slice(0, take);
+      return select ? r.map((x) => projectRow(x, select)) : r;
     },
   };
   const generationTask = {

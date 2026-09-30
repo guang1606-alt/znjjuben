@@ -91,6 +91,9 @@ describe('采访式创作·HTTP 闭环', { concurrency: 1 }, () => {
     assert.ok(j.gaps.desire && j.gaps.conflict);
     assert.strictEqual(bal('rich'), before - 5);
     global.ivSession = j.sessionId;
+    const reloaded = await (await get(`/api/interview/sessions/${j.sessionId}`, 'rich')).json();
+    assert.strictEqual(reloaded.session.ready, false, '刷新单轮采访不能提前显示已就绪');
+    assert.deepStrictEqual(reloaded.session.gaps, j.gaps, '刷新后素材缺口与本轮响应一致');
   });
   it('追问一轮：turnCount 累计、就绪判定转 true、再扣5积分', async () => {
     const before = bal('rich');
@@ -129,10 +132,34 @@ describe('采访式创作·HTTP 闭环', { concurrency: 1 }, () => {
   it('会话列表与详情', async () => {
     const list = await get('/api/interview/sessions', 'rich');
     const lj = await list.json();
-    assert.ok(lj.sessions.some((s) => s.id === global.ivSession));
+    const listed = lj.sessions.find((s) => s.id === global.ivSession);
+    assert.ok(listed);
+    assert.strictEqual(listed.ready, true, '恢复入口应呈现真实就绪状态');
     const one = await get(`/api/interview/sessions/${global.ivSession}`, 'rich');
     const oj = await one.json();
     assert.strictEqual(oj.session.turnCount, 2);
+    assert.strictEqual(oj.session.ready, true, '刷新已就绪采访不能丢失成稿状态');
+    assert.deepStrictEqual(oj.session.gaps, { desire: true, conflict: true, stakes: true, turn: true });
+    assert.deepStrictEqual(listed.gaps, oj.session.gaps);
+  });
+  it('满2轮仍缺少欲望和冲突时，刷新和恢复列表都不能仅凭轮数判定就绪', async () => {
+    const opened = await post('/api/interview/sessions', {
+      idea: 'The main character walks through the city every morning.', lang: 'en',
+    }, 'other');
+    const start = await opened.json();
+    const answered = await post(`/api/interview/sessions/${start.sessionId}/turn`, {
+      text: 'The city square is beside the old school building.',
+    }, 'other');
+    const turn = await answered.json();
+    assert.strictEqual(answered.status, 200);
+    assert.strictEqual(turn.turnCount, 2);
+    assert.strictEqual(turn.ready, false);
+    const one = await (await get(`/api/interview/sessions/${start.sessionId}`, 'other')).json();
+    const list = await (await get('/api/interview/sessions', 'other')).json();
+    for (const session of [one.session, list.sessions.find(s => s.id === start.sessionId)]) {
+      assert.strictEqual(session.ready, false);
+      assert.deepStrictEqual(session.gaps, { desire: false, conflict: false, stakes: false, turn: false });
+    }
   });
   it('简报：确定性拼装、就绪后会话转 CONVERTED，再追问返回 409', async () => {
     const r = await post(`/api/interview/sessions/${global.ivSession}/brief`, {}, 'rich');

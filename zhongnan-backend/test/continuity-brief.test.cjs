@@ -8,6 +8,20 @@ const assert = require('node:assert');
 const { continuityBrief } = require('../dist/engine/continuity-brief.js');
 const { CHAR_STATE_META } = require('../dist/engine/character-state-ledger.js');
 
+test('同状态的不同人物分别进入连续性简报，重发状态不被旧 resolved 吞掉', () => {
+  const r = continuityBrief({ prevStates: {
+    onsets: [
+      { state: 'pregnant', character: '林晚', onsetInEp: 2, snippet: '林晚怀孕了' },
+      { state: 'pregnant', character: '王丽', onsetInEp: 4, snippet: '王丽怀孕了' },
+    ],
+    resolved: ['pregnant'], epNo: 4,
+  } });
+  const states = r.items.filter(i => i.kind === 'state');
+  assert.strictEqual(states.length, 2);
+  assert.ok(states.some(i => i.zh.includes('林晚') && i.zh.includes('第2集')));
+  assert.ok(states.some(i => i.zh.includes('王丽') && i.zh.includes('第4集')));
+});
+
 test('空输入：无条目、两层指令均为空串、curEpNo 兜底 1', () => {
   const r = continuityBrief({});
   assert.strictEqual(r.curEpNo, 1);

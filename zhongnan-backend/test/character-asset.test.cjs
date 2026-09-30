@@ -214,7 +214,7 @@ describe('角色资产引擎·冲突预警 detectCastAssetConflicts', () => {
 // —— HTTP 闭环（串行）——
 describe('角色资产 HTTP 闭环（串行）', { concurrency: 1 }, () => {
   let projIdFromRef = null; // 用例2立项返回的项目 id，供用例3生成注入复用
-  it('手动建档+非法参数400+同名upsert+列表归属隔离+删除防越权+未登录401', async () => {
+  it('手动建档+非法参数400+按id编辑+列表归属隔离+删除防越权+未登录401', async () => {
     mem._seedUser({ id: 'u_ca_a', level: 'BASIC', balance: 5000 });
     mem._seedUser({ id: 'u_ca_b', level: 'BASIC', balance: 5000 });
     const r1 = await jsonReq('POST', '/api/generate/character-assets', 'u_ca_a', 'BASIC', { name: '林昭', persona: '外冷内热刑警', voice: '短句' });
@@ -224,11 +224,11 @@ describe('角色资产 HTTP 闭环（串行）', { concurrency: 1 }, () => {
     const bad = await jsonReq('POST', '/api/generate/character-assets', 'u_ca_a', 'BASIC', { name: '', persona: '' });
     assert.strictEqual(bad.status, 400);
     assert.strictEqual(bad.json.field, 'name');
-    const r2 = await jsonReq('POST', '/api/generate/character-assets', 'u_ca_a', 'BASIC', { name: '林昭', persona: '升级版人设' });
+    const r2 = await jsonReq('POST', '/api/generate/character-assets', 'u_ca_a', 'BASIC', { id: r1.json.asset.id, name: '林昭', persona: '升级版人设' });
     assert.strictEqual(r2.status, 200);
-    assert.strictEqual(r2.json.updated, true, '同名走 upsert 更新');
+    assert.strictEqual(r2.json.updated, true, '按 id 更新本人记录');
     assert.strictEqual(r2.json.asset.persona, '升级版人设');
-    assert.strictEqual(mem._characterAssets.length, 1, 'upsert 不新建行');
+    assert.strictEqual(mem._characterAssets.length, 1, '编辑不新建行');
     const listA = await jsonReq('GET', '/api/generate/character-assets', 'u_ca_a', 'BASIC');
     assert.strictEqual(listA.json.assets.length, 1);
     const listB = await jsonReq('GET', '/api/generate/character-assets', 'u_ca_b', 'BASIC');
@@ -365,7 +365,7 @@ describe('角色资产 HTTP 闭环（串行）', { concurrency: 1 }, () => {
     assert.strictEqual(first.status, 200);
     assert.strictEqual(first.json.created, 1);
     const manual = await jsonReq('POST', '/api/generate/character-assets', 'u_ca_ng', 'BASIC', {
-      name: '沈青', persona: '手动精修的完整人设内核', voice: '手动精修的声音特质',
+      id: first.json.assets[0].id, name: '沈青', persona: '手动精修的完整人设内核', voice: '手动精修的声音特质',
       signatureLines: ['手动台词锚'], visualAnchor: '左眉疤痕',
     });
     assert.strictEqual(manual.status, 200);
@@ -450,7 +450,7 @@ describe('角色资产 HTTP 闭环（串行）', { concurrency: 1 }, () => {
     assert.deepStrictEqual(r.json.asset.tags, ['复仇', '女捕快'], '建档即带标签');
     // 二次编辑（面板整档覆盖语义）仍随档提交 tags → 覆盖后保留并可增补
     const r2 = await jsonReq('POST', '/api/generate/character-assets', 'u_ca_tag', 'BASIC', {
-      name: '苏眉', persona: '飒爽利落句句带刺的女捕快人设', tags: ['复仇', '女捕快', '市井'],
+      id: r.json.asset.id, name: '苏眉', persona: '飒爽利落句句带刺的女捕快人设', tags: ['复仇', '女捕快', '市井'],
     });
     assert.strictEqual(r2.status, 200);
     assert.strictEqual(r2.json.updated, true);

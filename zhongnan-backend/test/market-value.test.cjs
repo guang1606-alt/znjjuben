@@ -55,6 +55,23 @@ describe('v2.72 价值证书接入交易广场', { concurrency: 1 }, () => {
     }
   });
 
+  it('分集修改后只按最新版本计算集数和参考总价', async () => {
+    await seedEpisodes('pj_versioned', 2);
+    await mem.script.create({ data: {
+      id: 'pj_versioned_ep1_v2', projectId: 'pj_versioned', epNo: 1, version: 2,
+      title: '第1集修订版', content: '第1集修订正文：女主识破骗局，决定反击。'.repeat(3),
+    } });
+    const r = await post('/listings/value-preview', { projectId: 'pj_versioned' });
+    assert.strictEqual(r.status, 200);
+    const j = await r.json();
+    assert.strictEqual(j.value.episodes, 2);
+    assert.strictEqual(j.suggested.episodes, 2);
+    assert.strictEqual(j.suggested.totalLowYuan, j.suggested.perEpLowYuan * 2);
+    const listing = await post('/listings', { projectId: 'pj_versioned', priceFen: 5000, sample: '样章' });
+    assert.strictEqual(listing.status, 200);
+    assert.strictEqual((await listing.json()).value.episodes, 2);
+  });
+
   it('上架时自动写入价值快照，列表回显等级徽章字段', async () => {
     const r = await post('/listings', { scriptId: 'pj_good_ep1', priceFen: 5000, sample: '样章' });
     assert.strictEqual(r.status, 200);

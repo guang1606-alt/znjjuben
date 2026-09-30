@@ -76,7 +76,8 @@ export function createApp(routers: AppRouters = {}, preErrorRouter?: Router | Ro
   // 生产 setInterval 已被 DISABLE_CRON=1 关闭，改由该路由驱动托管放款
   app.post('/api/internal/escrow/settle', async (_req, res) => {
     const token = _req.headers.authorization?.replace(/^Bearer\s+/i, '') || (_req.headers['x-cron-token'] as string);
-    if (token !== process.env.CONFIG_SECRET) return res.status(401).json({ error: 'unauthorized' });
+    const secret = process.env.CONFIG_SECRET;
+    if (!secret?.trim() || !token || token !== secret) return res.status(401).json({ error: 'unauthorized' });
     try {
       const n = await settleDueEscrows();
       res.json({ ok: true, settled: n });
@@ -91,7 +92,8 @@ export function createApp(routers: AppRouters = {}, preErrorRouter?: Router | Ro
     const raw = typeof body === 'string' ? body.trim()
       : body && typeof body === 'object' ? String(Object.values(body)[0] ?? '') : '';
     const [token, task] = raw.split(':');
-    if (token !== process.env.CONFIG_SECRET) return res.status(404).end();
+    const secret = process.env.CONFIG_SECRET;
+    if (!secret?.trim() || !token || token !== secret) return res.status(404).end();
     try {
       if (task === 'daily') {
         const { runDailyLearningCycle } = await import('../services/auto-learning');
