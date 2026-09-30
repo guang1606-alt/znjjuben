@@ -2,7 +2,7 @@
 
 > 面向前端（`web/` 原生 JS 站点及后续独立前端/移动端）的后端 API 契约与适配说明。
 > 后端每次破坏性契约变更都会在此登记：变更内容 → 迁移对照 → 前端已同步点。
-> 版本对齐 `package.json`，当前基线：**v2.231.0**。
+> 版本对齐 `package.json`，当前基线：**v2.232.0**。
 
 ---
 
@@ -119,6 +119,7 @@
 
 | 版本 | 变更 |
 |---|---|
+| v2.232.0 | data-i 命名空间扫尾（纯前端，无 API 变更）：`renderStaticText` 的 `[data-i]` 循环把一切 data-i 当 i18n 键（`I18N.t` 未知键回落返回 key 本身），三处动态渲染复用 data-i 作索引 → 语言切换瞬间动态内容被洗成裸数字——app.js 快速搜索列表 `data-i="${i}"` 读写双处改 `data-idx`、branch-view.js 权重输入去残留（读侧按 `.br-w` class）、ad-roll.js 轮播圆点改 `data-idx`（读侧按 `.ad-dots i`）；`#subAllBtn` 展开态文案（`subHideAll`+计数多段 t() 拼接）挂静态 `data-i="subShowAll"`，展开后切语言按钮洗回「查看全部」而列表仍展开（状态错位）→ index.html 去 data-i + app.js 具名 `syncSubAllLabel()` 收口（`subAllCache` 缓存计数，`renderStaticText` 接入自愈，boot/切语言双时机复原）；新增 web-data-i-sweep 守卫 7 断言（先红后绿），全量 5551 条 0 fail |
 | v2.231.0 | 市场榜单 total 消费（纯前端，无 API 变更）：`loadBoard()` 此前不传 `limit`（吃后端默认 20）也不消费 `total`（>20 条静默不可见、take 500 硬帽静默截断，v2.156 铁律漏网点）→ 请求补 `&limit=50`（`BOARD_LIMIT` 对齐后端 maxLimit）+ 消费 `data.total` 渲染 `#mkBoardMeta`（「共 X 条上榜」，total > 展示条数时追加「榜单仅展示前 X 条」截断提示）；`all` 分支/失败/空态隐藏 meta（all 走 loadListings 翻页器，空态由 `#mkEmpty` 承担）；i18n 新增 `boardTotal`/`boardTrunc` 双语、styles.css 新增 `.board-meta`、index.html 新增 `#mkBoardMeta` 容器（榜单 Tab 与网格之间，初始 hidden）；新增 web-market-board 守卫 5 断言（先红后绿），全量 5544 条 0 fail |
 | v2.230.0 | 交流广场纳入分页统一契约（v2.215 六键，本轮唯一破坏性契约变更）：`GET /api/community/posts` 裸数组 + take 50 静默截断退役 → `{ items, total, page, pageSize, limit, offset }`（`parsePageParams` 默认 50/上限 100，`section` 过滤保留），total 为过滤后真总数；前端 `loadFeed` 消费侧翻页对齐（`SQ_PAGE_SIZE=50`、`renderSqPager` 复用 `znPagerState` 与 `renderMkPager` 同构、分区切换重置页码），失败/空态收口 `znErrorHtml/znEmptyHtml`，`#sqEmpty` 去 `notice`/`data-i`、新增 `#sqPager` 容器；http-community 契约断言改造 + 分页用例（六键/翻页/别名/无效值默认），新增 web-community-feed 守卫 4 断言（先红后绿） |
 | v2.229.0 | 分页契约 v2.215 消费侧覆盖对齐（后端 API 零变更）：market 橱窗 `loadListings` 补 `page/pageSize` 参数并消费 `total`（>50 条不再静默截断），`mkPage` 状态 + `znPagerState` 纯函数 + `renderMkPager` 上/下一页翻页器（disabled 态），`mkSort` 切换重置第 1 页，榜单 Tab 隐藏翻页器；admin 用户表 `renderAdmUserPager` 纯文本页码升级可交互翻页（`admPage` 此前恒为 1）；顺带收口 loadListings/loadBoard 失败态混空态为 `znErrorHtml/znEmptyHtml`（v2.224 漏网点），`#mkEmpty` 移除 `notice`/`data-i`（防语言切换覆盖 innerHTML），新增 `.zn-pager` 样式；新增 web-pagination-coverage 守卫 5 断言（先红后绿） |
