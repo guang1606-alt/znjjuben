@@ -2,7 +2,7 @@
 
 > 面向前端（`web/` 原生 JS 站点及后续独立前端/移动端）的后端 API 契约与适配说明。
 > 后端每次破坏性契约变更都会在此登记：变更内容 → 迁移对照 → 前端已同步点。
-> 版本对齐 `package.json`，当前基线：**v2.224.0**。
+> 版本对齐 `package.json`，当前基线：**v2.225.0**。
 
 ---
 
@@ -109,6 +109,7 @@
 
 | 版本 | 变更 |
 |---|---|
+| v2.225.0 | toast 三入口统一（纯前端，无 API 变更）：`znToast(msg, kind)` 重写为 v2.186 富版薄封装（kind 默认 info，签名向后兼容），`#znToastHost` 双 host 与 `.zn-toast` 样式退役（-14 行死样式）；`xnSay(line, tip, kind)` / `Xn.toast(m, kind)` 透传语义，view js 34 处分级——room-view 15 error、teardown-view 10 error+5 ok、diversity-view 3 error，**错误红条/成功绿条首次贯通独立视图**；window 新暴露 `toastError/toastOk/toastInfo`；`_syncTopbarOffset` Toast 分支改指 `#toastStack`（v2.191 让位只覆盖旧 host 的富版压顶缺口一并修复）；新增 web-toast-unify 守卫 8 断言 |
 | v2.224.0 | 错误态第二轮扫尾（纯前端，无 API 变更）：app.js 9 处旧式失败态收口——loadCatalog×2 muted→znError、反馈箱 catch muted→znErrorHtml、买家详情 muted→znErrorHtml 并落实 **INTERNAL_ERROR 回落本地友好文案**（v2.216 契约速查首次在详情页落地）、listen 弹窗 3 处 segBox textContent→znErrorHtml（token 防竞态保留）、PK 榜→znErrorHtml、超管 API 目录 admApiDir→znError（骨架屏占位替换）；**三态统一体系勘察收口**：六个独立 view js（progress-view/tool-lesson/ad-roll/nav-stack/pointer-fx/staff-cost）逐一过筛——progress-view 为零依赖纯函数状态机（浏览器/Node 单测共用）刻意不接入 window 帮助函数，其余五文件无旧式三态写法，收口范围到此完备 |
 | v2.223.0 | 错误态统一（纯前端，无 API 变更）：新增 `znErrorHtml/znError`（与 .zn-empty 同构：⚠+文案+可选细节 hint，`role=alert`，`_znEsc` 转义，window 暴露供 view js 复用）；14 处旧式错误/加载/空态收口——app.js 11 处（2 处 notice err、2 处 p.muted 当错误用、2 处内联 danger 边框 hack、2 处 muted 加载态改骨架屏、3 处旧空态改 znEmpty）、room-view 历史失败态不再冒充记录卡片（`histFail` 键首次接线）、teardown-view 2 处失败态收口；styles.css 新增 `.zn-error`（`--danger` 三主题令牌） |
 | v2.222.0 | 独立 view js 接入统一加载/空态（纯前端，无 API 变更）：room-view（编剧室历史 骨架屏+znEmptyHtml）、teardown-view（拆解记录 骨架屏+znEmptyHtml）、diversity-view（多样性对比 骨架屏）、branch-view（节点检视空态 znEmptyHtml）共 6 处旧纯文本/muted 写法收口；run-tests.cjs 默认 `--test-concurrency=4` 根治高负载 flaky（PENDING #13） |
