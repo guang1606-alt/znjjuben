@@ -37,7 +37,7 @@
   const freeDone = () => en() ? 'Teardown done — free for staff' : '拆解完成，内部账户免费';
   const freeOutline = () => en() ? 'Adaptation outline ready — free for staff' : '改编大纲已生成，内部账户免费';
   const freeHist = () => en() ? 'Staff free' : '内部免费';
-  const toast = (msg) => { try { if (window.Xn && typeof window.Xn.toast === 'function') { window.Xn.toast(msg); return; } } catch { /* Xn 不可用时降级 */ } alert(msg); };
+  const toast = (msg) => { try { if (window.Xn && typeof window.Xn.toast === 'function') { window.Xn.toast(msg); return; } } catch { /* Xn 不可用时降级 */ } console.warn(msg); };
   const idemToken = () => `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
   const failMsg = (e, fallback) => (e && e.code === 'AUTH_REQUIRED') ? '' : ((e && (e.message || e.error)) || fallback);
   const needLogin = (e) => { if (e && e.code === 'AUTH_REQUIRED') { window.dispatchEvent(new CustomEvent('zn-auth-required')); return true; } return false; };
@@ -87,13 +87,13 @@
       const r = await raw('/api/teardown/analyze', {
         text, sourceType: $('tdSource').value, sourceUrl: $('tdUrl').value.trim() || undefined, lang: en() ? 'en' : 'zh', clientToken: idemToken(),
       });
-      if (!r.ok) { alert(r.data.message || r.data.error || T().analyzeFail); return; }
+      if (!r.ok) { toast(r.data.message || r.data.error || T().analyzeFail); return; }
       state.recordId = r.data.recordId; state.report = r.data.report; state.directions = r.data.directions;
       state.direction = 'swap_persona'; state.restoreTags = null; state.lastOutline = null;
       renderResult();
       toast(r.data.staff ? freeDone() : T().done(r.data.points));
     } catch (e) {
-      if (needLogin(e)) return; alert(failMsg(e, T().analyzeFail));
+      if (needLogin(e)) return; toast(failMsg(e, T().analyzeFail));
     } finally { restore(); }
   }
   function renderOutline(o) {
@@ -124,12 +124,12 @@
     const restore = btn('tdOutlineBtn');
     try {
       const r = await raw(`/api/teardown/${state.recordId}/outline`, { pickedTags: state.picked, direction: state.direction, clientToken: idemToken() });
-      if (!r.ok) { alert(r.data.message || r.data.error || T().outlineFail); return; }
+      if (!r.ok) { toast(r.data.message || r.data.error || T().outlineFail); return; }
       state.lastOutline = r.data.outline;
       renderOutline(state.lastOutline);
       toast(r.data.staff ? freeOutline() : T().outlineDone(r.data.points));
     } catch (e) {
-      if (needLogin(e)) return; alert(failMsg(e, T().outlineFail));
+      if (needLogin(e)) return; toast(failMsg(e, T().outlineFail));
     } finally { restore(); }
   }
   async function toProject() {
@@ -140,13 +140,13 @@
         engineTier: $('engine')?.value || 'STANDARD', format: $('scriptFormatSel')?.value || 'LIVE_ACTION',
       });
       if (!r.ok) {
-        if (r.data.error === 'REACH_PROJECT_LIMIT') { alert(r.data.message || T().projLimit); return; }
-        alert(r.data.message || r.data.error || T().projFail); return;
+        if (r.data.error === 'REACH_PROJECT_LIMIT') { toast(r.data.message || T().projLimit); return; }
+        toast(r.data.message || r.data.error || T().projFail); return;
       }
       window.dispatchEvent(new CustomEvent('zn-adaptation-project', { detail: { project: r.data.project } }));
       toast(T().projOk);
     } catch (e) {
-      if (needLogin(e)) return; alert(failMsg(e, T().projFail));
+      if (needLogin(e)) return; toast(failMsg(e, T().projFail));
     } finally { restore(); }
   }
   /* ---------- c195 历史拆解记录：积分产物可追溯。
@@ -179,9 +179,9 @@
     const t = T();
     try {
       const r = await raw(`/api/teardown/${id}`);
-      if (!r.ok) { alert(r.data.message || r.data.error || t.histOpenFail); return; }
+      if (!r.ok) { toast(r.data.message || r.data.error || t.histOpenFail); return; }
       const rec = r.data;
-      if (!rec.report) { alert(t.histOpenFail); return; }
+      if (!rec.report) { toast(t.histOpenFail); return; }
       state.recordId = rec.id; state.report = rec.report; state.directions = rec.directions || [];
       state.restoreTags = rec.pickedTags || []; state.direction = rec.direction || 'swap_persona';
       state.lastOutline = rec.outline || null;
@@ -191,7 +191,7 @@
       $('tdResult').scrollIntoView({ behavior: 'smooth', block: 'start' });
       toast(t.restored);
     } catch (e) {
-      if (needLogin(e)) return; alert(failMsg(e, t.histOpenFail));
+      if (needLogin(e)) return; toast(failMsg(e, t.histOpenFail));
     }
   }
   function toggleHistory() {

@@ -129,7 +129,7 @@
     return window.Api.jsonOrThrow(res);
   }
   function needAuth() {
-    if (!window.Api.isAuthed()) { alert(T().needLogin); return false; }
+    if (!window.Api.isAuthed()) { window.Xn.toast(T().needLogin); return false; }
     return true;
   }
   function errMsg(e) {
@@ -181,23 +181,23 @@
   async function pitchOpen() {
     if (!needAuth()) return;
     const idea = $('pitchIdea').value.trim();
-    if (idea.length < 2) return alert(T().needIdea);
+    if (idea.length < 2) { window.Xn.toast(T().needIdea); return; }
     const btn = $('pitchOpenBtn'); btn.disabled = true;
     try {
       const j = await post('/api/room/pitch/open', { idea, audience: $('pitchAud').value.trim() || undefined, medium: $('pitchMed').value.trim() || undefined, lang: en() ? 'en' : 'zh', clientToken: idemToken() });
       state.pitchRoom = j.roomId;
       $('pitchMore').classList.remove('hidden');
       await refreshPitch();
-    } catch (e) { alert(errMsg(e)); } finally { btn.disabled = false; }
+    } catch (e) { window.Xn.toast(errMsg(e)); } finally { btn.disabled = false; }
   }
   async function pitchSay() {
-    if (!state.pitchRoom) return alert(T().openPitchFirst);
+    if (!state.pitchRoom) { window.Xn.toast(T().openPitchFirst); return; }
     const content = $('pitchSay').value.trim();
     if (!content) return;
     try {
       await post(`/api/room/pitch/${state.pitchRoom}/speak`, { content, clientToken: idemToken() });
       $('pitchSay').value = ''; await refreshPitch();
-    } catch (e) { alert(errMsg(e)); }
+    } catch (e) { window.Xn.toast(errMsg(e)); }
   }
   function renderVerdict(v) {
     const t = T();
@@ -226,12 +226,15 @@
     }
   }
   async function pitchDecide() {
-    if (!state.pitchRoom) return alert(T().openPitchFirst);
+    if (!state.pitchRoom) { window.Xn.toast(T().openPitchFirst); return; }
     // c197：恢复已决议房后按钮仍在；每次点击都带新幂等令牌、服务端必扣 20 积分，故必须有状态感知的二次确认防误触
     // 内部账户（超管/副管理员）重新决议 0 扣费，确认语不展示积分数
-    if (state.lastVerdict && !window.confirm(window.znIsStaff && window.znIsStaff()
-      ? (en() ? 'This room already has a verdict. Re-deciding is free for staff. Continue?' : '本房已形成决议。内部账户重新决议免费，确定继续吗？')
-      : T().redecideConfirm)) return;
+    // v2.206 confirm→uiConfirm（pitchDecide 本就 async，签名不变）
+    if (state.lastVerdict && !(await window.uiConfirm({
+      body: window.znIsStaff && window.znIsStaff()
+        ? (en() ? 'This room already has a verdict. Re-deciding is free for staff. Continue?' : '本房已形成决议。内部账户重新决议免费，确定继续吗？')
+        : T().redecideConfirm,
+    }))) return;
     try {
       const j = await post(`/api/room/pitch/${state.pitchRoom}/decide`, {
         relation: $('pitchRel').value.trim(), conflict: $('pitchConf').value.trim(),
@@ -241,7 +244,7 @@
       state.lastVerdict = j.verdict;
       renderVerdict(j.verdict);
       await refreshPitch();
-    } catch (e) { alert(errMsg(e)); }
+    } catch (e) { window.Xn.toast(errMsg(e)); }
   }
   // —— 围读 ——
   function renderReadModes(selectedId) {
@@ -397,7 +400,7 @@
     if (!needAuth()) return;
     const picked = state.pickedScript;
     const text = $('readScript').value.trim();
-    if (!picked && text.length < 10) return alert(T().needScript);
+    if (!picked && text.length < 10) { window.Xn.toast(T().needScript); return; }
     try {
       const payload = { readMode: state.readMode, mode: $('readFormat').value, lang: en() ? 'en' : 'zh', clientToken: idemToken() };
       if (picked) payload.scriptId = picked.scriptId; // 选了作品分集：全文由后端按 id 取，不信客户端文本
@@ -407,21 +410,21 @@
       clearPicked();
       await refreshRead();
       if (state.readMode === 'xn_xn') readAi(); // 小南+小南：建室即自动围读（首次围读 30 积分由模式描述与既有确认链承担）
-    } catch (e) { alert(errMsg(e)); }
+    } catch (e) { window.Xn.toast(errMsg(e)); }
   }
   async function readJoin() {
     if (!needAuth()) return;
     const code = $('readJoinCode').value.trim();
     if (!code) return;
     try { const j = await post('/api/room/read/join', { inviteCode: code }); state.readRoom = j.roomId; await refreshRead(); }
-    catch (e) { alert(errMsg(e)); }
+    catch (e) { window.Xn.toast(errMsg(e)); }
   }
   async function readSay() {
-    if (!state.readRoom) return alert(T().needRoom);
+    if (!state.readRoom) { window.Xn.toast(T().needRoom); return; }
     const content = $('readSay').value.trim();
     if (!content) return;
     try { await post(`/api/room/read/${state.readRoom}/speak`, { content, clientToken: idemToken() }); $('readSay').value = ''; await refreshRead(); }
-    catch (e) { alert(errMsg(e)); }
+    catch (e) { window.Xn.toast(errMsg(e)); }
   }
   function renderReadActions(r) {
     const t = T();
@@ -497,20 +500,23 @@
     row.appendChild(btn);
   }
   async function readAi() {
-    if (!state.readRoom) return alert(T().needRoom2);
+    if (!state.readRoom) { window.Xn.toast(T().needRoom2); return; }
     // c199：与 c197 决议二次确认同族——恢复历史房或重跑时结论已存在，再点按钮是一次新的 30 积分扣费，
     // 必须状态感知地明示；首次围读（含 xn_xn 建室自动触发）state.lastRead 为空，不打扰。
     // 内部账户 AI 围读 0 扣费，确认语不展示积分数
-    if (state.lastRead && !window.confirm(window.znIsStaff && window.znIsStaff()
-      ? (en() ? 'This room already has a read result. Another AI read is free for staff. Continue?' : '本房已出过一份围读结论。内部账户重新围读免费，确定继续吗？')
-      : T().readAgainConfirm)) return;
+    // v2.206 confirm→uiConfirm（readAi 本就 async，签名不变）
+    if (state.lastRead && !(await window.uiConfirm({
+      body: window.znIsStaff && window.znIsStaff()
+        ? (en() ? 'This room already has a read result. Another AI read is free for staff. Continue?' : '本房已出过一份围读结论。内部账户重新围读免费，确定继续吗？')
+        : T().readAgainConfirm,
+    }))) return;
     const btn = $('readAiBtn'); btn.disabled = true;
     try {
       const j = await post(`/api/room/read/${state.readRoom}/ai-read`, { mode: $('readFormat').value, clientToken: idemToken() });
       state.lastRead = j.result;
       renderReadActions(j.result);
       await refreshRead();
-    } catch (e) { alert(errMsg(e)); } finally { btn.disabled = false; }
+    } catch (e) { window.Xn.toast(errMsg(e)); } finally { btn.disabled = false; }
   }
   // —— c196 我的编剧室历史：每次打开新鲜拉取；点击恢复消息流 + 决议/围读结论，可继续发言 ——
   function modeName(modeId) {
@@ -591,7 +597,7 @@
         if (state.lastRead) renderReadActions(state.lastRead);
         else $('readActions').classList.add('hidden');
       }
-    } catch (e) { alert(errMsg(e)); }
+    } catch (e) { window.Xn.toast(errMsg(e)); }
   }
   function rerender() {
     renderReadModes();

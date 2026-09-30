@@ -149,3 +149,40 @@ describe('F 轮：toast 堆叠上限（防错误风暴刷屏）', () => {
     assert.ok(/firstElementChild\.remove\(\)/.test(region), '超出上限应移除最旧一条');
   });
 });
+
+describe('G 轮：ESC 双重响应修复（对话框打开时 ESC 不弹回上一视图）', () => {
+  it('uiModalShell 遮罩带 ui-dlg-overlay 标识类，nav ESC 检测纳入该类', () => {
+    const region = extractMarkedRegion('v2.202 通用模态对话框');
+    assert.ok(region, 'v2.202 区域缺失');
+    assert.ok(/overlay\.className = 'ui-dlg-overlay'/.test(region), '遮罩应有 ui-dlg-overlay 标识类');
+    const navHits = (src.match(/ui-dlg-overlay/g) || []).length;
+    assert.ok(navHits >= 2, `ui-dlg-overlay 至少出现 2 处（shell 标识 + nav ESC 检测），实测 ${navHits}`);
+    assert.ok(
+      /querySelector\('\.modal\.open, \.overlay\.open, #workbenchLayer:not\(\.hidden\), \.ui-dlg-overlay'\)/.test(src),
+      'nav ESC 的 hasOverlay 检测应纳入 .ui-dlg-overlay'
+    );
+  });
+
+  it('uiConfirm / uiPrompt 全局暴露（供独立视图文件使用）', () => {
+    assert.ok(/window\.uiConfirm\s*=\s*uiConfirm/.test(src), '应暴露 window.uiConfirm');
+    assert.ok(/window\.uiPrompt\s*=\s*uiPrompt/.test(src), '应暴露 window.uiPrompt');
+  });
+});
+
+describe('G 轮：web 视图文件零原生弹窗', () => {
+  const FILES = ['diversity-view.js', 'room-view.js', 'branch-view.js', 'teardown-view.js'];
+  for (const f of FILES) {
+    it(`${f} 不含原生 alert/confirm/prompt`, () => {
+      const code = fs.readFileSync(path.join(WEB, f), 'utf8');
+      const lines = code.split('\n');
+      const hits = [];
+      let m;
+      const re = new RegExp(NATIVE_RE.source, 'g');
+      while ((m = re.exec(code)) !== null) {
+        const lineNo = code.slice(0, m.index).split('\n').length;
+        hits.push(`L${lineNo}: ${lines[lineNo - 1].trim().slice(0, 90)}`);
+      }
+      assert.deepStrictEqual(hits, [], `${f} 发现 ${hits.length} 处原生弹窗，应改用 window.Xn.toast / window.uiConfirm:\n${hits.join('\n')}`);
+    });
+  }
+});

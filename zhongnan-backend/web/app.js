@@ -1551,8 +1551,8 @@
     // 若当前焦点在 input/textarea/contenteditable，不拦截 ESC（让用户先退出输入）
     const tag = (document.activeElement && document.activeElement.tagName) || '';
     if (/INPUT|TEXTAREA|SELECT/.test(tag) || (document.activeElement && document.activeElement.isContentEditable)) return;
-    // 若有打开的 modal/overlay/workbench，先交给它们处理（不拦截）
-    const hasOverlay = document.querySelector('.modal.open, .overlay.open, #workbenchLayer:not(.hidden)');
+    // 若有打开的 modal/overlay/workbench/ui 对话框，先交给它们处理（不拦截）
+    const hasOverlay = document.querySelector('.modal.open, .overlay.open, #workbenchLayer:not(.hidden), .ui-dlg-overlay');
     if (hasOverlay) return;
     e.preventDefault();
     const popped = _navStack.pop();
@@ -1607,6 +1607,8 @@
   function _uiLangEn() { return typeof lang === 'string' && lang === 'en'; }
   function _uiModalShell(o) {
     const overlay = document.createElement('div');
+    // v2.206 标识类：供顶层 ESC 返回上一级的 hasOverlay 检测识别，避免对话框打开时 ESC 同时弹回上一视图
+    overlay.className = 'ui-dlg-overlay';
     overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.55);z-index:9999;display:flex;align-items:center;justify-content:center;padding:16px';
     const modal = document.createElement('div');
     modal.setAttribute('role', 'dialog');
@@ -1741,6 +1743,9 @@
     });
   }
   /* ---------- v2.202 通用模态对话框 结束 ---------- */
+  // v2.206 全局暴露：供独立视图文件（room-view / teardown-view / diversity-view 等）统一交互
+  window.uiConfirm = uiConfirm;
+  window.uiPrompt = uiPrompt;
 
   // v2.186 注册全局 API 钩子：AUTH_REQUIRED 自动跳登录 + 网络错误 toast + 5xx toast
   if (typeof Api !== 'undefined' && Api.onAuthRequired) {

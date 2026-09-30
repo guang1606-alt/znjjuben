@@ -58,7 +58,7 @@
   async function mutate(op) {
     if (!graph) return;
     try { const j = await postJson('/api/craft/branch-mutate', { graph, op, lang: en() ? 'en' : 'zh' }); setState(j.graph, j.layout); renderReport(j.report); }
-    catch (e) { window.xnSay ? window.xnSay(e.message) : alert(e.message); }
+    catch (e) { window.xnSay ? window.xnSay(e.message) : console.error(e.message); }
   }
   function render() {
     const t = T();
