@@ -2,7 +2,7 @@
 
 > 面向前端（`web/` 原生 JS 站点及后续独立前端/移动端）的后端 API 契约与适配说明。
 > 后端每次破坏性契约变更都会在此登记：变更内容 → 迁移对照 → 前端已同步点。
-> 版本对齐 `package.json`，当前基线：**v2.235.0**。
+> 版本对齐 `package.json`，当前基线：**v2.236.0**。
 
 ---
 
@@ -119,6 +119,7 @@
 
 | 版本 | 变更 |
 |---|---|
+| v2.236.0 | CSP 安全响应头上线（**无 API 契约变更**，纯响应头 additive）：v2.208「不设 CSP」口径仅覆盖 style 维度、把 script 维度一并放弃——本轮勘察实证 web/ 全部 13 个 JS 0 处 eval/new Function、0 处内联事件处理器，index.html 0 内联 `<script>/<style>/onclick`（156 处内联 `style=` 仅存于 style 维度），无 `@font-face/<form>/<base>`，脚本样式全同源，故 `script-src 'self'`（**不含 unsafe-inline**）直接强制，注入型 XSS 内联脚本执行面真正封死。策略仅挂**非 /api 响应**（文档与静态资产；JSON API 无需文档策略）：`default-src/script-src 'self'`；`style-src 'self' 'unsafe-inline'`；`img-src 'self' data: https: blob:`（https: 广告位用户图 / data: CSS 内联 SVG 噪点底纹 / blob: 下载预览）；`connect-src/font-src 'self'`；`object-src/base-uri 'none'`；`frame-ancestors 'none'`（与 X-Frame-Options:DENY 对齐）；`form-action 'self'`。isApi 判定顺带兼容 `/api` 精确路径（此前 no-store 漏该路径）。http-security-headers 扩 2 用例（策略全文精确断言防静默放松 + script-src 禁 unsafe-inline + /api 零 CSP 隔离 + /health 按规则携带），TDD 先红后绿，变异验证红黑（dist 摘 script-src 双红），全量 5572 条 0 fail |
 | v2.235.0 | i18n 键完整性审计（无 API 变更，纯前端文案修复 + 回归守卫）：审计发现 `t()` 未知键回落返回键名本身导致**裸键上屏**（boot 时 `renderStaticText` 把 `[data-i]` 元素洗成裸键名）——补齐 5 个用户可见缺失键 zh/en 双语：`askOk`/`askCancel`（uiAsk 输入对话框按钮，app.js:1457）、`subTitle`/`subFree`（投稿面板标题/副标题，index.html data-i）、`dlEp`（导出菜单「导出单集…」按钮）；清理 `sqEmpty` 在 zh/en 顶层各 2 次重复定义（后者静默覆盖，先定义为死副本，删除无行为变化）；新增 web-i18n-keys 守卫 6 断言（源码花括号深度顶层键提取防 mode/modeDesc 嵌套误报：sanity ≥600 / 双语奇偶 / 顶层无重复 / t() 字面量引用⊆字典 / data-i⊆字典 / 动态前缀 `admTab_` 至少 1 匹配），变异验证红黑（摘 askOk 即红 2 断言），全量 5570 条 0 fail |
 | v2.234.0 | 端点反向对齐守卫（无 API 变更，纯回归守卫）：v2.233 孤儿审计的反向补齐——前端 191 唯一「方法+路径」调用 vs 后端路由表全量对照，**0 真幽灵**；审计发现并补登 MOUNT 映射遗漏的 craft.ts（/api/craft，7 路由 8 调用点，前端 branch-view/diversity-view/app.js 调用全部有后端承接）；新增 web-endpoint-reverse-alignment 守卫 4 断言（MOUNT 与 routes 目录一一对应、前端提取量 ≥150 防过杀、前端每调用路径必须解析到后端路由、后端表 ≥190 防漏登记假绿），沉淀 5 条提取假阳性通用规则（seam-fill/${} 归一/query 尾插值/封装前缀/相对路径封装）；变异验证红黑（摘掉 craft 映射 3 断言即红，恢复转绿），全量 5564 条 0 fail |
 | v2.233.0 | 端点全量对照审计 + 生成取消闭环（**additive 契约，无破坏性变更**）：后端 frozen SSE 帧**增发 `taskId`** 字段（`{stage:'frozen', taskId, points, ...}`，旧前端多收字段无影响）→ 前端 handleEvent 捕获存 `session.taskId`；SSE 新增 `cancelled` 帧语义（后端 abort+冻结积分退款后发出）→ progress-view 新增 cancelled 分支（复用 failed 相位 + `cancelled` 标记 + 默认文案「已取消生成，冻结积分将原路退回」）→ app.js handleEvent cancelled 分支（status=failed、`t('genCancelled')`、renderTaskQueue、active 时 showFail）；进度面板新增 `#genCancelBtn`（仅运行中且有 taskId 显示，点击置 cancelling 忙态 → `POST /api/generate/tasks/:id/cancel`，失败复位+toast），v2.190 取消能力首次有前端入口；采访面板新增 `#ivStopBtn`「⏹ 结束会话」（会话存在且未关闭时显示，调 `POST /api/interview/sessions/:id/close`）；i18n 新增 genCancel/genCancelling/genCancelled/genCancelFail/ivStop 双语；新增 web-endpoint-alignment 守卫 9 断言（先红后绿），全量 5560 条 0 fail |
