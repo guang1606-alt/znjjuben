@@ -48,6 +48,15 @@
   async function raw(path, body) {
     const res = await window.Api.request(path, body ? { method: 'POST', body: JSON.stringify(body) } : {});
     const data = await res.json().catch(() => ({}));
+    // v2.239：5xx 内部裸码脱敏为本地友好文案（v2.226 回落层同口径）；4xx 业务码原样保留
+    // （toProject 的 REACH_PROJECT_LIMIT 分支与 r.data.message 回退文案依赖原字段，故不走 jsonOrThrow 重构）
+    if (!res.ok && res.status >= 500) {
+      const code = data && (data.error || data.message);
+      if (!code || code === 'INTERNAL_ERROR' || code === 'SERVER_BUSY') {
+        data.error = en() ? 'Server hiccup — please try again later.' : '服务开小差了，请稍后重试';
+        delete data.message;
+      }
+    }
     return { ok: res.ok, status: res.status, data };
   }
   const btn = (id) => { const b = $(id); if (b) { b.disabled = true; b.dataset.t = b.textContent; b.textContent = T().busy; } return () => { if (b) { b.disabled = false; b.textContent = b.dataset.t; } }; };

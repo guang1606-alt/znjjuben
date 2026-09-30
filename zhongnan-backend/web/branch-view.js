@@ -45,9 +45,7 @@
   async function getJson(path) { const r = await window.Api.request(path); return window.Api.jsonOrThrow(r); }
   async function postJson(path, body) {
     const r = await window.Api.request(path, { method: 'POST', body: JSON.stringify(body || {}) });
-    const j = await r.json().catch(() => null);
-    if (!r.ok) throw new Error((j && j.error) || ('HTTP ' + r.status));
-    return j;
+    return window.Api.jsonOrThrow(r); // v2.239：与 getJson 同口径走 v2.226 脱敏层，不再手动投掷 j.error 裸码
   }
   const posOf = (id) => posOverride[id] || layout[id] || { x: 40, y: 40 };
   function setState(next, nextLayout) {

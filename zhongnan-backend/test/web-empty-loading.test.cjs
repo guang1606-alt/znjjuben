@@ -290,3 +290,28 @@ describe('v2.238 作品列表/资产三族/导演交付包 三态收口', () => 
     assert.ok(/znEmpty\(body, t\('dpEmpty'\)\)/.test(region), 'renderDpPage 空态应走 znEmpty(body)');
   });
 });
+
+/* v2.239 物料预览 matBody 三态收口（v2.238 dpBody 同族漏网）：
+ * openMaterials 此前手动判响应码取 j.error 裸 textContent（绕过 v2.226 脱敏层，500 裸显 INTERNAL_ERROR），
+ * catch 亦裸 err.message textContent；收口为 jsonOrThrow 统一脱敏 + znError(matBody)（role=alert 即时播报）。
+ */
+describe('v2.239 物料预览 matBody 三态收口', () => {
+  const fnRegion = (startMark, endMark) => {
+    const s = src.indexOf(startMark);
+    const e = s >= 0 ? src.indexOf(endMark, s) : -1;
+    return s >= 0 && e > s ? src.slice(s, e) : '';
+  };
+  const region = fnRegion('const openMaterials = async', "if ($('dlMat'))");
+
+  it('openMaterials 走 Api.jsonOrThrow 脱敏层，不再手动取 error 字段裸上屏', () => {
+    assert.ok(region, '应定位到 openMaterials');
+    assert.ok(/Api\.jsonOrThrow\(r\)/.test(region), '应使用 jsonOrThrow（INTERNAL_ERROR 回落本地友好文案）');
+    assert.doesNotMatch(region, /m = j\.error/, '不应再手动解析 j.error 裸上屏');
+  });
+
+  it('matBody 错误态走 znError，textContent 裸写清零', () => {
+    assert.ok(region, '应定位到 openMaterials');
+    assert.doesNotMatch(region, /\$\('matBody'\)\.textContent/, 'matBody 不应再 textContent 裸写');
+    assert.ok(/znError\('matBody', \(err && err\.message\) \|\| t\('matEmpty'\)\)/.test(region), 'catch 应走 znError(matBody)（role=alert 即时播报）');
+  });
+});

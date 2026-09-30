@@ -1434,6 +1434,14 @@
   window.znSkeleton = znSkeleton; window.znEmpty = znEmpty; window.znEmptyHtml = znEmptyHtml; window.znSkeletonHtml = znSkeletonHtml;
   window.znError = znError; window.znErrorHtml = znErrorHtml;
   /* ---------- v2.221 加载/空态统一 结束 ---------- */
+  // v2.239 内部裸码脱敏（与 api.js v2.226 jsonOrThrow 回落层同口径）：
+  // 供 body 已被 text()/json() 消费的错误路径使用（jsonOrThrow 无法再消费 body 的场景）；
+  // 仅 5xx 的 INTERNAL_ERROR/SERVER_BUSY/空文本回落本地友好文案，4xx 业务码原样透传。
+  function znSanitizeErr(codeOrText, status) {
+    const bare = !codeOrText || codeOrText === 'INTERNAL_ERROR' || codeOrText === 'SERVER_BUSY';
+    if (bare && (status == null || status >= 500)) return lang === 'en' ? 'Server hiccup — please try again later.' : '服务开小差了，请稍后重试';
+    return codeOrText;
+  }
   // 模态输入框：替代 window.prompt。resolve(value|null)；Enter=确定，Esc=取消
   function askText(label, def) {
     return new Promise((resolve) => {
@@ -5106,7 +5114,7 @@
       saveButton.disabled = true;
       try {
         const r = await Api.request('/api/generate/character-assets', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
-        if (!r.ok) { const e = await r.json().catch(() => ({})); throw new Error(e.message || e.error || t('castLibFail')); }
+        await Api.jsonOrThrow(r); // v2.239：错误统一走 v2.226 脱敏层，内部裸码回落本地友好文案
         box.classList.add('hidden');
         // v2.177 c173 复盘修复：编辑成功后清空 thin 状态 + 清空搜索框，避免刚补全（score≥55）的资产被 thin 分支过滤掉，用户看不到刚编辑的资产
         castThinActive = false;
@@ -5346,7 +5354,7 @@
       saveButton.disabled = true;
       try {
         const r = await Api.request('/api/generate/prop-assets', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
-        if (!r.ok) { const e = await r.json().catch(() => ({})); throw new Error(e.message || e.error || t('propLibFail')); }
+        await Api.jsonOrThrow(r); // v2.239：错误统一走 v2.226 脱敏层，内部裸码回落本地友好文案
         box.classList.add('hidden');
         // v2.177 c173 复盘修复：编辑成功后清空 thin 状态 + 清空搜索框（与 cast 同构）
         propThinActive = false;
@@ -5586,7 +5594,7 @@
       saveButton.disabled = true;
       try {
         const r = await Api.request('/api/generate/scene-assets', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
-        if (!r.ok) { const e = await r.json().catch(() => ({})); throw new Error(e.message || e.error || t('sceneLibFail')); }
+        await Api.jsonOrThrow(r); // v2.239：错误统一走 v2.226 脱敏层，内部裸码回落本地友好文案
         box.classList.add('hidden');
         // v2.177 c173 复盘修复：编辑成功后清空 thin 状态 + 清空搜索框（与 cast/prop 同构）
         sceneThinActive = false;
@@ -5685,7 +5693,7 @@
             return;
           }
           if (ej.error === 'MATURE_CONSENT_REQUIRED') { openXMature().catch(() => {}); return; }
-          throw new Error(ej.message || ej.error || ('HTTP ' + pr.status));
+          throw new Error(znSanitizeErr(ej.message || ej.error || ('HTTP ' + pr.status), pr.status)); // v2.239：内部裸码脱敏
         }
         project = await pr.json();
       }
@@ -5705,6 +5713,7 @@
         let msg = txt || ('HTTP ' + res.status);
         let j = null;
         try { j = JSON.parse(txt); if (j && j.error) msg = j.error; } catch { /* 非 JSON 原样展示 */ }
+        msg = znSanitizeErr(msg, res.status); // v2.239：内部裸码回落本地友好文案（body 已消费，走同口径 helper）
         // v2.95 互动分支：闭环校验/必填错误就地提示（尚未扣费）
         if (j && (j.error === 'BRANCH_VALIDATION_FAILED' || j.field === 'mainLine' || j.field === 'choicePoints' || j.field === 'endings')) {
           failGenerationSession(session, j.message || msg);
@@ -7963,8 +7972,8 @@
     openModal('matModal');
     try {
       const r = await Api.request(`/api/export/${projectId}/materials`);
-      if (!r.ok) { let m = t('matEmpty'); try { const j = await r.json(); m = j.error || m; } catch {} if (isCurrentProject()) { $('matBody').textContent = m; matData = null; } return; }
-      const data = await r.json();
+      // v2.239：统一走 jsonOrThrow（v2.226 脱敏层）——不再手动判响应码取 error 字段裸上屏（v2.238 dpBody 同族收口）
+      const data = await Api.jsonOrThrow(r);
       if (!isCurrentProject()) return;
       matData = data;
       const en = lang === 'en'; const st = data.stats || {};
@@ -8015,7 +8024,7 @@
         }
       });
       if (!mx.length) row(en ? '(No valid scene headers)' : '（无合规场头，无法生成矩阵）');
-    } catch (err) { if (isCurrentProject()) { $('matBody').textContent = err.message || t('matEmpty'); matData = null; } }
+    } catch (err) { if (isCurrentProject()) { znError('matBody', (err && err.message) || t('matEmpty')); matData = null; } }
   };
   if ($('dlMat')) $('dlMat').onclick = openMaterials;
   if ($('matCopy')) $('matCopy').onclick = () => {
@@ -8335,7 +8344,7 @@
       const q = new URLSearchParams(); if (status) q.set('status', status); if (type) q.set('type', type);
       try {
         const r = await Api.request('/api/feedback/admin/export' + (q.toString() ? '?' + q.toString() : ''));
-        if (!r.ok) { const e = await r.json().catch(() => ({})); throw new Error(e.error || `HTTP ${r.status}`); }
+        if (!r.ok) await Api.jsonOrThrow(r); // v2.239：失败统一走 v2.226 脱敏层（成功路径保留 blob 下载）
         const blob = await r.blob();
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
@@ -8383,8 +8392,7 @@
     if (sumEl) sumEl.textContent = '';
     try {
       const res = await Api.request('/api/admin/model/balances');
-      if (!res.ok) { const e = await res.json().catch(() => ({})); throw new Error(e.error || `HTTP ${res.status}`); }
-      const d = await res.json();
+      const d = await Api.jsonOrThrow(res); // v2.239：统一走 v2.226 脱敏层，内部裸码回落本地友好文案
       // 列表
       const rows = Array.isArray(d.balances) ? d.balances : [];
       if (listEl) {
@@ -8433,7 +8441,7 @@
       const res = await Api.request(`/api/admin/model/balances/${encodeURIComponent(pid)}`, {
         method: 'POST', body: JSON.stringify({ balanceYuan: yuan, thresholdYuan: threshold, note }),
       });
-      if (!res.ok) { const e = await res.json().catch(() => ({})); throw new Error(e.error || `HTTP ${res.status}`); }
+      if (!res.ok) await Api.jsonOrThrow(res); // v2.239：失败统一走 v2.226 脱敏层
       xnSay(lang === 'en' ? 'Saved' : '已保存');
       $('balYuan').value = ''; $('balNote').value = '';
       await loadAdmBalances();
@@ -8443,8 +8451,7 @@
     const btn = $('balRefresh'); if (btn) { btn.disabled = true; btn.textContent = '查询中…'; }
     try {
       const res = await Api.request('/api/admin/model/balances/refresh', { method: 'POST', body: '{}' });
-      if (!res.ok) { const e = await res.json().catch(() => ({})); throw new Error(e.error || `HTTP ${res.status}`); }
-      const d = await res.json();
+      const d = await Api.jsonOrThrow(res); // v2.239：统一走 v2.226 脱敏层，内部裸码回落本地友好文案
       const arr = Array.isArray(d.results) ? d.results : [];
       const ok = arr.filter((r) => !r.skipped && !r.error).length;
       const fail = arr.filter((r) => r.error).length;
