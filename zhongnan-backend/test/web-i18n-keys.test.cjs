@@ -14,6 +14,16 @@
  *     断言字典中至少有 1 个以该前缀开头的键（动态键无法静态穷举，前缀有匹配即非缺失）。
  *  ② 顶层键提取用花括号深度扫描（字符串/转义跳过），嵌套对象（mode:/modeDesc:）的
  *     内部键不算顶层键，不参与重复检测与奇偶对比。
+ *
+ * v2.237 反向守卫（第 7 断言「字典键 ⊆ 消费证据集」）：
+ *  v2.235 审计遗留线索——字典 668 顶层键中约 107 个未被静态引用。逐一甄别动态消费形态
+ * （D.mode[id] 嵌套、'sec'+Cap(s) 拼接、'fbStatus_'+rawStatus 变量间接、fieldName() 拼接、
+ * PF_AGES/PROP_LIB_LEVEL 映射表字面量）后定案 24 个真死键双语删除（668→644）：
+ *  fbStatus_PENDING/PROCESSING/SOLVED（nextStatus 仅三态 executing/todo/rejected，永不产生）、
+ *  fbLoading/fbSubmitDone/slogan/zoneUser/xiaonanTip/dpLoading/backHome/monthlyGift/freeDaily/
+ *  loginToAct/needMember/xscriptBadge/filmBadge/tbSection/tbSectionSub/tbEyebrow/dashLoading/
+ *  dashStatsConflicts/dashThinBatchConfirm/dashConflictScrollTitle/libAdviceTitle（全文 0 出现）。
+ * 该断言使未来新增死键立即红：新增键必须要么被消费（子串出现），要么登记进 DYN_FAMILIES。
  */
 const { describe, it } = require('node:test');
 const assert = require('node:assert');
@@ -129,5 +139,23 @@ describe('v2.235 i18n 键完整性', () => {
       const hits = [...zhSet].filter((k) => k.startsWith(p));
       assert.ok(hits.length >= 1, '动态前缀 ' + JSON.stringify(p) + ' 在字典中无任何匹配键');
     }
+  });
+
+  // v2.237 反向守卫：「字典键 ⊆ 消费证据集」，防死键无声积累（v2.235 审计遗留线索闭环）。
+  // 消费证据 = ① key 作为子串出现在任何 web 文件（除 i18n.js）——覆盖 t()/data-i/映射表
+  //   字面量（PF_AGES/PROP_LIB_LEVEL 等）乃至注释提及（宁松勿紧，防误删）；
+  //   ∪ ② 白名单动态拼接家族——键整体作为子串不出现、只能靠拼接消费，逐一溯源登记：
+  const DYN_FAMILIES = [
+    /^admTab_/,                    // 超管后台 Tab（既有前缀形态，t('admTab_' + tab)）
+    /^sec(Experience|Team|Review|News)$/, // app.js SQ_SECTIONS：t('sec' + Cap(s))，s ∈ experience/team/review/news
+    /^fbStatus_(EXECUTING|TODO|REJECTED)$/, // app.js t('fbStatus_' + rawStatus)；engine/feedback.ts nextStatus 仅产出 executing/todo/rejected 三态（大写后）
+    /^dashThinBatchFields(Voice|SignatureLines|VisualAnchor|Taboo|Tags|Mood)$/, // app.js fieldName()：'dashThinBatchFields' + Cap(f)；f ∈ PATCH_FIELDS_CAST/PROP/SCENE 白名单并集
+  ];
+  it('字典顶层键 ⊆ 消费证据集（防死键积累）', () => {
+    const corpus = fs.readdirSync(WEB)
+      .filter((f) => f !== 'i18n.js' && (f.endsWith('.js') || f.endsWith('.html')))
+      .map((f) => fs.readFileSync(path.join(WEB, f), 'utf8')).join('\n');
+    const dead = [...zhSet].filter((k) => !corpus.includes(k) && !DYN_FAMILIES.some((re) => re.test(k))).sort();
+    assert.deepStrictEqual(dead, [], '字典存在无任何消费证据的死键（删除或补消费入口）：' + dead.join(', '));
   });
 });
