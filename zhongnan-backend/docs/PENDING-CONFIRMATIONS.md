@@ -2,11 +2,11 @@
 
 > 单一事实源：所有需要用户拍板的事项登记于此，每日复盘报告自动回显；开发中不打断用户，用户上手操作时统一提醒处理。
 
-## 1.【高】远程分支 `剧本1` 是否合并进 master
-- 来源：gitee 远程新分支（他人推送），领先 master 2 个提交
-  - `2fee59d` 同步 2026-09-29 本地修改：界面显示、移动端布局与演示数据修复
-  - `05d1002` 完善剧本交易交付与查看链路
-- 建议：内容为界面/交易链路完善，大概率无冲突；请确认后执行 `git merge gitee/剧本1` 并跑 `npm test` 全量
+## 1.【已完成】远程分支 `剧本1` 已合并进 master（2026-09-30）
+- 合并 commit：`9609756`（剧本1 全部 5 个提交 + 合并解决），已推送 gitee master
+- 冲突解决 5 文件：export.ts / interview.ts / memory-prisma.cjs / app.js / styles.css——策略为「剧本1 增强 + 我方独有功能」双边保留（账号隔离守卫 `isPrivateSessionCurrent` 已接入 loadMe/loadWorks/xnSay 等 5 处）
+- 收尾修复：dev-server 重复 import/挂载、单集导出 `scripts` 恢复 `let`；4 个 web 沙箱测试补 `userRoleLabel`/`isStaffAcct`/`_syncTopbarOffset`/`_navStack` 注入
+- 验证：`tsc` 全量编译通过，`npm test` 5386 条 0 失败
 
 ## 2.【高】火山方舟模型名/接入点核验（实调 404）
 - 现象：`doubao-seed-2-1-pro` 实调报 404 InvalidEndpointOrModel.NotFound
