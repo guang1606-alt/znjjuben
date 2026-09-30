@@ -234,8 +234,42 @@
     return Number.isFinite(n) && n > 0 ? `v${n}` : '—';
   }
 
+  /* B2 v2.200：小南课堂 · 工具方法论卡片接入（费曼式，让等待期间学方法论）
+     通过 lazy lookup 访问全局 ZnToolLesson（web/tool-lesson.js 在浏览器侧已先于 progress-view.js 加载）。
+     Node 单测中通过 global.ZnToolLesson = require('../web/tool-lesson.js') 模拟。 */
+  const TOOL_LESSON_ORDER = ['tbCardPitch', 'tbCardRead', 'tbCardTd', 'tbCardDv', 'tbCardBr'];
+  function _getZnToolLesson() {
+    try { return (typeof ZnToolLesson !== 'undefined') ? ZnToolLesson : (typeof global !== 'undefined' ? global.ZnToolLesson : null); }
+    catch { return null; }
+  }
+  /** 取所有 5 张方法论卡片简化版（含 oneLiner/plainExplain/diagram/toolId/steps） */
+  function getXiaonanLessons(en) {
+    const mod = _getZnToolLesson();
+    if (!mod || typeof mod.getLesson !== 'function') return [];
+    return TOOL_LESSON_ORDER.map((id) => {
+      const c = mod.getLesson(id, en);
+      if (!c) return null;
+      return {
+        toolId: c.id,
+        title: c.title,
+        oneLiner: c.oneLiner,
+        steps: c.steps,
+        diagram: c.diagram,
+        plainExplain: c.plainExplain,
+      };
+    }).filter(Boolean);
+  }
+  /** 按 waitTips 序号 mod 5 取对应工具卡片（轮播对应） */
+  function lessonForTip(tipIndex, en) {
+    const arr = getXiaonanLessons(en);
+    if (!arr.length) return null;
+    const idx = ((Number(tipIndex) || 0) % arr.length + arr.length) % arr.length;
+    return arr[idx];
+  }
+
   return {
     createProgress, reduceProgress, stageList, milestone, parseSseChunk, roleMeta, waitTips,
     formatDisplayValue, formatIssueText, formatDateTime, formatVersion,
+    getXiaonanLessons, lessonForTip,
   };
 });

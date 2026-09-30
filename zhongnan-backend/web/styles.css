@@ -458,6 +458,17 @@ textarea { background: var(--panel); color: var(--text); border: 1px solid var(-
 .role-chip.done { opacity:.85; color: var(--ok); }
 .wait-tip { margin-top:8px; font-size:.8rem; color:var(--text-2); font-style:italic; animation: tipFade .6s ease; }
 @keyframes tipFade { from { opacity:0; transform:translateY(4px);} to { opacity:1; transform:none; } }
+/* B2 v2.200 小南课堂：等待期方法论卡片（费曼式 SVG 图 + 白话讲解） */
+.wait-lesson { margin-top:10px; padding:10px 12px; border-radius:12px; background: color-mix(in srgb, var(--panel-2) 88%, transparent); border:1px solid var(--line); animation: tipFade .5s ease; }
+.wait-lesson.hidden { display:none; }
+.wait-lesson .wl-head b { font-size:.86rem; color:var(--accent-strong); }
+.wait-lesson .wl-oneliner { margin-top:4px; font-size:.8rem; font-weight:600; color:var(--text); line-height:1.5; }
+.wait-lesson .wl-diagram { margin:8px auto 2px; max-width:220px; color:var(--accent-strong); }
+.wait-lesson .wl-diagram svg { width:100%; height:auto; display:block; }
+.wait-lesson .wl-step { display:flex; gap:6px; margin-top:5px; font-size:.76rem; line-height:1.45; }
+.wait-lesson .wl-step b { color:var(--accent-strong); white-space:nowrap; }
+.wait-lesson .wl-step span { color:var(--text-2); }
+.wait-lesson .wl-plain { margin-top:8px; padding-top:8px; border-top:1px dashed var(--line); font-size:.76rem; color:var(--text-2); line-height:1.6; }
 .pmeta { display: flex; justify-content: space-between; margin: 8px 2px 2px; color: var(--text-2); font-size: .85rem; }
 .milestone { color: var(--accent-strong); font-weight: 600; font-family: var(--serif); }
 .timeline { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px; }

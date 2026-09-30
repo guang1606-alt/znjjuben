@@ -2973,18 +2973,39 @@
   const PV = () => window.ProgressView;
   function resetPanels() { ['progressPanel', 'resultPanel', 'failPanel', 'diagPanel', 'investorPanel'].forEach((id) => $(id).classList.add('hidden')); lastDiagnosis = null; }
   let waitTipTimer = null; let waitTipIdx = 0;
+  /* B2 v2.200：等待期小南课堂——tips 轮播时同步渲染对应工具的方法论卡片（费曼式：SVG 图 + 白话讲解） */
+  function renderWaitLesson(idx) {
+    const box = $('waitLesson'); if (!box) return;
+    const lessons = (PV().getXiaonanLessons && PV().getXiaonanLessons(lang === 'en')) || [];
+    if (!lessons.length) { box.innerHTML = ''; box.classList.add('hidden'); return; }
+    const c = lessons[((idx % lessons.length) + lessons.length) % lessons.length];
+    if (!c) { box.innerHTML = ''; return; }
+    box.classList.remove('hidden');
+    box.innerHTML =
+      `<div class="wl-head"><b>🎓 ${escapeHtml(c.title || '')}</b></div>` +
+      `<div class="wl-oneliner">${escapeHtml(c.oneLiner || '')}</div>` +
+      `<div class="wl-diagram">${c.diagram || ''}</div>` +
+      c.steps.map((s) => `<div class="wl-step"><b>${escapeHtml(s.name)}</b><span>${escapeHtml(s.explain)}</span></div>`).join('') +
+      `<div class="wl-plain">${escapeHtml(c.plainExplain || '')}</div>`;
+  }
   function startWaitTips() {
     stopWaitTips();
     const el = $('waitTip'); if (!el) return;
     const tips = PV().waitTips(lang === 'en');
     waitTipIdx = Math.floor(Math.random() * tips.length);
     el.textContent = '💡 ' + tips[waitTipIdx];
+    renderWaitLesson(waitTipIdx);
     waitTipTimer = setInterval(() => {
       waitTipIdx = (waitTipIdx + 1) % tips.length;
       el.textContent = '💡 ' + tips[waitTipIdx];
+      renderWaitLesson(waitTipIdx);
     }, 6000);
   }
-  function stopWaitTips() { if (waitTipTimer) { clearInterval(waitTipTimer); waitTipTimer = null; } const el = $('waitTip'); if (el) el.textContent = ''; }
+  function stopWaitTips() {
+    if (waitTipTimer) { clearInterval(waitTipTimer); waitTipTimer = null; }
+    const el = $('waitTip'); if (el) el.textContent = '';
+    const box = $('waitLesson'); if (box) { box.innerHTML = ''; box.classList.add('hidden'); }
+  }
   function renderRoleStrip() {
     const box = $('roleStrip'); if (!box) return;
     const list = PV().stageList(progress);
