@@ -474,12 +474,39 @@ function createMemoryPrisma() {
       return { count: n };
     },
   };
+  // —— v2.612 API 余额监控：providerBalance 单独数组，按 providerId 取最新 ——
+  const providerBalances = [];
+  const providerBalance = {
+    async create({ data }) { const row = { id: `pb_${++seq}`, createdAt: new Date(), updatedAt: new Date(), ...data }; providerBalances.push(row); return row; },
+    async findMany({ where = {}, orderBy, take } = {}) {
+      let r = providerBalances.filter((x) => Object.entries(where).every(([k, v]) => x[k] === v));
+      const ob = Array.isArray(orderBy) ? orderBy : (orderBy ? [orderBy] : []);
+      if (ob.length) r = [...r].sort((a, b) => { for (const o of ob) { const k = Object.keys(o)[0]; const dir = o[k] === 'desc' ? -1 : 1; const c = cmp(a[k], b[k]); if (c !== 0) return c * dir; } return 0; });
+      return typeof take === 'number' ? r.slice(0, take) : r;
+    },
+    async findFirst({ where = {}, orderBy } = {}) {
+      let r = providerBalances.filter((x) => Object.entries(where).every(([k, v]) => x[k] === v));
+      const ob = Array.isArray(orderBy) ? orderBy : (orderBy ? [orderBy] : []);
+      if (ob.length) r = [...r].sort((a, b) => { for (const o of ob) { const k = Object.keys(o)[0]; const dir = o[k] === 'desc' ? -1 : 1; const c = cmp(a[k], b[k]); if (c !== 0) return c * dir; } return 0; });
+      return r[0] ?? null;
+    },
+    async updateMany({ where = {}, data }) {
+      let count = 0;
+      providerBalances.forEach((x) => {
+        if ((!where.providerId || x.providerId === where.providerId)) {
+          Object.entries(data).forEach(([k, v]) => { x[k] = v; });
+          x.updatedAt = new Date(); count += 1;
+        }
+      });
+      return { count };
+    },
+  };
   // 行锁 SELECT ... FOR UPDATE 在内存实现里为空操作（单线程测试无并发竞争）
   const $queryRaw = async () => [];
-  const tx = { user, invitation, pointsAccount, storageObject, ledgerEntry, project, script, generationTask, modelCallLog, feedback, order, payment, membership, post, postLike, poster, pkBattle, knowledgeItem, learningReport, announcement, modelConfig, safetyConfig, listing, purchase, writersRoom, roomMessage, teardownRecord, advert, characterAsset, propAsset, sceneAsset, matureConsent, interviewSession, $queryRaw };
+  const tx = { user, invitation, pointsAccount, storageObject, ledgerEntry, project, script, generationTask, modelCallLog, feedback, order, payment, membership, post, postLike, poster, pkBattle, knowledgeItem, learningReport, announcement, modelConfig, safetyConfig, listing, purchase, writersRoom, roomMessage, teardownRecord, advert, characterAsset, propAsset, sceneAsset, matureConsent, interviewSession, providerBalance, $queryRaw };
   return {
     user, invitation, pointsAccount, ledgerEntry, project, script, generationTask, modelCallLog, feedback,
-    order, payment, membership, post, postLike, poster, pkBattle, knowledgeItem, learningReport, announcement, modelConfig, safetyConfig, listing, purchase, storageObject, writersRoom, roomMessage, teardownRecord, advert, characterAsset, propAsset, sceneAsset, matureConsent, interviewSession,
+    order, payment, membership, post, postLike, poster, pkBattle, knowledgeItem, learningReport, announcement, modelConfig, safetyConfig, listing, purchase, storageObject, writersRoom, roomMessage, teardownRecord, advert, characterAsset, propAsset, sceneAsset, matureConsent, interviewSession, providerBalance,
     async $transaction(fn) { return fn(tx); },
     _users: users, _accounts: accounts, _projects: projects, _scripts: scripts, _tasks: tasks, _ledgers: ledgers,
     _orders: orders, _payments: payments, _memberships: memberships, _posts: posts, _postLikes: postLikes, _posters: posters, _pkBattles: pkBattles,

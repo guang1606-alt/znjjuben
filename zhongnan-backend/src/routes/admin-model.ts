@@ -9,7 +9,7 @@ import { createRequireAdmin, requireSuperAdmin } from '../middleware/admin';
 import { prisma } from '../lib/prisma';
 import { maskedConfig, saveConfig, ModelConfigData, maskedProvidersConfig, saveProvider, deleteProvider, saveRouting, loadProviders, loadRouting } from '../lib/model-config';
 import {
-  ALL_ROLE_IDS, ROLE_LABEL_ZH, routingCoverage, routedCostFenPerEp, RoleId, ProviderEntry,
+  ALL_ROLE_IDS, ROLE_LABEL_ZH, routingCoverage, routedCostFenPerEp, RoleId, ProviderEntry, enrichProviderFromCatalog,
 } from '../lib/model-config-policy';
 import {
   TEXT_MODELS, IMAGE_MODELS, buildTiers, priceForTier, portfolioAdvice,
@@ -142,12 +142,14 @@ export function createAdminModelRouter(prisma: any) {
     const d = parsed.data;
     const catalog = d.catalogId ? findModel(d.catalogId) : undefined;
     if (d.catalogId && !catalog) return res.status(400).json({ error: '未知目录型号 catalogId' });
-    const entry: ProviderEntry = {
+    const raw: ProviderEntry = {
       id: d.id || '', name: d.name.trim(), modality: d.modality,
       baseUrl: d.baseUrl.trim(), apiKey: d.apiKey.trim(), model: d.model.trim(),
       inYuanPerMTok: d.inYuanPerMTok, outYuanPerMTok: d.outYuanPerMTok,
       catalogId: d.catalogId || undefined, enabled: d.enabled,
     };
+    // 选目录型号时自动回填单价/baseUrl/model（用户手填优先）
+    const entry = enrichProviderFromCatalog(raw, catalog);
     try {
       await saveProvider(entry, catalog?.defaultBaseUrl, req.userId || 'admin', prisma);
       res.json({ ok: true, masked: await maskedProvidersConfig(prisma) });

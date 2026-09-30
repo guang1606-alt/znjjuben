@@ -672,3 +672,25 @@ model SceneAsset {
   updatedAt          DateTime @updatedAt
   @@index([userId, updatedAt])
 }
+
+// ============ API 余额监控（v2.612 后台） ============
+// 各供应商预充值余额的快照；每次查询/手动填值落一条，按 providerId 取最新。
+// vendor 决定查询方式：deepseek/moonshot 自动查；volcengine/aliyun/minimax 手动填值。
+// alertLevel 由 thresholdYuan 判定：>2×阈值 NORMAL、(阈值, 2×阈值] LOW、≤阈值 CRITICAL、null UNKNOWN。
+model ProviderBalance {
+  id            String    @id @default(cuid())
+  providerId    String    // 关联 ModelConfig.providers[].id
+  vendor        String    // deepseek/moonshot/volcengine/aliyun/minimax
+  providerName  String    // 供应商池名字（快照，方便后台展示）
+  balanceYuan   Float?    // 余额（元）；null 表示查询失败/未知
+  thresholdYuan Float     @default(5) // 告警阈值（元）
+  rawJson       Json?     // 原始响应（调试用）
+  source        String    @default("AUTO") // AUTO=自动查询 / MANUAL=管理员手动填值
+  alertLevel    String    @default("UNKNOWN") // NORMAL / LOW / CRITICAL / UNKNOWN
+  errorMsg      String?   // 查询失败时的错误信息
+  lastQueriedAt DateTime? // 最后查询时间（自动查询时填）
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  @@index([providerId, createdAt])
+  @@index([vendor])
+}

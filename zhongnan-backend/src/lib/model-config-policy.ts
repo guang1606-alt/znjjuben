@@ -58,6 +58,24 @@ export function validateProvider(p: Partial<ProviderEntry>, catalogDefault?: str
   return { ok: problems.length === 0, problems };
 }
 
+/**
+ * 选 catalog 型号时自动回填单价/baseUrl/model（用户手填优先，单价为 0 才回填）。
+ * 修复：之前 saveProvider 只回填 baseUrl，不回填单价，导致选目录型号后单价落库为 0，
+ * 成本核算/×2铁底/健康降级全部失效。
+ */
+export function enrichProviderFromCatalog(
+  entry: ProviderEntry, catalog?: { defaultBaseUrl?: string; name?: string; inYuanPerMTok?: number; outYuanPerMTok?: number },
+): ProviderEntry {
+  if (!catalog) return entry;
+  return {
+    ...entry,
+    baseUrl: entry.baseUrl || catalog.defaultBaseUrl || '',
+    model: entry.model || catalog.name || '',
+    inYuanPerMTok: (entry.inYuanPerMTok ?? 0) > 0 ? entry.inYuanPerMTok : (catalog.inYuanPerMTok ?? 0),
+    outYuanPerMTok: (entry.outYuanPerMTok ?? 0) > 0 ? entry.outYuanPerMTok : (catalog.outYuanPerMTok ?? 0),
+  };
+}
+
 /** 新增或按 id 覆盖；不同 id 不允许重名（避免后台混淆） */
 export function upsertProvider(list: ProviderEntry[], entry: ProviderEntry, catalogDefault?: string): ProviderEntry[] {
   if (!entry.id) entry.id = `pv_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 7)}`;

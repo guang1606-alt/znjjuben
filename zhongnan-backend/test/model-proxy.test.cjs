@@ -40,6 +40,8 @@ test('REQUIRE_REAL_MODEL=true 且无密钥：拒绝"假装创作"并抛错', asy
 test('真实调用按 usage 与档位单价精确核算成本（经济档 1M入+0.5M出=180分）', async () => {
   process.env.MODEL_TEXT_ECONOMY_KEY = 'sk-test';
   process.env.MODEL_GATEWAY_BASE_URL = 'https://stub.local/v1';
+  // 显式隔离 DB：用空 provider 源，确保走 env 档位单价（0.8/2 元），不被 DB 已存 provider 单价串扰
+  MP.__setProviderSource(async () => ({ providers: [], routing: {} }));
   MP.__setHttpTransport(async () => ({
     ok: true,
     status: 200,
@@ -53,6 +55,7 @@ test('真实调用按 usage 与档位单价精确核算成本（经济档 1M入+
     assert.strictEqual(r.costFen, 180); // 0.8 + 1.0 元
   } finally {
     MP.__setHttpTransport(null);
+    MP.__setProviderSource(null);
     delete process.env.MODEL_TEXT_ECONOMY_KEY;
   }
 });
