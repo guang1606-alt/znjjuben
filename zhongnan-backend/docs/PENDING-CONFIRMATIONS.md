@@ -74,3 +74,17 @@
 - 疑因：run-tests.cjs 无 per-test 超时、文件级并行（node --test 默认并发），负载敏感型用例（时间窗/超时类）在高 load 下偶发变慢失败
 - 建议（可选）：① 全量跑前确认无其他 `node --test` 进程（`ps aux | grep "node --test"`）；② 若再复现，先落盘完整输出（`npm test 2>&1 > /tmp/zn-test.log`）再定位；③ 根治可考虑给 run-tests.cjs 加 `--test-concurrency=4` 限并发或对时间敏感用例放宽断言
 - 转观察项，不阻塞业务
+
+## 14.【低】v2.219.0 前后端对齐审计：确认不补入口的后端能力清单（待拍板）
+- 背景：v2.219.0 对齐审计发现以下后端端点**有实现、无前端入口**，经研判均属刻意保留/低价值/旧别名，本轮不补入口；登记于此供用户拍板是否需要
+- 清单：
+  1. `GET /api/admin/pricing-sim`（定价模拟器）——运营测算工具，暂无页面消费
+  2. `POST /api/admin/board/ingest`、`/board/clear`（榜单手动采集/清空）——榜单由定时任务自动采集，手动口仅排障用
+  3. `GET /api/handoff/brief`（接续简报单查）——前端 `/handoff` 列表已含全量，单查口冗余
+  4. `POST /api/admin-model/portfolio/review`、`/review/run`、`/review/ack`、`GET /audit-report`（周审工作流）——前端已有 `portfolio/audit` 一次性入口，周审多步流暂未接
+  5. `GET /api/api-directory/docx`（目录 docx 下载版）——前端已用 JSON 版渲染
+  6. `POST /api/knowledge/self-learn/run`、`GET /report`——疑为 `/self-learn/run-auto`、`/reports` 的旧别名，建议下轮确认后废弃
+  7. `GET /api/knowledge/builtin-skill-pack`（仅正文）——疑为 `/builtin-skill-bundle` 的旧别名，同上
+  8. `GET /api/generate/va/xiaonan`（小南 VA 明细）——前端以字段方式消费聚合口，明细口暂未用
+  9. `GET /api/generate/modes`（模式清单）——前端 I18N.MODES 本地渲染（模式属产品定义，刻意本地化），接口口暂未消费
+- 操作建议：1~5、8、9 维持现状；6、7 下轮审计确认无外部依赖后删除旧别名（或补 deprecation 提示）

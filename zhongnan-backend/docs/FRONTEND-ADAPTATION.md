@@ -2,7 +2,7 @@
 
 > 面向前端（`web/` 原生 JS 站点及后续独立前端/移动端）的后端 API 契约与适配说明。
 > 后端每次破坏性契约变更都会在此登记：变更内容 → 迁移对照 → 前端已同步点。
-> 版本对齐 `package.json`，当前基线：**v2.218.0**。
+> 版本对齐 `package.json`，当前基线：**v2.219.0**。
 
 ---
 
@@ -87,6 +87,17 @@
 
 - `TRUST_PROXY_HOPS`：反向代理跳数，默认 `1`（nginx/veFaaS 单层网关标准形态）。多层网关设实际跳数；**直连部署（无代理）设 `0`**。影响 `req.ip` → 注册/登录/邀请码三类 IP 维度限流的准确性：不解析 XFF 时全体用户共享代理 IP，注册限流（5 个/15min/IP）必误伤
 
+### 超管后台与运营能力入口（v2.219.0 前后端能力对齐）
+
+对齐审计补齐 4 处「后端有能力、前端无入口」，后端 API 零变更：
+
+| 能力 | 前端入口 | 端点 |
+|---|---|---|
+| 广告位管理 | 超管后台「广告位」标签页（slot 动态下拉、新建/编辑/删除、uiConfirm 确认） | `GET /api/ads/admin/list`、`POST /admin/create`、`POST /admin/:id/update`、`POST /admin/:id/delete`（slot ∈ AD_SLOTS 四档：home_hero_roll / create_done / square_feed / user_side） |
+| 全量投稿渠道 | 投稿面板「查看全部投稿渠道」展开（含未核验计数，二次点击收起） | `GET /api/submission/channels` → `{ channels, unverified }` |
+| 副管理员授予/回收 | 用户管理行操作「授予副管理员 / 摘管理员帽」按钮 | `POST /api/admin/users/:id/admin-flag`（body `{ isAdmin }`；仅主账号可授） |
+| 知识条目归档/恢复 | 学习窗口行操作「归档（可填原因）/ 恢复（转待审）」按钮 | `POST /api/admin/knowledge/:id/archive`（body `{ reason? }` → ARCHIVED）、`/:id/restore` → PENDING |
+
 ### 鉴权与会话（`web/api.js` API 层）
 
 - `Authorization: Bearer <accessToken>`；access 过期用 refresh 静默续期并重试一次
@@ -98,6 +109,7 @@
 
 | 版本 | 变更 |
 |---|---|
+| v2.219.0 | 前后端能力对齐：web 端补齐 4 处「后端有、前端无入口」——广告位管理标签页（/api/ads/admin/* CRUD）、全量投稿渠道展开（/api/submission/channels）、用户行操作 admin-flag、知识条目归档/恢复；后端 API 无变更 |
 | v2.218.0 | 请求体错误契约：坏 JSON 400「请求体格式错误」/ 超 12mb 413「请求体过大」（原 500 INTERNAL_ERROR）；新增 `TRUST_PROXY_HOPS` 部署变量（默认 1）解析 X-Forwarded-For 真实客户端 IP，保障 IP 维度限流准确 |
 | v2.217.0 | 注册与改密暴力防护：`/register` 同 IP 15min 成功注册 5 个后 429「注册过于频繁」（失败探测不计数）；`/change-password` 当前密码连错 5 次 429「尝试过于频繁」，成功改密清零。前端无 API 变更，仅新增 429 场景 |
 | v2.216.0 | 500 错误脱敏：12 处动态异常消息直回（admin-model×10/knowledge/export）统一为 `INTERNAL_ERROR`；详情只进服务端日志；前端导出失败提示对 `INTERNAL_ERROR` 回落本地文案 |
