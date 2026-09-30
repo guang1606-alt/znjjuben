@@ -104,3 +104,48 @@ describe('D 轮：uiConfirm / uiPrompt 通用模态助手', () => {
     assert.ok(/toastInfo\(/.test(src.slice(src.indexOf('function genClickGuard'), src.indexOf('function genClickGuard') + 600)), '拦截时应有轻提示，不静默吞点击');
   });
 });
+
+describe('F 轮：批量补全对话框迁移 v2.202 规范', () => {
+  const region = extractMarkedRegion('v2.205 批量补全对话框');
+
+  it('标记区域存在（showBatchCompleteDialog 应有 v2.205 标记注释）', () => {
+    assert.ok(region, '应有标记区域「v2.205 批量补全对话框」…结束');
+  });
+
+  it('DOM 构建安全：不用 innerHTML / 不用 inline onmouseover/onmouseout', () => {
+    assert.ok(region, '标记区域缺失');
+    assert.ok(!region.includes('innerHTML'), '应改用 DOM API 构建，不用 innerHTML');
+    assert.ok(!/onmouseover\s*=/.test(region), '不应有 inline onmouseover（hover 效果走 CSS）');
+    assert.ok(!/onmouseout\s*=/.test(region), '不应有 inline onmouseout');
+  });
+
+  it('焦点管理：圈定 + 恢复 + dialog 语义', () => {
+    assert.ok(region, '标记区域缺失');
+    assert.ok(/_uiTrapTab/.test(region), 'Tab 焦点应圈定在模态内（复用 _uiTrapTab）');
+    assert.ok(/prevFocus/.test(region) && /prevFocus\.focus\(\)/.test(region), '关闭后焦点应恢复到触发元素');
+    assert.ok(/aria-modal/.test(region) || /_uiModalShell\(/.test(region), '应有 dialog/aria-modal 语义（或复用 _uiModalShell）');
+  });
+
+  it('动效：入场/出场动画 + reduced-motion 守卫', () => {
+    assert.ok(region, '标记区域缺失');
+    assert.ok(/_uiReducedMotion\(\)/.test(region), '动画前应查 prefers-reduced-motion');
+    assert.ok(/\.animate\(/.test(region), '应有入场/出场动画（与 uiConfirm 一致）');
+  });
+
+  it('行为保留：全选/全不选/空选提示/按字段过滤 patches', () => {
+    assert.ok(region, '标记区域缺失');
+    assert.ok(/dash-batch-all/.test(region), '应保留全选');
+    assert.ok(/dash-batch-none/.test(region), '应保留全不选');
+    assert.ok(/dashThinBatchDialogEmpty/.test(region), '空选时应有提示');
+    assert.ok(/filteredPatches/.test(region), '确认时应按选中字段过滤 patches');
+  });
+});
+
+describe('F 轮：toast 堆叠上限（防错误风暴刷屏）', () => {
+  it('toast 区域超出上限时移除最旧一条', () => {
+    const region = extractMarkedRegion('v2.186 全局 Toast');
+    assert.ok(region, 'toast 区域应有「v2.186 全局 Toast」…结束标记');
+    assert.ok(/children\.length > \d+/.test(region), '应有堆叠条数上限判断');
+    assert.ok(/firstElementChild\.remove\(\)/.test(region), '超出上限应移除最旧一条');
+  });
+});

@@ -1617,6 +1617,10 @@ summary:hover{color:var(--accent-strong)}
   .toast, .toast.toast-out { animation: none; }
 }
 
+/* —— 1.1 批量补全对话框字段行（v2.205 自 inline onmouseover/out 迁出） —— */
+.dash-batch-field { transition: background var(--motion-fast, .14s) var(--ease-out, cubic-bezier(.22,.61,.36,1)); }
+.dash-batch-field:hover { background: rgba(127,127,127,0.08); }
+
 /* —— 2. Skeleton + Shimmer —— */
 .skeleton {
   position: relative; overflow: hidden;

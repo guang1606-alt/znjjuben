@@ -1559,7 +1559,8 @@
     if (popped && popped.view) switchView(popped.view);
   });
 
-  /* ---------- v2.186 全局 Toast（统一错误/成功/加载反馈）---------- */
+  /* ---------- v2.186 全局 Toast ---------- */
+  // 统一错误/成功/加载反馈；v2.205 增加堆叠上限（防错误风暴刷屏）
   let _toastSeq = 0;
   function toast(opts) {
     const stack = $('toastStack'); if (!stack) return;
@@ -1589,12 +1590,15 @@
     cb.onclick = close;
     node.appendChild(cb);
     stack.appendChild(node);
+    // v2.205 堆叠上限：错误风暴/连发时最多同时展示 5 条，超出移除最旧（旧条的 close 定时器对已移除节点幂等无害）
+    while (stack.children.length > 5) stack.firstElementChild.remove();
     if (ttl > 0) setTimeout(close, ttl);
     return close;
   }
   function toastError(msg, title) { return toast({ kind: 'error', title: title || '出错', body: msg }); }
   function toastOk(msg, title)   { return toast({ kind: 'ok',    title: title || '成功', body: msg }); }
   function toastInfo(msg, title) { return toast({ kind: 'info',  title: title || '', body: msg }); }
+  /* ---------- v2.186 全局 Toast 结束 ---------- */
 
   /* ---------- v2.202 通用模态对话框 ---------- */
   // 交互统一：原生 confirm/prompt 在移动端观感差、样式不可控、与 toast/modal 体系割裂。
@@ -4271,53 +4275,83 @@
   // v2.185 c180 批量补全 modal dialog（三族共用）：dry-run 后弹字段选择 dialog，编导可取消某些字段，
   // 确认后按选中字段过滤 patches，实际补全请求带 patches + fields 跳过 autoFill 重算
   // 返回 Promise<{patches, fields}> 或 null（取消）；patches 已按 fields 过滤，只含选中字段
+  /* ---------- v2.205 批量补全对话框 ---------- */
+  // 薄弱资产「一键补全」确认弹窗：v2.205 迁移 v2.202 规范——DOM 构建（防注入）、
+  // 焦点圈定/恢复（_uiTrapTab/prevFocus）、入场出场动画（_uiReducedMotion 守卫）、
+  // 字段行 hover 效果移交 CSS（.dash-batch-field:hover）。
   function showBatchCompleteDialog(dryRes) {
     return new Promise((resolve) => {
       const u = (dryRes.willUpdate || []).length;
       const s = (dryRes.willSkip || []).length;
       const fields = (dryRes.fieldsUnion || []);
       const patches = (dryRes.willUpdate || []).map((x) => ({ id: x.id, name: x.name, patch: x.patch || {} }));
-      const overlay = document.createElement('div');
-      overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.55);z-index:9999;display:flex;align-items:center;justify-content:center';
-      const modal = document.createElement('div');
-      modal.style.cssText = 'background:var(--bg,#fff);color:var(--fg,#222);border-radius:8px;box-shadow:0 8px 32px rgba(0,0,0,0.3);padding:16px;max-width:480px;width:90%;max-height:80vh;overflow-y:auto';
-      modal.innerHTML = `
-        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
-          <h3 style="margin:0;font-size:16px">${t('dashThinBatchDialogTitle')}</h3>
-          <button type="button" class="dash-batch-x" style="font-size:18px;line-height:1;padding:2px 8px;border:none;background:transparent;color:var(--muted,#888);cursor:pointer;border-radius:4px" title="${t('dashThinBatchDialogCancel')}">×</button>
-        </div>
-        <div style="font-size:13px;margin-bottom:10px">${t('dashThinBatchDialogSummary', { u, s })}</div>
-        <div style="font-size:12px;margin-bottom:4px;color:var(--muted,#888)">${t('dashThinBatchDialogFields')}</div>
-        <div class="dash-batch-fields" style="margin-bottom:12px">
-          ${fields.map((f) => `<label style="display:block;font-size:13px;margin:4px 0;cursor:pointer;padding:4px 6px;border-radius:4px;transition:background 0.15s" onmouseover="this.style.background='rgba(127,127,127,0.08)'" onmouseout="this.style.background='transparent'"><input type="checkbox" value="${escapeHtml(f)}" checked style="margin-right:6px"> ${escapeHtml(fieldName(f))}<span class="muted" style="font-size:11px;margin-left:6px">(${patches.filter((p) => f in p.patch).length} 条)</span></label>`).join('')}
-        </div>
-        <div style="display:flex;gap:8px;margin-bottom:12px">
-          <button type="button" class="dash-batch-all" style="font-size:11px;padding:3px 10px;border:1px solid var(--muted,#888);background:transparent;color:var(--fg,#222);border-radius:4px;cursor:pointer">${t('dashThinBatchDialogAll')}</button>
-          <button type="button" class="dash-batch-none" style="font-size:11px;padding:3px 10px;border:1px solid var(--muted,#888);background:transparent;color:var(--fg,#222);border-radius:4px;cursor:pointer">${t('dashThinBatchDialogNone')}</button>
-        </div>
-        <div style="display:flex;gap:8px;justify-content:flex-end">
-          <button type="button" class="dash-batch-cancel" style="font-size:13px;padding:6px 14px;border:1px solid var(--muted,#888);background:transparent;color:var(--fg,#222);border-radius:4px;cursor:pointer">${t('dashThinBatchDialogCancel')}</button>
-          <button type="button" class="dash-batch-confirm" style="font-size:13px;padding:6px 14px;background:var(--jade,#2e7d32);color:#fff;border:none;border-radius:4px;cursor:pointer">${t('dashThinBatchDialogConfirm')}</button>
-        </div>
-      `;
-      overlay.appendChild(modal);
-      document.body.appendChild(overlay);
-      // c181 复盘完善：close 统一清理 DOM + 移除 Esc handler 防残留
+      const prevFocus = document.activeElement;
+      const { overlay, modal, bodyEl, okBtn, cancelBtn } = _uiModalShell({
+        title: t('dashThinBatchDialogTitle'),
+        body: t('dashThinBatchDialogSummary', { u, s }),
+        okText: t('dashThinBatchDialogConfirm'),
+        cancelText: t('dashThinBatchDialogCancel'),
+      });
+      const fieldsLabel = document.createElement('div');
+      fieldsLabel.style.cssText = 'font-size:12px;margin-bottom:4px;color:var(--muted,#888)';
+      fieldsLabel.textContent = t('dashThinBatchDialogFields');
+      const fieldsBox = document.createElement('div');
+      fieldsBox.className = 'dash-batch-fields';
+      fieldsBox.style.cssText = 'margin-bottom:12px';
+      for (const f of fields) {
+        const label = document.createElement('label');
+        label.className = 'dash-batch-field';
+        label.style.cssText = 'display:block;font-size:13px;margin:4px 0;cursor:pointer;padding:4px 6px;border-radius:4px';
+        const cb = document.createElement('input');
+        cb.type = 'checkbox'; cb.value = f; cb.checked = true; cb.style.marginRight = '6px';
+        label.appendChild(cb);
+        label.appendChild(document.createTextNode(' ' + fieldName(f) + ' '));
+        const count = document.createElement('span');
+        count.className = 'muted';
+        count.style.cssText = 'font-size:11px;margin-left:6px';
+        count.textContent = '(' + patches.filter((p) => f in p.patch).length + ' 条)';
+        label.appendChild(count);
+        fieldsBox.appendChild(label);
+      }
+      const toggles = document.createElement('div');
+      toggles.style.cssText = 'display:flex;gap:8px;margin-bottom:12px';
+      const mkToggle = (cls, text) => {
+        const b = document.createElement('button');
+        b.type = 'button'; b.className = cls; b.textContent = text;
+        b.style.cssText = 'font-size:11px;padding:3px 10px;border:1px solid var(--muted,#888);background:transparent;color:var(--fg,#222);border-radius:4px;cursor:pointer';
+        return b;
+      };
+      const allBtn = mkToggle('dash-batch-all', t('dashThinBatchDialogAll'));
+      const noneBtn = mkToggle('dash-batch-none', t('dashThinBatchDialogNone'));
+      toggles.appendChild(allBtn); toggles.appendChild(noneBtn);
+      // 插在摘要之后、按钮行之前（_uiModalShell 已把按钮行 append 在 modal 末尾）
+      if (bodyEl) bodyEl.after(fieldsLabel, fieldsBox, toggles);
       let closed = false;
-      const escHandler = (e) => { if (e.key === 'Escape' && !closed) close(null); };
-      const close = (result) => { if (closed) return; closed = true; document.removeEventListener('keydown', escHandler); overlay.remove(); resolve(result); };
-      document.addEventListener('keydown', escHandler);
-      modal.querySelector('.dash-batch-x').onclick = () => close(null);
-      modal.querySelector('.dash-batch-all').onclick = () => {
-        modal.querySelectorAll('.dash-batch-fields input[type=checkbox]').forEach((c) => { c.checked = true; });
+      const close = (result) => {
+        if (closed) return; closed = true;
+        document.removeEventListener('keydown', keyHandler);
+        resolve(result);
+        try { if (prevFocus && prevFocus.focus) prevFocus.focus(); } catch {}
+        // 退场淡出只作视觉余韵，不阻塞 resolve；onfinish/oncancel + 超时兜底保证 DOM 必被清理
+        const finish = () => { overlay.remove(); };
+        if (!_uiReducedMotion() && overlay.animate) {
+          const anim = overlay.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 120, easing: 'ease-in' });
+          anim.onfinish = finish; anim.oncancel = finish;
+          setTimeout(finish, 300);
+        } else finish();
       };
-      modal.querySelector('.dash-batch-none').onclick = () => {
-        modal.querySelectorAll('.dash-batch-fields input[type=checkbox]').forEach((c) => { c.checked = false; });
+      const keyHandler = (e) => {
+        if (closed) return;
+        if (e.key === 'Escape') close(null);
+        else if (e.key === 'Tab') _uiTrapTab(e, modal);
       };
-      modal.querySelector('.dash-batch-cancel').onclick = () => close(null);
+      document.addEventListener('keydown', keyHandler);
+      allBtn.onclick = () => { fieldsBox.querySelectorAll('input[type=checkbox]').forEach((c) => { c.checked = true; }); };
+      noneBtn.onclick = () => { fieldsBox.querySelectorAll('input[type=checkbox]').forEach((c) => { c.checked = false; }); };
+      cancelBtn.onclick = () => close(null);
       overlay.onclick = (e) => { if (e.target === overlay) close(null); };
-      modal.querySelector('.dash-batch-confirm').onclick = () => {
-        const selectedFields = [...modal.querySelectorAll('.dash-batch-fields input[type=checkbox]:checked')].map((c) => c.value);
+      okBtn.onclick = () => {
+        const selectedFields = [...fieldsBox.querySelectorAll('input[type=checkbox]:checked')].map((c) => c.value);
         if (!selectedFields.length) { toastInfo(t('dashThinBatchDialogEmpty')); return; }
         // 按选中字段过滤 patches——只保留选中字段；过滤后空 patch 的条目跳过
         const filteredPatches = patches.map((p) => {
@@ -4327,8 +4361,14 @@
         }).filter((p) => Object.keys(p.patch).length > 0);
         close({ patches: filteredPatches, fields: selectedFields });
       };
+      document.body.appendChild(overlay);
+      if (!_uiReducedMotion() && modal.animate) {
+        modal.animate([{ opacity: 0, transform: 'scale(0.96)' }, { opacity: 1, transform: 'scale(1)' }], { duration: 150, easing: 'ease-out' });
+      }
+      okBtn.focus();
     });
   }
+  /* ---------- v2.205 批量补全对话框 结束 ---------- */
   function dashHotRow(a, family) {
     const color = DASH_LEVEL_COLOR[a.level] || DASH_LEVEL_COLOR.thin;
     const tag = t(DASH_FAMILY_KEY[family] || 'dashFamilyCast');
