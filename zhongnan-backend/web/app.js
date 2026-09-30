@@ -2194,7 +2194,9 @@
     const isPhone = /^1[3-9]\d{9}$/.test(phone);
     const isAdminAcct = /^[A-Za-z0-9_]{6,20}$/.test(phone); // 允许字母数字的管理员账号
     if (!isPhone && !isAdminAcct) return showAuthErr(t('authErrPhone'));
-    if (pwd.length < 8) return showAuthErr(t('authErrPwd'));
+    // v2.227 对齐后端 v2.212 统一密码策略（8-64 位 + 必含字母和数字，仅注册校验强度），
+    // 与改密/admin 开号/admin 重置三入口同口径，弱密码不再白跑后端
+    if (pwd.length < 8 || !/[a-zA-Z]/.test(pwd) || !/[0-9]/.test(pwd)) return showAuthErr(t('authErrPwd'));
     $('authSubmit').disabled = true;
     try {
       if (authMode === 'register') await Api.auth.register(phone, pwd, invite);
