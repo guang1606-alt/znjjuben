@@ -1,0 +1,1738 @@
+[
+  {
+    "viewport": 1440,
+    "parent": "rtab-pitch",
+    "from": "pitchIdea",
+    "to": "pitchAud",
+    "gap": 9.79998779296875
+  },
+  {
+    "viewport": 1440,
+    "parent": "rtab-read",
+    "from": "围读参与模式\n            我+我的小",
+    "to": "readFormat",
+    "gap": 9.79998779296875
+  },
+  {
+    "viewport": 1440,
+    "parent": "rtab-read",
+    "from": "readPickProject",
+    "to": "readScript",
+    "gap": 15.67999267578125
+  },
+  {
+    "viewport": 1440,
+    "parent": "teardownPanel",
+    "from": "tdSource",
+    "to": "tdUrl",
+    "gap": 15.67999267578125
+  },
+  {
+    "viewport": 1440,
+    "parent": "teardownPanel",
+    "from": "tdUrl",
+    "to": "tdText",
+    "gap": 15.67999267578125
+  },
+  {
+    "viewport": 1440,
+    "parent": "teardownPanel",
+    "from": "tdText",
+    "to": "tdAnalyzeBtn",
+    "gap": 13.719970703125
+  },
+  {
+    "viewport": 1440,
+    "parent": "tdResult",
+    "from": "勾选要保留的标签（可增删，决定改编基因）",
+    "to": "field",
+    "gap": 15.67999267578125
+  },
+  {
+    "viewport": 1440,
+    "parent": "tdResult",
+    "from": "改编方向（只借底层逻辑，不抄表达）",
+    "to": "tdOutlineBtn",
+    "gap": 13.719970703125
+  },
+  {
+    "viewport": 1440,
+    "parent": "sqPostBox",
+    "from": "sqTitle",
+    "to": "sqBody",
+    "gap": 16
+  },
+  {
+    "viewport": 1440,
+    "parent": "sqPostBox",
+    "from": "sqBody",
+    "to": "sqSubmit",
+    "gap": 16
+  },
+  {
+    "viewport": 1440,
+    "parent": "fbSubmitPane",
+    "from": "类型\n              \n      ",
+    "to": "fbUrgentField",
+    "gap": 11.519989013671875
+  },
+  {
+    "viewport": 1440,
+    "parent": "fbSubmitPane",
+    "from": "fbUrgent",
+    "to": "fbContent",
+    "gap": 11.52001953125
+  },
+  {
+    "viewport": 1440,
+    "parent": "fbSubmitPane",
+    "from": "fbContent",
+    "to": "fbImgInput",
+    "gap": 11.52001953125
+  },
+  {
+    "viewport": 1440,
+    "parent": "fbSubmitPane",
+    "from": "fbImgInput",
+    "to": "fbContact",
+    "gap": 11.52001953125
+  },
+  {
+    "viewport": 1440,
+    "parent": "modal",
+    "from": "listScript",
+    "to": "listPrice",
+    "gap": 11.519989013671875
+  },
+  {
+    "viewport": 1440,
+    "parent": "modal",
+    "from": "listPrice",
+    "to": "listSample",
+    "gap": 11.519989013671875
+  },
+  {
+    "viewport": 1440,
+    "parent": "modal modal-wide",
+    "from": "xMatureAge",
+    "to": "xMatureRegion",
+    "gap": 11.519989013671875
+  },
+  {
+    "viewport": 1440,
+    "parent": "subpanel",
+    "from": "pvName",
+    "to": "pvModality",
+    "gap": 10
+  },
+  {
+    "viewport": 1440,
+    "parent": "subpanel",
+    "from": "pvModality",
+    "to": "pvCatalog",
+    "gap": 10
+  },
+  {
+    "viewport": 1440,
+    "parent": "subpanel",
+    "from": "pvCatalog",
+    "to": "pvModel",
+    "gap": 10
+  },
+  {
+    "viewport": 1440,
+    "parent": "subpanel",
+    "from": "pvModel",
+    "to": "pvBase",
+    "gap": 10
+  },
+  {
+    "viewport": 1440,
+    "parent": "subpanel",
+    "from": "pvBase",
+    "to": "pvKey",
+    "gap": 10
+  },
+  {
+    "viewport": 1440,
+    "parent": "subpanel",
+    "from": "knKind",
+    "to": "knTitle",
+    "gap": 10
+  },
+  {
+    "viewport": 1440,
+    "parent": "subpanel",
+    "from": "knTitle",
+    "to": "knCategory",
+    "gap": 10
+  },
+  {
+    "viewport": 1440,
+    "parent": "subpanel",
+    "from": "knCategory",
+    "to": "knContent",
+    "gap": 10
+  },
+  {
+    "viewport": 1440,
+    "parent": "subpanel",
+    "from": "knUrl",
+    "to": "knContent",
+    "gap": 10
+  },
+  {
+    "viewport": 1440,
+    "parent": "subpanel",
+    "from": "knFile",
+    "to": "knContent",
+    "gap": 10
+  },
+  {
+    "viewport": 1440,
+    "parent": "subpanel",
+    "from": "knContent",
+    "to": "knSubmit",
+    "gap": 10
+  },
+  {
+    "viewport": 1440,
+    "parent": "subpanel",
+    "from": "hdLast",
+    "to": "hdBacklog",
+    "gap": 10
+  },
+  {
+    "viewport": 1440,
+    "parent": "subpanel",
+    "from": "hdBacklog",
+    "to": "hdQuestions",
+    "gap": 10
+  },
+  {
+    "viewport": 1440,
+    "parent": "subpanel",
+    "from": "hdNext",
+    "to": "hdNotes",
+    "gap": 10
+  },
+  {
+    "viewport": 1440,
+    "parent": "subpanel",
+    "from": "hdNotes",
+    "to": "hdLogVer",
+    "gap": 10
+  },
+  {
+    "viewport": 1440,
+    "parent": "subpanel",
+    "from": "hdLogVer",
+    "to": "hdBrief",
+    "gap": 10
+  },
+  {
+    "viewport": 1440,
+    "parent": "subpanel",
+    "from": "admUpdVer",
+    "to": "admUpdTitleZh",
+    "gap": 10
+  },
+  {
+    "viewport": 1440,
+    "parent": "subpanel",
+    "from": "admUpdTitleZh",
+    "to": "admUpdTitleEn",
+    "gap": 10
+  },
+  {
+    "viewport": 1440,
+    "parent": "subpanel",
+    "from": "admUpdTitleEn",
+    "to": "admUpdBodyZh",
+    "gap": 10
+  },
+  {
+    "viewport": 1440,
+    "parent": "subpanel",
+    "from": "admUpdBodyZh",
+    "to": "admUpdBodyEn",
+    "gap": 10
+  },
+  {
+    "viewport": 1440,
+    "parent": "subpanel",
+    "from": "admUpdBodyEn",
+    "to": "admUpdPinned",
+    "gap": 10
+  },
+  {
+    "viewport": 1440,
+    "parent": "subpanel",
+    "from": "admUpdPinned",
+    "to": "admUpdSubmit",
+    "gap": 10
+  },
+  {
+    "viewport": 1440,
+    "parent": "modal",
+    "from": "authPhone",
+    "to": "authPwd",
+    "gap": 11.519989013671875
+  },
+  {
+    "viewport": 1440,
+    "parent": "modal",
+    "from": "authPwd",
+    "to": "authSubmit",
+    "gap": 23.03997802734375
+  },
+  {
+    "viewport": 1440,
+    "parent": "modal",
+    "from": "authInvite",
+    "to": "authSubmit",
+    "gap": 23.0400390625
+  },
+  {
+    "viewport": 1440,
+    "parent": "castLibEdit",
+    "from": "castLibEditName",
+    "to": "castLibEditPersona",
+    "gap": 11.519989013671875
+  },
+  {
+    "viewport": 1440,
+    "parent": "castLibEdit",
+    "from": "castLibEditPersona",
+    "to": "castLibEditVoice",
+    "gap": 11.52001953125
+  },
+  {
+    "viewport": 1440,
+    "parent": "castLibEdit",
+    "from": "castLibEditVoice",
+    "to": "castLibEditAnchor",
+    "gap": 11.52001953125
+  },
+  {
+    "viewport": 1440,
+    "parent": "castLibEdit",
+    "from": "castLibEditAnchor",
+    "to": "castLibEditSigs",
+    "gap": 11.52001953125
+  },
+  {
+    "viewport": 1440,
+    "parent": "castLibEdit",
+    "from": "castLibEditSigs",
+    "to": "castLibEditTags",
+    "gap": 11.52001953125
+  },
+  {
+    "viewport": 1440,
+    "parent": "castLibEdit",
+    "from": "castLibEditTags",
+    "to": "castLibEditSave",
+    "gap": 11.52001953125
+  },
+  {
+    "viewport": 1440,
+    "parent": "propLibEdit",
+    "from": "propLibEditName",
+    "to": "propLibEditMeaning",
+    "gap": 11.52001953125
+  },
+  {
+    "viewport": 1440,
+    "parent": "propLibEdit",
+    "from": "propLibEditMeaning",
+    "to": "propLibEditTaboo",
+    "gap": 11.52001953125
+  },
+  {
+    "viewport": 1440,
+    "parent": "propLibEdit",
+    "from": "propLibEditTaboo",
+    "to": "propLibEditEps",
+    "gap": 11.5198974609375
+  },
+  {
+    "viewport": 1440,
+    "parent": "propLibEdit",
+    "from": "propLibEditEps",
+    "to": "propLibEditClosedEps",
+    "gap": 11.5198974609375
+  },
+  {
+    "viewport": 1440,
+    "parent": "propLibEdit",
+    "from": "propLibEditClosedEps",
+    "to": "propLibEditAnchor",
+    "gap": 11.5198974609375
+  },
+  {
+    "viewport": 1440,
+    "parent": "propLibEdit",
+    "from": "propLibEditAnchor",
+    "to": "propLibEditTags",
+    "gap": 11.5198974609375
+  },
+  {
+    "viewport": 1440,
+    "parent": "propLibEdit",
+    "from": "propLibEditTags",
+    "to": "propLibEditSave",
+    "gap": 11.5198974609375
+  },
+  {
+    "viewport": 1440,
+    "parent": "sceneLibEdit",
+    "from": "sceneLibEditName",
+    "to": "sceneLibEditMeaning",
+    "gap": 11.52001953125
+  },
+  {
+    "viewport": 1440,
+    "parent": "sceneLibEdit",
+    "from": "sceneLibEditMeaning",
+    "to": "sceneLibEditMood",
+    "gap": 11.52001953125
+  },
+  {
+    "viewport": 1440,
+    "parent": "sceneLibEdit",
+    "from": "sceneLibEditMood",
+    "to": "sceneLibEditTaboo",
+    "gap": 11.5198974609375
+  },
+  {
+    "viewport": 1440,
+    "parent": "sceneLibEdit",
+    "from": "sceneLibEditTaboo",
+    "to": "sceneLibEditEps",
+    "gap": 11.5198974609375
+  },
+  {
+    "viewport": 1440,
+    "parent": "sceneLibEdit",
+    "from": "sceneLibEditEps",
+    "to": "sceneLibEditAnchor",
+    "gap": 11.5198974609375
+  },
+  {
+    "viewport": 1440,
+    "parent": "sceneLibEdit",
+    "from": "sceneLibEditAnchor",
+    "to": "sceneLibEditTags",
+    "gap": 11.5198974609375
+  },
+  {
+    "viewport": 1440,
+    "parent": "sceneLibEdit",
+    "from": "sceneLibEditTags",
+    "to": "sceneLibEditSave",
+    "gap": 11.5198974609375
+  },
+  {
+    "viewport": 1024,
+    "parent": "rtab-pitch",
+    "from": "pitchIdea",
+    "to": "pitchAud",
+    "gap": 9.79998779296875
+  },
+  {
+    "viewport": 1024,
+    "parent": "rtab-read",
+    "from": "围读参与模式\n            我+我的小",
+    "to": "readFormat",
+    "gap": 9.79998779296875
+  },
+  {
+    "viewport": 1024,
+    "parent": "rtab-read",
+    "from": "readPickProject",
+    "to": "readScript",
+    "gap": 15.67999267578125
+  },
+  {
+    "viewport": 1024,
+    "parent": "teardownPanel",
+    "from": "tdSource",
+    "to": "tdUrl",
+    "gap": 15.680023193359375
+  },
+  {
+    "viewport": 1024,
+    "parent": "teardownPanel",
+    "from": "tdUrl",
+    "to": "tdText",
+    "gap": 15.67999267578125
+  },
+  {
+    "viewport": 1024,
+    "parent": "teardownPanel",
+    "from": "tdText",
+    "to": "tdAnalyzeBtn",
+    "gap": 13.719970703125
+  },
+  {
+    "viewport": 1024,
+    "parent": "tdResult",
+    "from": "勾选要保留的标签（可增删，决定改编基因）",
+    "to": "field",
+    "gap": 15.67999267578125
+  },
+  {
+    "viewport": 1024,
+    "parent": "tdResult",
+    "from": "改编方向（只借底层逻辑，不抄表达）",
+    "to": "tdOutlineBtn",
+    "gap": 13.72003173828125
+  },
+  {
+    "viewport": 1024,
+    "parent": "sqPostBox",
+    "from": "sqTitle",
+    "to": "sqBody",
+    "gap": 16
+  },
+  {
+    "viewport": 1024,
+    "parent": "sqPostBox",
+    "from": "sqBody",
+    "to": "sqSubmit",
+    "gap": 16
+  },
+  {
+    "viewport": 1024,
+    "parent": "fbSubmitPane",
+    "from": "类型\n              \n      ",
+    "to": "fbUrgentField",
+    "gap": 11.519989013671875
+  },
+  {
+    "viewport": 1024,
+    "parent": "fbSubmitPane",
+    "from": "fbUrgent",
+    "to": "fbContent",
+    "gap": 11.52001953125
+  },
+  {
+    "viewport": 1024,
+    "parent": "fbSubmitPane",
+    "from": "fbContent",
+    "to": "fbImgInput",
+    "gap": 11.52001953125
+  },
+  {
+    "viewport": 1024,
+    "parent": "fbSubmitPane",
+    "from": "fbImgInput",
+    "to": "fbContact",
+    "gap": 11.52001953125
+  },
+  {
+    "viewport": 1024,
+    "parent": "modal",
+    "from": "listScript",
+    "to": "listPrice",
+    "gap": 11.519989013671875
+  },
+  {
+    "viewport": 1024,
+    "parent": "modal",
+    "from": "listPrice",
+    "to": "listSample",
+    "gap": 11.519989013671875
+  },
+  {
+    "viewport": 1024,
+    "parent": "modal modal-wide",
+    "from": "xMatureAge",
+    "to": "xMatureRegion",
+    "gap": 11.52001953125
+  },
+  {
+    "viewport": 1024,
+    "parent": "subpanel",
+    "from": "pvName",
+    "to": "pvModality",
+    "gap": 10
+  },
+  {
+    "viewport": 1024,
+    "parent": "subpanel",
+    "from": "pvModality",
+    "to": "pvCatalog",
+    "gap": 10
+  },
+  {
+    "viewport": 1024,
+    "parent": "subpanel",
+    "from": "pvCatalog",
+    "to": "pvModel",
+    "gap": 10
+  },
+  {
+    "viewport": 1024,
+    "parent": "subpanel",
+    "from": "pvModel",
+    "to": "pvBase",
+    "gap": 10
+  },
+  {
+    "viewport": 1024,
+    "parent": "subpanel",
+    "from": "pvBase",
+    "to": "pvKey",
+    "gap": 10
+  },
+  {
+    "viewport": 1024,
+    "parent": "subpanel",
+    "from": "knKind",
+    "to": "knTitle",
+    "gap": 10
+  },
+  {
+    "viewport": 1024,
+    "parent": "subpanel",
+    "from": "knTitle",
+    "to": "knCategory",
+    "gap": 10
+  },
+  {
+    "viewport": 1024,
+    "parent": "subpanel",
+    "from": "knCategory",
+    "to": "knContent",
+    "gap": 10
+  },
+  {
+    "viewport": 1024,
+    "parent": "subpanel",
+    "from": "knUrl",
+    "to": "knContent",
+    "gap": 10
+  },
+  {
+    "viewport": 1024,
+    "parent": "subpanel",
+    "from": "knFile",
+    "to": "knContent",
+    "gap": 10
+  },
+  {
+    "viewport": 1024,
+    "parent": "subpanel",
+    "from": "knContent",
+    "to": "knSubmit",
+    "gap": 10
+  },
+  {
+    "viewport": 1024,
+    "parent": "subpanel",
+    "from": "hdLast",
+    "to": "hdBacklog",
+    "gap": 10
+  },
+  {
+    "viewport": 1024,
+    "parent": "subpanel",
+    "from": "hdBacklog",
+    "to": "hdQuestions",
+    "gap": 10
+  },
+  {
+    "viewport": 1024,
+    "parent": "subpanel",
+    "from": "hdNext",
+    "to": "hdNotes",
+    "gap": 10
+  },
+  {
+    "viewport": 1024,
+    "parent": "subpanel",
+    "from": "hdNotes",
+    "to": "hdLogVer",
+    "gap": 10
+  },
+  {
+    "viewport": 1024,
+    "parent": "subpanel",
+    "from": "hdLogVer",
+    "to": "hdBrief",
+    "gap": 10
+  },
+  {
+    "viewport": 1024,
+    "parent": "subpanel",
+    "from": "admUpdVer",
+    "to": "admUpdTitleZh",
+    "gap": 10
+  },
+  {
+    "viewport": 1024,
+    "parent": "subpanel",
+    "from": "admUpdTitleZh",
+    "to": "admUpdTitleEn",
+    "gap": 10
+  },
+  {
+    "viewport": 1024,
+    "parent": "subpanel",
+    "from": "admUpdTitleEn",
+    "to": "admUpdBodyZh",
+    "gap": 10
+  },
+  {
+    "viewport": 1024,
+    "parent": "subpanel",
+    "from": "admUpdBodyZh",
+    "to": "admUpdBodyEn",
+    "gap": 10
+  },
+  {
+    "viewport": 1024,
+    "parent": "subpanel",
+    "from": "admUpdBodyEn",
+    "to": "admUpdPinned",
+    "gap": 10
+  },
+  {
+    "viewport": 1024,
+    "parent": "subpanel",
+    "from": "admUpdPinned",
+    "to": "admUpdSubmit",
+    "gap": 10
+  },
+  {
+    "viewport": 1024,
+    "parent": "modal",
+    "from": "authPhone",
+    "to": "authPwd",
+    "gap": 11.519989013671875
+  },
+  {
+    "viewport": 1024,
+    "parent": "modal",
+    "from": "authPwd",
+    "to": "authSubmit",
+    "gap": 23.040008544921875
+  },
+  {
+    "viewport": 1024,
+    "parent": "modal",
+    "from": "authInvite",
+    "to": "authSubmit",
+    "gap": 23.0400390625
+  },
+  {
+    "viewport": 1024,
+    "parent": "castLibEdit",
+    "from": "castLibEditName",
+    "to": "castLibEditPersona",
+    "gap": 11.519989013671875
+  },
+  {
+    "viewport": 1024,
+    "parent": "castLibEdit",
+    "from": "castLibEditPersona",
+    "to": "castLibEditVoice",
+    "gap": 11.52001953125
+  },
+  {
+    "viewport": 1024,
+    "parent": "castLibEdit",
+    "from": "castLibEditVoice",
+    "to": "castLibEditAnchor",
+    "gap": 11.52001953125
+  },
+  {
+    "viewport": 1024,
+    "parent": "castLibEdit",
+    "from": "castLibEditAnchor",
+    "to": "castLibEditSigs",
+    "gap": 11.52001953125
+  },
+  {
+    "viewport": 1024,
+    "parent": "castLibEdit",
+    "from": "castLibEditSigs",
+    "to": "castLibEditTags",
+    "gap": 11.52001953125
+  },
+  {
+    "viewport": 1024,
+    "parent": "castLibEdit",
+    "from": "castLibEditTags",
+    "to": "castLibEditSave",
+    "gap": 11.52001953125
+  },
+  {
+    "viewport": 1024,
+    "parent": "propLibEdit",
+    "from": "propLibEditName",
+    "to": "propLibEditMeaning",
+    "gap": 11.52001953125
+  },
+  {
+    "viewport": 1024,
+    "parent": "propLibEdit",
+    "from": "propLibEditMeaning",
+    "to": "propLibEditTaboo",
+    "gap": 11.52001953125
+  },
+  {
+    "viewport": 1024,
+    "parent": "propLibEdit",
+    "from": "propLibEditTaboo",
+    "to": "propLibEditEps",
+    "gap": 11.5198974609375
+  },
+  {
+    "viewport": 1024,
+    "parent": "propLibEdit",
+    "from": "propLibEditEps",
+    "to": "propLibEditClosedEps",
+    "gap": 11.5198974609375
+  },
+  {
+    "viewport": 1024,
+    "parent": "propLibEdit",
+    "from": "propLibEditClosedEps",
+    "to": "propLibEditAnchor",
+    "gap": 11.5198974609375
+  },
+  {
+    "viewport": 1024,
+    "parent": "propLibEdit",
+    "from": "propLibEditAnchor",
+    "to": "propLibEditTags",
+    "gap": 11.5198974609375
+  },
+  {
+    "viewport": 1024,
+    "parent": "propLibEdit",
+    "from": "propLibEditTags",
+    "to": "propLibEditSave",
+    "gap": 11.5198974609375
+  },
+  {
+    "viewport": 1024,
+    "parent": "sceneLibEdit",
+    "from": "sceneLibEditName",
+    "to": "sceneLibEditMeaning",
+    "gap": 11.52001953125
+  },
+  {
+    "viewport": 1024,
+    "parent": "sceneLibEdit",
+    "from": "sceneLibEditMeaning",
+    "to": "sceneLibEditMood",
+    "gap": 11.52001953125
+  },
+  {
+    "viewport": 1024,
+    "parent": "sceneLibEdit",
+    "from": "sceneLibEditMood",
+    "to": "sceneLibEditTaboo",
+    "gap": 11.5198974609375
+  },
+  {
+    "viewport": 1024,
+    "parent": "sceneLibEdit",
+    "from": "sceneLibEditTaboo",
+    "to": "sceneLibEditEps",
+    "gap": 11.5198974609375
+  },
+  {
+    "viewport": 1024,
+    "parent": "sceneLibEdit",
+    "from": "sceneLibEditEps",
+    "to": "sceneLibEditAnchor",
+    "gap": 11.5198974609375
+  },
+  {
+    "viewport": 1024,
+    "parent": "sceneLibEdit",
+    "from": "sceneLibEditAnchor",
+    "to": "sceneLibEditTags",
+    "gap": 11.5198974609375
+  },
+  {
+    "viewport": 1024,
+    "parent": "sceneLibEdit",
+    "from": "sceneLibEditTags",
+    "to": "sceneLibEditSave",
+    "gap": 11.5198974609375
+  },
+  {
+    "viewport": 390,
+    "parent": "rtab-pitch",
+    "from": "pitchIdea",
+    "to": "pitchAud",
+    "gap": 9.79998779296875
+  },
+  {
+    "viewport": 390,
+    "parent": "rtab-read",
+    "from": "围读参与模式\n            我+我的小",
+    "to": "readFormat",
+    "gap": 9.79998779296875
+  },
+  {
+    "viewport": 390,
+    "parent": "rtab-read",
+    "from": "readPickProject",
+    "to": "readScript",
+    "gap": 15.679931640625
+  },
+  {
+    "viewport": 390,
+    "parent": "teardownPanel",
+    "from": "tdSource",
+    "to": "tdUrl",
+    "gap": 15.67999267578125
+  },
+  {
+    "viewport": 390,
+    "parent": "teardownPanel",
+    "from": "tdUrl",
+    "to": "tdText",
+    "gap": 15.67999267578125
+  },
+  {
+    "viewport": 390,
+    "parent": "teardownPanel",
+    "from": "tdText",
+    "to": "tdAnalyzeBtn",
+    "gap": 13.72003173828125
+  },
+  {
+    "viewport": 390,
+    "parent": "tdResult",
+    "from": "勾选要保留的标签（可增删，决定改编基因）",
+    "to": "field",
+    "gap": 15.679931640625
+  },
+  {
+    "viewport": 390,
+    "parent": "tdResult",
+    "from": "改编方向（只借底层逻辑，不抄表达）",
+    "to": "tdOutlineBtn",
+    "gap": 13.719970703125
+  },
+  {
+    "viewport": 390,
+    "parent": "sqPostBox",
+    "from": "sqTitle",
+    "to": "sqBody",
+    "gap": 16
+  },
+  {
+    "viewport": 390,
+    "parent": "sqPostBox",
+    "from": "sqBody",
+    "to": "sqSubmit",
+    "gap": 16
+  },
+  {
+    "viewport": 390,
+    "parent": "fbSubmitPane",
+    "from": "类型\n              \n      ",
+    "to": "fbUrgentField",
+    "gap": 11.519989013671875
+  },
+  {
+    "viewport": 390,
+    "parent": "fbSubmitPane",
+    "from": "fbUrgent",
+    "to": "fbContent",
+    "gap": 11.519989013671875
+  },
+  {
+    "viewport": 390,
+    "parent": "fbSubmitPane",
+    "from": "fbContent",
+    "to": "fbImgInput",
+    "gap": 11.52001953125
+  },
+  {
+    "viewport": 390,
+    "parent": "fbSubmitPane",
+    "from": "fbImgInput",
+    "to": "fbContact",
+    "gap": 11.52001953125
+  },
+  {
+    "viewport": 390,
+    "parent": "modal",
+    "from": "listScript",
+    "to": "listPrice",
+    "gap": 11.52001953125
+  },
+  {
+    "viewport": 390,
+    "parent": "modal",
+    "from": "listPrice",
+    "to": "listSample",
+    "gap": 11.52001953125
+  },
+  {
+    "viewport": 390,
+    "parent": "modal modal-wide",
+    "from": "xMatureAge",
+    "to": "xMatureRegion",
+    "gap": 11.52001953125
+  },
+  {
+    "viewport": 390,
+    "parent": "subpanel",
+    "from": "pvName",
+    "to": "pvModality",
+    "gap": 10
+  },
+  {
+    "viewport": 390,
+    "parent": "subpanel",
+    "from": "pvModality",
+    "to": "pvCatalog",
+    "gap": 10
+  },
+  {
+    "viewport": 390,
+    "parent": "subpanel",
+    "from": "pvCatalog",
+    "to": "pvModel",
+    "gap": 10
+  },
+  {
+    "viewport": 390,
+    "parent": "subpanel",
+    "from": "pvModel",
+    "to": "pvBase",
+    "gap": 10
+  },
+  {
+    "viewport": 390,
+    "parent": "subpanel",
+    "from": "pvBase",
+    "to": "pvKey",
+    "gap": 10
+  },
+  {
+    "viewport": 390,
+    "parent": "subpanel",
+    "from": "knKind",
+    "to": "knTitle",
+    "gap": 10
+  },
+  {
+    "viewport": 390,
+    "parent": "subpanel",
+    "from": "knTitle",
+    "to": "knCategory",
+    "gap": 10
+  },
+  {
+    "viewport": 390,
+    "parent": "subpanel",
+    "from": "knCategory",
+    "to": "knContent",
+    "gap": 10
+  },
+  {
+    "viewport": 390,
+    "parent": "subpanel",
+    "from": "knUrl",
+    "to": "knContent",
+    "gap": 10
+  },
+  {
+    "viewport": 390,
+    "parent": "subpanel",
+    "from": "knFile",
+    "to": "knContent",
+    "gap": 10
+  },
+  {
+    "viewport": 390,
+    "parent": "subpanel",
+    "from": "knContent",
+    "to": "knSubmit",
+    "gap": 10
+  },
+  {
+    "viewport": 390,
+    "parent": "subpanel",
+    "from": "hdLast",
+    "to": "hdBacklog",
+    "gap": 10
+  },
+  {
+    "viewport": 390,
+    "parent": "subpanel",
+    "from": "hdBacklog",
+    "to": "hdQuestions",
+    "gap": 10
+  },
+  {
+    "viewport": 390,
+    "parent": "subpanel",
+    "from": "hdNext",
+    "to": "hdNotes",
+    "gap": 10
+  },
+  {
+    "viewport": 390,
+    "parent": "subpanel",
+    "from": "hdNotes",
+    "to": "hdLogVer",
+    "gap": 10
+  },
+  {
+    "viewport": 390,
+    "parent": "subpanel",
+    "from": "hdLogVer",
+    "to": "hdBrief",
+    "gap": 10
+  },
+  {
+    "viewport": 390,
+    "parent": "subpanel",
+    "from": "admUpdVer",
+    "to": "admUpdTitleZh",
+    "gap": 10
+  },
+  {
+    "viewport": 390,
+    "parent": "subpanel",
+    "from": "admUpdTitleZh",
+    "to": "admUpdTitleEn",
+    "gap": 10
+  },
+  {
+    "viewport": 390,
+    "parent": "subpanel",
+    "from": "admUpdTitleEn",
+    "to": "admUpdBodyZh",
+    "gap": 10
+  },
+  {
+    "viewport": 390,
+    "parent": "subpanel",
+    "from": "admUpdBodyZh",
+    "to": "admUpdBodyEn",
+    "gap": 10
+  },
+  {
+    "viewport": 390,
+    "parent": "subpanel",
+    "from": "admUpdBodyEn",
+    "to": "admUpdPinned",
+    "gap": 10
+  },
+  {
+    "viewport": 390,
+    "parent": "subpanel",
+    "from": "admUpdPinned",
+    "to": "admUpdSubmit",
+    "gap": 10
+  },
+  {
+    "viewport": 390,
+    "parent": "modal",
+    "from": "authPhone",
+    "to": "authPwd",
+    "gap": 11.52001953125
+  },
+  {
+    "viewport": 390,
+    "parent": "modal",
+    "from": "authPwd",
+    "to": "authSubmit",
+    "gap": 23.03997802734375
+  },
+  {
+    "viewport": 390,
+    "parent": "modal",
+    "from": "authInvite",
+    "to": "authSubmit",
+    "gap": 23.0400390625
+  },
+  {
+    "viewport": 390,
+    "parent": "castLibEdit",
+    "from": "castLibEditName",
+    "to": "castLibEditPersona",
+    "gap": 11.52001953125
+  },
+  {
+    "viewport": 390,
+    "parent": "castLibEdit",
+    "from": "castLibEditPersona",
+    "to": "castLibEditVoice",
+    "gap": 11.52001953125
+  },
+  {
+    "viewport": 390,
+    "parent": "castLibEdit",
+    "from": "castLibEditVoice",
+    "to": "castLibEditAnchor",
+    "gap": 11.52001953125
+  },
+  {
+    "viewport": 390,
+    "parent": "castLibEdit",
+    "from": "castLibEditAnchor",
+    "to": "castLibEditSigs",
+    "gap": 11.52001953125
+  },
+  {
+    "viewport": 390,
+    "parent": "castLibEdit",
+    "from": "castLibEditSigs",
+    "to": "castLibEditTags",
+    "gap": 11.52001953125
+  },
+  {
+    "viewport": 390,
+    "parent": "castLibEdit",
+    "from": "castLibEditTags",
+    "to": "castLibEditSave",
+    "gap": 11.5198974609375
+  },
+  {
+    "viewport": 390,
+    "parent": "propLibEdit",
+    "from": "propLibEditName",
+    "to": "propLibEditMeaning",
+    "gap": 11.519989013671875
+  },
+  {
+    "viewport": 390,
+    "parent": "propLibEdit",
+    "from": "propLibEditMeaning",
+    "to": "propLibEditTaboo",
+    "gap": 11.52001953125
+  },
+  {
+    "viewport": 390,
+    "parent": "propLibEdit",
+    "from": "propLibEditTaboo",
+    "to": "propLibEditEps",
+    "gap": 11.52001953125
+  },
+  {
+    "viewport": 390,
+    "parent": "propLibEdit",
+    "from": "propLibEditEps",
+    "to": "propLibEditClosedEps",
+    "gap": 11.52001953125
+  },
+  {
+    "viewport": 390,
+    "parent": "propLibEdit",
+    "from": "propLibEditClosedEps",
+    "to": "propLibEditAnchor",
+    "gap": 11.52001953125
+  },
+  {
+    "viewport": 390,
+    "parent": "propLibEdit",
+    "from": "propLibEditAnchor",
+    "to": "propLibEditTags",
+    "gap": 11.52001953125
+  },
+  {
+    "viewport": 390,
+    "parent": "propLibEdit",
+    "from": "propLibEditTags",
+    "to": "propLibEditSave",
+    "gap": 11.52001953125
+  },
+  {
+    "viewport": 390,
+    "parent": "sceneLibEdit",
+    "from": "sceneLibEditName",
+    "to": "sceneLibEditMeaning",
+    "gap": 11.519989013671875
+  },
+  {
+    "viewport": 390,
+    "parent": "sceneLibEdit",
+    "from": "sceneLibEditMeaning",
+    "to": "sceneLibEditMood",
+    "gap": 11.52001953125
+  },
+  {
+    "viewport": 390,
+    "parent": "sceneLibEdit",
+    "from": "sceneLibEditMood",
+    "to": "sceneLibEditTaboo",
+    "gap": 11.52001953125
+  },
+  {
+    "viewport": 390,
+    "parent": "sceneLibEdit",
+    "from": "sceneLibEditTaboo",
+    "to": "sceneLibEditEps",
+    "gap": 11.52001953125
+  },
+  {
+    "viewport": 390,
+    "parent": "sceneLibEdit",
+    "from": "sceneLibEditEps",
+    "to": "sceneLibEditAnchor",
+    "gap": 11.52001953125
+  },
+  {
+    "viewport": 390,
+    "parent": "sceneLibEdit",
+    "from": "sceneLibEditAnchor",
+    "to": "sceneLibEditTags",
+    "gap": 11.52001953125
+  },
+  {
+    "viewport": 390,
+    "parent": "sceneLibEdit",
+    "from": "sceneLibEditTags",
+    "to": "sceneLibEditSave",
+    "gap": 11.52001953125
+  },
+  {
+    "viewport": 320,
+    "parent": "rtab-pitch",
+    "from": "pitchIdea",
+    "to": "pitchAud",
+    "gap": 9.800018310546875
+  },
+  {
+    "viewport": 320,
+    "parent": "rtab-read",
+    "from": "围读参与模式\n            我+我的小",
+    "to": "readFormat",
+    "gap": 9.800048828125
+  },
+  {
+    "viewport": 320,
+    "parent": "rtab-read",
+    "from": "readPickProject",
+    "to": "readScript",
+    "gap": 15.6800537109375
+  },
+  {
+    "viewport": 320,
+    "parent": "teardownPanel",
+    "from": "tdSource",
+    "to": "tdUrl",
+    "gap": 15.67999267578125
+  },
+  {
+    "viewport": 320,
+    "parent": "teardownPanel",
+    "from": "tdUrl",
+    "to": "tdText",
+    "gap": 15.67999267578125
+  },
+  {
+    "viewport": 320,
+    "parent": "teardownPanel",
+    "from": "tdText",
+    "to": "tdAnalyzeBtn",
+    "gap": 13.72003173828125
+  },
+  {
+    "viewport": 320,
+    "parent": "tdResult",
+    "from": "勾选要保留的标签（可增删，决定改编基因）",
+    "to": "field",
+    "gap": 15.6800537109375
+  },
+  {
+    "viewport": 320,
+    "parent": "tdResult",
+    "from": "改编方向（只借底层逻辑，不抄表达）",
+    "to": "tdOutlineBtn",
+    "gap": 13.719970703125
+  },
+  {
+    "viewport": 320,
+    "parent": "sqPostBox",
+    "from": "sqTitle",
+    "to": "sqBody",
+    "gap": 16
+  },
+  {
+    "viewport": 320,
+    "parent": "sqPostBox",
+    "from": "sqBody",
+    "to": "sqSubmit",
+    "gap": 16
+  },
+  {
+    "viewport": 320,
+    "parent": "fbSubmitPane",
+    "from": "类型\n              \n      ",
+    "to": "fbUrgentField",
+    "gap": 11.52001953125
+  },
+  {
+    "viewport": 320,
+    "parent": "fbSubmitPane",
+    "from": "fbUrgent",
+    "to": "fbContent",
+    "gap": 11.519989013671875
+  },
+  {
+    "viewport": 320,
+    "parent": "fbSubmitPane",
+    "from": "fbContent",
+    "to": "fbImgInput",
+    "gap": 11.51995849609375
+  },
+  {
+    "viewport": 320,
+    "parent": "fbSubmitPane",
+    "from": "fbImgInput",
+    "to": "fbContact",
+    "gap": 11.52001953125
+  },
+  {
+    "viewport": 320,
+    "parent": "modal",
+    "from": "listScript",
+    "to": "listPrice",
+    "gap": 11.52001953125
+  },
+  {
+    "viewport": 320,
+    "parent": "modal",
+    "from": "listPrice",
+    "to": "listSample",
+    "gap": 11.52001953125
+  },
+  {
+    "viewport": 320,
+    "parent": "modal modal-wide",
+    "from": "xMatureAge",
+    "to": "xMatureRegion",
+    "gap": 11.52001953125
+  },
+  {
+    "viewport": 320,
+    "parent": "subpanel",
+    "from": "pvName",
+    "to": "pvModality",
+    "gap": 10
+  },
+  {
+    "viewport": 320,
+    "parent": "subpanel",
+    "from": "pvModality",
+    "to": "pvCatalog",
+    "gap": 10
+  },
+  {
+    "viewport": 320,
+    "parent": "subpanel",
+    "from": "pvCatalog",
+    "to": "pvModel",
+    "gap": 10
+  },
+  {
+    "viewport": 320,
+    "parent": "subpanel",
+    "from": "pvModel",
+    "to": "pvBase",
+    "gap": 10
+  },
+  {
+    "viewport": 320,
+    "parent": "subpanel",
+    "from": "pvBase",
+    "to": "pvKey",
+    "gap": 10
+  },
+  {
+    "viewport": 320,
+    "parent": "subpanel",
+    "from": "knKind",
+    "to": "knTitle",
+    "gap": 10
+  },
+  {
+    "viewport": 320,
+    "parent": "subpanel",
+    "from": "knTitle",
+    "to": "knCategory",
+    "gap": 10
+  },
+  {
+    "viewport": 320,
+    "parent": "subpanel",
+    "from": "knCategory",
+    "to": "knContent",
+    "gap": 10
+  },
+  {
+    "viewport": 320,
+    "parent": "subpanel",
+    "from": "knUrl",
+    "to": "knContent",
+    "gap": 10
+  },
+  {
+    "viewport": 320,
+    "parent": "subpanel",
+    "from": "knFile",
+    "to": "knContent",
+    "gap": 10
+  },
+  {
+    "viewport": 320,
+    "parent": "subpanel",
+    "from": "knContent",
+    "to": "knSubmit",
+    "gap": 10
+  },
+  {
+    "viewport": 320,
+    "parent": "subpanel",
+    "from": "hdLast",
+    "to": "hdBacklog",
+    "gap": 10
+  },
+  {
+    "viewport": 320,
+    "parent": "subpanel",
+    "from": "hdBacklog",
+    "to": "hdQuestions",
+    "gap": 10
+  },
+  {
+    "viewport": 320,
+    "parent": "subpanel",
+    "from": "hdNext",
+    "to": "hdNotes",
+    "gap": 10
+  },
+  {
+    "viewport": 320,
+    "parent": "subpanel",
+    "from": "hdNotes",
+    "to": "hdLogVer",
+    "gap": 10
+  },
+  {
+    "viewport": 320,
+    "parent": "subpanel",
+    "from": "hdLogVer",
+    "to": "hdBrief",
+    "gap": 10
+  },
+  {
+    "viewport": 320,
+    "parent": "subpanel",
+    "from": "admUpdVer",
+    "to": "admUpdTitleZh",
+    "gap": 10
+  },
+  {
+    "viewport": 320,
+    "parent": "subpanel",
+    "from": "admUpdTitleZh",
+    "to": "admUpdTitleEn",
+    "gap": 10
+  },
+  {
+    "viewport": 320,
+    "parent": "subpanel",
+    "from": "admUpdTitleEn",
+    "to": "admUpdBodyZh",
+    "gap": 10
+  },
+  {
+    "viewport": 320,
+    "parent": "subpanel",
+    "from": "admUpdBodyZh",
+    "to": "admUpdBodyEn",
+    "gap": 10
+  },
+  {
+    "viewport": 320,
+    "parent": "subpanel",
+    "from": "admUpdBodyEn",
+    "to": "admUpdPinned",
+    "gap": 10
+  },
+  {
+    "viewport": 320,
+    "parent": "subpanel",
+    "from": "admUpdPinned",
+    "to": "admUpdSubmit",
+    "gap": 10
+  },
+  {
+    "viewport": 320,
+    "parent": "modal",
+    "from": "authPhone",
+    "to": "authPwd",
+    "gap": 11.52001953125
+  },
+  {
+    "viewport": 320,
+    "parent": "modal",
+    "from": "authPwd",
+    "to": "authSubmit",
+    "gap": 23.0400390625
+  },
+  {
+    "viewport": 320,
+    "parent": "modal",
+    "from": "authInvite",
+    "to": "authSubmit",
+    "gap": 23.0400390625
+  },
+  {
+    "viewport": 320,
+    "parent": "castLibEdit",
+    "from": "castLibEditName",
+    "to": "castLibEditPersona",
+    "gap": 11.519989013671875
+  },
+  {
+    "viewport": 320,
+    "parent": "castLibEdit",
+    "from": "castLibEditPersona",
+    "to": "castLibEditVoice",
+    "gap": 11.52001953125
+  },
+  {
+    "viewport": 320,
+    "parent": "castLibEdit",
+    "from": "castLibEditVoice",
+    "to": "castLibEditAnchor",
+    "gap": 11.52001953125
+  },
+  {
+    "viewport": 320,
+    "parent": "castLibEdit",
+    "from": "castLibEditAnchor",
+    "to": "castLibEditSigs",
+    "gap": 11.52001953125
+  },
+  {
+    "viewport": 320,
+    "parent": "castLibEdit",
+    "from": "castLibEditSigs",
+    "to": "castLibEditTags",
+    "gap": 11.52001953125
+  },
+  {
+    "viewport": 320,
+    "parent": "castLibEdit",
+    "from": "castLibEditTags",
+    "to": "castLibEditSave",
+    "gap": 11.52001953125
+  },
+  {
+    "viewport": 320,
+    "parent": "propLibEdit",
+    "from": "propLibEditName",
+    "to": "propLibEditMeaning",
+    "gap": 11.52001953125
+  },
+  {
+    "viewport": 320,
+    "parent": "propLibEdit",
+    "from": "propLibEditMeaning",
+    "to": "propLibEditTaboo",
+    "gap": 11.52001953125
+  },
+  {
+    "viewport": 320,
+    "parent": "propLibEdit",
+    "from": "propLibEditTaboo",
+    "to": "propLibEditEps",
+    "gap": 11.52001953125
+  },
+  {
+    "viewport": 320,
+    "parent": "propLibEdit",
+    "from": "propLibEditEps",
+    "to": "propLibEditClosedEps",
+    "gap": 11.52001953125
+  },
+  {
+    "viewport": 320,
+    "parent": "propLibEdit",
+    "from": "propLibEditClosedEps",
+    "to": "propLibEditAnchor",
+    "gap": 11.51995849609375
+  },
+  {
+    "viewport": 320,
+    "parent": "propLibEdit",
+    "from": "propLibEditAnchor",
+    "to": "propLibEditTags",
+    "gap": 11.51995849609375
+  },
+  {
+    "viewport": 320,
+    "parent": "propLibEdit",
+    "from": "propLibEditTags",
+    "to": "propLibEditSave",
+    "gap": 11.51995849609375
+  },
+  {
+    "viewport": 320,
+    "parent": "sceneLibEdit",
+    "from": "sceneLibEditName",
+    "to": "sceneLibEditMeaning",
+    "gap": 11.52001953125
+  },
+  {
+    "viewport": 320,
+    "parent": "sceneLibEdit",
+    "from": "sceneLibEditMeaning",
+    "to": "sceneLibEditMood",
+    "gap": 11.52001953125
+  },
+  {
+    "viewport": 320,
+    "parent": "sceneLibEdit",
+    "from": "sceneLibEditMood",
+    "to": "sceneLibEditTaboo",
+    "gap": 11.52001953125
+  },
+  {
+    "viewport": 320,
+    "parent": "sceneLibEdit",
+    "from": "sceneLibEditTaboo",
+    "to": "sceneLibEditEps",
+    "gap": 11.52001953125
+  },
+  {
+    "viewport": 320,
+    "parent": "sceneLibEdit",
+    "from": "sceneLibEditEps",
+    "to": "sceneLibEditAnchor",
+    "gap": 11.51995849609375
+  },
+  {
+    "viewport": 320,
+    "parent": "sceneLibEdit",
+    "from": "sceneLibEditAnchor",
+    "to": "sceneLibEditTags",
+    "gap": 11.51995849609375
+  },
+  {
+    "viewport": 320,
+    "parent": "sceneLibEdit",
+    "from": "sceneLibEditTags",
+    "to": "sceneLibEditSave",
+    "gap": 11.51995849609375
+  }
+]

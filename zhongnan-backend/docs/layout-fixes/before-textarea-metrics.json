@@ -1,0 +1,146 @@
+[
+  {
+    "id": "sqBody",
+    "resize": "both",
+    "beforeWidth": 1090,
+    "width": 1210,
+    "beforeHeight": 80.25,
+    "height": 140.25,
+    "overflow": 120
+  },
+  {
+    "id": "pitchIdea",
+    "resize": "both",
+    "beforeWidth": 1130,
+    "width": 1250,
+    "beforeHeight": 80.25,
+    "height": 140.25,
+    "overflow": 120
+  },
+  {
+    "id": "readScript",
+    "resize": "both",
+    "beforeWidth": 1120,
+    "width": 1240,
+    "beforeHeight": 129.75,
+    "height": 189.75,
+    "overflow": 120
+  },
+  {
+    "id": "tdText",
+    "resize": "both",
+    "beforeWidth": 1120,
+    "width": 1240,
+    "beforeHeight": 179.25,
+    "height": 239.25,
+    "overflow": 120
+  },
+  {
+    "id": "brGraph",
+    "resize": "both",
+    "beforeWidth": 1120,
+    "width": 1240,
+    "beforeHeight": 150.375,
+    "height": 210.375,
+    "overflow": 120
+  },
+  {
+    "id": "tbHeat",
+    "resize": "both",
+    "beforeWidth": 1130,
+    "width": 1250,
+    "beforeHeight": 55.5,
+    "height": 115.5,
+    "overflow": 130
+  },
+  {
+    "id": "tbAngle",
+    "resize": "both",
+    "beforeWidth": 1130,
+    "width": 1250,
+    "beforeHeight": 55.5,
+    "height": 115.5,
+    "overflow": 130
+  },
+  {
+    "id": "brMain",
+    "resize": "both",
+    "beforeWidth": 1130,
+    "width": 1250,
+    "beforeHeight": 55.5,
+    "height": 115.5,
+    "overflow": 130
+  },
+  {
+    "id": "brChoice",
+    "resize": "both",
+    "beforeWidth": 1130,
+    "width": 1250,
+    "beforeHeight": 55.5,
+    "height": 115.5,
+    "overflow": 130
+  },
+  {
+    "id": "sourceText",
+    "resize": "both",
+    "beforeWidth": 1130,
+    "width": 1250,
+    "beforeHeight": 109.984375,
+    "height": 169.984375,
+    "overflow": 120
+  },
+  {
+    "id": "fbContent",
+    "resize": "both",
+    "beforeWidth": 700,
+    "width": 820,
+    "beforeHeight": 154.5,
+    "height": 214.5,
+    "overflow": 120
+  },
+  {
+    "id": "listSample",
+    "resize": "both",
+    "beforeWidth": 370,
+    "width": 490,
+    "beforeHeight": 80.25,
+    "height": 140.25,
+    "overflow": 120
+  },
+  {
+    "id": "castLibEditPersona",
+    "resize": "both",
+    "beforeWidth": 700,
+    "width": 820,
+    "beforeHeight": 55.5,
+    "height": 115.5,
+    "overflow": 120
+  },
+  {
+    "id": "castLibEditSigs",
+    "resize": "both",
+    "beforeWidth": 700,
+    "width": 820,
+    "beforeHeight": 55.5,
+    "height": 115.5,
+    "overflow": 120
+  },
+  {
+    "id": "propLibEditMeaning",
+    "resize": "both",
+    "beforeWidth": 700,
+    "width": 820,
+    "beforeHeight": 55.5,
+    "height": 115.5,
+    "overflow": 120
+  },
+  {
+    "id": "sceneLibEditMeaning",
+    "resize": "both",
+    "beforeWidth": 700,
+    "width": 820,
+    "beforeHeight": 55.5,
+    "height": 115.5,
+    "overflow": 120
+  }
+]

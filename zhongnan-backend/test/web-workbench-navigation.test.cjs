@@ -83,7 +83,7 @@ function setup() {
   for (const name of ['VIEWS', '_WORKBENCH_PANEL_IDS', 'WORKBENCH_TITLES', '_workbenchInited', '_workbenchHideTimer', '_workbenchPrevHidden', '_GENERATIVE_PANELS']) {
     vm.runInContext(`let ${name} = ${initializers.get(name)};`, context);
   }
-  for (const name of ['_initWorkbenchLayer', '_showWorkbenchLayer', '_hideWorkbenchLayer', 'openWorkbench', 'closeWorkbench', '_workbenchEsc', 'switchView', 'switchSession', 'renderTaskQueue', 'openProject', 'resetPanels', 'showFail']) {
+  for (const name of ['_syncWorkbenchTopInset', '_initWorkbenchLayer', '_showWorkbenchLayer', '_hideWorkbenchLayer', 'openWorkbench', 'closeWorkbench', '_workbenchEsc', 'switchView', 'switchSession', 'renderTaskQueue', 'openProject', 'resetPanels', 'showFail']) {
     vm.runInContext(functions.get(name), context);
   }
   context._initWorkbenchLayer();
@@ -156,4 +156,37 @@ test('a user can explicitly reopen a workbench after returning to Studio', async
   assert.equal($('workbenchLayer').dataset.current, 'sourceTextPanel');
   assert.equal($('sourceTextPanel').classList.contains('hidden'), false);
   assert.equal($('taskQueuePanel').classList.contains('hidden'), true);
+});
+
+test('opening a workbench hides every stale panel and removes the floating assistant', async () => {
+  const { c, $, flushMutations, finishAnimations } = setup();
+  $('tagBench').classList.remove('hidden');
+  await flushMutations();
+
+  c.openWorkbench('teardownPanel');
+  await flushMutations();
+
+  const visible = ['tagBench', 'craftBench', 'novelSrcBench', 'branchPanel',
+    'branchBriefPanel', 'diversityPanel', 'roomPanel', 'teardownPanel',
+    'interviewPanel', 'brandPanel', 'trendPanel', 'sourceTextPanel',
+    'taskQueuePanel', 'progressPanel', 'resultPanel', 'failPanel']
+    .filter(id => !$(id).classList.contains('hidden'));
+  assert.deepEqual(visible, ['teardownPanel']);
+  assert.equal($('workbenchLayer').dataset.current, 'teardownPanel');
+  assert.equal($('xnFloat').classList.contains('workbench-hidden'), true);
+
+  c.closeWorkbench();
+  await finishAnimations();
+  assert.equal($('xnFloat').classList.contains('workbench-hidden'), false);
+});
+
+test('observer-driven workbench updates also keep panels mutually exclusive', async () => {
+  const { c, $, flushMutations } = setup();
+  c.openWorkbench('tagBench');
+  await flushMutations();
+  $('resultPanel').classList.remove('hidden');
+  await flushMutations();
+  assert.equal($('workbenchLayer').dataset.current, 'resultPanel');
+  assert.equal($('tagBench').classList.contains('hidden'), true);
+  assert.equal($('resultPanel').classList.contains('hidden'), false);
 });

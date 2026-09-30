@@ -20,12 +20,14 @@
 
   /* ---------- 持久化偏好 ---------- */
   const LS = { g: (k, d) => localStorage.getItem(k) || d, s: (k, v) => localStorage.setItem(k, v) };
-  const THEMES = ['tech', 'light'];
+  const THEMES = ['tech', 'light', 'dark', 'eye', 'auto'];
   let theme = LS.g('zn_theme', 'tech');
-  if (!THEMES.includes(theme)) { theme = 'tech'; LS.s('zn_theme', theme); }
+  const mq = window.matchMedia ? window.matchMedia('(prefers-color-scheme: dark)') : null;
 
   function applyTheme() {
-    document.documentElement.setAttribute('data-theme', theme);
+    const eff = theme === 'auto' ? (mq && mq.matches ? 'dark' : 'light') : theme;
+    document.documentElement.setAttribute('data-theme', eff);
+    document.documentElement.setAttribute('data-theme-mode', theme);
   }
   function applyLang() {
     // c204 复盘修复：localStorage 可能是脏值（旧版本/手滑/带引号的 '"en"'），直接拿去索引双语表
@@ -54,6 +56,7 @@
     // 通知独立 view（编剧室/拆爆款/多版本/分支）按新语言重渲染静态文案
     document.dispatchEvent(new CustomEvent('zn-lang', { detail: lang }));
   }
+  if (mq && mq.addEventListener) mq.addEventListener('change', () => theme === 'auto' && applyTheme());
 
   /* ---------- 静态文案 ---------- */
   function renderStaticText() {
@@ -1383,9 +1386,24 @@
   const _workbenchPrevHidden = {}; // 记录上次 hidden 状态，只在变化时行动（避免 view-in 等无关类变化触发死循环）
   // v2.189 生成类工作台：在这些 panel 内显示"生成剧本"按钮（举一反三：tagBench/craftBench/branchBriefPanel/interviewPanel/brandPanel/trendPanel/sourceTextPanel）
   const _GENERATIVE_PANELS = new Set(['tagBench', 'craftBench', 'branchBriefPanel', 'interviewPanel', 'brandPanel', 'trendPanel', 'sourceTextPanel']);
+  function _syncWorkbenchTopInset() {
+    const layer = $('workbenchLayer');
+    const topbar = document.querySelector('.topbar');
+    if (!layer || !topbar || typeof topbar.getBoundingClientRect !== 'function') return;
+    const rect = topbar.getBoundingClientRect();
+    const viewportHeight = typeof window === 'undefined' ? 0 : window.innerHeight;
+    const isVisible = rect.bottom > 0 && (!viewportHeight || rect.top < viewportHeight);
+    layer.style.setProperty('--workbench-top', `${isVisible ? Math.ceil(Math.max(0, rect.bottom) + 8) : 8}px`);
+  }
   function _initWorkbenchLayer() {
     if (_workbenchInited) return; _workbenchInited = true;
     const body = $('workbenchBody'); if (!body) return;
+    const topbar = document.querySelector('.topbar');
+    if (topbar && typeof ResizeObserver !== 'undefined') {
+      _syncWorkbenchTopInset();
+      new ResizeObserver(_syncWorkbenchTopInset).observe(topbar);
+    }
+    if (typeof window !== 'undefined') window.addEventListener('scroll', _syncWorkbenchTopInset, { passive: true });
     // 静态转移：把工作台 panel 从 #view-studio 移到 #workbenchBody，事件绑定不丢
     _WORKBENCH_PANEL_IDS.forEach((id) => { const el = $(id); if (el) body.appendChild(el); });
     // 返回按钮
@@ -1424,10 +1442,15 @@
     // 也不能取消导航触发的关闭定时器。隐藏面板，避免返回创作页时混入其他工作台。
     const studio = $('view-studio');
     if (!studio || studio.classList.contains('hidden')) { el.classList.add('hidden'); return; }
+    // Observer、入口点击和后台同步最终都会经过这里；统一保证工作台只显示目标面板。
+    _WORKBENCH_PANEL_IDS.forEach((panelId) => {
+      if (panelId !== id) $(panelId)?.classList.add('hidden');
+    });
     // v2.188 取消 pending 的 _hideWorkbenchLayer timer（切换 panel 时旧 timer 会异步关闭 layer）
     if (_workbenchHideTimer) { clearTimeout(_workbenchHideTimer); _workbenchHideTimer = null; }
     // 把 panel 移到 body 顶部（让它在最前）
     if (body && el.parentElement !== body) body.appendChild(el);
+    _syncWorkbenchTopInset();
     layer.dataset.current = id;
     layer.classList.remove('hidden');
     layer.setAttribute('aria-hidden', 'false');
@@ -1445,6 +1468,7 @@
     if (genBtn) genBtn.classList.toggle('hidden', !_GENERATIVE_PANELS.has(id));
     // ESC 键关闭
     document.addEventListener('keydown', _workbenchEsc);
+    $('xnFloat')?.classList.add('workbench-hidden');
     if (body) body.scrollTop = 0;
   }
   function _hideWorkbenchLayer() {
@@ -1456,6 +1480,7 @@
       layer.classList.remove('view-out');
       layer.setAttribute('aria-hidden', 'true');
       layer.dataset.current = '';
+      $('xnFloat')?.classList.remove('workbench-hidden');
       _workbenchHideTimer = null;
     }, 220);
     document.removeEventListener('keydown', _workbenchEsc);
@@ -1463,10 +1488,12 @@
   function openWorkbench(id) {
     _initWorkbenchLayer();
     const layer = $('workbenchLayer');
-    const cur = layer?.dataset.current;
-    // 若当前 layer 显示的是别的 panel，先把它 hidden（会触发 Observer _hideWorkbenchLayer）
-    if (cur && cur !== id) { const curEl = $(cur); if (curEl) curEl.classList.add('hidden'); }
     const el = $(id); if (!el) return;
+    // 初始化同步和后台更新都可能留下未登记到 dataset.current 的面板。
+    // 每次打开都以目标面板为唯一真源，避免工作台串页。
+    _WORKBENCH_PANEL_IDS.forEach((panelId) => {
+      if (panelId !== id) $(panelId)?.classList.add('hidden');
+    });
     el.classList.remove('hidden'); // 触发 Observer _showWorkbenchLayer
     // 兜底：若 Observer 没反应（如已是非 hidden）
     if (layer && !layer.dataset.current) _showWorkbenchLayer(id);
@@ -2001,9 +2028,9 @@
     $('inAgeBand').innerHTML = opt('', en ? 'Not set' : '不限/未填') + PF_AGES.map(([v, k]) => opt(v, t(k))).join('');
     $('inGender').innerHTML = opt('', en ? 'Not set' : '不限/未填') + opt('男', en ? 'Male' : '男') + opt('女', en ? 'Female' : '女') + opt('保密', en ? 'Prefer not to say' : '保密');
   }
-  // 后台入口与服务端实际授权保持一致。
+  // 仅管理员显示「管理后台」入口（依据 /me 返回的 isAdmin）
   function refreshAdminNav() {
-    const isAdm = !!(meCache && meCache.canAdmin);
+    const isAdm = !!(meCache && meCache.isAdmin);
     document.querySelectorAll('.admin-only').forEach((el) => el.classList.toggle('hidden', !isAdm));
   }
   $('editProfileBtn').onclick = () => $('profileEdit').classList.toggle('hidden');
@@ -2063,12 +2090,12 @@
         const savePct = Math.round((1 - yearItem.amountFen / (p.monthlyFen * 12)) * 100);
         yearLine = `<button class="btn-ghost plan-year" data-sku="${yearSku}"${disabled}>${lang==='en'?'Yearly':'年卡'} ¥${yearItem.amountYuan} · ${lang==='en'?'≈':'折'}¥${yearMonthly.toFixed(1)}/${lang==='en'?'mo':'月'} · ${lang==='en'?'save':'省'}${savePct}%</button>`;
       }
-      return `<div class="plan-card ${p.level==='ADVANCED'?'featured':''}">
+      return `<div class="plan-card ${p.level==='ADVANCED'?'featured':''} ${p.level==='FREE'?'plan-free':''}">
         <h3>${lvName(p.level)}${isCur?` <span class="badge">${t('currentPlan')}</span>`:''}</h3>
         <div class="plan-price">${price?('¥'+price):'¥0'}<small>/${lang==='en'?'mo':'月'}</small></div>
         <ul class="plan-perks">${perks.map((x)=>`<li>${x}</li>`).join('')}</ul>
         <div class="plan-actions">
-          ${monthSku?`<button class="btn-primary" data-sku="${monthSku}"${disabled}>${purchaseLabel}</button>`:'<span class="muted">—</span>'}
+          ${monthSku?`<button class="btn-primary" data-sku="${monthSku}"${disabled}>${purchaseLabel}</button>`:`<span class="plan-current-state">${lang==='en'?'Free plan · no activation needed':'免费方案 · 无需开通'}</span>`}
           ${yearLine}
         </div>
       </div>`;
@@ -2383,7 +2410,6 @@
   /* ---------- 交流广场 ---------- */
   const SQ_SECTIONS = ['', 'experience', 'team', 'review', 'news'];
   let curSection = '';
-  let feedRequestSeq = 0;
   function renderSqTabs() {
     $('sqTabs').innerHTML = SQ_SECTIONS.map((s) =>
       `<button data-sec="${s}" class="${s === curSection ? 'on' : ''}">${t(s === '' ? 'secAll' : 'sec' + s[0].toUpperCase() + s.slice(1))}</button>`).join('');
@@ -2391,10 +2417,8 @@
   }
   async function loadFeed() {
     renderSqTabs();
-    const seq = ++feedRequestSeq;
     let list = [], failed = false;
     try { const res = await fetch('/api/community/posts' + (curSection ? '?section=' + curSection : '')); if (!res.ok) failed = true; else { const j = await res.json(); if (Array.isArray(j)) list = j; } } catch { failed = true; }
-    if (seq !== feedRequestSeq) return;
     const empty = $('sqEmpty'), feed = $('sqFeed');
     empty.textContent = failed ? t('loadFail') : t('sqEmpty');
     empty.classList.toggle('hidden', list.length > 0); feed.innerHTML = '';
@@ -2426,16 +2450,10 @@
   /* ---------- 剧本交易广场 ---------- */
   let curPurchase = null;
   let purchaseViewSeq = 0;
-  let marketRequestSeq = 0;
-  let curBoard = 'all';
   async function loadListings() {
-    curBoard = 'all';
-    document.querySelectorAll('.board-tab').forEach((b) => b.classList.toggle('active', b.dataset.board === 'all'));
-    const seq = ++marketRequestSeq;
     const sort = $('mkSort').value || 'new';
     let list = [], failed = false;
     try { const res = await fetch('/api/market/listings?sort=' + sort); if (!res.ok) failed = true; else { const j = await res.json(); if (Array.isArray(j)) list = j; } } catch { failed = true; }
-    if (seq !== marketRequestSeq) return;
     const grid = $('mkGrid'), empty = $('mkEmpty');
     empty.textContent = failed ? t('loadFail') : t('mkEmpty');
     empty.classList.toggle('hidden', list.length > 0); grid.innerHTML = '';
@@ -2487,19 +2505,18 @@
         <div class="v-section"><b>${lang === 'en' ? 'Sample' : '样章'}</b><div class="listing-sample">${escapeHtml(d.sample || (lang==='en'?'No sample':'暂无样章'))}</div></div>
         <div class="listing-foot" style="margin-top:12px"><span class="price-tag">${d.pricePoints} ${t('points')}</span>
           <button class="btn-primary" id="detailBuyBtn">${t('buy')}</button></div>`;
-      $('detailBuyBtn').onclick = () => { $('detailModal').classList.add('hidden'); buyListing(id); };
+      $('detailBuyBtn').onclick = () => { closeModal('detailModal'); buyListing(id); };
     } catch (e) { body.innerHTML = `<div class="muted">${escapeHtml(e.message)}</div>`; }
   }
   $('mkSort').onchange = loadListings;
   // v2.74 榜单 Tab
+  let curBoard = 'all';
   async function loadBoard(type) {
     curBoard = type;
     document.querySelectorAll('.board-tab').forEach((b) => b.classList.toggle('active', b.dataset.board === type));
     if (type === 'all') { loadListings(); return; }
-    const seq = ++marketRequestSeq;
     let data = { items: [] }, failed = false;
     try { const res = await fetch('/api/market/board?type=' + type); if (!res.ok) failed = true; else data = await res.json(); } catch { failed = true; }
-    if (seq !== marketRequestSeq) return;
     const list = data.items || [];
     const grid = $('mkGrid'), empty = $('mkEmpty');
     empty.textContent = failed ? t('loadFail') : t('mkEmpty');
@@ -7303,7 +7320,7 @@
     // 入口虽只对管理员显示，仍做一次服务端口径校验
     const ensure = meCache ? Promise.resolve(meCache) : Api.request('/api/auth/me').then((r) => r.json()).then((m) => { meCache = m; return m; });
     ensure.then((me) => {
-      if (!me || !me.canAdmin) { xnSay(lang === 'en' ? 'Admin only.' : '仅超级管理员可进入后台'); switchView('studio'); return; }
+      if (!me || !me.isAdmin) { xnSay(lang === 'en' ? 'Admin only.' : '仅超级管理员可进入后台'); switchView('studio'); return; }
       if (!admInited) { initAdmin(); admInited = true; }
       // c199 「开设账号」仅主账号可见（isSuperAdmin 由服务端口径判定，副管理员不可见此入口）
       const createBox = $('admCreateBox'); if (createBox) createBox.classList.toggle('hidden', !me.isSuperAdmin);

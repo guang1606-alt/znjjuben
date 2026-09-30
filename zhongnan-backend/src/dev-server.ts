@@ -24,7 +24,6 @@ import { createAdminModelRouter } from './routes/admin-model';
 import { createAdminRouter } from './routes/admin';
 import { createAdminSafetyRouter } from './routes/admin-safety';
 import { createAdminHandoffRouter } from './routes/admin-handoff';
-import { createUpdatesRouter } from './routes/updates';
 import { hashPassword } from './lib/auth';
 
 const mem = createMemoryPrisma();
@@ -50,7 +49,6 @@ const app = createApp({
   admin: createAdminRouter(mem),
   adminSafety: createAdminSafetyRouter(mem),
   adminHandoff: createAdminHandoffRouter(mem),
-  updates: createUpdatesRouter(mem),
 });
 
 // 预置四个等级的演示账号（手机号登录，密码统一 demo123456）
@@ -63,17 +61,14 @@ const demoUsers = [
   { id: 'demo_admin', phone: '18891995171', level: 'PRO', balance: 99999, isAdmin: false },
   { id: 'local_admin_15209291219', phone: '15209291219', level: 'PRO', balance: 99999, isAdmin: true },
 ];
+demoUsers.forEach(async (u) => {
+  const seeded = mem._seedUser(u);
+  seeded.passwordHash = await hashPassword('demo123456');
+});
+
 const port = Number(process.env.PORT) || 8099;
-async function startDemo() {
-  const passwordHash = await hashPassword('demo123456');
-  demoUsers.forEach((u) => {
-    const seeded = mem._seedUser(u);
-    seeded.passwordHash = passwordHash;
-  });
-  app.listen(port, () => {
-    console.log(`🎬 终南集 DEMO 模式: http://127.0.0.1:${port}（内存数据，重启清空）`);
-    console.log('演示账号：FREE 13900000001 / BASIC 13900000002 / ADVANCED 13900000003 / PRO 13900000004 / 超管 18891995171，密码均 demo123456');
-    console.log('本地管理员：15209291219，密码 demo123456');
-  });
-}
-startDemo().catch((error) => { console.error('演示账号初始化失败', error); process.exitCode = 1; });
+app.listen(port, () => {
+  console.log(`🎬 终南集 DEMO 模式: http://127.0.0.1:${port}（内存数据，重启清空）`);
+  console.log('演示账号：FREE 13900000001 / BASIC 13900000002 / ADVANCED 13900000003 / PRO 13900000004 / 超管 18891995171，密码均 demo123456');
+  console.log('本地管理员：15209291219，密码 demo123456');
+});

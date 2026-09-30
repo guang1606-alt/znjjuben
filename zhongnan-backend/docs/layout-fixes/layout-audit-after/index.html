@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>终南集布局修复前后对比</title>
+  <style>
+    * { box-sizing: border-box; }
+    body { margin: 0; padding: 16px; color: #17212b; background: #f5f7fa; font-family: "Microsoft YaHei", sans-serif; line-height: 1.6; }
+    main { max-width: 1480px; margin: auto; }
+    h1 { font-size: 24px; margin: 8px 0; }
+    h2 { font-size: 20px; margin: 0 0 6px; }
+    h3 { font-size: 16px; margin: 0 0 8px; }
+    p { margin: 0 0 14px; }
+    a { color: #195ca5; overflow-wrap: anywhere; }
+    .comparison { padding: 16px 0; border-top: 1px solid #cbd4df; margin-top: 20px; }
+    .pair { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 16px; }
+    .before h3 { color: #ad2237; }
+    .after h3 { color: #25684b; }
+    img { display: block; width: 100%; height: auto; border: 1px solid #cbd4df; }
+    .mobile img { max-width: 390px; margin: auto; }
+    .gallery { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+    .gallery figure { margin: 0; }
+    .gallery img { max-height: 600px; object-fit: contain; }
+    @media (max-width: 600px) { .pair, .gallery { grid-template-columns: minmax(0, 1fr); } h1 { font-size: 22px; } }
+  </style>
+</head>
+<body><main>
+  <h1>终南集：布局修复前后对比</h1>
+  <p>2026-09-30 · 当前本地地址 <a href="http://127.0.0.1:8099">http://127.0.0.1:8099</a>（截图拍摄时服务位于 8100，中断后按项目默认端口恢复）。左侧为先前审查保存的真实截图，红框指出原问题；右侧为当前源码的浏览器实拍。手机均为 390 × 844，桌面为 1440 × 900。工具区采用相同分区起点，页面内容高度因修复而变化。</p>
+  <p>本次未执行登录、发布、充值或付费生成。审查浏览器拦截了非必要写入请求，拍摄前清除了因此产生的网络提示；没有改变截图中的表单内容或套餐数据。此前文本域限宽和表单间距修复保持有效。</p>
+
+  <section id="compare-home" class="comparison mobile">
+    <h2>1. 手机顶栏、分区标题与卡片宽度</h2>
+    <p>顶栏约 169px → 113px；导航不再换成多行，按钮至少 44px。MODES 标签按内容宽度显示；移除卡片右侧固定 64px 空栏。</p>
+    <div class="pair"><div class="before"><h3>修复前：顶栏分散，标题被拉长</h3><a href="before-01-mobile-home.png"><img src="before-01-mobile-home.png" alt="手机首页修复前"></a></div><div class="after"><h3>修复后：两层导航，全宽卡片</h3><a href="after-home-390.png"><img src="after-home-390.png" alt="手机首页修复后"></a></div></div>
+  </section>
+  <section id="compare-vip" class="comparison mobile">
+    <h2>2. 手机会员页标题与权益</h2>
+    <p>“会员与积分”不再拆断；说明独占下一行，套餐权益提升至 14px。作品页和广场页同类标题也统一为纵向层级。</p>
+    <div class="pair"><div class="before"><h3>修复前：标题与说明挤在一行</h3><a href="before-02-mobile-vip.png"><img src="before-02-mobile-vip.png" alt="手机会员页修复前"></a></div><div class="after"><h3>修复后：标题完整，说明分行</h3><a href="after-vip-390.png"><img src="after-vip-390.png" alt="手机会员页修复后"></a></div></div>
+  </section>
+  <section id="compare-tools" class="comparison mobile">
+    <h2>3. 五个工具卡：空栏与费用挤占标题</h2>
+    <p>费用从绝对定位改为独立信息行；标题不再预留固定右内边距，卡片恢复全宽，说明至少 14px。右图工具费用位于卡片下方，所有五个工具使用同一规则。</p>
+    <div class="pair"><div class="before"><h3>修复前：右侧空栏，标题贴近费用</h3><a href="before-03-mobile-tool-cards.png"><img src="before-03-mobile-tool-cards.png" alt="工具卡修复前"></a></div><div class="after"><h3>修复后：全宽标题，费用独立一行</h3><a href="after-tools-390.png"><img src="after-tools-390.png" alt="工具卡修复后"></a></div></div>
+  </section>
+  <section id="compare-workbench" class="comparison mobile">
+    <h2>4. 工作台：无效空白与按钮遮挡</h2>
+    <p>从已滚走导航的工具区进入时，工作台头部约 y=188px → y=9px。打开工作台时隐藏助手，输入区域和“开始拆解”不再被覆盖。</p>
+    <div class="pair"><div class="before"><h3>修复前：顶部空白，助手盖住按钮</h3><a href="before-04-workbench-gap-overlap.png"><img src="before-04-workbench-gap-overlap.png" alt="工作台空白及遮挡修复前"></a></div><div class="after"><h3>修复后：从顶部展开，按钮完整</h3><a href="after-workbench-390.png"><img src="after-workbench-390.png" alt="工作台空白及遮挡修复后"></a></div></div>
+  </section>
+  <section id="compare-panels" class="comparison mobile">
+    <h2>5. 工作台：当前标题与内容不一致</h2>
+    <p>原先进入“拆爆款”却混入“智能标签工作台”。现在共同显示入口隐藏所有非目标面板，点击和 Observer 自动更新都遵循互斥规则。</p>
+    <div class="pair"><div class="before"><h3>修复前：拆爆款标题下显示智能标签</h3><a href="before-05-workbench-mixed-panels.png"><img src="before-05-workbench-mixed-panels.png" alt="工作台串页修复前"></a></div><div class="after"><h3>修复后：只显示拆爆款输入区</h3><a href="after-panels-390.png"><img src="after-panels-390.png" alt="工作台串页修复后"></a></div></div>
+  </section>
+  <section id="compare-desktop" class="comparison">
+    <h2>6. 桌面免费套餐：底部空白与无意义横线</h2>
+    <p>免费卡按自身内容自然收束；权益到状态栏间距约 86px → 14px。原先横线替换为“免费方案 · 无需开通”，不增加虚构权益或装饰。</p>
+    <div class="pair"><div class="before"><h3>修复前：拉齐高度留下大片空白</h3><a href="before-06-desktop-vip.png"><img src="before-06-desktop-vip.png" alt="桌面免费套餐修复前"></a></div><div class="after"><h3>修复后：自然高度，明确免费状态</h3><a href="after-vip-1440.png"><img src="after-vip-1440.png" alt="桌面免费套餐修复后"></a></div></div>
+  </section>
+  <section class="comparison">
+    <h2>验证与边界</h2>
+    <p>五个工具在 390px、1440px 下分别首次进入和返回，当前面板、返回按钮与助手状态均复核；主页面检查 320/390/768/1440px；另补 320px 英文标题溢出的回归。文本域仍仅允许纵向拉伸，并限制最大宽度；相邻表单保持间距。</p>
+    <p>未真实登录验证授权模式生成结果、作品详情和管理后台，不能将这部分页面宣称为已经全面验收。</p>
+    <details><summary>五个工具修复后的手机原图</summary>
+      <div class="gallery">
+        <figure><figcaption>选题会</figcaption><a href="verified-after-toolPitch-390.png"><img src="verified-after-toolPitch-390.png" alt="选题会修复后"></a></figure>
+        <figure><figcaption>剧本围读</figcaption><a href="verified-after-toolRead-390.png"><img src="verified-after-toolRead-390.png" alt="剧本围读修复后"></a></figure>
+        <figure><figcaption>拆爆款</figcaption><a href="verified-after-toolTeardown-390.png"><img src="verified-after-toolTeardown-390.png" alt="拆爆款修复后"></a></figure>
+        <figure><figcaption>多版本去重体检</figcaption><a href="verified-after-toolDiversity-390.png"><img src="verified-after-toolDiversity-390.png" alt="去重体检修复后"></a></figure>
+        <figure><figcaption>互动分支</figcaption><a href="verified-after-toolBranch-390.png"><img src="verified-after-toolBranch-390.png" alt="互动分支修复后"></a></figure>
+      </div>
+    </details>
+  </section>
+</main></body></html>

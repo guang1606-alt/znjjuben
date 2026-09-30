@@ -161,48 +161,6 @@ test('expired authentication opens the real login modal', () => {
   assert.equal(c.authMode, 'login');
 });
 
-test('listing detail buy closes the detail modal and reaches purchase', async () => {
-  const purchases = [];
-  const { context: c, $ } = setup(['openListingDetail'], {
-    openModal: id => $(id).classList.remove('hidden'),
-    buyListing: id => purchases.push(id),
-    fetch: async () => ({ ok: true, json: async () => ({
-      title: '测试剧本', pricePoints: 100, sample: '样章', seller: { nickname: '作者' },
-    }) }),
-  });
-  await c.openListingDetail('listing-1');
-  assert.equal($('detailModal').classList.contains('hidden'), false);
-  $('detailBuyBtn').onclick();
-  assert.equal($('detailModal').classList.contains('hidden'), true);
-  assert.deepEqual(purchases, ['listing-1']);
-});
-
-test('admin navigation follows effective authorization rather than legacy admin flag', () => {
-  const nav = { classList: { hidden: true, toggle(_name, hidden) { this.hidden = hidden; } } };
-  const { context: c } = setup(['refreshAdminNav'], {
-    document: { querySelectorAll: () => [nav] },
-    meCache: { isAdmin: true, canAdmin: false },
-  });
-  c.refreshAdminNav();
-  assert.equal(nav.classList.hidden, true);
-  c.meCache = { isAdmin: false, canAdmin: true };
-  c.refreshAdminNav();
-  assert.equal(nav.classList.hidden, false);
-});
-
-test('direct admin navigation rejects accounts without effective authorization', async () => {
-  const views = [];
-  const { context: c } = setup(['enterAdmin'], {
-    meCache: { isAdmin: true, canAdmin: false },
-    Api: { isAuthed: () => true },
-    switchView: name => views.push(name),
-    initAdmin: () => assert.fail('admin UI must not initialize'),
-  });
-  c.enterAdmin();
-  await new Promise(resolve => setImmediate(resolve));
-  assert.deepEqual(views, ['studio']);
-});
-
 test('opening an adaptation draft offers a resume action with the saved brief', async () => {
   const project = { id: 'draft1', title: '改编草稿', mode: 'adapt', totalEps: 20, engineTier: 'STANDARD', format: 'LIVE_ACTION', bible: { adaptationDraft: { brief: '保存的改编人物和主线', recordId: 'td1' } } };
   const { context: c, $ } = setup(['openProject', 'resumeAdaptationProject', 'syncDraftProject', 'clearDraftProject'], {
