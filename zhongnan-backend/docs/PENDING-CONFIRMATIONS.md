@@ -90,3 +90,15 @@
   9. `GET /api/generate/modes`（模式清单）——前端 I18N.MODES 本地渲染（模式属产品定义，刻意本地化），接口口暂未消费
 - 操作建议：1~5、8、9 维持现状；6、7 下轮审计确认无外部依赖后删除旧别名（或补 deprecation 提示）
 - 更正（2026-10-01，v2.221.0）：第 6/7 项经细读实现，**并非旧别名，而是语义不同的独立能力**——`/self-learn/run`=手动喂信号学习轮（signals 可空仅执行淘汰快照，测试 http-knowledge.test.cjs 依赖 3 处），`/run-auto`=自动采集全闭环；`/self-learn/report`=即时分布快照，`/reports`=历史报告列表；`/builtin-skill-pack`=纯 JSON 内置技能包，`/builtin-skill-bundle`=SKILL.md+references 文件映射。结论：**全部保留，不删除、不加 deprecation**；前端暂无入口维持现状（与 1~5、8、9 同口径）
+
+## 15.【低】v2.233.0 端点全量对照审计：2 项缺口已补齐 + 1 项新发现待拍板
+- 背景：v2.233.0 对后端自有路由（21 文件 199 端点）vs 前端消费（217 调用点 / 172 唯一键）做全量对照审计，21 个孤儿逐一读后端语义分类定案
+- 已补齐 2 项（v2.233.0 本轮实施，TDD 先红后绿）：
+  1. `POST /api/generate/tasks/:id/cancel`（生成取消）——v2.190 后端能力首次有前端入口：frozen SSE 帧 additive 增发 `taskId` → 前端捕获存 `session.taskId` → 进度面板新增「✕ 取消生成」按钮（仅运行中且有 taskId 时显示）→ 调取消口 → 后端 abort+冻结积分退款+发 `cancelled` 帧 → 前端新分支渲染「已取消生成，冻结积分将原路退回」
+  2. `POST /api/interview/sessions/:id/close`（采访会话关闭）——采访面板新增「⏹ 结束会话」按钮（会话存在且未关闭时显示，点击调 close 并置 ivClosed 联动 UI）
+- 新发现待拍板 1 项：`POST /api/va/xiaonan`（小南深度共创，10 积分/次付费执行口）——前端无入口；注意与第 8 项 `GET /api/generate/va/xiaonan`（明细单查口）是**不同端点**。如需上线请拍板交互形态（入口位置/展示形式/是否打包进会员权益）
+- 补充口径（确认非缺口，无需处理）：
+  - `POST /api/order/notify/wechat`、`/alipay`——支付异步回调，服务端专用（第三方支付服务器回调），前端不调属正常
+  - `GET /api/admin/board/status`——同第 14 条第 2 项榜单手动口排障口径，维持现状
+  - `DELETE /api/admin/model/providers/:id`——前端 app.js 实有调用（`'.../providers/' + id` 尾拼接形态），v2.233 审计脚本对无尾字面量的拼接缝不匹配，系**审计假阳性**，维持现状
+- 审计假阳性类型学留档（下轮审计脚本改进方向）：①相对路径封装调用（admApi/admDownload/fbAdm/adAdm）；②尾拼接 `'.../' + var` 无尾字面量；③模板串内层引号截断（`${el.getAttribute('x')}`）；④`'/api-directory'` 相对路径 startsWith('/api') 误判
