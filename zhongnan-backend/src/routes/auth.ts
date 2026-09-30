@@ -8,12 +8,15 @@ import { INVITE, MEMBERSHIP, MemberLevel } from '../config/pricing';
 import { authRequired } from '../middleware/auth';
 import type { AuthRequest } from '../middleware/auth';
 import { isAdminUser, isSuperAdminUser, SUPER_ADMIN_PHONE } from '../middleware/admin';
+import { createLoginThrottle } from '../lib/login-throttle';
 import { AGE_BAND_IDS, GENDERS, PROFILE_REGIONS } from '../lib/profile-mapping';
 
 /** 工厂化：生产用默认 prisma 单例，测试可注入内存桩（HTTP 层端到端，不依赖真实数据库） */
 type PrismaLike = typeof defaultPrisma;
 export function createAuthRouter(prisma: PrismaLike | any) {
   const authRouter = asyncRouter();
+  // 登录失败限流（每路由实例独立，测试互不污染）：IP+手机号 15 分钟窗口内 5 次失败即锁定
+  const loginThrottle = createLoginThrottle();
   const phoneSchema = z.object({
     phone: z.string().regex(/^1[3-9]\d{9}$/, '手机号格式不正确'),
     password: z.string().min(8, '密码至少8位').max(64),
@@ -54,10 +57,15 @@ export function createAuthRouter(prisma: PrismaLike | any) {
   authRouter.post('/login', async (req, res) => {
     const p = loginSchema.safeParse(req.body);
     if (!p.success) return res.status(400).json({ error: '参数错误' });
+    const throttleKey = `${req.ip ?? 'unknown'}:${p.data.phone}`;
+    if (loginThrottle.isLocked(throttleKey)) return res.status(429).json({ error: '尝试过于频繁，请稍后再试' });
     const user = await prisma.user.findUnique({ where: { phone: p.data.phone } });
-    if (!user || !user.passwordHash || !(await verifyPassword(user.passwordHash, p.data.password)))
+    if (!user || !user.passwordHash || !(await verifyPassword(user.passwordHash, p.data.password))) {
+      loginThrottle.recordFailure(throttleKey);
       return res.status(401).json({ error: '手机号或密码错误' }); // 不区分“用户不存在/密码错”，防枚举
+    }
     if (user.banned) return res.status(403).json({ error: '账号已封禁' });
+    loginThrottle.clear(throttleKey);
     const payload = { sub: user.id, level: user.level };
     res.json({ accessToken: signAccess(payload), refreshToken: signRefresh(payload), user: { id: user.id, level: user.level, isAdmin: isAdminUser(user), staff: isAdminUser(user), isSuperAdmin: isSuperAdminUser(user) } });
   });

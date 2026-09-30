@@ -46,6 +46,17 @@ export function createApp(routers: AppRouters = {}, preErrorRouter?: Router | Ro
   app.use(express.json({ limit: '12mb' })); // 学习窗口支持上传较大文本/转写稿
   app.use(express.text({ type: 'text/plain', limit: '1mb' })); // veFaaS 定时器 Payload 以 text/plain 透传
   app.use(cors({ origin: (process.env.CORS_ORIGINS || '').split(',').filter(Boolean), credentials: true }));
+  // 安全响应头（v2.208）：nosniff 防_mime嗅探、DENY 防点击劫持、Referrer-Policy 限引荐泄露、
+  // Permissions-Policy 关闭摄像头/麦克风/定位；/api 响应禁缓存防 token 与个人信息落中间缓存。
+  // 不设 CSP：web 端大量内联样式，style-src 需 unsafe-inline 形同虚设，贸然上线会全站破坏。
+  app.use((_req, res, next) => {
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    res.setHeader('X-Frame-Options', 'DENY');
+    res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
+    res.setHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
+    if (_req.path.startsWith('/api/')) res.setHeader('Cache-Control', 'no-store');
+    next();
+  });
   app.get('/health', (_req, res) => res.json({ ok: true, ts: Date.now() }));
   if (deps.prisma) app.use('/api', bannedGuard(deps.prisma));
   app.use('/api/auth', routers.auth ?? defaultAuth);
