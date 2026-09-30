@@ -45,7 +45,7 @@ function environment(route, options = {}) {
     },
   };
 }
-async function flush() { for (let i = 0; i < 12; i++) await Promise.resolve(); }
+async function flush() { for (let i = 0; i < 40; i++) await Promise.resolve(); }
 function keepB(env) {
   assert.equal(env.Api.getToken(), 'access-b');
   assert.equal(env.Api.getUser().id, 'b');
@@ -153,22 +153,23 @@ describe('API requests stay bound to the initiating login session', () => {
     assert.equal(env.Api.getToken(), 'new-access-a'); assert.equal(env.hooks.auth, 0);
   });
 
-  it('two concurrent refreshes belonging to one login may both finish', async () => {
-    const refreshes = [deferred(), deferred()], attempts = new Map();
-    let refreshIndex = 0;
+  it('two concurrent refreshes belonging to one login share a single flight', async () => {
+    const refresh = deferred(), attempts = new Map();
     const env = environment((url) => {
-      if (url === '/api/auth/refresh') return refreshes[refreshIndex++].promise;
+      if (url === '/api/auth/refresh') return refresh.promise;
       const count = (attempts.get(url) || 0) + 1; attempts.set(url, count);
       return Promise.resolve(response(count === 1 ? 401 : 200));
     });
     const first = env.Api.request('/one'), second = env.Api.request('/two');
-    await flush(); assert.equal(refreshIndex, 2);
-    refreshes[1].resolve(response(200, { accessToken: 'fresh-a-2' }));
+    await flush();
+    assert.equal(env.calls.filter((c) => c.url === '/api/auth/refresh').length, 1, '并发 401 必须共享同一次续期调用');
+    refresh.resolve(response(200, { accessToken: 'fresh-a' }));
     assert.equal((await second).status, 200);
-    refreshes[0].resolve(response(200, { accessToken: 'fresh-a-1' }));
     assert.equal((await first).status, 200);
-    assert.equal(env.Api.getUser().id, 'a'); assert.equal(env.hooks.auth, 0);
+    assert.equal(env.Api.getToken(), 'fresh-a');
+    assert.equal(env.Api.getUser().id, 'a');
     assert.equal(attempts.get('/one'), 2); assert.equal(attempts.get('/two'), 2);
+    assert.equal(env.hooks.auth, 0);
   });
 
   it('a late final 401 from A replay cannot clear B', async () => {

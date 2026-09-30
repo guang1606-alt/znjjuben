@@ -32,13 +32,14 @@ export async function verifyPassword(hash: string, pw: string): Promise<boolean>
   try { return await argon2.verify(hash, pw); } catch { return false; }
 }
 
-export interface JwtPayload { sub: string; level: string }
+export interface JwtPayload { sub: string; level: string; jti?: string; exp?: number }
 
 export function signAccess(p: JwtPayload): string {
   return jwt.sign(p, ACCESS_SECRET(), { expiresIn: Number(process.env.JWT_ACCESS_TTL) || 900 });
 }
 export function signRefresh(p: JwtPayload): string {
-  return jwt.sign(p, REFRESH_SECRET(), { expiresIn: Number(process.env.JWT_REFRESH_TTL) || 2592000 });
+  // jwtid：每个 refresh token 唯一 ID，配合 refresh-rotate 做轮换后的一次性消费（重放防护）
+  return jwt.sign(p, REFRESH_SECRET(), { expiresIn: Number(process.env.JWT_REFRESH_TTL) || 2592000, jwtid: randomBytes(16).toString('hex') });
 }
 export function verifyAccess(token: string): JwtPayload {
   return jwt.verify(token, ACCESS_SECRET()) as JwtPayload;

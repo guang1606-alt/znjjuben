@@ -29,6 +29,7 @@
   const responseSessions = new WeakMap();
   function getToken() { return store.get(K.access); }
   function getUser() { return store.get(K.user); }
+  function getRefreshToken() { return store.get(K.refresh); }
   function setSession({ accessToken, refreshToken, user }) {
     sessionVersion++;
     if (accessToken) store.set(K.access, accessToken);
@@ -44,13 +45,17 @@
   function sessionChangedError() {
     const err = new Error('SESSION_CHANGED'); err.code = 'SESSION_CHANGED'; err.name = 'AbortError'; return err;
   }
-  function assertSameSession(snapshot) {
+  function sessionMatches(snapshot) {
     // 同一账号并发续期允许 access 变化；登录/退出代次和持久化身份仍须一致。
+    // 轮换（同一账号 refresh token 合法更新 rt1→rt2）不视为会话切换：只比对「有无 refresh」状态——
+    // 换号由 user 比对兜底，登出由「快照有而当前无」捕获。
     const accessChangedWithoutRefresh = !snapshot.refresh && getToken() !== snapshot.access;
-    if (sessionVersion !== snapshot.version || store.get(K.refresh) !== snapshot.refresh ||
-        JSON.stringify(getUser()) !== snapshot.user || accessChangedWithoutRefresh) {
-      throw sessionChangedError();
-    }
+    const refreshPresenceChanged = !!snapshot.refresh !== !!store.get(K.refresh);
+    return sessionVersion === snapshot.version && !refreshPresenceChanged &&
+      JSON.stringify(getUser()) === snapshot.user && !accessChangedWithoutRefresh;
+  }
+  function assertSameSession(snapshot) {
+    if (!sessionMatches(snapshot)) throw sessionChangedError();
   }
 
   function abortError() {
@@ -96,6 +101,38 @@
   }
 
   // 401 → 用 refresh 换新 access 重试一次；仍失败则清登录态并抛 AUTH_REQUIRED
+  // /refresh 单飞：并发 401 共享同一次续期（配合后端轮换的一次性消费语义，避免并发重复调用被判重放）。
+  // 同一账号在途共享；跨账号（user 不同）各开各的 flight。
+  let refreshFlight = null; // { key, promise, done }
+  function refreshSession(snapshot, opts) {
+    const rtNow = store.get(K.refresh);
+    if (!rtNow) return Promise.resolve(null);
+    const key = snapshot.user || '';
+    if (refreshFlight && !refreshFlight.done && refreshFlight.key === key) return refreshFlight.promise;
+    const flight = { key, promise: null, done: false };
+    flight.promise = (async () => {
+      try {
+        const rr = await fetchWithTimeout('/api/auth/refresh', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ refreshToken: rtNow }), signal: opts.signal, timeout: opts.timeout,
+        });
+        if (!rr || !rr.ok) return null;
+        const txt = await rr.text();
+        let d = null;
+        try { d = txt ? JSON.parse(txt) : null; } catch { /* 网关返回非 JSON 时不得把整个请求链打崩 */ }
+        if (!d || !d.accessToken) return null;
+        // 迟到的旧会话响应不得写入 store（期间可能已登出/换号，B 的登录态不可被 A 的响应覆盖）
+        if (!sessionMatches(snapshot)) return null;
+        store.set(K.access, d.accessToken);
+        if (d.refreshToken) store.set(K.refresh, d.refreshToken); // 轮换：持久化新 refreshToken（旧值即刻作废）
+        return d;
+      } catch { return null; } // refresh 网络错误吞掉，调用方落到 401 清登录态
+      finally { flight.done = true; }
+    })();
+    refreshFlight = flight;
+    return flight.promise;
+  }
+
   async function request(path, opts = {}) {
     const session = sessionSnapshot();
     const mayRetry = !opts.body && ['GET', 'HEAD'].includes((opts.method || 'GET').toUpperCase());
@@ -126,25 +163,13 @@
     }
     ensureActive();
 
-    // 401 → refresh 重试一次
+    // 401 → 单飞 refresh（并发共享一次），成功后用 store 最新 token 重试一次
     if (res.status === 401) {
-      const rt = session.refresh;
-      if (rt) {
-        try {
-          const rr = await fetchWithTimeout('/api/auth/refresh', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ refreshToken: rt }), signal: opts.signal, timeout: opts.timeout });
-          ensureActive();
-          if (rr.ok) {
-            const txt = await rr.text();
-            ensureActive();
-            let d = null;
-            try { d = txt ? JSON.parse(txt) : null; } catch { /* 网关返回非 JSON 时不得把整个请求链打崩 */ }
-            if (d && d.accessToken) {
-              store.set(K.access, d.accessToken);
-              res = await raw(path, opts, d.accessToken);
-              ensureActive();
-            }
-          }
-        } catch (e) { /* refresh 网络错误吞掉，落到下面 401 清登录态 */ }
+      const d = await refreshSession(session, opts);
+      ensureActive();
+      if (d) {
+        res = await raw(path, opts, getToken());
+        ensureActive();
       }
     }
     ensureActive();
@@ -217,7 +242,7 @@
   };
 
   return {
-    getToken, getUser, setSession, clearSession, isAuthed,
+    getToken, getUser, getRefreshToken, setSession, clearSession, isAuthed,
     request, jsonOrThrow, auth,
     // 钩子注册（app.js 启动时调用）
     onAuthRequired(fn) { hooks.onAuthRequired = fn; },

@@ -71,11 +71,20 @@ export function createAuthRouter(prisma: PrismaLike | any) {
   });
   authRouter.post('/refresh', async (req, res) => {
     try {
-      const { verifyRefresh } = await import('../lib/auth');
+      const { verifyRefresh, signRefresh } = await import('../lib/auth');
+      const { consumeRefreshToken } = await import('../lib/refresh-rotate');
+      const { createHash } = await import('crypto');
       const data = verifyRefresh(req.body?.refreshToken);
+      // 一次性消费（重放防护）：新格式 token 用 jti；旧格式无 jti 用 token 摘要兜底，同样只放行一次，刷完即升级为轮换 token
+      const key = data.jti ?? `legacy:${createHash('sha256').update(String(req.body?.refreshToken)).digest('hex')}`;
+      if (!consumeRefreshToken(key, data.exp ?? Math.floor(Date.now() / 1000) + 86400)) {
+        return res.status(401).json({ error: 'REFRESH_REUSED' });
+      }
       const user = await prisma.user.findUnique({ where: { id: data.sub } });
       if (!user || user.banned) return res.status(401).json({ error: '无效凭证' });
-      res.json({ accessToken: signAccess({ sub: user.id, level: user.level }) });
+      const payload = { sub: user.id, level: user.level };
+      // 轮换：每次刷新同时下发新 refreshToken，旧 token 即刻作废
+      res.json({ accessToken: signAccess(payload), refreshToken: signRefresh(payload) });
     } catch {
       res.status(401).json({ error: 'REFRESH_INVALID' });
     }
