@@ -86,7 +86,7 @@ function setup() {
   }
   // _syncTopbarOffset（v2.612 topbar 避让）为 _showWorkbenchLayer 依赖；_navStack 的初始化器自带
   // ZnNavStack 存在性守卫，在 vm 中自然降级为 null，与浏览器缺 nav-stack.js 时的行为一致
-  for (const name of ['_syncTopbarOffset', '_syncWorkbenchTopInset', '_initWorkbenchLayer', '_showWorkbenchLayer', '_hideWorkbenchLayer', 'openWorkbench', 'closeWorkbench', '_workbenchEsc', 'switchView', 'switchSession', 'renderTaskQueue', 'openProject', 'resetPanels', 'showFail']) {
+  for (const name of ['_syncTopbarOffset', '_syncWorkbenchTopInset', '_initWorkbenchLayer', '_showWorkbenchLayer', '_hideWorkbenchLayer', 'openWorkbench', 'closeWorkbench', '_workbenchEsc', 'switchView', 'switchSession', 'renderTaskQueue', 'openProject', 'resetPanels', 'showFail', 'genClickGuard']) {
     vm.runInContext(functions.get(name), context);
   }
   context._initWorkbenchLayer();

@@ -81,4 +81,26 @@ describe('D 轮：uiConfirm / uiPrompt 通用模态助手', () => {
     const restores = (region.match(/prevFocus\.focus\(\)/g) || []).length;
     assert.ok(restores >= 2, `uiConfirm 与 uiPrompt 都应恢复焦点，实测 ${restores} 处`);
   });
+
+  it('出场动画：resolve 即刻返回（不被动画阻塞），overlay 淡出后移除', () => {
+    const region = extractMarkedRegion('v2.202 通用模态对话框');
+    assert.ok(/animate\(\[\{ opacity: 1 \}, \{ opacity: 0 \}\]/.test(region), '应有 overlay 退场淡出动画');
+    assert.ok(/onfinish/.test(region), '动画完成后才移除 DOM');
+    assert.ok(/oncancel|setTimeout\(/.test(region), '应有动画未触发的兜底清理（oncancel/超时）');
+    // resolve 在动画之前调用：close() 内 resolve(result) 出现于退场动画路径之外（不依赖 onfinish 才 resolve）
+    const closeBodies = region.match(/const close = \(result\) => \{[\s\S]*?\n      \};/g) || [];
+    assert.ok(closeBodies.length >= 2, 'uiConfirm 与 uiPrompt 都应有统一 close');
+    closeBodies.forEach((body, i) => {
+      assert.ok(/resolve\(result\)/.test(body), `第 ${i + 1} 个对话框的 close 应同步 resolve`);
+    });
+  });
+
+  it('防连点节流：生成按钮 UI 层 800ms 节流（程序化调用与测试直调不受影响）', () => {
+    assert.ok(/let _lastGenClick = 0;/.test(src), '应有提交时间戳节流变量');
+    assert.ok(/function genClickGuard\(/.test(src), '应有 UI 层节流包装 helper');
+    assert.ok(/- _lastGenClick < \d+/.test(src), '应有短窗节流判断（拦截手抖连点，间隔足够仍放行新单）');
+    const wraps = (src.match(/onclick = genClickGuard\(/g) || []).length;
+    assert.ok(wraps >= 3, `生成类按钮应统一走 genClickGuard 包装，实测 ${wraps} 处`);
+    assert.ok(/toastInfo\(/.test(src.slice(src.indexOf('function genClickGuard'), src.indexOf('function genClickGuard') + 600)), '拦截时应有轻提示，不静默吞点击');
+  });
 });

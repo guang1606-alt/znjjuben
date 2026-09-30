@@ -1665,9 +1665,16 @@
       let closed = false;
       const close = (result) => {
         if (closed) return; closed = true;
-        document.removeEventListener('keydown', keyHandler); overlay.remove();
-        try { if (prevFocus && prevFocus.focus) prevFocus.focus(); } catch {}
+        document.removeEventListener('keydown', keyHandler);
         resolve(result);
+        try { if (prevFocus && prevFocus.focus) prevFocus.focus(); } catch {}
+        // 退场淡出只作视觉余韵，不阻塞 resolve；onfinish/oncancel + 超时兜底保证 DOM 必被清理
+        const finish = () => { overlay.remove(); };
+        if (!_uiReducedMotion() && overlay.animate) {
+          const anim = overlay.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 120, easing: 'ease-in' });
+          anim.onfinish = finish; anim.oncancel = finish;
+          setTimeout(finish, 300);
+        } else finish();
       };
       const keyHandler = (e) => {
         if (closed) return;
@@ -1699,9 +1706,16 @@
       let closed = false;
       const close = (result) => {
         if (closed) return; closed = true;
-        document.removeEventListener('keydown', keyHandler); overlay.remove();
-        try { if (prevFocus && prevFocus.focus) prevFocus.focus(); } catch {}
+        document.removeEventListener('keydown', keyHandler);
         resolve(result);
+        try { if (prevFocus && prevFocus.focus) prevFocus.focus(); } catch {}
+        // 退场淡出只作视觉余韵，不阻塞 resolve；onfinish/oncancel + 超时兜底保证 DOM 必被清理
+        const finish = () => { overlay.remove(); };
+        if (!_uiReducedMotion() && overlay.animate) {
+          const anim = overlay.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 120, easing: 'ease-in' });
+          anim.onfinish = finish; anim.oncancel = finish;
+          setTimeout(finish, 300);
+        } else finish();
       };
       const keyHandler = (e) => {
         if (closed) return;
@@ -1818,7 +1832,7 @@
     if (back) back.onclick = () => closeWorkbench();
     // v2.189 工作台内"生成剧本"按钮（生成类工作台共用，调 startGenerate）
     const genBtn = $('workbenchGenBtn');
-    if (genBtn) genBtn.onclick = () => { if (typeof startGenerate === 'function') startGenerate(); };
+    if (genBtn) genBtn.onclick = genClickGuard(() => { if (typeof startGenerate === 'function') startGenerate(); });
     // Observer：panel.classList 中 hidden 状态变化时自动开/关 layer（其他类变化如 view-in 不触发，避免死循环）
     const mo = new MutationObserver((muts) => {
       for (const m of muts) {
@@ -5336,6 +5350,17 @@
     if (session.id === activeSessionId) $('progressPanel').classList.add('hidden');
     renderTaskQueue();
   }
+  // v2.203 防连点：UI 事件层 800ms 节流——手抖连点轻提示后忽略；程序化调用与测试直调 startGenerate 不经 guard、不受影响；
+  // 间隔足够仍正常开新单（多任务并行特性不受影响）
+  let _lastGenClick = 0;
+  function genClickGuard(fn) {
+    return (...args) => {
+      const now = Date.now();
+      if (now - _lastGenClick < 800) { toastInfo(lang === 'en' ? 'Easy there — one at a time.' : '点太快啦，稍等一下再开新单～'); return; }
+      _lastGenClick = now;
+      return fn(...args);
+    };
+  }
   async function startGenerate() {
     if (!Api.isAuthed()) { xnSay(t('needLogin')); openAuth('login'); return; }
     const account = capturePrivateSession();
@@ -7690,7 +7715,7 @@
   };
 
   document.addEventListener('click', (e) => { const m = $('dlMenu'); if (m && !m.classList.contains('hidden') && !m.contains(e.target) && e.target !== $('dlBtn')) m.classList.add('hidden'); });
-  $('retryBtn').onclick = () => startGenerate();
+  $('retryBtn').onclick = genClickGuard(() => startGenerate());
   $('diagRefreshBtn').onclick = () => { if (currentProjectId) loadDiagnosis(currentProjectId); };
   $('diagCopyBtn').onclick = () => {
     if (!lastDiagnosis) return;
@@ -7878,8 +7903,8 @@
     const inWorks = !!b.closest('#worksDiag');
     applyTargetedFix(b, inWorks ? currentWorksProject?.id : currentProjectId, inWorks ? currentWorksDiagnosis : lastDiagnosis);
   });
-  $('failRetry').onclick = () => startGenerate();
-  $('genBtn').onclick = () => startGenerate();
+  $('failRetry').onclick = genClickGuard(() => startGenerate());
+  $('genBtn').onclick = genClickGuard(() => startGenerate());
   $('xnFloat').onclick = () => xnSay(lang === 'en' ? 'Xiaonan here — tell me your idea.' : '小南在呢，说说你的创意吧～');
 
   /* ---------- 顶栏控件 ---------- */
