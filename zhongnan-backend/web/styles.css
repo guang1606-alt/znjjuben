@@ -63,7 +63,6 @@
   --muted: var(--text-2); --border: var(--line); --hover: var(--panel-2);
   --brand: var(--accent); --soft: var(--panel-2); --panel-soft: var(--panel-2); --panel-1: var(--panel);
 }
-[data-font='sm'] { --fs: 13.5px; } [data-font='md'] { --fs: 15px; } [data-font='lg'] { --fs: 17px; } [data-font='xl'] { --fs: 19px; }
 
 * { box-sizing: border-box; }
 html, body { margin: 0; padding: 0; }

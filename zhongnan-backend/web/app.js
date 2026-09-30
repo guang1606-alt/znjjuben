@@ -1,5 +1,5 @@
 /* 终南集·AGI编剧大师 · 前端主逻辑（零构建原生 ES）。
-   主题/字号/语言持久化、12 模式、登录注册、作品库、带鉴权 SSE 生成、游戏化进度、结果与分享。 */
+   主题/语言持久化、12 模式、登录注册、作品库、带鉴权 SSE 生成、游戏化进度、结果与分享。 */
 (function () {
   'use strict';
   const $ = (id) => document.getElementById(id);
@@ -21,8 +21,7 @@
   /* ---------- 持久化偏好 ---------- */
   const LS = { g: (k, d) => localStorage.getItem(k) || d, s: (k, v) => localStorage.setItem(k, v) };
   const THEMES = ['tech', 'light', 'dark', 'eye', 'auto'];
-  const FONTS = ['sm', 'md', 'lg', 'xl'];
-  let theme = LS.g('zn_theme', 'tech'), font = LS.g('zn_font', 'md');
+  let theme = LS.g('zn_theme', 'tech');
   const mq = window.matchMedia ? window.matchMedia('(prefers-color-scheme: dark)') : null;
 
   function applyTheme() {
@@ -30,7 +29,6 @@
     document.documentElement.setAttribute('data-theme', eff);
     document.documentElement.setAttribute('data-theme-mode', theme);
   }
-  function applyFont() { document.documentElement.setAttribute('data-font', font); }
   function applyLang() {
     // c204 复盘修复：localStorage 可能是脏值（旧版本/手滑/带引号的 '"en"'），直接拿去索引双语表
     // 会让 renderSelects 等在每次加载时抛 TypeError、页面半崩；入口白名单归一并自愈写回。
@@ -7260,7 +7258,6 @@
 
   /* ---------- 顶栏控件 ---------- */
   $('themeBtn').onclick = () => { theme = THEMES[(THEMES.indexOf(theme) + 1) % THEMES.length]; LS.s('zn_theme', theme); applyTheme(); };
-  $('fontBtn').onclick = () => { font = FONTS[(FONTS.indexOf(font) + 1) % FONTS.length]; LS.s('zn_font', font); applyFont(); };
   $('langBtn').onclick = () => { const nx = lang === 'zh' ? 'en' : 'zh'; LS.s('zn_lang', nx); applyLang(); };
 
   /* ---------- 工具 ---------- */
@@ -8093,6 +8090,6 @@
   setTimeout(initUpdateBanner, 1500);
 
   /* ---------- 启动 ---------- */
-  applyTheme(); applyFont(); applyLang(); renderAuthButton(); initHookConsole(); wireFormatSelector();
+  applyTheme(); applyLang(); renderAuthButton(); initHookConsole(); wireFormatSelector();
   if (Api.isAuthed()) loadMe();
 })();
