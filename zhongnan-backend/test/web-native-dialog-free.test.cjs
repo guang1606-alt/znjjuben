@@ -158,8 +158,8 @@ describe('G 轮：ESC 双重响应修复（对话框打开时 ESC 不弹回上�
     const navHits = (src.match(/ui-dlg-overlay/g) || []).length;
     assert.ok(navHits >= 2, `ui-dlg-overlay 至少出现 2 处（shell 标识 + nav ESC 检测），实测 ${navHits}`);
     assert.ok(
-      /querySelector\('\.modal\.open, \.overlay\.open, #workbenchLayer:not\(\.hidden\), \.ui-dlg-overlay'\)/.test(src),
-      'nav ESC 的 hasOverlay 检测应纳入 .ui-dlg-overlay'
+      /querySelector\('\.modal\.open, \.overlay\.open, \.modal-mask:not\(\.hidden\), #workbenchLayer:not\(\.hidden\), \.ui-dlg-overlay'\)/.test(src),
+      'nav ESC 的 hasOverlay 检测应纳入 .modal-mask 与 .ui-dlg-overlay（v2.220 起模态打开时 ESC 让位）'
     );
   });
 

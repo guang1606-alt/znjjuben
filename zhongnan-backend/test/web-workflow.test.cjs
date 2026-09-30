@@ -156,7 +156,7 @@ for (const error of ['BRANCH_VALIDATION_FAILED', 'TREND_PII_BLOCKED', 'AD_CLAIM_
 }
 
 test('expired authentication opens the real login modal', () => {
-  const { context: c, $ } = setup(['openAuth'], { authMode: '', syncAuthTabs() {}, renderAuthButton() {}, switchView() {} });
+  const { context: c, $ } = setup(['openAuth'], { authMode: '', syncAuthTabs() {}, renderAuthButton() {}, switchView() {}, openModal(id) { $(id).classList.remove('hidden'); } });
   c.window = {};
   vm.runInContext(`(${authHook})()`, c);
   assert.equal($('authModal').classList.contains('hidden'), false);

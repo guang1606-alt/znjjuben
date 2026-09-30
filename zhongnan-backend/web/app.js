@@ -1556,7 +1556,7 @@
     const tag = (document.activeElement && document.activeElement.tagName) || '';
     if (/INPUT|TEXTAREA|SELECT/.test(tag) || (document.activeElement && document.activeElement.isContentEditable)) return;
     // 若有打开的 modal/overlay/workbench/ui 对话框，先交给它们处理（不拦截）
-    const hasOverlay = document.querySelector('.modal.open, .overlay.open, #workbenchLayer:not(.hidden), .ui-dlg-overlay');
+    const hasOverlay = document.querySelector('.modal.open, .overlay.open, .modal-mask:not(.hidden), #workbenchLayer:not(.hidden), .ui-dlg-overlay');
     if (hasOverlay) return;
     e.preventDefault();
     const popped = _navStack.pop();
@@ -2143,8 +2143,8 @@
       renderAuthButton(); refreshAdminNav(); renderModes();
     }
   });
-  function openAuth(mode) { authMode = mode || 'login'; $('authModal').classList.remove('hidden'); syncAuthTabs(); }
-  function closeAuth() { $('authModal').classList.add('hidden'); $('authErr').classList.add('hidden'); }
+  function openAuth(mode) { authMode = mode || 'login'; openModal('authModal'); syncAuthTabs(); }
+  function closeAuth() { closeModalEl($('authModal')); $('authErr').classList.add('hidden'); }
   function syncAuthTabs() {
     $('tabLogin').classList.toggle('on', authMode === 'login');
     $('tabRegister').classList.toggle('on', authMode === 'register');
@@ -2679,9 +2679,40 @@
     } catch (e) { xnSay(e.message); }
   }
 
-  /* ---------- 通用弹窗关闭 ---------- */
-  document.querySelectorAll('[data-close]').forEach((b) => { b.onclick = () => $(b.getAttribute('data-close')).classList.add('hidden'); });
-  document.querySelectorAll('.modal-mask').forEach((m) => { m.addEventListener('click', (e) => { if (e.target === m) m.classList.add('hidden'); }); });
+  /* ---------- v2.220 模态统一收口（语义/Esc/焦点/清理钩子） ----------
+     18 个 .modal-mask 业务弹窗此前只有 data-close/遮罩两条关闭路径：Esc 仅 dpModal 专属、
+     无 role/aria-modal 语义、开关无焦点管理、关闭副作用各自为政。本区域统一收口：
+     openModal/closeModalEl 单一出入口 + setModalCloseHook 清理钩子（关闭只 hidden，清理归各模块）。 */
+  const _modalCloseHooks = new Map();
+  function setModalCloseHook(id, fn) { _modalCloseHooks.set(id, fn); }
+  // 语义补齐（幂等）：屏幕阅读器按对话框朗读
+  document.querySelectorAll('.modal-mask').forEach((m) => {
+    if (!m.getAttribute('role')) m.setAttribute('role', 'dialog');
+    if (!m.hasAttribute('aria-modal')) m.setAttribute('aria-modal', 'true');
+  });
+  function _modalFocusables(el) {
+    return Array.from(el.querySelectorAll('button, input, select, textarea, [tabindex]:not([tabindex="-1"])'))
+      .filter((n) => !n.disabled && !n.classList.contains('hidden'));
+  }
+  function closeModalEl(el) {
+    if (!el || el.classList.contains('hidden')) return;
+    const hook = _modalCloseHooks.get(el.id);
+    if (hook) { try { hook(); } catch { /* 清理失败不阻断关闭 */ } }
+    el.classList.add('hidden');
+    // 焦点仍留在模态内才恢复（避免打断用户已在别处的焦点）
+    const prev = el._znPrevFocus;
+    if (prev && prev.focus && el.contains(document.activeElement)) { try { prev.focus(); } catch { /* 焦点恢复失败忽略 */ } }
+    delete el._znPrevFocus;
+  }
+  document.querySelectorAll('[data-close]').forEach((b) => { b.onclick = () => closeModalEl($(b.getAttribute('data-close'))); });
+  document.querySelectorAll('.modal-mask').forEach((m) => { m.addEventListener('click', (e) => { if (e.target === m) closeModalEl(m); }); });
+  // Esc 关闭最上层可见模态（openModal 把节点搬到 body 末尾，DOM 序即层叠序）；workbench 的 ESC 退级已让位（见 hasOverlay 选择器）
+  document.addEventListener('keydown', (e) => {
+    if (e.key !== 'Escape' && e.key !== 'Esc') return;
+    const openMasks = document.querySelectorAll('.modal-mask:not(.hidden)');
+    if (!openMasks.length) return;
+    closeModalEl(openMasks[openMasks.length - 1]);
+  });
   const openModal = (id) => {
     const el = $(id);
     if (!el) return;
@@ -2690,8 +2721,13 @@
     // （听剧本表现为“点了没反应却有声音”）。显示前一次性把节点搬到 body 末尾：
     // fixed 定位、id、事件委托与元素级监听全部保留；已在视图外（authModal/qsMask）则无操作。
     if (el.closest('[id^="view-"]')) document.body.appendChild(el);
+    el._znPrevFocus = document.activeElement;
     el.classList.remove('hidden');
+    // 焦点入模态：键盘/读屏用户可直接 Tab 操作，不落在背景页
+    const first = _modalFocusables(el)[0];
+    if (first) { try { first.focus(); } catch { /* 焦点入失败忽略 */ } }
   };
+  /* ---------- v2.220 模态统一收口 结束 ---------- */
   /* ---------- v2.185.14 c194 用户反馈中心（提交建议/Bug + 我的工单进度 + 小南回复） ----------
      后端 /api/feedback（POST / 提交、GET /mine 查询、admin 三态处置）此前只有管理员处置端接线，
      终端创作者既无提交入口、也看不到处理状态与回复——完整工单子系统对 C 端零触达。本模块补齐闭环。 */
@@ -6354,10 +6390,8 @@
       // 语速在当前段立即生效：以当前段重播（暂停态下只存设置，不强行开口）
       if (listenTts.playing && !listenTts.paused && listenTts.idx >= 0) speakListenIdx(listenTts.idx);
     };
-    // 关闭弹窗（X / 关闭按钮 / 点遮罩）即停，与通用关闭监听器并存不冲突
-    $('listenModal').addEventListener('click', (e) => {
-      if (e.target.id === 'listenModal' || e.target.closest('[data-close="listenModal"]')) listenFinish();
-    });
+    // v2.220 关闭收口：X/关闭按钮/遮罩/Esc 统一走 closeModalEl，清理经钩子触发（listenFinish 只停播清态，不负责 hidden）
+    setModalCloseHook('listenModal', listenFinish);
     window.addEventListener('beforeunload', listenFinish);
   }
   // opts.autostart：连播/选集/片单入口自动开口；startAt: first|last|idx（配 startIdx）
@@ -7753,7 +7787,6 @@
   document.querySelectorAll('#dpModal [data-dp-fmt]').forEach((b) => {
     b.onclick = () => { const fmt = b.dataset.dpFmt; $('dpModal').classList.add('hidden'); downloadFromServer(fmt); };
   });
-  document.addEventListener('keydown', (e) => { if (e.key === 'Escape') { const m = $('dpModal'); if (m && !m.classList.contains('hidden')) m.classList.add('hidden'); } });
   // v2.154 制作物料清单预览：场景总表/角色出场表/道具总表（跨集聚合，制片交付层，登录即可）
   let matData = null;
   const openMaterials = async () => {
