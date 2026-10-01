@@ -1577,12 +1577,13 @@
     // 旧视图淡出（不阻塞 hidden 切换，过渡结束后清理）
     const oldEl = document.querySelector('#view-home, #view-studio, #view-toolbox, #view-works, #view-vip, #view-square, #view-market, #view-admin:not(.hidden)');
     VIEWS.forEach((x) => { const el = $('view-' + x); if (el) el.classList.toggle('hidden', x !== v); });
-    // nav active 指示器（保留 on 类向后兼容，新加 active）
-    document.querySelectorAll('.nav .nav-item').forEach((b) => b.classList.remove('active', 'on'));
+    // nav active 指示器（保留 on 类向后兼容，新加 active）；aria-current 同步屏幕阅读器可感知激活态
+    document.querySelectorAll('.nav .nav-item').forEach((b) => { b.classList.remove('active', 'on'); b.removeAttribute('aria-current'); });
     document.querySelectorAll('.nav [data-view]').forEach((b) => {
       const on = b.getAttribute('data-view') === v;
       b.classList.toggle('on', on);
       b.classList.toggle('active', on);
+      if (on) b.setAttribute('aria-current', 'page'); else b.removeAttribute('aria-current');
     });
     // 新视图淡入：先 hidden 移除后强制 reflow，再加 view-in 动画类
     const newEl = $('view-' + v);
@@ -1852,9 +1853,10 @@
   // v2.191 编剧室/递招/素材库 等独立模块：直接打开对应工作台面板
   document.querySelectorAll('.nav [data-open]').forEach((b) => b.onclick = () => {
     const id = b.getAttribute('data-open'); if (!id) return;
-    // 切换 nav active 态（data-open 按钮无 data-view，手动标记）
-    document.querySelectorAll('.nav .nav-item').forEach((n) => n.classList.remove('active', 'on'));
+    // 切换 nav active 态（data-open 按钮无 data-view，手动标记）；面板非页面，aria-current 用 true 而非 page
+    document.querySelectorAll('.nav .nav-item').forEach((n) => { n.classList.remove('active', 'on'); n.removeAttribute('aria-current'); });
     b.classList.add('active', 'on');
+    b.setAttribute('aria-current', 'true');
     openWorkbench(id);
   });
   document.querySelectorAll('.nav [data-nav]').forEach((b) => b.onclick = () => xnSay(lang === 'en' ? 'That area is being built.' : '该板块正在建设中，敬请期待～'));

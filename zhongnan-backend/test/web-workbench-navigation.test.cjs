@@ -42,6 +42,7 @@ function setup() {
       getBoundingClientRect: () => ({ bottom: 78, top: 0, height: 0 }),
       querySelector: () => null, querySelectorAll: () => [], addEventListener() {},
       setAttribute: (key, value) => { attrs[key] = value; }, getAttribute: key => attrs[key],
+      removeAttribute: key => { delete attrs[key]; },
       appendChild(child) { child.parentElement = node; node.children.push(child); },
       classList: {
         contains: name => classes.has(name),
