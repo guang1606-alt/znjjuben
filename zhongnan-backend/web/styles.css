@@ -516,6 +516,8 @@ textarea { box-sizing: border-box; max-width: 100%; resize: vertical; background
 .modal{position:relative;width:min(420px,100%);background:var(--panel);border:1px solid var(--line);border-top:3px solid var(--gold);border-radius:18px;padding:24px;box-shadow:var(--shadow-lg)}
 .modal-x{position:absolute;top:11px;right:15px;background:none;border:none;font-size:22px;color:var(--text-2);cursor:pointer;line-height:1}
 .modal-x:hover{color:var(--cinnabar)}
+/* v2.268：键盘焦点可见（openModal 自动聚焦 × 按钮，缺焦点环时键盘用户不知道焦点在哪） */
+.modal-x:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:6px}
 .auth-tabs{display:flex;gap:8px;margin-bottom:16px}
 .auth-tabs button{flex:1;padding:9px;border-radius:10px;border:1px solid var(--line);background:transparent;color:var(--text-2);cursor:pointer;font-size:14px}
 .auth-tabs button.on{background:var(--accent);color:#fbf7ec;border-color:var(--accent)}

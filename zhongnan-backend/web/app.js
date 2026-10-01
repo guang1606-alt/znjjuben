@@ -2175,7 +2175,7 @@
   (function wireQuickSwitcher() {
     const mask = document.createElement('div');
     mask.className = 'modal-mask hidden'; mask.id = 'qsMask';
-    mask.innerHTML = `<div class="modal" role="dialog" style="max-width:460px">
+    mask.innerHTML = `<div class="modal" style="max-width:460px">
       <input id="qsInput" class="mini-input" style="width:100%;margin-bottom:8px" placeholder="搜索页面/创作模式，回车直达（Esc 关闭）" />
       <div id="qsList" class="qs-list"></div></div>`;
     document.body.appendChild(mask);
@@ -2929,6 +2929,21 @@
   document.querySelectorAll('.modal-mask').forEach((m) => { m.addEventListener('click', (e) => { if (e.target === m) closeModalEl(m); }); });
   // Esc 关闭最上层可见模态（openModal 把节点搬到 body 末尾，DOM 序即层叠序）；workbench 的 ESC 退级已让位（见 hasOverlay 选择器）
   document.addEventListener('keydown', (e) => {
+    // Tab 焦点圈闭：有可见弹窗时，焦点限定在最上层 mask 内循环
+    // （dogfood 第三轮实测：authModal 打开后 Tab 序列逃出弹窗落到背景 mkSort 等）
+    if (e.key === 'Tab') {
+      const openMasks = document.querySelectorAll('.modal-mask:not(.hidden)');
+      if (!openMasks.length) return;
+      const top = openMasks[openMasks.length - 1];
+      const items = _modalFocusables(top);
+      if (!items.length) { e.preventDefault(); return; }
+      const active = document.activeElement;
+      const idx = items.indexOf(active);
+      if (idx < 0) { e.preventDefault(); items[0].focus(); return; }
+      if (e.shiftKey && idx === 0) { e.preventDefault(); items[items.length - 1].focus(); }
+      else if (!e.shiftKey && idx === items.length - 1) { e.preventDefault(); items[0].focus(); }
+      return;
+    }
     if (e.key !== 'Escape' && e.key !== 'Esc') return;
     const openMasks = document.querySelectorAll('.modal-mask:not(.hidden)');
     if (!openMasks.length) return;
