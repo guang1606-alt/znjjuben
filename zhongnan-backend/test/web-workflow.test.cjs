@@ -45,6 +45,7 @@ function setup(names, extra = {}) {
     currentWorksProject: null, currentWorksDiagnosis: null, currentScripts: [], currentProjectId: null,
     lastFiling: null, pendingWarnings: null, activeSessionId: null, genSessions: [],
     renderAigcDash() {}, loadDiagnosis: async () => {}, loadEmotionWave: async () => {}, loadInvestorLens: async () => {},
+    _uiLangEn: () => ((typeof extra.lang === 'string' ? extra.lang : 'zh') === 'en'),
     ...extra };
   vm.createContext(context);
   // v2.221 加载/空态统一：被抽取函数（openProject/switchSession 等）依赖 znSkeleton/znEmpty*，先注入真实实现

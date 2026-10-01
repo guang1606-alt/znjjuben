@@ -1688,7 +1688,7 @@
       ab.onclick = () => { try { o.action.fn(node); } catch {} close(); };
       node.appendChild(ab);
     }
-    const cb = document.createElement('button'); cb.className = 't-close'; cb.textContent = '×'; cb.setAttribute('aria-label', '关闭');
+    const cb = document.createElement('button'); cb.className = 't-close'; cb.textContent = '×'; cb.setAttribute('aria-label', _uiLangEn() ? 'Close' : '关闭');
     cb.onclick = close;
     node.appendChild(cb);
     stack.appendChild(node);
@@ -1697,8 +1697,8 @@
     if (ttl > 0) setTimeout(close, ttl);
     return close;
   }
-  function toastError(msg, title) { return toast({ kind: 'error', title: title || '出错', body: msg }); }
-  function toastOk(msg, title)   { return toast({ kind: 'ok',    title: title || '成功', body: msg }); }
+  function toastError(msg, title) { return toast({ kind: 'error', title: title || (_uiLangEn() ? 'Error' : '出错'), body: msg }); }
+  function toastOk(msg, title)   { return toast({ kind: 'ok',    title: title || (_uiLangEn() ? 'Done' : '成功'), body: msg }); }
   function toastInfo(msg, title) { return toast({ kind: 'info',  title: title || '', body: msg }); }
   // v2.225 window 暴露：独立 view js 也可直接复用富版便捷函数（陪伴提示仍建议走 Xn.toast）
   window.toastError = toastError; window.toastOk = toastOk; window.toastInfo = toastInfo;
@@ -1869,21 +1869,24 @@
   // v2.186 注册全局 API 钩子：AUTH_REQUIRED 自动跳登录 + 网络错误 toast + 5xx toast
   if (typeof Api !== 'undefined' && Api.onAuthRequired) {
     Api.onAuthRequired(() => {
-      toastError('登录已过期，请重新登录', '需重新登录');
+      toastError(_uiLangEn() ? 'Session expired — please sign in again.' : '登录已过期，请重新登录', _uiLangEn() ? 'Sign in required' : '需重新登录');
       renderAuthButton();
       openAuth('login');
     });
     Api.onNetworkError((err, path) => {
-      const msg = err.code === 'TIMEOUT' ? '请求超时，请检查网络后重试' : '网络异常，请稍后重试';
-      toastError(msg + (path ? '（' + path + '）' : ''), '网络问题');
+      const enUi = _uiLangEn();
+      const msg = err.code === 'TIMEOUT'
+        ? (enUi ? 'Request timed out — check your network and retry.' : '请求超时，请检查网络后重试')
+        : (enUi ? 'Network error — please retry later.' : '网络异常，请稍后重试');
+      toastError(msg + (path ? '（' + path + '）' : ''), enUi ? 'Network issue' : '网络问题');
     });
     Api.onServerBusy((res, path) => {
-      toastError('服务器繁忙，正在重试…' + (path ? '（' + path + '）' : ''), '服务繁忙');
+      toastError((_uiLangEn() ? 'Server busy, retrying…' : '服务器繁忙，正在重试…') + (path ? '（' + path + '）' : ''), _uiLangEn() ? 'Server busy' : '服务繁忙');
     });
     // v2.210 跨标签页会话同步：他页登录/换号 → 提示并刷新顶栏与用户态（他页登出走上面的 onAuthRequired）
     Api.onSessionRemoteChange((snap) => {
       const name = snap && snap.user ? (snap.user.nickname || snap.user.id) : '';
-      toastInfo('登录账号已在其他标签页切换为「' + name + '」', '账号已同步');
+      toastInfo(_uiLangEn() ? 'Signed-in account switched to "' + name + '" in another tab.' : '登录账号已在其他标签页切换为「' + name + '」', _uiLangEn() ? 'Account synced' : '账号已同步');
       renderAuthButton();
       loadMe().catch(() => {});
     });
@@ -3641,7 +3644,7 @@
     box.innerHTML = genSessions.map((s) => {
       const icon = s.status === 'running' ? '⏳' : (s.status === 'done' ? '✅' : '❌');
       const stTxt = s.status === 'running' ? ((s.progress && s.progress.percent ? s.progress.percent + '%' : (lang === 'en' ? 'starting' : '启动中'))) : (s.status === 'done' ? (lang === 'en' ? 'done' : '已完成') : (lang === 'en' ? 'failed' : '已失败'));
-      const stage = s.progress && s.progress.label ? s.progress.label : '';
+      const stage = s.progress && s.progress.label ? translateProgressState(s.progress.label) : '';
       const cur = s.id === activeSessionId;
       return `<div class="task-card ${s.status}${cur ? ' active' : ''}" data-sid="${s.id}" title="${lang === 'en' ? 'Click to view' : '点击查看'}">
         <span class="tk-icon">${icon}</span>
@@ -3723,6 +3726,15 @@
       const isRetry = /打回|sent back|blocked|拦截|退回/.test(l.note || '');
       return `<div class="staff-line${isRetry ? ' retry' : ''}"><span class="staff-role">${meta.icon} ${escapeHtml(lang === 'en' ? meta.en : meta.zh)}</span><span class="staff-note">${escapeHtml(l.note || '')}</span></div>`;
     }).join('');
+  }
+  // v2.262 i18n：progress-view 状态机存语义键（state 不落文案），上屏前统一按 lang 翻译；非键原文直通
+  function translateProgressState(text) {
+    const K = (window.ProgressView && window.ProgressView.PV_KEYS) || { done: '__pv_done__', failed: '__pv_failed__', cancelled: '__pv_cancelled__' };
+    const en = lang === 'en';
+    if (text === K.done) return en ? 'Fresh script ready' : '新鲜剧本出炉';
+    if (text === K.failed) return en ? 'Generation failed — frozen points will be refunded' : '生成失败，已冻结积分将原路退回';
+    if (text === K.cancelled) return en ? 'Generation cancelled — frozen points will be refunded' : '已取消生成，冻结积分将原路退回';
+    return text;
   }
   function renderProgress() {
     if (!progress) return;
@@ -7723,7 +7735,7 @@
 
   function showFail(msg, refunded) {
     $('progressPanel').classList.add('hidden'); $('failPanel').classList.remove('hidden');
-    $('failText').textContent = (refunded ? (lang === 'en' ? 'Failed and refunded: ' : '已失败并退回积分：') : '') + msg;
+    $('failText').textContent = (refunded ? (lang === 'en' ? 'Failed and refunded: ' : '已失败并退回积分：') : '') + translateProgressState(msg);
   }
 
   /* ---------- 结果操作 ---------- */

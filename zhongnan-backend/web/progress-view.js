@@ -41,6 +41,9 @@
     return Math.max(0, Math.min(100, Math.max(prev, n))); // 单调不减
   }
 
+  /** 语义键：state 中不存硬编码文案，存键，由消费端按 lang 翻译 */
+  const PV_KEYS = { done: '__pv_done__', failed: '__pv_failed__', cancelled: '__pv_cancelled__' };
+
   function reduceProgress(s, evt, seq) {
     if (!evt || typeof evt !== 'object') return s;
     const next = Object.assign({}, s, { stages: Object.assign({}, s.stages), order: s.order.slice(), log: s.log.slice() });
@@ -91,7 +94,7 @@
         next.activeStage = null;
         next.phase = 'done';
         next.percent = 100;
-        next.label = '新鲜剧本出炉';
+        next.label = PV_KEYS.done;
         next.result = {
           taskId: evt.taskId, pointsCharged: evt.pointsCharged, realCostFen: evt.realCostFen,
           free: !!evt.free, sandbox: !!evt.sandbox, antiAi: evt.antiAi || null,
@@ -102,14 +105,14 @@
 
       case 'failed_refunded':
         next.phase = 'failed';
-        next.error = String(evt.error || '生成失败，已冻结积分将原路退回');
+        next.error = String(evt.error || PV_KEYS.failed);
         return next;
 
       // v2.233 端点对齐：用户显式取消（后端 v2.190 abort → 发 cancelled 帧）；复用 failed 相位渲染
       case 'cancelled':
         next.phase = 'failed';
         next.cancelled = true;
-        next.error = String(evt.error || '已取消生成，冻结积分将原路退回');
+        next.error = String(evt.error || PV_KEYS.cancelled);
         return next;
 
       default:
@@ -278,5 +281,6 @@
     createProgress, reduceProgress, stageList, milestone, parseSseChunk, roleMeta, waitTips,
     formatDisplayValue, formatIssueText, formatDateTime, formatVersion,
     getXiaonanLessons, lessonForTip,
+    PV_KEYS,
   };
 });
