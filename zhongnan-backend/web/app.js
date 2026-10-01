@@ -3251,6 +3251,7 @@
     $('sqTabs').innerHTML = SQ_SECTIONS.map((s) =>
       `<button data-sec="${s}" class="${s === curSection ? 'on' : ''}">${t(s === '' ? 'secAll' : 'sec' + s[0].toUpperCase() + s.slice(1))}</button>`).join('');
     $('sqTabs').querySelectorAll('[data-sec]').forEach((b) => b.onclick = () => { curSection = b.getAttribute('data-sec'); sqPage = 1; renderSqTabs(); loadFeed(); });
+    znBindTablist($('sqTabs'), { selector: '[data-sec]' }); // v2.270 键盘方向键导航 + ARIA 语义
   }
   async function loadFeed() {
     renderSqTabs();
@@ -3431,6 +3432,7 @@
     // v2.258：序号必须在 all 分支前自增——all 分支调 loadListings 会再 ++，恰好作废旧榜单在途请求
     const seq = ++mkReqSeq;
     document.querySelectorAll('.board-tab').forEach((b) => b.classList.toggle('active', b.dataset.board === type));
+    znBindTablist($('mkBoardTabs'), { selector: '.board-tab' }); // v2.270 键盘方向键导航 + ARIA 语义
     if (type === 'all') { $('mkBoardMeta').classList.add('hidden'); loadListings(); return; }
     let data = { items: [] }, failed = false;
     try { const res = await fetch('/api/market/board?type=' + type + '&limit=' + BOARD_LIMIT); if (!res.ok) failed = true; else data = await res.json(); } catch { failed = true; }
@@ -3465,6 +3467,7 @@
     });
   }
   document.querySelectorAll('.board-tab').forEach((b) => { b.onclick = () => loadBoard(b.dataset.board); });
+  znBindTablist($('mkBoardTabs'), { selector: '.board-tab' }); // v2.270 初始绑定（loadBoard 前即可用方向键）
   $('mkListBtn').onclick = async () => {
     if (!Api.isAuthed()) { openAuth('login'); return; }
     const res = await Api.request('/api/generate/projects');
@@ -8553,6 +8556,46 @@
     });
   }
   function escapeHtml(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])); }
+  // v2.270 Roving tabindex 键盘导航：Tab 键只需按一次进入 tab 组，方向键在组内移动，Home/End 跳首尾
+  // 幂等：同一 container 重复调用不会叠加事件监听；每次调用都会重新同步 tabindex/aria 状态
+  function znBindTablist(container, opts = {}) {
+    if (!container) return { sync() {} };
+    const sel = opts.selector || 'button';
+    const vertical = !!opts.vertical;
+    function tabs() { return [...container.querySelectorAll(sel)]; }
+    function isActive(el) {
+      return el.classList.contains('on') || el.classList.contains('active') || el.getAttribute('aria-selected') === 'true';
+    }
+    function sync() {
+      container.setAttribute('role', 'tablist');
+      tabs().forEach((tab) => {
+        tab.setAttribute('role', 'tab');
+        const active = isActive(tab);
+        tab.setAttribute('aria-selected', active ? 'true' : 'false');
+        tab.tabIndex = active ? 0 : -1;
+      });
+    }
+    if (!container._znTablistBound) {
+      container._znTablistBound = true;
+      container.addEventListener('keydown', (e) => {
+        const list = tabs();
+        if (!list.length) return;
+        const cur = list.findIndex((el) => el === document.activeElement);
+        const fwd = vertical ? 'ArrowDown' : 'ArrowRight';
+        const back = vertical ? 'ArrowUp' : 'ArrowLeft';
+        let next = -1;
+        if (e.key === fwd) next = (cur + 1) % list.length;
+        else if (e.key === back) next = (cur - 1 + list.length) % list.length;
+        else if (e.key === 'Home') next = 0;
+        else if (e.key === 'End') next = list.length - 1;
+        if (next >= 0) { e.preventDefault(); list[next].focus(); }
+      });
+      // 点击后同步 tabindex（click 事件在 keydown Enter/Space 之后触发）
+      container.addEventListener('click', () => setTimeout(sync, 0));
+    }
+    sync();
+    return { sync };
+  }
   // v2.169 补全闭环：ISO 日期距今天数（dashboard thinQueue 行显示"X 天前编辑"）
   function daysSince(iso) { const t = new Date(iso).getTime(); return Number.isFinite(t) ? Math.max(0, Math.floor((Date.now() - t) / 86400000)) : 0; }
   // 付费动作客户端幂等令牌：每次点击生成新令牌（刻意重复操作可再扣费），网络重试/双击重发复用同一请求体
@@ -8592,6 +8635,7 @@
     $('admTabs').innerHTML = ADM_TABS.map((k) =>
       `<button data-atab="${k}" class="${k === admTab ? 'on' : ''}">${t('admTab_' + k)}</button>`).join('');
     $('admTabs').querySelectorAll('[data-atab]').forEach((b) => b.onclick = () => { admTab = b.getAttribute('data-atab'); renderAdmTabs(); loadAdmTab(); });
+    znBindTablist($('admTabs'), { selector: '[data-atab]' }); // v2.270 键盘方向键导航 + ARIA 语义（12 个后台 tab 不再靠 Tab 键逐个穿越）
   }
   function loadAdmTab() {
     ['Users', 'Stats', 'Finance', 'Posts', 'Models', 'Knowledge', 'Feedback', 'Safety', 'Handoff', 'Updates', 'Balances', 'Ads'].forEach((n) => $('adm' + n + 'Pane').classList.add('hidden'));
