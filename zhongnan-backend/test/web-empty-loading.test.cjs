@@ -315,3 +315,41 @@ describe('v2.239 物料预览 matBody 三态收口', () => {
     assert.ok(/znError\('matBody', \(err && err\.message\) \|\| t\('matEmpty'\)\)/.test(region), 'catch 应走 znError(matBody)（role=alert 即时播报）');
   });
 });
+
+/* v2.253 超管后台三态收口第四弹（v2.238/v2.239 同族漏网清零）：
+ * 勘察发现三处真实缺口——
+ * ① switchAdminTab 的 models 分支 `loadProviders().catch(() => {})` 完全静默，
+ *    供应商池加载失败超管看不到任何提示（v2.238 loadWorks 静默失败根治的漏网）；
+ * ② admPfSummary 失败用 `textContent = e.message` 裸字串上屏，无 ⚠ 图标/role=alert，
+ *    且与 v2.224 错误态统一（znErrorHtml 视觉语言）不一致；
+ * ③ admModelWrap 失败仍用 `<div class="notice">`（v2.238 资产三族 notice 清零的漏网）。
+ * 修复：①catch 上提到调用点统一走 xnSay；②textContent 裸字串改 znErrorHtml 结构化渲染；
+ * ③notice 类替换为 znErrorHtml（role=alert）。
+ */
+describe('v2.253 超管后台三态收口（静默失败/裸字串/notice 漏网）', () => {
+  it('loadProviders 在 models 分支不再静默 catch——失败提示上屏', () => {
+    // 定位 switchAdminTab 函数的 models 分支行
+    const m = src.match(/if \(admTab === 'models'\)[^\n]*loadAdmPortfolio[^\n]*loadProviders[^\n]*/);
+    assert.ok(m, '应定位到 models 分支行');
+    assert.doesNotMatch(m[0], /loadProviders\(\)\.catch\(\(\) => \{\}\)/, 'loadProviders 不应再静默 catch 空体（v2.238 loadWorks 静默失败根治的同族漏网）');
+    assert.ok(/loadProviders\(\)\.catch\(\(e\)/.test(m[0]), 'loadProviders 失败应有可见提示（xnSay/toastError）');
+  });
+
+  it('admPfSummary 失败态走 znErrorHtml（非 textContent 裸字串）', () => {
+    // 定位 models 分支 loadAdmPortfolio().catch 部分（catch 回调含括号，取整行断言）
+    const m = src.match(/if \(admTab === 'models'\)[^\n]*loadAdmPortfolio[^\n]*\n?/);
+    assert.ok(m, '应定位到 models 分支行');
+    assert.doesNotMatch(m[0], /textContent\s*=\s*e\.message/, 'admPfSummary 不应再 textContent 裸字串');
+    assert.ok(/znErrorHtml|znError\(/.test(m[0]), 'admPfSummary 失败应走 znErrorHtml/znError（role=alert 即时播报）');
+  });
+
+  it('admModelWrap 失败态 notice 类清零（v2.238 资产三族同族漏网）', () => {
+    // 定位 loadAdmModels 函数体内的 catch
+    const s = src.indexOf('async function loadAdmModels');
+    const e = s >= 0 ? src.indexOf('async function ', s + 10) : -1;
+    const region = s >= 0 && e > s ? src.slice(s, e) : '';
+    assert.ok(region, '应定位到 loadAdmModels');
+    assert.doesNotMatch(region, /<div class="notice">/, 'admModelWrap catch 不应再用 notice 类（v2.238 资产三族清零的同族漏网）');
+    assert.ok(/znErrorHtml|znError\(/.test(region), 'admModelWrap 失败应走 znErrorHtml/znError');
+  });
+});

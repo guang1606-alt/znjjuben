@@ -8340,7 +8340,7 @@
     if (admTab === 'stats') loadAdmStats();
     if (admTab === 'finance') loadAdmFinance();
     if (admTab === 'posts') loadAdmPosts();
-    if (admTab === 'models') { loadAdmModels(); loadAdmPortfolio().catch((e) => { $('admPfSummary').textContent = e.message; }); loadProviders().catch(() => {}); }
+    if (admTab === 'models') { loadAdmModels(); loadAdmPortfolio().catch((e) => { $('admPfSummary').innerHTML = znErrorHtml((e && e.message) || t('loadFail')); }); loadProviders().catch((e) => { xnSay((e && e.message) || t('loadFail')); }); }
     if (admTab === 'knowledge') { renderKnCategory(); loadAdmKnowledge(); }
     if (admTab === 'feedback') loadAdmFeedback();
     if (admTab === 'safety') loadAdmSafety();
@@ -8785,7 +8785,7 @@
   async function loadAdmModels() {
     let cfg;
     try { cfg = await admApi('/model/'); }
-    catch (e) { $('admModelWrap').innerHTML = `<div class="notice">${escapeHtml(e.message)}</div>`; return; }
+    catch (e) { $('admModelWrap').innerHTML = znErrorHtml((e && e.message) || t('loadFail')); return; }
     $('admModelUpdated').textContent = cfg.updatedAt
       ? (lang === 'en' ? 'Updated: ' : '最近更新：') + new Date(cfg.updatedAt).toLocaleString()
       : (lang === 'en' ? 'Not configured yet' : '尚未配置，将回退环境变量');
