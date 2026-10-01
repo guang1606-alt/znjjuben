@@ -2,7 +2,7 @@
 
 > 面向前端（`web/` 原生 JS 站点及后续独立前端/移动端）的后端 API 契约与适配说明。
 > 后端每次破坏性契约变更都会在此登记：变更内容 → 迁移对照 → 前端已同步点。
-> 版本对齐 `package.json`，当前基线：**v2.241.0**。
+> 版本对齐 `package.json`，当前基线：**v2.242.0**。
 
 ---
 
@@ -119,6 +119,7 @@
 
 | 版本 | 变更 |
 |---|---|
+| v2.242.0 | a11y 第三梯队：工作台面板 dialog 语义 + 焦点进出管理（**无 API 契约变更**，纯前端可访问性补全）：①`#workbenchLayer` 加 `role="dialog"` / `aria-modal="true"` / `aria-labelledby="workbenchTitle"`（标题元素已存在，读屏器把工作台朗读为带名称的模态对话框而非无名 div）；②`openWorkbench` 打开时存 `document.activeElement` 到 `_workbenchPrevFocus`（仅在无暂存时存，防面板连开覆盖原始触发点）；③`_hideWorkbenchLayer` 隐藏回调末尾恢复焦点——元素仍在文档中且可聚焦才 `focus()`，try/catch 兜底后置 null（此前打开工作台焦点留在被 aria-hidden 遮罩覆盖的触发按钮上，关闭后焦点丢失到 body，键盘/读屏用户迷失位置）。修复两个 sandbox 测试注入缺口：web-workflow 上下文补 `_workbenchPrevFocus: null`、web-workbench-navigation 注入列表补 `_workbenchPrevFocus`（隐藏回调读取该变量，缺注入 ReferenceError 2 条 fail）。新增 web-a11y-workbench 守卫 4 断言：layer 三属性、openWorkbench 存 prevFocus、hide 区域含 prevFocus+focus()、workbenchTitle 存在。TDD 先红（3 fail + 1 pass）后绿，变异验证红黑两路（摘 index.html role=dialog 即红、摘 focus() 调用即红，恢复均复绿），全量 5600 条 0 fail |
 | v2.241.0 | a11y 第二梯队：导航语义（**无 API 契约变更**，纯前端可访问性补全）：①主 `<nav class="nav">` 加 `aria-label="主导航"`（页面含主导航 + 面包屑双 nav 地标，此前缺 label 读屏无法区分）；②初始激活 home nav-item 设 `aria-current="page"`（全文件静态仅 1 处，其余由 JS 管理）；③`switchView` 激活循环同步 `setAttribute('aria-current', 'page')` / `removeAttribute`（两处 nav 清理循环同步移除防残留错位），data-view 按钮用 `page` 语义；④data-open 面板按钮（roomPanel/craftBench/novelSrcBench）激活设 `aria-current="true"`（面板非页面不用 `page`）。新增 web-a11y-nav 守卫 5 断言：主 nav aria-label 区分、初始 aria-current 仅 1 处、switchView 同步 set/remove、清理循环同步移除、data-open 用 true 值。TDD 先红（5/5 fail）后绿，变异验证红黑两路（摘 switchView setAttribute 即红、摘 index.html 静态 aria-current 即红），全量 5596 条 0 fail |
 | v2.240.0 | a11y 表单标签程序化关联（**无 API 契约变更**，纯 index.html 可访问性补全）：139 个 label 中 106 个「纯文本 label + 紧邻控件」对仅有视觉相邻、无程序化关联——屏幕阅读器焦点进入控件时无法朗读用途。机械化补全 `for/id` 显式关联（控件类型分布 input 57 / select 29 / textarea 20；24 个包裹式 label 天然关联豁免、7 个组标题 label 豁免、3 个既有 for 已合规），脚本化执行 + 106/106 逐对剥 for 校验零意外改动。新增 web-a11y-labels 守卫 4 断言：①紧邻控件对 `for===id` 强约束（对数低于 100 需复核扫描逻辑）；②for 无悬挂引用；③id 全局唯一（for/id 完整性前置）；④包裹式豁免家族存续校验。TDD 先红（恰 1 fail 列出 106 违规）后绿，变异验证红黑（摘 pitchConf 的 for 即红、恢复复绿），全量 5591 条 0 fail |
 | v2.239.0 | 脱敏层消费侧收口（**无 API 契约变更**，纯前端错误路径收口）：v2.226 `jsonOrThrow` 脱敏层上线后仍有十处消费侧绕过——手动 `r.json()` 取 error 字段投掷/上屏，500 时把 `INTERNAL_ERROR` 裸码糊给用户（违反契约速查「前端遇到 INTERNAL_ERROR 应显示本地友好文案」）。本轮清零：①`openMaterials`（matBody 物料预览）改走 `Api.jsonOrThrow` + catch 走 `znError('matBody')`（v2.238 dpBody 同族收口）；②三族资产保存（character/prop/scene-assets POST）不再 `e.message \|\| e.error` 手动投掷，统一 jsonOrThrow；③反馈导出 `fbExportBtn` 失败走 jsonOrThrow（成功路径保留 blob 下载）；④admin 余额 load/save/refresh 三处全走 jsonOrThrow；⑤`startGenerate` 两处 body 已被 text()/json() 消费的路径新增 `znSanitizeErr(code, status)` helper 就地脱敏（与 v2.226 回落层同口径：仅 5xx 的 INTERNAL_ERROR/SERVER_BUSY/空文本回落本地双语友好文案，4xx 业务码原样透传）；⑥branch-view `postJson` 与同文件 getJson 同口径走 jsonOrThrow；⑦teardown-view `raw()` 就地 5xx 裸码脱敏（**不走 jsonOrThrow 重构**——`REACH_PROJECT_LIMIT` 业务码分支与 `r.data.message` 回退文案依赖原字段结构），保持 `{ok,status,data}` 契约、5 处调用点零改动。web-api-sanitize 守卫新增 v2.239 describe 6 断言 + web-empty-loading 新增 matBody 2 断言，TDD 先红后绿 + 变异验证红黑（摘 openMaterials jsonOrThrow 即红），全量 5587 条 0 fail |
