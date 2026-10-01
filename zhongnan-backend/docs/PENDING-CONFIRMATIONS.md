@@ -67,6 +67,7 @@
   2. 两个迁移已建、模型未声明的性能索引（check 报 removed index）：`ix_workshop_work_likes_work_id`（0066）、`ix_topic_replies_user_topic_created`（0069）——按方案 A 在 workshop.py/topic.py 的 `__table_args__` 补 `Index(...)` 声明即可，纯模型改动
   3. 4 条注释漂移：class_topics.date / friendships 表注释 / parent_encouragements.content+related_event_type / topic_replies.user_id+nickname——迁移里写了注释、模型没写或文案不一致，按方案 A 补 `comment=` 即可
 - 建议（待拍板一句话）：**方案 A 继续，分两个 commit**——①模型补 2 索引声明 + 4 处注释（零迁移，check 消 6 条）；②0070 修复 0067 DESC 索引（check 消最后 1 条，随后 alembic check 全绿，autogenerate 禁令可解除）。协作者 0066-0069 已落，如仍在动 family/topic/workshop 模型区请先打个招呼避免撞车
+- 四读封盘（2026-10-01 晚，用户已点头方案 A 后实地核验）：**行动中止，全部目标区域在协作者在途工作面上**——`topic.py` 整个文件、0066/0067/0068/0069/c2a8837569e7 五个迁移文件均为**未跟踪（??）状态**，family.py 的 ParentEncouragement 类（+92 行）、workshop.py 的 WorkshopWorkLike 类（+17 行）均为未提交新增。前述 7 条漂移全部源自这批在途代码，check 对比的就是「工作区含在途模型 vs 本地 DB」。此刻补声明=在他人在途代码上叠改且单文件 add 无法剥离；建 0070=给未跟踪的迁移链加下游节点，协作者改基即断链。**已做零改动**。待协作者提交 0066-0069 批次后重跑 `alembic check` 再按上面两 commit 方案执行（届时需重新核对漂移清单，以该批次落库后的 check 输出为准）
 
 ## 12.【高】迁移 0063 待确认执行：先删 farm_states 645 行孤儿数据再补 FK
 - 背景：协作者 `96d6f3c` 备好迁移 `backend/alembic/versions/0063_add_missing_student_fks.py`，给 daily_checkins / farm_states 补建表时遗漏的 student_id 外键
