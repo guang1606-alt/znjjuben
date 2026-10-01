@@ -988,6 +988,7 @@
   let tagChosen = [];        // 流水线面向：始终存中文标签名
   let tagDirector = null;    // 最近一次智能随机结果（含中英文简报/小南解释）
   let tagDimInited = false, tagBusy = false, tagSearchTimer = null, lastPool = [];
+  let tagLeavesSeq = 0; // v2.258：标签维度切换请求序号，慢维度响应不得覆盖新维度标签池
   const outLocale = () => (($('outLang') && $('outLang').value === 'en') ? 'en' : 'zh');
   function tagEnLabel(zh) {
     const items = tagDirector && tagDirector.english && tagDirector.english.items;
@@ -1072,8 +1073,18 @@
   }
   async function loadTagLeaves(dim) {
     $('tagSearch').value = '';
-    const j = await (await Api.request('/api/tags/leaves?dim=' + encodeURIComponent(dim) + '&limit=40')).json();
-    renderTagPool((j.leaves || []).map((x) => x.name));
+    // v2.258：连切维度时旧响应作废；取数纳入 jsonOrThrow 脱敏层并补 catch（原为裸 .json() 无 catch）
+    const seq = ++tagLeavesSeq;
+    try {
+      const res = await Api.request('/api/tags/leaves?dim=' + encodeURIComponent(dim) + '&limit=40');
+      const j = await Api.jsonOrThrow(res);
+      if (seq !== tagLeavesSeq) return;
+      renderTagPool((j.leaves || []).map((x) => x.name));
+    } catch (e) {
+      if (seq !== tagLeavesSeq) return;
+      renderTagPool([]);
+      xnSay((e && e.message) || t('tagRecommendFail'));
+    }
   }
   function addTag(name) {
     if (tagChosen.includes(name)) return;
@@ -3212,6 +3223,7 @@
   let purchaseViewSeq = 0;
   // v2.229 消费侧分页：v2.215 契约 { items, total, ... } 全量消费，>50 条不再静默截断（后端 defaultLimit 50 / maxLimit 100）
   let mkPage = 1;
+  let mkReqSeq = 0; // v2.258：市场网格（列表/榜单共用 mkGrid）请求序号，过期响应丢弃
   const MK_PAGE_SIZE = 50;
   const BOARD_LIMIT = 50; // v2.231 榜单页大小对齐后端 maxLimit（此前不传 limit 吃默认 20）
   function znPagerState(total, page, pageSize) {
@@ -3231,9 +3243,12 @@
     $('mkNextPage').onclick = () => { mkPage++; loadListings(); };
   }
   async function loadListings() {
+    // v2.258：市场网格共享请求序号——翻页/排序/榜单 Tab 连点时，过期响应作废，不得覆盖新页
+    const seq = ++mkReqSeq;
     const sort = $('mkSort').value || 'new';
     let list = [], total = 0, failed = false;
     try { const res = await fetch('/api/market/listings?sort=' + sort + '&page=' + mkPage + '&pageSize=' + MK_PAGE_SIZE); if (!res.ok) failed = true; else { const j = await res.json(); if (Array.isArray(j.items)) { list = j.items; total = Number(j.total) || list.length; } } } catch { failed = true; }
+    if (seq !== mkReqSeq) return; // 期间又翻页/切排序/切榜单：旧响应作废
     const grid = $('mkGrid'), empty = $('mkEmpty');
     empty.innerHTML = failed ? znErrorHtml(t('loadFail')) : znEmptyHtml(t('mkEmpty'));
     empty.classList.toggle('hidden', list.length > 0); grid.innerHTML = '';
@@ -3259,8 +3274,10 @@
     dlg.setAttribute('aria-label', lang === 'en' ? 'Listing detail' : '作品详情');
     openModal('detailModal');
     znSkeleton(body);
+    const seq = ++detailReqSeq; // v2.258：详情弹窗竞态令牌
     try {
       const res = await fetch('/api/market/listings/' + id);
+      if (seq !== detailReqSeq) return; // 已关闭或已打开别的作品：旧响应作废（错误态也不得覆盖新骨架）
       if (!res.ok) {
         // v2.216 契约：INTERNAL_ERROR 是脱敏码，对用户回落本地友好文案而非甩错误码
         const e = await res.json().catch(() => ({}));
@@ -3269,6 +3286,7 @@
         body.innerHTML = znErrorHtml(errText); return;
       }
       const d = await res.json();
+      if (seq !== detailReqSeq) return; // 二次 await 后再校验：正文渲染前确认仍是当前弹窗
       // v2.249 a11y：数据到达后同步 dialog 可访问名为具体作品名（读屏器报「作品详情：<标题>」）
       dlg.setAttribute('aria-label', (lang === 'en' ? 'Listing detail: ' : '作品详情：') + d.title);
       const v = d.value; const snap = d.valueSnapshot;
@@ -3299,17 +3317,22 @@
           <button class="btn-primary" id="detailBuyBtn">${t('buy')}</button></div>`;
       $('detailBuyBtn').onclick = () => { closeModal('detailModal'); buyListing(id); };
     // v2.256：网络异常（fetch reject/JSON 解析失败）走本地友好文案，不把浏览器技术信息（Failed to fetch 等）裸上屏
-    } catch { body.innerHTML = znErrorHtml(lang === 'en' ? 'Failed to load, please retry later' : '加载失败，请稍后重试'); }
+    // v2.258：过期请求的网络失败不得覆盖当前弹窗
+    } catch { if (seq !== detailReqSeq) return; body.innerHTML = znErrorHtml(lang === 'en' ? 'Failed to load, please retry later' : '加载失败，请稍后重试'); }
   }
   $('mkSort').onchange = () => { mkPage = 1; loadListings(); };
   // v2.74 榜单 Tab
   let curBoard = 'all';
+  let detailReqSeq = 0; // v2.258：作品详情弹窗请求序号（关 A 立刻开 B，A 慢响应不得覆盖 B）
   async function loadBoard(type) {
     curBoard = type;
+    // v2.258：序号必须在 all 分支前自增——all 分支调 loadListings 会再 ++，恰好作废旧榜单在途请求
+    const seq = ++mkReqSeq;
     document.querySelectorAll('.board-tab').forEach((b) => b.classList.toggle('active', b.dataset.board === type));
     if (type === 'all') { $('mkBoardMeta').classList.add('hidden'); loadListings(); return; }
     let data = { items: [] }, failed = false;
     try { const res = await fetch('/api/market/board?type=' + type + '&limit=' + BOARD_LIMIT); if (!res.ok) failed = true; else data = await res.json(); } catch { failed = true; }
+    if (seq !== mkReqSeq) return; // 期间又点了别的榜单 Tab：旧响应作废
     const list = data.items || [];
     // v2.231 消费 total 真总数：共 X 条上榜 + 截断可见化（limit 50 / take 500 硬帽，v2.156 铁律）
     const total = Number(data.total) || list.length;
@@ -7595,12 +7618,14 @@
   async function loadSubmissionMatch(tags) {
     const panel = $('submissionPanel'); if (!panel) return;
     if (!tags || !tags.length) { panel.classList.add('hidden'); return; }
+    const seq = ++subMatchSeq; // v2.258：投资人体检串联触发，连跑两个项目时旧匹配作废
     try {
       const r = await Api.request('/api/submission/match?tags=' + encodeURIComponent(tags.join(',')) + '&count=6');
       const d = await Api.jsonOrThrow(r);
+      if (seq !== subMatchSeq) return;
       renderSubmission(d.matches);
       panel.classList.remove('hidden');
-    } catch { panel.classList.add('hidden'); }
+    } catch { if (seq !== subMatchSeq) return; panel.classList.add('hidden'); }
   }
   function renderSubmission(matches) {
     const list = $('submissionList'); if (!list) return;
@@ -7626,6 +7651,7 @@
      绑定会在语言切换时把它洗回「查看全部」而列表仍展开）；展开态计数入 subAllCache，切语言后可复原 */
   const subAllBtn = $('subAllBtn');
   let subAllCache = null;
+  let subMatchSeq = 0; // v2.258：投稿匹配请求序号，连跑两次体检旧匹配结果不得覆盖新结果
   function syncSubAllLabel() {
     if (!subAllBtn) return;
     const box = $('submissionAllList');
