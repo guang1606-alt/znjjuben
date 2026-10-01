@@ -69,6 +69,8 @@ function setup(handler = async () => response([])) {
     rrFixedKeys: new Map(), draftProject: null, listenTts: { data: null }, listenSeries: { list: [], auto: true },
     tagChosen: [], dpPages: [], dpActive: 0, dpEpisodeCount: 0, matData: null,
     curPurchase: null, purchaseViewSeq: 0,
+    // v2.274：loadWorks 同会话搜索请求序号（产品侧模块级 let，harness 逐函数 vm 求值需在此预置，同 purchaseViewSeq）
+    worksReqSeq: 0,
     selectedMode: 'original', LEVEL_ZH: { FREE: '免费' }, LEVEL_EN: { FREE: 'Free' },
     document: {
       createElement: () => element(), getElementById: id => nodes.get(id) || null,

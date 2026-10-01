@@ -2403,8 +2403,10 @@
     xnSay(lang === 'en' ? 'Your adaptation brief is ready. Review it, then generate this project.' : '已恢复改编大纲，确认简报后点击「生成剧本」即可继续这个项目。');
   }
   window.addEventListener('zn-adaptation-project', (event) => resumeAdaptationProject(event.detail?.project));
+  let worksReqSeq = 0; // v2.274：作品搜索同会话请求序号，弱网乱序时旧查询响应一律作废（同 mkReqSeq/feedReqSeq 范式）
   async function loadWorks() {
     const account = capturePrivateSession();
+    const seq = ++worksReqSeq; // v2.274：发请求前自增，await 回来后据此判新旧（防抖连搜/翻页乱序）
     // v2.267 [P3-1] 再点 nav「我的作品」/触发搜索即回列表态：收起可能正展开的作品详情
     $('worksDetail')?.classList.add('hidden');
     const grid = $('worksGrid'), empty = $('worksEmpty'); grid.innerHTML = '';
@@ -2420,7 +2422,7 @@
     try {
     const res = await Api.request('/api/generate/projects' + (q ? `?q=${encodeURIComponent(q)}` : ''));
     const list = await Api.jsonOrThrow(res);
-    if (!isPrivateSessionCurrent(account)) return;
+    if (!isPrivateSessionCurrent(account) || seq !== worksReqSeq) return; // v2.274：换号或旧查询晚回，均不得写 DOM
     $('worksCount').textContent = t('worksCount', { n: list.length });
     empty.classList.toggle('hidden', list.length > 0);
     if (!list.length) empty.innerHTML = znEmptyHtml(t('worksEmpty'));
@@ -2481,7 +2483,7 @@
       grid.appendChild(c);
     });
     } catch {
-      if (!isPrivateSessionCurrent(account)) return;
+      if (!isPrivateSessionCurrent(account) || seq !== worksReqSeq) return; // v2.274：旧查询失败晚回也不得冲掉新查询的正确态
       $('worksCount').textContent = '';
       empty.classList.remove('hidden');
       empty.innerHTML = znErrorHtml(t('loadFail'));
