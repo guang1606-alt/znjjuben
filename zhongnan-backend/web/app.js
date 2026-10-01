@@ -5905,6 +5905,11 @@
   // 该窗口内重复点击会重放 GET 并连发 POST /projects（紧接扣费 episodes）。闸仅覆盖准备期，建卡前同一同步执行段
   // 立即释放，故 v2.132「卡后多任务并行」完全不受影响。
   let _genStarting = false;
+  // v2.277 失败重试「项目复用句柄」：episodes 阶段失败时项目行已真实建成（占额度），点重试若整链路重跑
+  // 会再 POST /projects 造空壳孤儿（实测一次重试 projects 1→2、两张同标题失败卡，FREE 档重试两次即触顶）。
+  // #failRetry 仅对「已持服务端项目 + 已留 briefText」的失败会话安装句柄；startGenerate 入口同步取走即清空。
+  let _retryProject = null;
+  let _retryBrief = null;
   async function startGenerate() {
     if (!Api.isAuthed()) { xnSay(t('needLogin')); openAuth('login'); return; }
     if (_genStarting) {
@@ -5913,6 +5918,11 @@
     }
     _genStarting = true;
     try {
+    // v2.277 同步消费重试句柄（先于任何 await）：点击处理→此处同一同步执行段，并发不可见；取走即清空，普通生成永不误伤
+    const reuseProject = _retryProject;
+    const reuseBrief = _retryBrief;
+    _retryProject = null;
+    _retryBrief = null;
     const account = capturePrivateSession();
     const generationDraft = selectedMode === 'adapt' ? draftProject : null;
     for (const loadAssets of [loadCastAssets, loadPropAssets, loadSceneAssets]) {
@@ -5921,7 +5931,11 @@
     }
     let brief, projTitle;
     const useTagBench = selectedMode === 'tags' && $('tagBench') && !$('tagBench').classList.contains('hidden');
-    if (useTagBench) {
+    if (reuseBrief != null) {
+      // v2.277 失败重试：沿用上一次已建项目的简报与标题，跳过输入框/tagBench 校验（失败时面板可能已不在原视图）
+      brief = reuseBrief;
+      projTitle = (reuseProject && reuseProject.title) || brief.slice(0, 40);
+    } else if (useTagBench) {
       brief = buildTagBrief();
       if (!brief || !brief.trim()) { xnSay(t('tagNoPick')); return; }
       rememberPrefTags(tagChosen); // 手动确认出本的标签同样沉淀为长期偏好
@@ -5954,7 +5968,7 @@
       const investRaw = parseInt($('investWan').value, 10);
       const investWan = Number.isFinite(investRaw) && investRaw >= 0 ? investRaw : undefined;
       const specialTopic = $('specialTopic').checked;
-      let project = generationDraft;
+      let project = generationDraft || reuseProject; // v2.277 episodes 阶段失败重试：项目已建行，复用之，不再 POST /projects 造孤儿
       if (!project) {
         const pr = await Api.request('/api/generate/projects', { method: 'POST', body: JSON.stringify({
           title: projTitle, mode: selectedMode, ...(selectedMode === 'hit_lab' ? { track: selectedTrack } : {}), totalEps, engineTier: $('engine').value,
@@ -5980,6 +5994,7 @@
       session.abortCtrl = abortCtrl = new AbortController();
       session.progress = progress = PV().createProgress({ lang }); renderProgress(); pendingWarnings = null;
       renderTaskQueue();
+      session.briefText = brief.trim(); // v2.277 仅 episodes 阶段留存原简报：失败后 #failRetry 凭此 + session.project 安装复用句柄
       const res = await Api.request('/api/generate/episodes', { method: 'POST', signal: abortCtrl.signal,
         body: JSON.stringify({ projectId: project.id, brief: brief.trim(), engineTier: $('engine').value, lang: outLocale(), ...hookPayload(), ...beatPayload(), ...(aigcPayload()), ...(selectedMode === 'hit_lab' ? { track: selectedTrack } : {}), ...bbPayload, ...tbPayload, ...brPayload, ...sourceTextPayload() }) });
       if (!isPrivateSessionCurrent(account)) { res.body?.cancel().catch(() => {}); return; }
@@ -6022,8 +6037,15 @@
       }
     } catch (e) {
       if (!isPrivateSessionCurrent(account) || e.code === 'SESSION_CHANGED') return;
-      failGenerationSession(session, String(e.message || e));
-      if (e.code === 'AUTH_REQUIRED') openAuth('login'); else showFail(e.message);
+      // v2.277 网络裸码（NETWORK_ERR/TIMEOUT，api.js makeNetErr 的 message 即裸码）与 5xx 同口径回落本地文案，
+      // 失败面板大字不再直出 NETWORK_ERR；服务端业务错误在此之前已由 znSanitizeErr 脱敏，保持原样。
+      const friendly = (e.code === 'NETWORK_ERR' || e.code === 'TIMEOUT')
+        ? (lang === 'en'
+          ? (e.code === 'TIMEOUT' ? 'Request timed out — check your network and retry.' : 'Network error — please retry later.')
+          : (e.code === 'TIMEOUT' ? '请求超时，请检查网络后重试' : '网络异常，请稍后重试'))
+        : String(e.message || e);
+      failGenerationSession(session, friendly);
+      if (e.code === 'AUTH_REQUIRED') openAuth('login'); else showFail(friendly);
     } finally { if (isPrivateSessionCurrent(account)) renderTaskQueue(); }
     } finally {
       _genStarting = false; // v2.276 兜底：准备期任何提前 return / 抛错都释放，杜绝一次失败后永久不能生成
@@ -8520,7 +8542,16 @@
     const inWorks = !!b.closest('#worksDiag');
     applyTargetedFix(b, inWorks ? currentWorksProject?.id : currentProjectId, inWorks ? currentWorksDiagnosis : lastDiagnosis);
   });
-  $('failRetry').onclick = genClickGuard(() => startGenerate());
+  $('failRetry').onclick = genClickGuard(() => {
+    // v2.277 仅当失败会话已持有服务端项目（episodes 阶段失败，项目行已占额度）时安装复用句柄，
+    // 让 startGenerate 跳过 POST /projects 直接重发 episodes；projects 阶段失败（project/briefText 缺失）仍整链路重跑。
+    const s = genSessions.find((x) => x.id === activeSessionId);
+    if (s && s.status === 'failed' && s.project && s.briefText != null) {
+      _retryProject = s.project;
+      _retryBrief = s.briefText;
+    }
+    startGenerate();
+  });
   // v2.233 取消生成：调后端取消端点（abort 流水线 + 退冻结积分），随后等 cancelled 帧统一走失败态
   $('genCancelBtn').onclick = async () => {
     const as = genSessions.find((s) => s.id === activeSessionId);

@@ -44,6 +44,8 @@ function setup(names, extra = {}) {
     _WORKBENCH_PANEL_IDS: ['sourceTextPanel', 'teardownPanel', 'interviewPanel', 'resultPanel'],
     currentWorksProject: null, currentWorksDiagnosis: null, currentScripts: [], currentProjectId: null,
     lastFiling: null, pendingWarnings: null, activeSessionId: null, genSessions: [],
+    // v2.276/v2.277 模块级 let（逐函数 vm 求值需在 context 预置，否则 startGenerate 入口 ReferenceError）
+    _genStarting: false, _retryProject: null, _retryBrief: null,
     renderAigcDash() {}, loadDiagnosis: async () => {}, loadEmotionWave: async () => {}, loadInvestorLens: async () => {},
     _uiLangEn: () => ((typeof extra.lang === 'string' ? extra.lang : 'zh') === 'en'),
     ...extra };

@@ -73,6 +73,8 @@ function setup(handler = async () => response([])) {
     worksReqSeq: 0,
     // v2.275：作品卡片写操作在途锁（模块级 let），runWorkAction 内读写，需在 context 预置
     _workActionBusy: false,
+    // v2.276/v2.277 startGenerate 模块级 let（逐函数 vm 求值需在 context 预置，否则入口 ReferenceError）
+    _genStarting: false, _retryProject: null, _retryBrief: null,
     selectedMode: 'original', LEVEL_ZH: { FREE: '免费' }, LEVEL_EN: { FREE: 'Free' },
     document: {
       createElement: () => element(), getElementById: id => nodes.get(id) || null,
