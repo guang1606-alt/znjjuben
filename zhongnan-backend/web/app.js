@@ -3306,14 +3306,18 @@
     $('sqPrevPage').onclick = () => { sqPage--; loadFeed(); };
     $('sqNextPage').onclick = () => { sqPage++; loadFeed(); };
   }
+  // v2.269 发帖在途锁：弱网/连点下双击「发布」不得产生两条重复帖
+  let _sqPosting = false;
   $('sqSubmit').onclick = async () => {
+    if (_sqPosting) return;
     if (!Api.isAuthed()) { openAuth('login'); return; }
     const title = $('sqTitle').value.trim(), body = $('sqBody').value.trim();
     if (!title || !body) { xnSay(lang === 'en' ? 'Title and body required.' : '请填写标题和正文'); return; }
+    _sqPosting = true;
     try {
       const res = await Api.request('/api/community/posts', { method: 'POST', body: JSON.stringify({ section: curSection || 'experience', title, body }) });
       await Api.jsonOrThrow(res); $('sqTitle').value = ''; $('sqBody').value = ''; xnSay(t('postedOk')); loadFeed();
-    } catch (e) { xnSay(e.message); }
+    } catch (e) { xnSay(e.message); } finally { _sqPosting = false; }
   };
 
   /* ---------- 剧本交易广场 ---------- */
@@ -3532,17 +3536,21 @@
     const fen = Math.round(yuan * 100);
     return fen % 10 === 0 ? fen : null;
   }
+  // v2.269 上架在途锁：弱网/连点下双击「上架」不得为同一剧本挂出两条重复 listing
+  let _listing = false;
   $('listSubmit').onclick = async () => {
+    if (_listing) return;
     const scriptId = $('listScript').value;
     const fen = priceFenFromYuan($('listPrice').value);
     if (!scriptId) { xnSay(lang === 'en' ? 'Pick a script first.' : '请选择剧本'); return; }
     if (fen === null) { xnSay(lang === 'en' ? 'Price min ¥1, in 0.1-yuan (1 credit) steps.' : '价格不低于 1 元，且需为 0.1 元(1积分)的整数倍'); return; }
     const sample = $('listSample').value.trim();
+    _listing = true;
     try {
       const res = await Api.request('/api/market/listings', { method: 'POST', body: JSON.stringify({ scriptId, priceFen: fen, sample }) });
       await Api.jsonOrThrow(res); $('listModal').classList.add('hidden'); $('listPrice').value = ''; $('listSample').value = '';
       xnSay(t('listedOk')); loadListings();
-    } catch (e) { xnSay(e.message); }
+    } catch (e) { xnSay(e.message); } finally { _listing = false; }
   };
   // v2.260 购买在途锁：双击 detailBuyBtn 不得双扣积分建两笔托管
   let _buyingListing = false;
