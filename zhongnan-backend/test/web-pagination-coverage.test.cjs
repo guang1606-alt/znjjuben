@@ -46,7 +46,8 @@ describe('v2.229 market 橱窗分页', () => {
 
   it('榜单 Tab 模式隐藏翻页器 + 空/失败态统一 znEmptyHtml/znErrorHtml', () => {
     assert.match(boardRegion, /\$\('mkPager'\)\.classList\.add\('hidden'\)/, '榜单模式应隐藏翻页器');
-    const trio = (src.match(/empty\.innerHTML = failed \? znErrorHtml\(t\('loadFail'\)\) : znEmptyHtml\(t\('mkEmpty'\)\)/g) || []).length;
+    // v2.282：failed 分支允许拼接 znRetryHtml 重试行（错误态可重试）
+    const trio = (src.match(/empty\.innerHTML = failed \? znErrorHtml\(t\('loadFail'\)\)( \+ znRetryHtml\('[a-z-]+'\))? : znEmptyHtml\(t\('mkEmpty'\)\)/g) || []).length;
     assert.ok(trio >= 2, `loadListings/loadBoard 空/失败态应统一 znErrorHtml/znEmptyHtml，实际 ${trio} 处`);
   });
 

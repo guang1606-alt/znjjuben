@@ -1506,6 +1506,11 @@
     const host = typeof el === 'string' ? $(el) : el;
     if (host) host.innerHTML = znErrorHtml(text, hint);
   }
+  // v2.282 错误态重试入口：复用 v2.255 .zn-retry-row 范式（loadNovelSources/eps/hook-opts 同款），
+  // 供主列表错误态拼接；各调用点渲染后按注入 class 查询并绑定重新加载
+  function znRetryHtml(cls) {
+    return `<div class="zn-retry-row"><button type="button" class="btn-ghost ${cls}">${lang === 'en' ? 'Retry' : '重试'}</button></div>`;
+  }
   window.znSkeleton = znSkeleton; window.znEmpty = znEmpty; window.znEmptyHtml = znEmptyHtml; window.znSkeletonHtml = znSkeletonHtml;
   window.znError = znError; window.znErrorHtml = znErrorHtml;
   /* ---------- v2.221 加载/空态统一 结束 ---------- */
@@ -3301,7 +3306,8 @@
     renderSqTabs();
     const seq = ++feedReqSeq; // v2.259：切板块/翻页连点时旧响应作废
     // v2.281 三态补全：慢网取数期铺纵向卡片骨架，隐藏空态与旧分页器；响应回来后由完成路径统一接管
-    $('sqEmpty').classList.add('hidden');
+    // v2.282 重试即新周期：同步清空旧错误/空态内容，重试点击后 role=alert 即时消失而非滞留到响应返回
+    $('sqEmpty').classList.add('hidden'); $('sqEmpty').innerHTML = '';
     $('sqPager').classList.add('hidden');
     znSkeleton($('sqFeed'), 'cards');
     let list = [], total = 0, failed = false;
@@ -3312,8 +3318,10 @@
     } catch { failed = true; }
     if (seq !== feedReqSeq) return; // v2.259：过期响应不得写 sqEmpty/sqFeed
     const empty = $('sqEmpty'), feed = $('sqFeed');
-    empty.innerHTML = failed ? znErrorHtml(t('loadFail')) : znEmptyHtml(t('sqEmpty'));
+    empty.innerHTML = failed ? znErrorHtml(t('loadFail')) + znRetryHtml('sq-retry') : znEmptyHtml(t('sqEmpty'));
     empty.classList.toggle('hidden', list.length > 0); feed.innerHTML = '';
+    const sqRetry = empty.querySelector('.sq-retry');
+    if (sqRetry) sqRetry.onclick = () => loadFeed();
     list.forEach((p) => {
       const c = document.createElement('div'); c.className = 'post-card';
       const mine = Api.isAuthed() && p.userId === Api.getUser()?.id;
@@ -3398,15 +3406,18 @@
     const seq = ++mkReqSeq;
     const sort = $('mkSort').value || 'new';
     // v2.281 三态补全：慢网取数期铺网格骨架，隐藏空态与旧分页器；响应回来后由完成路径统一接管
-    $('mkEmpty').classList.add('hidden');
+    // v2.282 重试即新周期：同步清空 mkEmpty 旧内容
+    $('mkEmpty').classList.add('hidden'); $('mkEmpty').innerHTML = '';
     $('mkPager').classList.add('hidden');
     znSkeleton($('mkGrid'), 'grid');
     let list = [], total = 0, failed = false;
     try { const res = await fetch('/api/market/listings?sort=' + sort + '&page=' + mkPage + '&pageSize=' + MK_PAGE_SIZE); if (!res.ok) failed = true; else { const j = await res.json(); if (Array.isArray(j.items)) { list = j.items; total = Number(j.total) || list.length; } } } catch { failed = true; }
     if (seq !== mkReqSeq) return; // 期间又翻页/切排序/切榜单：旧响应作废
     const grid = $('mkGrid'), empty = $('mkEmpty');
-    empty.innerHTML = failed ? znErrorHtml(t('loadFail')) : znEmptyHtml(t('mkEmpty'));
+    empty.innerHTML = failed ? znErrorHtml(t('loadFail')) + znRetryHtml('mk-retry') : znEmptyHtml(t('mkEmpty'));
     empty.classList.toggle('hidden', list.length > 0); grid.innerHTML = '';
+    const mkRetry = empty.querySelector('.mk-retry');
+    if (mkRetry) mkRetry.onclick = () => loadListings();
     list.forEach((l) => {
       const c = document.createElement('div'); c.className = 'listing-card';
       const gradeBadge = l.valueGrade && l.valueGrade !== 'NA'
@@ -3487,7 +3498,8 @@
     znBindTablist($('mkBoardTabs'), { selector: '.board-tab' }); // v2.270 键盘方向键导航 + ARIA 语义
     if (type === 'all') { $('mkBoardMeta').classList.add('hidden'); loadListings(); return; }
     // v2.281 榜单三态补全：慢网取数期铺网格骨架（all 分支的骨架由 loadListings 铺）
-    $('mkEmpty').classList.add('hidden');
+    // v2.282 重试即新周期：同步清空 mkEmpty 旧内容
+    $('mkEmpty').classList.add('hidden'); $('mkEmpty').innerHTML = '';
     $('mkPager').classList.add('hidden');
     znSkeleton($('mkGrid'), 'grid');
     let data = { items: [] }, failed = false;
@@ -3503,9 +3515,11 @@
       ? t('boardTotal', { total }) + (total > list.length ? ' · ' + t('boardTrunc', { shown: list.length }) : '')
       : '';
     const grid = $('mkGrid'), empty = $('mkEmpty');
-    empty.innerHTML = failed ? znErrorHtml(t('loadFail')) : znEmptyHtml(t('mkEmpty'));
+    empty.innerHTML = failed ? znErrorHtml(t('loadFail')) + znRetryHtml('board-retry') : znEmptyHtml(t('mkEmpty'));
     $('mkPager').classList.add('hidden');
     empty.classList.toggle('hidden', list.length > 0); grid.innerHTML = '';
+    const boardRetry = empty.querySelector('.board-retry');
+    if (boardRetry) boardRetry.onclick = () => loadBoard(curBoard);
     list.forEach((l) => {
       const c = document.createElement('div'); c.className = 'listing-card';
       const gradeBadge = l.valueGrade && l.valueGrade !== 'NA'

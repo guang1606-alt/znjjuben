@@ -44,7 +44,8 @@ describe('v2.230 交流广场分页消费', () => {
   });
 
   it('空/失败态统一 znEmptyHtml/znErrorHtml，旧式 textContent 退役', () => {
-    assert.match(feedRegion, /failed \? znErrorHtml\(t\('loadFail'\)\) : znEmptyHtml\(t\('sqEmpty'\)\)/, 'sqEmpty 应统一三态');
+    // v2.282：failed 分支允许拼接 znRetryHtml 重试行（错误态可重试）
+    assert.match(feedRegion, /failed \? znErrorHtml\(t\('loadFail'\)\)( \+ znRetryHtml\('[a-z-]+'\))? : znEmptyHtml\(t\('sqEmpty'\)\)/, 'sqEmpty 应统一三态');
     assert.doesNotMatch(feedRegion, /empty\.textContent/, '旧式 textContent 错误态应退役');
   });
 
