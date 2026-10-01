@@ -14,6 +14,7 @@
 
 | 风格 | 参数 | 说明 |
 |---|---|---|
+| v2.298.0 | 2026-10-02 | 软删除穿透设卡沉淀（五轮同族修复封口）：新增常驻 AST-lite 守卫 scripts/guard-deleted-filter.cjs——对 project 直接查询与 script include project 间接查询设卡，新增裸查询缺 status 过滤即刻转红；五条放行规则（内联 status/后置判定/变量 where/文件白名单 admin/行级 marker 锚定待拍板面）精确覆盖现存 48 处查询面。守卫测试 10 条含 fixture 红黑自证（test/guard-deleted-filter.test.cjs），纯后端无前端变更。 |
 | v2.297.0 | 2026-10-02 | 软删除穿透补漏第五批（交易市场新增上架入口面）：resolveScript 统一判定已删项目按不存在处理——已删项目不再可新上架交易广场（POST /listings 404）、不再可生成上架前价值预览（value-preview 按无剧本拒绝）；存量 listing 在架/购买面不动（待拍板项边界清晰）。守卫 5 条（test/http-deleted-guard-market-listing.test.cjs），前端零改动（404/400 中文 error 走 xnSay 惯例）。 |
 | v2.296.0 | 2026-10-02 | 软删除穿透补漏第四批（海报计费面/改编承接面）：①海报生成项目查询补 status 过滤——已删项目不再穿透到计费阶段（此前已删项目可花 39/199 积分生成海报）；②拆爆款改编承接口 matching 判定排除已删项目——已删项目不再被当「已承接」返回，确认改编照常新建项目（此前记录标 TO_PROJECT 指向已删项目、新项目不创建）。守卫 5 条（test/http-deleted-guard-va-teardown.test.cjs），前端零改动（404 走 xnSay 惯例）。 |
 | v2.295.0 | dogfood 第三十三轮（软删除穿透补漏 lens：v2.293 漏网面）六处「已删=不存在」对齐（纯后端 src/routes/export.ts×2、src/routes/room.ts×2、src/routes/value-added.ts×3 + 新增守卫 test/http-deleted-guard-collab.test.cjs，零前端变更、零 API 契约新增——404 中文 error 走既有响应惯例经 web/api.js jsonOrThrow → xnSay 展示） |
