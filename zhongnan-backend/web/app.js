@@ -1303,7 +1303,11 @@
     if (lang === 'en') return `Craft: hooks [${hk.join(', ')}]; methods [${cd.join('; ')}]`;
     return `创作手法：钩子[${hk.join('、')}]；方法[${cd.join('；')}]`;
   }
+  // v2.260 递招在途锁：craftGoBtn 双击与 smartRandomTags 后程序化调用共享一把锁（推荐幂等，重入纯浪费）
+  let _craftGoing = false;
   async function craftGo() {
+    if (_craftGoing) return;
+    _craftGoing = true;
     const loading = $('craftLoading'); loading.classList.remove('hidden');
     loading.textContent = lang === 'en' ? 'Matching craft to your idea…' : '小南正在匹配最贴的钩子与方法…';
     try {
@@ -1316,7 +1320,7 @@
       craftSelCards = craftRecCards.map((c) => ({ id: c.id, title: c.title }));
       renderCraftHooks(); renderCraftCards(); renderCraftPicked();
       if (j.openingAudit && j.openingAudit.advice) xnSay(j.openingAudit.advice);
-    } catch (e) { xnSay(e.message || 'craft error'); } finally { loading.classList.add('hidden'); }
+    } catch (e) { xnSay(e.message || 'craft error'); } finally { loading.classList.add('hidden'); _craftGoing = false; }
   }
   const craftGoBtn = $('craftGoBtn'); if (craftGoBtn) craftGoBtn.onclick = craftGo;
   const craftCopyBtn = $('craftCopyBtn');
@@ -2823,13 +2827,17 @@
     }).join('');
     document.querySelectorAll('[data-sku]').forEach((b) => b.onclick = () => placeOrder(b.getAttribute('data-sku')));
   }
+  // v2.260 下单在途锁：[data-sku] 按钮与 xMatureBuy 两入口共享，函数级锁才能挡跨入口重入
+  let _placingOrder = false;
   async function placeOrder(sku) {
+    if (_placingOrder) return;
     if (!Api.isAuthed()) { openAuth('login'); return; }
+    _placingOrder = true;
     try {
       const res = await Api.request('/api/order/create', { method: 'POST', body: JSON.stringify({ sku }) });
       const o = await Api.jsonOrThrow(res);
       xnSay(lang === 'en' ? `Order ${o.orderId} created (pending). Live pay coming soon.` : `已创建待支付订单 ${o.orderId}，正式支付通道接入中。`);
-    } catch (e) { xnSay(e.message); }
+    } catch (e) { xnSay(e.message); } finally { _placingOrder = false; }
   }
 
   /* ---------- v2.220 模态统一收口（语义/Esc/焦点/清理钩子） ----------
@@ -3461,8 +3469,12 @@
       xnSay(t('listedOk')); loadListings();
     } catch (e) { xnSay(e.message); }
   };
+  // v2.260 购买在途锁：双击 detailBuyBtn 不得双扣积分建两笔托管
+  let _buyingListing = false;
   async function buyListing(id) {
+    if (_buyingListing) return;
     if (!Api.isAuthed()) { openAuth('login'); return; }
+    _buyingListing = true;
     const account = capturePrivateSession(), requestSeq = ++purchaseViewSeq;
     try {
       const res = await Api.request(`/api/market/listings/${id}/buy`, { method: 'POST' });
@@ -3478,6 +3490,7 @@
       $('fullRefund').classList.remove('hidden');
       openModal('fullModal'); xnSay(t('boughtOk'));
     } catch (e) { if (e.code !== 'SESSION_CHANGED' && isPrivateSessionCurrent(account) && requestSeq === purchaseViewSeq) xnSay(e.message); }
+    finally { _buyingListing = false; }
   }
   async function viewPurchasedScript(id) {
     const account = capturePrivateSession(), requestSeq = ++purchaseViewSeq;
@@ -3501,9 +3514,14 @@
   $('fullCopy').onclick = () => copy($('fullText').textContent);
   $('fullConfirm').onclick = async () => { if (!curPurchase || !isPrivateSessionCurrent(curPurchase.account)) return; await dealAction(`/api/market/purchases/${curPurchase.id}/confirm`); };
   $('fullRefund').onclick = async () => { if (!curPurchase || !isPrivateSessionCurrent(curPurchase.account)) return; await dealAction(`/api/market/purchases/${curPurchase.id}/refund`); };
+  // v2.260 确认收货/退款在途锁：双击不重复提交（后端状态机虽会拒第二笔，前端先挡）
+  let _dealBusy = false;
   async function dealAction(url) {
+    if (_dealBusy) return;
+    _dealBusy = true;
     try { const res = await Api.request(url, { method: 'POST' }); const d = await Api.jsonOrThrow(res); $('fullModal').classList.add('hidden'); xnSay(d.notice || (lang === 'en' ? 'Done.' : '操作成功')); loadListings(); }
     catch (e) { xnSay(e.message); }
+    finally { _dealBusy = false; }
   }
   $('mkMineBtn').onclick = async () => {
     if (!Api.isAuthed()) { openAuth('login'); return; }
