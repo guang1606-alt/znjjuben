@@ -3764,7 +3764,11 @@
     panel.classList.toggle('hidden', !studio || studio.classList.contains('hidden'));
     box.innerHTML = genSessions.map((s) => {
       const icon = s.status === 'running' ? '⏳' : (s.status === 'done' ? '✅' : '❌');
-      const stTxt = s.status === 'running' ? ((s.progress && s.progress.percent ? s.progress.percent + '%' : (lang === 'en' ? 'starting' : '启动中'))) : (s.status === 'done' ? (lang === 'en' ? 'done' : '已完成') : (lang === 'en' ? 'failed' : '已失败'));
+      const stTxt = s.status === 'running'
+        ? (s.recovering // v2.279：断流恢复中——连接已断但服务端仍在跑，区别于正常进度
+          ? (lang === 'en' ? 'reconnecting…' : '重连中·服务端仍在生成')
+          : (s.progress && s.progress.percent ? s.progress.percent + '%' : (lang === 'en' ? 'starting' : '启动中')))
+        : (s.status === 'done' ? (lang === 'en' ? 'done' : '已完成') : (lang === 'en' ? 'failed' : '已失败'));
       const stage = s.progress && s.progress.label ? translateProgressState(s.progress.label) : '';
       const cur = s.id === activeSessionId;
       return `<div class="task-card ${s.status}${cur ? ' active' : ''}" data-sid="${s.id}" title="${lang === 'en' ? 'Click to view' : '点击查看'}">
@@ -5890,6 +5894,36 @@
     sel.addEventListener('change', sync); sync();
   }
 
+  // v2.279 SSE 断流恢复：服务端断连后继续跑完、正常结算入库（generate.ts「断网不丢」语义），
+  // 前端断流（NETWORK_ERR/TIMEOUT）不得直接判失败——否则用户看到失败但积分已扣、分集其实在生成。
+  // 断流且已持 projectId 时按 /projects/:id/scripts 轮询分集落库：拿到分集即恢复（卡片转完成、
+  // 切作品视图打开真实成稿）；超时/确认失败才落失败面板。全程尊重换号守卫与卡片移除。
+  async function pollUntilSettled(session, account) {
+    const DEADLINE_MS = 10 * 60 * 1000; // 与服务端全局硬超时 30min 错位：前端 10min 无落库即判恢复失败
+    const INTERVAL_MS = 4000;
+    const deadline = Date.now() + DEADLINE_MS;
+    while (Date.now() < deadline) {
+      await new Promise((r) => setTimeout(r, INTERVAL_MS));
+      if (!genSessions.includes(session) || !isPrivateSessionCurrent(account)) return false; // 卡片被移除/换号：放弃恢复
+      try {
+        const r = await Api.request(`/api/generate/projects/${session.projectId}/scripts`);
+        const eps = await Api.jsonOrThrow(r);
+        if (!genSessions.includes(session) || !isPrivateSessionCurrent(account)) return false;
+        if (Array.isArray(eps) && eps.length > 0) {
+          session.status = 'done';
+          session.doneData = { episodes: eps, recovered: true }; // 断流恢复无 done 帧完整载荷：以真实分集为准
+          renderTaskQueue();
+          if (session.id === activeSessionId) {
+            switchView('works');
+            try { await openProject(session.project || { id: session.projectId, title: session.title }); }
+            catch (e) { toastError((e && e.message) || (lang === 'en' ? 'Unable to open project.' : '打开作品失败，请重试。')); }
+          }
+          return true;
+        }
+      } catch (e) { if (e && e.code === 'AUTH_REQUIRED') return false; /* 其余错误下轮再试 */ }
+    }
+    return false;
+  }
   function failGenerationSession(session, message) {
     session.status = 'failed'; session.error = message;
     if (session.id === activeSessionId) $('progressPanel').classList.add('hidden');
@@ -6049,6 +6083,15 @@
           ? (e.code === 'TIMEOUT' ? 'Request timed out — check your network and retry.' : 'Network error — please retry later.')
           : (e.code === 'TIMEOUT' ? '请求超时，请检查网络后重试' : '网络异常，请稍后重试'))
         : String(e.message || e);
+      // v2.279 断流恢复优先：连接断开≠生成失败（服务端断连后仍跑完入库）。
+      // 已持 projectId 的断流先轮询分集落库恢复真实结果，恢复无果才落失败面板。
+      if ((e.code === 'NETWORK_ERR' || e.code === 'TIMEOUT') && session.projectId) {
+        session.recovering = true; renderTaskQueue(); // 卡片转「重连中」，用户知情服务端仍在跑
+        const recovered = await pollUntilSettled(session, account);
+        session.recovering = false;
+        if (recovered) return; // 已渲染真实成稿，不再落失败
+        if (!genSessions.includes(session) || !isPrivateSessionCurrent(account)) return; // 恢复期间卡片被移除/换号
+      }
       failGenerationSession(session, friendly);
       if (e.code === 'AUTH_REQUIRED') openAuth('login'); else showFail(friendly);
     } finally { if (isPrivateSessionCurrent(account)) renderTaskQueue(); }
