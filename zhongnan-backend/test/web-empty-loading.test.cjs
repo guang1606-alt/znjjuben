@@ -353,3 +353,26 @@ describe('v2.253 超管后台三态收口（静默失败/裸字串/notice 漏网
     assert.ok(/znErrorHtml|znError\(/.test(region), 'admModelWrap 失败应走 znErrorHtml/znError');
   });
 });
+
+/* v2.254 创作工作台死 loading 与 notice 漏网清零（v2.253 超管后台同族问题在创作工作台的重演）：
+   loadDiagnosis 无内部兜底，失败留「正在跑四套质检尺子…」死 loading；
+   dashFail 失败态用旧 notice 类未统一为 znErrorHtml 视觉语言。 */
+describe('v2.254 创作工作台死 loading + notice 漏网', () => {
+  it('loadDiagnosis 内部 catch 兜底，失败时 diagBars 显示 znErrorHtml（非死 loading）', () => {
+    const s = src.indexOf('async function loadDiagnosis(');
+    const e = s >= 0 ? src.indexOf('async function ', s + 10) : -1;
+    const region = s >= 0 && e > s ? src.slice(s, e) : '';
+    assert.ok(region, '应定位到 loadDiagnosis');
+    assert.ok(/catch\s*\(/.test(region), 'loadDiagnosis 应有内部 catch（死 loading 兜底，v2.238 loadWorks 同族漏网）');
+    assert.ok(/znErrorHtml|znError\(/.test(region), 'loadDiagnosis catch 内应渲染 znErrorHtml/znError（含刷新入口 diagRefreshBtn）');
+  });
+
+  it('dashFail 失败态 notice 类清零（v2.253 超管后台同族漏网在创作工作台的重演）', () => {
+    // dashFail 渲染点在数据看板 loadDash 类函数的 catch 块（openCastLibrary 之前），按关键字锚定
+    const i = src.indexOf("t('dashFail')");
+    assert.ok(i > 0, '应定位到 dashFail 渲染点');
+    const region = src.slice(Math.max(0, i - 300), i + 100);
+    assert.doesNotMatch(region, /<div class="notice">\$\{t\('dashFail'\)\}<\/div>/, 'dashFail 不应再用 notice 类');
+    assert.ok(/znErrorHtml\(\s*t\('dashFail'\)\s*\)/.test(region), 'dashFail 应走 znErrorHtml 统一视觉语言');
+  });
+});

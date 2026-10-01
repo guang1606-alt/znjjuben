@@ -4891,7 +4891,7 @@
       });
     } catch {
       if (!isPrivateSessionCurrent(account)) return;
-      body.innerHTML = `<div class="notice">${t('dashFail')}</div>`;
+      body.innerHTML = znErrorHtml(t('dashFail'));
     }
   }
   // —— v2.152 角色资产库管理面板：列表+体检徽章+冲突预警+内联编辑/删除（与后端 health 端点同构） ——
@@ -6667,11 +6667,17 @@
     const account = capturePrivateSession();
     const bars = $('diagBars'); bars.innerHTML = `<div class="diag-loading">${lang === 'en' ? 'Running full-script diagnosis…' : '正在对全本跑四套质检尺子…'}</div>`;
     panel.classList.remove('hidden');
-    const r = await Api.request(`/api/generate/projects/${projectId}/diagnosis?lang=${strategyLocale()}`);
-    const d = await Api.jsonOrThrow(r);
-    if (!isPrivateSessionCurrent(account) || (currentProjectId && currentProjectId !== projectId)) return;
-    lastDiagnosis = d;
-    renderDiagnosis(d);
+    // v2.254：内部 catch 兜底——失败时渲染 znErrorHtml 替代死 loading（面板右上角 diagRefreshBtn 可重试）
+    try {
+      const r = await Api.request(`/api/generate/projects/${projectId}/diagnosis?lang=${strategyLocale()}`);
+      const d = await Api.jsonOrThrow(r);
+      if (!isPrivateSessionCurrent(account) || (currentProjectId && currentProjectId !== projectId)) return;
+      lastDiagnosis = d;
+      renderDiagnosis(d);
+    } catch (e) {
+      if (!isPrivateSessionCurrent(account)) return;
+      bars.innerHTML = znErrorHtml((e && e.message) || t('loadFail'));
+    }
   }
   function diagColor(s) { return s >= 85 ? '#3fb67a' : s >= 70 ? '#7c9cff' : s >= 60 ? '#e0a23a' : '#e06a5b'; }
   // v2.38 全剧情绪曲线波形（确定性，与创作管线同源；免费可视化）
