@@ -333,12 +333,12 @@ details.home-updates[open] > summary.home-section-head .home-updates-caret { tra
               box-shadow var(--motion) var(--ease-out);
 }
 /* 内芯：mode-card 直接子元素缩进，模拟嵌套内胆 */
-.mode-card > h3, .mode-card > p, .mode-card > b, .mode-card > span,
+.mode-card > h2, .mode-card > h3, .mode-card > p, .mode-card > b, .mode-card > span,
 .mode-card > .track-row, .mode-card > .soon-badge, .mode-card > .lock-badge,
 .mode-card > .tier-badge, .mode-card > .tool-cost, .mode-card > .mode-go {
   margin-left: 11px; margin-right: 11px;
 }
-.mode-card > h3, .mode-card > b { margin-top: 11px; }
+.mode-card > h2, .mode-card > h3, .mode-card > b { margin-top: 11px; }
 .mode-card > p, .mode-card > span, .mode-card > .tool-cost, .mode-card > .mode-go { margin-bottom: 11px; }
 #modeGrid .mode-card { counter-increment: mc; }
 #modeGrid .mode-card::before {
@@ -377,7 +377,7 @@ details.home-updates[open] > summary.home-section-head .home-updates-caret { tra
   border-color: var(--gold);
   box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--gold) 22%, transparent);
 }
-.mode-card h3 { margin: 0 0 6px; font-family: var(--serif); font-size: 1.02rem; display: flex; align-items: center; gap: 8px; letter-spacing: .03em; }
+.mode-card h2, .mode-card h3 { margin: 0 0 6px; font-family: var(--serif); font-size: 1.02rem; display: flex; align-items: center; gap: 8px; letter-spacing: .03em; }
 .mode-card p { margin: 0; color: var(--text-2); font-size: .84rem; min-height: 40px; line-height: 1.55; }
 .mode-card b { display: block; margin: 0 0 6px; font-family: var(--serif); font-size: 1.06rem; font-weight: 700; color: var(--text); line-height: 1.4; letter-spacing: .03em; }
 .mode-card span { display: block; color: var(--text-2); font-size: .83rem; line-height: 1.55; min-height: 38px; }
@@ -631,7 +631,9 @@ textarea { box-sizing: border-box; max-width: 100%; resize: vertical; background
 .adm-grid2{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:16px}
 @media (max-width:900px){.adm-grid2{grid-template-columns:1fr}}
 .subpanel{min-width:0;border:1px solid var(--line);border-radius:12px;padding:15px;background:var(--panel)}
-.subpanel h4{margin:0 0 10px;font-family:var(--serif)}
+.subpanel h3,.subpanel h4{margin:0 0 10px;font-family:var(--serif);font-size:1em}
+/* v2.244 标题层级修复视觉锁定：admin 子区 h4→h3 后保持原 h4 字号 */
+#admModelsPane > h3{font-size:1em}
 .subpanel .field{margin-bottom:10px}
 .subpanel input,.subpanel select,.subpanel textarea{width:100%;box-sizing:border-box;padding:9px 11px;border-radius:9px;border:1px solid var(--line);background:var(--panel-2);color:var(--text)}
 .subpanel textarea{resize:vertical;font-family:inherit}
@@ -673,8 +675,8 @@ textarea { box-sizing: border-box; max-width: 100%; resize: vertical; background
 /* ================= 编剧室 ================= */
 .tool-grid{margin-bottom:18px}
 .tool-card{cursor:pointer;transition:.18s}
-.tool-card h3{font-family:var(--serif);padding-right:124px;min-height:24px}
-@media (max-width:420px){ .tool-card h3{padding-right:96px} }
+.tool-card h2,.tool-card h3{font-family:var(--serif);padding-right:124px;min-height:24px}
+@media (max-width:420px){ .tool-card h2,.tool-card h3{padding-right:96px} }
 .tool-card:hover{transform:translateY(-3px);box-shadow:var(--shadow-lg);border-color:var(--accent)}
 .tool-cost{position:absolute;top:13px;right:13px!important;min-height:0!important;font-size:.72rem;color:var(--gold-deep);background:var(--gold-soft);border:1px solid color-mix(in srgb,var(--gold) 30%,transparent);padding:2px 9px;border-radius:999px;font-weight:600}
 /* A3 工具箱卡片分层：方法论一句话提示行（卡片 → 方法论 → 进工作台） */
@@ -1675,7 +1677,7 @@ summary:hover{color:var(--accent-strong)}
 .nav-item.active { color: var(--text); }
 
 /* —— 5. Focus-visible 通用 ring（无障碍，键盘用户可见）—— */
-:where(button, a, [role="button"], input, select, textarea, summary):focus-visible {
+:where(button, a, [role="button"], input, select, textarea, summary, [tabindex]:not([tabindex="-1"])):focus-visible {
   outline: none;
   box-shadow: 0 0 0 3px var(--accent-weak), 0 0 0 5px var(--ring, rgba(15,110,108,.16));
   border-radius: inherit;
@@ -2106,7 +2108,7 @@ summary:hover{color:var(--accent-strong)}
 
 /* v2.190 mobile hierarchy and workbench isolation */
 .xn-float.workbench-hidden { display: none; }
-.tool-card h3 { padding-right: 0; }
+.tool-card h2, .tool-card h3 { padding-right: 0; }
 .tool-card > .tool-cost {
   position: static;
   align-self: flex-start;
@@ -2250,7 +2252,7 @@ summary:hover{color:var(--accent-strong)}
   .plan-perks { font-size: 14px; line-height: 1.5; }
   .field label { font-size: 13px; line-height: 1.45; }
   .mode-card.locked { opacity: .72; }
-  .tool-card h3 { padding-right: 0; }
+  .tool-card h2, .tool-card h3 { padding-right: 0; }
   .xn-float {
     position: static;
     display: block;
