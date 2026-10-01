@@ -175,6 +175,7 @@
       };
       grid.appendChild(card);
     });
+    znBindGrid(grid, { selector: '.mode-card' }); // v2.271 12 张模式卡四方向键导航（Tab 只需进网格一次）
   }
   /* ---------- v2.190 清爽首页渲染 ---------- */
   const HOME_QUICK_MODES = ['interview', 'adapt', 'tags', 'novel', 'interactive', 'hot'];
@@ -211,6 +212,7 @@
         };
         qg.appendChild(card);
       });
+      znBindGrid(qg, { selector: '.home-quick-card' }); // v2.271 首页快捷模式卡方向键导航
     }
     // 工具箱快捷入口（4 个）
     const tg = $('homeToolGrid');
@@ -228,6 +230,7 @@
         };
         tg.appendChild(card);
       });
+      znBindGrid(tg, { selector: '.home-tool-card' }); // v2.271 首页工具卡方向键导航
     }
     // CTA 绑定（仅首次）
     if (!_homeRendered) {
@@ -2153,6 +2156,7 @@
   Object.entries(_TOOL_TO_PANEL).forEach(([tid, pid]) => {
     const t = $(tid); if (t) t.addEventListener('click', () => openWorkbench(pid));
   });
+  znBindGrid($('toolboxGrid'), { selector: '.tool-card' }); // v2.271 工具箱静态卡方向键导航（卡片已由 div 改 button，原生可聚焦）
   // A3 工具箱卡片分层：卡片 → 一句话方法论提示行（幂等，先清旧再注入）
   function _applyToolboxHints() {
     if (typeof ZnToolLesson === 'undefined' || !ZnToolLesson.hintLine) return;
@@ -8591,6 +8595,57 @@
         if (next >= 0) { e.preventDefault(); list[next].focus(); }
       });
       // 点击后同步 tabindex（click 事件在 keydown Enter/Space 之后触发）
+      container.addEventListener('click', () => setTimeout(sync, 0));
+    }
+    sync();
+    return { sync };
+  }
+  // v2.271 卡片网格二维键盘导航：roving tabindex + 四方向键 + Home/End，列数运行时感知（offsetTop 分行法，适配 CSS auto-fill 响应式列数）
+  // 与 znBindTablist 的区别：tablist 是一维且带 ARIA tab 语义；网格是二维卡片集合，不套 grid role（避免读屏期望行列结构），仅做焦点管理与方向键。
+  function znBindGrid(container, opts = {}) {
+    if (!container) return { sync() {} };
+    const sel = opts.selector || 'button';
+    function items() { return [...container.querySelectorAll(sel)]; }
+    // 列数感知：数第一行（与首项 offsetTop 相同）的元素个数；auto-fill 下随视口宽度变化，故每次按键实时计算
+    function colCount(list) {
+      if (list.length < 2) return 1;
+      const top0 = list[0].offsetTop;
+      let n = 0;
+      for (const el of list) { if (el.offsetTop === top0) n++; else break; }
+      return Math.max(1, n);
+    }
+    // 记忆焦点项（卡片重渲染后元素被替换，从 0 重新开始；focusin 时按真实焦点校正）
+    let focusIdx = 0;
+    function sync() {
+      const list = items();
+      if (focusIdx >= list.length) focusIdx = 0;
+      list.forEach((el, i) => { el.tabIndex = (i === focusIdx) ? 0 : -1; });
+    }
+    if (!container._znGridBound) {
+      container._znGridBound = true;
+      container.addEventListener('keydown', (e) => {
+        const list = items();
+        if (!list.length) return;
+        const cur = list.findIndex((el) => el === document.activeElement);
+        if (cur < 0) return;
+        const cols = colCount(list);
+        const n = list.length;
+        let next = -1;
+        if (e.key === 'ArrowRight') next = (cur + 1) % n;                    // 线性 wrap：行尾进下一行行首
+        else if (e.key === 'ArrowLeft') next = (cur - 1 + n) % n;
+        else if (e.key === 'ArrowDown') { if (cur + cols < n) next = cur + cols; }  // 列向 clamp：越界不动
+        else if (e.key === 'ArrowUp') { if (cur - cols >= 0) next = cur - cols; }
+        else if (e.key === 'Home') next = 0;
+        else if (e.key === 'End') next = n - 1;
+        if (next >= 0) { e.preventDefault(); focusIdx = next; sync(); list[next].focus(); }
+      });
+      // 焦点跟随：鼠标点击/Tab 进入时同步 roving tabindex 记忆
+      container.addEventListener('focusin', (e) => {
+        const list = items();
+        const i = list.findIndex((el) => el === e.target);
+        if (i >= 0 && i !== focusIdx) { focusIdx = i; sync(); }
+      });
+      // 点击后兜底同步（click 在 keydown Enter/Space 之后触发）
       container.addEventListener('click', () => setTimeout(sync, 0));
     }
     sync();
