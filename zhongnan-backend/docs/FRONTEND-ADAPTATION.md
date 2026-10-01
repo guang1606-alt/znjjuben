@@ -2,7 +2,7 @@
 
 > 面向前端（`web/` 原生 JS 站点及后续独立前端/移动端）的后端 API 契约与适配说明。
 > 后端每次破坏性契约变更都会在此登记：变更内容 → 迁移对照 → 前端已同步点。
-> 版本对齐 `package.json`，当前基线：**v2.248.0**。
+> 版本对齐 `package.json`，当前基线：**v2.249.0**。
 
 ---
 
@@ -119,6 +119,7 @@
 
 | 版本 | 变更 |
 |---|---|
+| v2.249.0 | a11y 第九梯队：detailModal 动态标题同步可访问名（**无 API 契约变更**，纯前端可访问性补全）：v2.245 给 detailModal 补了静态 `aria-label="作品详情"` 兜底，但 `openListingDetail` 把 listing.title 注入 detailBody 的 h3 时 dialog 可访问名始终是"作品详情"——读屏器打开任何作品详情都读同一个名，无法区分当前看的是哪部。本轮：①打开时先把可访问名重置为静态兜底（`作品详情` / `Listing detail`，防上一作品标题残留——A 作品打开后关闭、再开 B 作品加载失败时不会误读 A 标题）；②数据到达后同步为 `作品详情：<标题>` / `Listing detail: <title>`（中英双语跟随 lang）。零行为变化：纯语义层，视觉/逻辑不动。新增 web-a11y-detail-title 守卫 4 断言（openListingDetail 内至少 2 处 aria-label 写入 + 动态注入含 d.title + 顺序铁律：重置<fetch<注入 + index.html 静态兜底保留且不改挂 labelledby）。TDD 先红（3 fail + 1 pass）后绿，变异验证红黑两路（摘动态注入即红 3/4、摘重置兜底即红 2/4，恢复均复绿），全量 5641 条 0 fail |
 | v2.248.0 | a11y 第八梯队：工作台独立面板地标角色细化（**无 API 契约变更**，纯 index.html 可访问性补全）：①craftBench 补 `role="region"` + `aria-labelledby="craftBenchTitle"`（h3「小南递招 · 方法卡与钩子」补 id）；②novelSrcBench 补 `role="region"` + `aria-labelledby="novelSrcBenchTitle"`（h3「免费合法小说素材库 · 多语言」补 id）；③roomPanel 补 `role="region"` + `aria-label="编剧室"`（无静态标题元素，tab 切换器非标题，用 aria-label 兜底）。三个高频独立面板均处于 workbenchLayer 内，补地标后读屏器可识别「小南递招 区域」「免费合法小说素材库 区域」「编剧室 区域」；其余 13 个面板为纯表格/空态/低访问频次，本轮不扩散。零行为变化：纯语义层，视觉/逻辑不动。新增 web-a11y-workbench-regions 守卫 4 断言（craftBench/novelSrcBench/roomPanel 各 1 + 其余 .panel 零扩散边界校验 + labelledby 无悬挂引用）。TDD 先红（4 fail）后绿，变异验证红黑两路（摘 craftBench role="region" 即红 2/4、摘 roomPanel aria-label 即红 1/4，恢复均复绿），全量 5637 条 0 fail |
 | v2.247.0 | a11y 第七梯队：模态框 aria-describedby 描述关联（**无 API 契约变更**，纯 index.html 可访问性补全）：①listenModal 补 `aria-describedby="listenNote listenTtsTip"`——听剧本弹窗的功能说明/TTS 提示区关联到 dialog，读屏器打开弹窗时先朗读标题"听剧本"再朗读描述内容；②xMatureModal 补 `aria-describedby="xMatureBoundary"`——成年分级弹窗的分级边界说明关联到 dialog。勘察结论：18 个 modal 中仅这 2 个有明确静态描述性 notice 区域（listenModal 的 #listenNote/#listenTtsTip、xMatureModal 的 #xMatureBoundary），其余弹窗纯表格/空态/表单，收益低维持现状。零行为变化：纯语义层，视觉/逻辑不动。新增 web-a11y-modal-describedby 守卫 4 断言（listenModal/xMatureModal 各 1 + 悬挂引用校验 + 其余 15 个 modal 零扩散边界校验）。TDD 先红（3 fail + 1 pass）后绿，变异验证红黑两路（摘 listenModal describedby 即红 2/4、摘 xMatureModal describedby 即红 2/4，恢复均复绿），全量 5633 条 0 fail |
 | v2.246.0 | a11y 第六梯队：authModal 字段错误关联（**无 API 契约变更**，纯前端可访问性补全）：①authPhone/authPwd 补 `aria-describedby="authErr"`——登录/注册失败时读屏器在输入框焦点上自动跟读错误区；②`#authErr` 补 `role="alert"`——`showAuthErr` 触发时立即断言朗读（不再依赖焦点位置）；③`showAuthErr` 触发时给两输入加 `aria-invalid="true"`（读屏器朗读"无效输入"）；④`closeAuth` + authPhone/authPwd `input` 事件清除 `aria-invalid`（错误修复/关闭后重开不残留）。零行为变化：纯语义层，视觉/逻辑/校验顺序不动。新增 web-a11y-form-errors 守卫 6 断言（describedby 关联 + role=alert + setAria-invalid + closeAuth 清理 + input 即时清除 + 静态侧零预置防误置）；web-modal-a11y 同步修订 closeAuth 多行化断言（原单行字面量失配——v2.246 起 closeAuth 多行补 aria-invalid 清理）。TDD 先红（5 fail + 1 pass）后绿，变异验证红黑两路（摘 authPhone setAttribute 即红、摘 authPhone describedby 即红，恢复均复绿），全量 5615 条 0 fail |
