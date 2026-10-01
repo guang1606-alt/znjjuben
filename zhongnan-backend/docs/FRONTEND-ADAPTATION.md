@@ -2,7 +2,7 @@
 
 > 面向前端（`web/` 原生 JS 站点及后续独立前端/移动端）的后端 API 契约与适配说明。
 > 后端每次破坏性契约变更都会在此登记：变更内容 → 迁移对照 → 前端已同步点。
-> 版本对齐 `package.json`，当前基线：**v2.242.0**。
+> 版本对齐 `package.json`，当前基线：**v2.243.0**。
 
 ---
 
@@ -119,6 +119,7 @@
 
 | 版本 | 变更 |
 |---|---|
+| v2.243.0 | a11y 第三梯队续：工作台焦点 trap + 焦点移入 + 必填输入 aria-required（**无 API 契约变更**，纯前端可访问性补全）：①`_workbenchEsc` 扩展 Tab 分支复用 modal 的 `_uiTrapTab(e, layer)`——Tab/Shift+Tab 焦点循环限制在工作台面板内（与模态框同一 trap 语义，aria-modal="true" 的配套行为补全；此前 Tab 会穿出面板落到被遮罩覆盖的背景元素上）；②`_showWorkbenchLayer` 打开时焦点移入 `#workbenchBack`（返回按钮恒定存在），仅在焦点不在 layer 内时移动（`layer.contains` 守卫——面板重显/用户已在面板内打字时不偷焦）；③8 个 JS 侧已有必填校验的输入补 `aria-required="true"`（bbBrand/bbSelling/tbName/tbHeat/brMain/brChoice/authPhone/authPwd，纯语义层补齐、不加原生 `required` 零行为变化，读屏器焦点进入即朗读"必填"）。progress/loading 态复核结论：骨架屏 `znSkeletonHtml` 已带 `role="status" + aria-busy="true"`、错误态 `znErrorHtml` 已带 `role="alert"`（web-empty-loading 守卫覆盖），无需改代码。web-a11y-workbench 守卫新增 v2.243 两 describe 11 断言：Tab trap 调 `_uiTrapTab`、焦点移入 + contains 守卫、`_uiTrapTab` 先例存续、8 输入 aria-required。TDD 先红（10 fail + 5 pass）后绿，变异验证红黑两路（摘 `_uiTrapTab` 调用即红、摘 authPhone aria-required 即红，恢复均复绿），全量 5597 条 0 fail |
 | v2.242.0 | a11y 第三梯队：工作台面板 dialog 语义 + 焦点进出管理（**无 API 契约变更**，纯前端可访问性补全）：①`#workbenchLayer` 加 `role="dialog"` / `aria-modal="true"` / `aria-labelledby="workbenchTitle"`（标题元素已存在，读屏器把工作台朗读为带名称的模态对话框而非无名 div）；②`openWorkbench` 打开时存 `document.activeElement` 到 `_workbenchPrevFocus`（仅在无暂存时存，防面板连开覆盖原始触发点）；③`_hideWorkbenchLayer` 隐藏回调末尾恢复焦点——元素仍在文档中且可聚焦才 `focus()`，try/catch 兜底后置 null（此前打开工作台焦点留在被 aria-hidden 遮罩覆盖的触发按钮上，关闭后焦点丢失到 body，键盘/读屏用户迷失位置）。修复两个 sandbox 测试注入缺口：web-workflow 上下文补 `_workbenchPrevFocus: null`、web-workbench-navigation 注入列表补 `_workbenchPrevFocus`（隐藏回调读取该变量，缺注入 ReferenceError 2 条 fail）。新增 web-a11y-workbench 守卫 4 断言：layer 三属性、openWorkbench 存 prevFocus、hide 区域含 prevFocus+focus()、workbenchTitle 存在。TDD 先红（3 fail + 1 pass）后绿，变异验证红黑两路（摘 index.html role=dialog 即红、摘 focus() 调用即红，恢复均复绿），全量 5600 条 0 fail |
 | v2.241.0 | a11y 第二梯队：导航语义（**无 API 契约变更**，纯前端可访问性补全）：①主 `<nav class="nav">` 加 `aria-label="主导航"`（页面含主导航 + 面包屑双 nav 地标，此前缺 label 读屏无法区分）；②初始激活 home nav-item 设 `aria-current="page"`（全文件静态仅 1 处，其余由 JS 管理）；③`switchView` 激活循环同步 `setAttribute('aria-current', 'page')` / `removeAttribute`（两处 nav 清理循环同步移除防残留错位），data-view 按钮用 `page` 语义；④data-open 面板按钮（roomPanel/craftBench/novelSrcBench）激活设 `aria-current="true"`（面板非页面不用 `page`）。新增 web-a11y-nav 守卫 5 断言：主 nav aria-label 区分、初始 aria-current 仅 1 处、switchView 同步 set/remove、清理循环同步移除、data-open 用 true 值。TDD 先红（5/5 fail）后绿，变异验证红黑两路（摘 switchView setAttribute 即红、摘 index.html 静态 aria-current 即红），全量 5596 条 0 fail |
 | v2.240.0 | a11y 表单标签程序化关联（**无 API 契约变更**，纯 index.html 可访问性补全）：139 个 label 中 106 个「纯文本 label + 紧邻控件」对仅有视觉相邻、无程序化关联——屏幕阅读器焦点进入控件时无法朗读用途。机械化补全 `for/id` 显式关联（控件类型分布 input 57 / select 29 / textarea 20；24 个包裹式 label 天然关联豁免、7 个组标题 label 豁免、3 个既有 for 已合规），脚本化执行 + 106/106 逐对剥 for 校验零意外改动。新增 web-a11y-labels 守卫 4 断言：①紧邻控件对 `for===id` 强约束（对数低于 100 需复核扫描逻辑）；②for 无悬挂引用；③id 全局唯一（for/id 完整性前置）；④包裹式豁免家族存续校验。TDD 先红（恰 1 fail 列出 106 违规）后绿，变异验证红黑（摘 pitchConf 的 for 即红、恢复复绿），全量 5591 条 0 fail |
