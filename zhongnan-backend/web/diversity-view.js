@@ -17,7 +17,7 @@
       scoreCap: '差异化分', pairs: (n) => `（比对 ${n} 对版本）`, issuesTitle: '需要拉开的地方',
       ver: '版本', overlap: (p) => `重合度 ${p}%`, noOverlap: '✔ 没有发现过度重合的版本对',
       matrix: '查看两两重合度明细', thPair: '版本对', thConf: '冲突重合', thPlot: '走向重合', thLog: '梗概相似',
-      auditFail: '体检失败', retry: '请重试',
+      auditFail: '体检失败', seedFail: '种子生成失败', retry: '请重试',
       dims: { archetype: '主角原型', conflict: '核心冲突', plot: '剧情走向', logline: '梗概文本' },
     },
     en: {
@@ -32,7 +32,7 @@
       scoreCap: 'Diversity', pairs: (n) => `(${n} pairs compared)`, issuesTitle: 'Where to widen the gap',
       ver: 'V', overlap: (p) => `overlap ${p}%`, noOverlap: '✔ No over-similar pair found',
       matrix: 'Show pairwise overlap detail', thPair: 'Pair', thConf: 'Conflict overlap', thPlot: 'Plot overlap', thLog: 'Logline similarity',
-      auditFail: 'Audit failed', retry: 'please retry',
+      auditFail: 'Audit failed', seedFail: 'Failed to generate seeds', retry: 'please retry',
       dims: { archetype: 'Lead archetype', conflict: 'Core conflict', plot: 'Plot turn', logline: 'Logline text' },
     },
   };
@@ -99,7 +99,14 @@
   }
   async function genSeeds() {
     const n = Math.min(6, Math.max(2, $('dvRows').children.length));
-    const j = await getJson('/api/craft/diverse-seeds?n=' + n + '&lang=' + (en() ? 'en' : 'zh'));
+    // v2.287 onclick 直绑本函数（fire-and-forget），取数须自管：失败就地 dv-bad（与 audit 同构），不冒泡
+    let j;
+    try {
+      j = await getJson('/api/craft/diverse-seeds?n=' + n + '&lang=' + (en() ? 'en' : 'zh'));
+    } catch (e) {
+      $('dvResult').innerHTML = `<div class="dv-bad">${T().seedFail}：${esc((e && e.message) || T().retry)}</div>`;
+      return;
+    }
     // 把正交主角原型填进现有版本（只填空，不覆盖用户已写）
     const rows = [...$('dvRows').children];
     j.seeds.forEach((s, i) => {

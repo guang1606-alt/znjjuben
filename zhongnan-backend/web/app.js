@@ -2812,7 +2812,12 @@
     const card = $('profileCard');
     if (!Api.isAuthed()) { card.style.display = 'none'; return; }
     card.style.display = '';
-    const res = await Api.request('/api/auth/me'); const me = await Api.jsonOrThrow(res);
+    // v2.287 loadMe 被 4 处 fire-and-forget（启动/切视图/登录/保存资料）调用，裸 reject 会冒泡
+    // unhandledrejection；catch 静默早退——网络面全局 onNetworkError 已 toast，401 由 api.js 拦截器处理，资料卡保旧即可
+    let me;
+    try {
+      const res = await Api.request('/api/auth/me'); me = await Api.jsonOrThrow(res);
+    } catch { return; }
     if (!isPrivateSessionCurrent(account)) return; // 合并（剧本1）：账号隔离守卫
     meCache = me;
     const lv = userRoleLabel(me);
@@ -2878,7 +2883,12 @@
 
   /* ---------- 会员充值（目录只认服务端） ---------- */
   async function loadCatalog() {
-    const res = await fetch('/api/order/catalog');
+    // v2.287 裸 fetch 不经 Api 层（无全局网络 hook toast）：断网 reject 既冒泡又零反馈，
+    // catch 与既有非 ok 分支同走 plansGrid 就地错误态
+    let res;
+    try {
+      res = await fetch('/api/order/catalog');
+    } catch { znError('plansGrid', t('loadFail')); return; }
     if (!res.ok) { znError('plansGrid', t('loadFail')); return; }
     const cat = await res.json().catch(() => null);
     if (!cat || !Array.isArray(cat.plans)) { znError('plansGrid', t('loadFail')); return; }
