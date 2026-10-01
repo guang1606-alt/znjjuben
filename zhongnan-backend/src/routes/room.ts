@@ -304,8 +304,19 @@ export function createRoomRouter(prisma: PrismaLike | any) {
     if (joinAttemptBlocked(ip, code)) return res.status(429).json({ error: '尝试次数过多，请15分钟后再试' });
     const room = await prisma.writersRoom.findUnique({ where: { inviteCode: code } });
     if (!room || room.kind !== 'READ') { noteJoinFail(ip, code); return res.status(404).json({ error: '邀请码无效' }); }
+    // c203：私人模式不接受拉人——me_xn（我与小南私密围读）与 xn_xn（无人值守自动围读）从设计上就没有
+    // “邀请他人”语义（open 注释明示只有 user_user/me_other_xn 靠邀请码拉人）。若放行，join 者经
+    // accessibleRoom 即被 GET /:id/messages 放行，而消息流响应携带整个 room 对象（含 scriptText 剧本
+    // 全文）——私密剧本会随邀请码泄漏被整本端走。故此处 403 切断，不计入爆破失败计数（码本身有效）。
+    if (room.readMode !== 'user_user' && room.readMode !== 'me_other_xn') {
+      return res.status(403).json({ error: '该围读模式不支持邀请加入（仅“双人围读/我与他人小南”可拉人）' });
+    }
     clearJoinFail(ip, code);
-    const ids = Array.from(new Set([...(room.participantIds || []), req.userId!]));
+    // c203：重复 join 幂等——已是参与者直接返回成功，不再重复写“进入围读室”消息刷屏
+    if ((room.participantIds || []).includes(req.userId!)) {
+      return res.json({ ok: true, roomId: room.id, readMode: room.readMode });
+    }
+    const ids = [...(room.participantIds || []), req.userId!];
     await prisma.writersRoom.update({ where: { id: room.id }, data: { participantIds: ids } });
     await addMsg(room.id, { speakerType: 'USER', speakerUserId: req.userId!, content: (room.payload as any)?.lang === 'en' ? 'Joined the read room' : '进入围读室' });
     res.json({ ok: true, roomId: room.id, readMode: room.readMode });
@@ -453,9 +464,12 @@ export function createRoomRouter(prisma: PrismaLike | any) {
       },
     });
     // ownerId 仅用于服务端判定角色，随之下发剔除：列表保持 c196 九摘要白名单，不泄漏内部字段
+    // c203 邀请码最小权限：inviteCode 是入场凭证，只随 owner 角色下发；member 拿不到码，
+    // 切断“参与者背着房主无限链式拉人”的传播面（房主对房间成员保持控制）。
     const rooms = (rows as Array<Record<string, unknown>>).map((r) => {
       const role = r.ownerId === userId ? 'owner' : 'member';
       const { ownerId: _ownerId, ...rest } = r;
+      if (role !== 'owner') delete (rest as Record<string, unknown>).inviteCode;
       return { ...rest, role };
     });
     res.json({ ok: true, rooms });

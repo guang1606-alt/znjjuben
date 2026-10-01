@@ -277,7 +277,8 @@ describe('c200 围读结论→定点改写包 GET /read/:id/rewrite-pack（只�
   });
 
   it('挂项目分集房 ai-read 后：linked/mine/ready=true，packs 与结论 actionItems 同口径，带落点 projectId/epNo/scriptId', async () => {
-    const o = await post('/api/room/read/open', { readMode: 'me_xn', scriptId: 'c200sc', title: '分集围读' }, 'rich');
+    // v2.294：me_xn 私密房已不可凭码加入（c203），本用例验证“参与者 mine=false”必须用可拉人的 user_user 协作房承载
+    const o = await post('/api/room/read/open', { readMode: 'user_user', scriptId: 'c200sc', title: '分集围读' }, 'rich');
     const rid = (await o.json()).roomId;
     const before = bal('rich');
     const ar = await post(`/api/room/read/${rid}/ai-read`, { clientToken: 'c200-linked-read' }, 'rich');
