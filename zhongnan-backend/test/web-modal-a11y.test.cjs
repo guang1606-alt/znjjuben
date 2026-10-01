@@ -83,6 +83,11 @@ describe('v2.220 周边让位与钩子接线', () => {
   it('authModal 开关走收口入口（openModal/closeModalEl）', () => {
     assert.ok(/function openAuth\(mode\) \{ authMode = mode \|\| 'login'; openModal\('authModal'\)/.test(src),
       'openAuth 应走 openModal（登录弹窗焦点入首个输入框）');
-    assert.ok(/function closeAuth\(\) \{ closeModalEl\(\$\('authModal'\)\)/.test(src), 'closeAuth 应走 closeModalEl');
+    // v2.246 起 closeAuth 多行化（补 aria-invalid 清理），改为校验「closeAuth 函数体含 closeModalEl(authModal)」
+    const i = src.indexOf('function closeAuth()');
+    const j = src.indexOf('function syncAuthTabs', i);
+    const body = i >= 0 && j > i ? src.slice(i, j) : '';
+    assert.ok(body.length > 0, '应定位到 closeAuth');
+    assert.ok(/closeModalEl\(\$\('authModal'\)\)/.test(body), 'closeAuth 应走 closeModalEl');
   });
 });

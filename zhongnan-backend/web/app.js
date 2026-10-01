@@ -2223,7 +2223,13 @@
     }
   });
   function openAuth(mode) { authMode = mode || 'login'; openModal('authModal'); syncAuthTabs(); }
-  function closeAuth() { closeModalEl($('authModal')); $('authErr').classList.add('hidden'); }
+  function closeAuth() {
+    closeModalEl($('authModal'));
+    $('authErr').classList.add('hidden');
+    // v2.246 a11y：清除字段错误标记（用户关闭后重开时不残留无效状态）
+    $('authPhone').removeAttribute('aria-invalid');
+    $('authPwd').removeAttribute('aria-invalid');
+  }
   function syncAuthTabs() {
     $('tabLogin').classList.toggle('on', authMode === 'login');
     $('tabRegister').classList.toggle('on', authMode === 'register');
@@ -2231,7 +2237,18 @@
     $('inviteWrap').classList.toggle('hidden', authMode !== 'register');
     $('authSubmit').textContent = authMode === 'login' ? t('login') : t('register');
   }
-  function showAuthErr(msg) { const e = $('authErr'); e.textContent = msg; e.classList.remove('hidden'); }
+  function showAuthErr(msg) {
+    const e = $('authErr');
+    e.textContent = msg;
+    e.classList.remove('hidden');
+    // v2.246 a11y：字段错误关联——读屏器在输入框焦点上可听到"无效输入"并通过 aria-describedby 跟读错误
+
+    $('authPhone').setAttribute('aria-invalid', 'true');
+    $('authPwd').setAttribute('aria-invalid', 'true');
+  }
+  // v2.246 a11y：用户重新输入时立即解除无效标记（错误修复反馈即时化）
+  $('authPhone').addEventListener('input', () => { $('authPhone').removeAttribute('aria-invalid'); });
+  $('authPwd').addEventListener('input', () => { $('authPwd').removeAttribute('aria-invalid'); });
   $('tabLogin').onclick = () => { authMode = 'login'; syncAuthTabs(); };
   $('tabRegister').onclick = () => { authMode = 'register'; syncAuthTabs(); };
   $('authClose').onclick = closeAuth;
