@@ -112,9 +112,9 @@
       <div class="grid" id="modeGrid"></div>
 
       <!-- 标签创建模式：智能标签工作台（3.3 标签创建 + 随机标签确认页） -->
-      <section class="panel tag-bench hidden" id="tagBench">
+      <section class="panel tag-bench hidden" id="tagBench" role="region" aria-labelledby="tagBenchTitle">
         <div class="tag-bench-head">
-          <h3 data-i="tagBenchTitle">智能标签工作台</h3>
+          <h3 data-i="tagBenchTitle" id="tagBenchTitle">智能标签工作台</h3>
           <div class="tag-bench-actions">
             <button class="btn-primary" id="tagRandomBtn" data-i="tagRandom">🎲 智能随机一组</button>
             <button class="chip" id="tagRecommendBtn" data-i="tagRecommend">🧩 补齐维度</button>
@@ -177,9 +177,9 @@
       </section>
 
       <!-- 互动短剧分支面板（v1.82，PRD 3.5） -->
-      <section class="panel hidden" id="branchPanel">
+      <section class="panel hidden" id="branchPanel" role="region" aria-labelledby="brPanelTitle">
         <div class="room-tabs">
-          <b style="align-self:center" data-i="tbBrTitle">互动分支可视化编辑器</b>
+          <b style="align-self:center" data-i="tbBrTitle" id="brPanelTitle">互动分支可视化编辑器</b>
           <span class="spacer" style="flex:1"></span>
           <label class="muted" style="align-self:center"><span data-i="tbBrCp">选择点</span>
             <select id="brCp" style="margin-left:4px"><option>1</option><option selected>2</option><option>3</option><option>4</option><option>5</option><option>6</option></select>
@@ -343,7 +343,7 @@
       </section>
 
       <!-- v2.92 采访式创作会话：一轮一问 + 四维记忆空间，产出结构化创意简报 -->
-      <section class="panel hidden" id="interviewPanel">
+      <section class="panel hidden" id="interviewPanel" role="region" aria-labelledby="ivHeading">
         <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap">
           <h3 style="margin:0">🎙️ <span id="ivHeading">采访式创作 · 小南来采访你</span></h3>
           <span class="muted" id="ivStatus"></span>
