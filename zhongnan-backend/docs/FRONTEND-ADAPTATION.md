@@ -2,7 +2,7 @@
 
 > 面向前端（`web/` 原生 JS 站点及后续独立前端/移动端）的后端 API 契约与适配说明。
 > 后端每次破坏性契约变更都会在此登记：变更内容 → 迁移对照 → 前端已同步点。
-> 版本对齐 `package.json`，当前基线：**v2.247.0**。
+> 版本对齐 `package.json`，当前基线：**v2.248.0**。
 
 ---
 
@@ -119,6 +119,7 @@
 
 | 版本 | 变更 |
 |---|---|
+| v2.248.0 | a11y 第八梯队：工作台独立面板地标角色细化（**无 API 契约变更**，纯 index.html 可访问性补全）：①craftBench 补 `role="region"` + `aria-labelledby="craftBenchTitle"`（h3「小南递招 · 方法卡与钩子」补 id）；②novelSrcBench 补 `role="region"` + `aria-labelledby="novelSrcBenchTitle"`（h3「免费合法小说素材库 · 多语言」补 id）；③roomPanel 补 `role="region"` + `aria-label="编剧室"`（无静态标题元素，tab 切换器非标题，用 aria-label 兜底）。三个高频独立面板均处于 workbenchLayer 内，补地标后读屏器可识别「小南递招 区域」「免费合法小说素材库 区域」「编剧室 区域」；其余 13 个面板为纯表格/空态/低访问频次，本轮不扩散。零行为变化：纯语义层，视觉/逻辑不动。新增 web-a11y-workbench-regions 守卫 4 断言（craftBench/novelSrcBench/roomPanel 各 1 + 其余 .panel 零扩散边界校验 + labelledby 无悬挂引用）。TDD 先红（4 fail）后绿，变异验证红黑两路（摘 craftBench role="region" 即红 2/4、摘 roomPanel aria-label 即红 1/4，恢复均复绿），全量 5637 条 0 fail |
 | v2.247.0 | a11y 第七梯队：模态框 aria-describedby 描述关联（**无 API 契约变更**，纯 index.html 可访问性补全）：①listenModal 补 `aria-describedby="listenNote listenTtsTip"`——听剧本弹窗的功能说明/TTS 提示区关联到 dialog，读屏器打开弹窗时先朗读标题"听剧本"再朗读描述内容；②xMatureModal 补 `aria-describedby="xMatureBoundary"`——成年分级弹窗的分级边界说明关联到 dialog。勘察结论：18 个 modal 中仅这 2 个有明确静态描述性 notice 区域（listenModal 的 #listenNote/#listenTtsTip、xMatureModal 的 #xMatureBoundary），其余弹窗纯表格/空态/表单，收益低维持现状。零行为变化：纯语义层，视觉/逻辑不动。新增 web-a11y-modal-describedby 守卫 4 断言（listenModal/xMatureModal 各 1 + 悬挂引用校验 + 其余 15 个 modal 零扩散边界校验）。TDD 先红（3 fail + 1 pass）后绿，变异验证红黑两路（摘 listenModal describedby 即红 2/4、摘 xMatureModal describedby 即红 2/4，恢复均复绿），全量 5633 条 0 fail |
 | v2.246.0 | a11y 第六梯队：authModal 字段错误关联（**无 API 契约变更**，纯前端可访问性补全）：①authPhone/authPwd 补 `aria-describedby="authErr"`——登录/注册失败时读屏器在输入框焦点上自动跟读错误区；②`#authErr` 补 `role="alert"`——`showAuthErr` 触发时立即断言朗读（不再依赖焦点位置）；③`showAuthErr` 触发时给两输入加 `aria-invalid="true"`（读屏器朗读"无效输入"）；④`closeAuth` + authPhone/authPwd `input` 事件清除 `aria-invalid`（错误修复/关闭后重开不残留）。零行为变化：纯语义层，视觉/逻辑/校验顺序不动。新增 web-a11y-form-errors 守卫 6 断言（describedby 关联 + role=alert + setAria-invalid + closeAuth 清理 + input 即时清除 + 静态侧零预置防误置）；web-modal-a11y 同步修订 closeAuth 多行化断言（原单行字面量失配——v2.246 起 closeAuth 多行补 aria-invalid 清理）。TDD 先红（5 fail + 1 pass）后绿，变异验证红黑两路（摘 authPhone setAttribute 即红、摘 authPhone describedby 即红，恢复均复绿），全量 5615 条 0 fail |
 | v2.245.0 | a11y 第五梯队：modal 对话框命名覆盖（18/18）（**无 API 契约变更**，纯 index.html 可访问性补全）：①16 个含静态 h3 的 .modal-mask 弹窗补 `aria-labelledby` 指向标题——6 个复用既有 id（`fullTitle`/`listenTitle`/`dpTitle`/`matTitle`/`xMatureTitle`），10 个 h3 新补 id（`castLibModalTitle`/`propLibModalTitle`/`sceneLibModalTitle`/`assetDashboardModalTitle`/`feedbackModalTitle`/`sampleModalTitle`/`listModalTitle`/`pkModalTitle`/`valueModalTitle`/`smartModalTitle`/`mineModalTitle`）；②2 个无静态 h3 的弹窗改用 `aria-label`：`detailModal="作品详情"`（标题由 `openListingDetail` 动态注入 `listing.title`，无静态可关联）、`authModal="登录或注册"`（无标题元素，tab 是切换器）。读屏器打开弹窗从"对话框"升级为"角色资产库 对话框"等命名朗读，v2.220 运行时 `role="dialog"+aria-modal="true"` 补齐的语义层获得完整可访问名。新增 web-a11y-modal-labels 守卫 5 断言：18 modal 命名全覆盖 + labelledby 值一致 + h3 id 无悬挂引用 + 无 h3 弹窗用 aria-label + id 全局唯一（每 id 恰 2 次：h3 id + mask labelledby）；采用线性扫描（与 web-a11y-headings 同款），避免「可选组套星号」正则的灾难性回溯。TDD 先红（5 fail）后绿，变异验证红黑两路（摘 castLibModal labelledby 即红 3/5、摘 authModal aria-label 即红 2/5，恢复均复绿），全量 5609 条 0 fail |
