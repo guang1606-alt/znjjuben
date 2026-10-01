@@ -5901,8 +5901,18 @@
       return fn(...args);
     };
   }
+  // v2.276 建卡前「启动准备」瞬时单飞闸：弱网下入口到会话卡之间要串行 await 三份资产清单（数秒、期间零反馈），
+  // 该窗口内重复点击会重放 GET 并连发 POST /projects（紧接扣费 episodes）。闸仅覆盖准备期，建卡前同一同步执行段
+  // 立即释放，故 v2.132「卡后多任务并行」完全不受影响。
+  let _genStarting = false;
   async function startGenerate() {
     if (!Api.isAuthed()) { xnSay(t('needLogin')); openAuth('login'); return; }
+    if (_genStarting) {
+      xnSay(lang === 'en' ? 'Still getting your last run ready…' : '正在准备上一条创作，马上就好～');
+      return;
+    }
+    _genStarting = true;
+    try {
     const account = capturePrivateSession();
     const generationDraft = selectedMode === 'adapt' ? draftProject : null;
     for (const loadAssets of [loadCastAssets, loadPropAssets, loadSceneAssets]) {
@@ -5936,6 +5946,7 @@
     if (brPayload === null) return;
     // v2.132 多任务并行：每单注册独立会话卡片，genBtn 不再被单任务独占（生成期间可再开新单）
     const session = { id: 'S' + Date.now() + Math.random().toString(36).slice(2, 6), account, title: projTitle, projectId: null, progress: null, abortCtrl: null, status: 'running', doneData: null, pendingWarnings: null, error: null };
+    _genStarting = false; // v2.276 建卡前瞬时释放（与下一行 unshift 同同步执行段，二次点击事件无法插入）；卡后即恢复 v2.132 并行
     genSessions.unshift(session); activeSessionId = session.id; renderTaskQueue();
     resetPanels(); $('progressPanel').classList.remove('hidden');
     try {
@@ -6014,6 +6025,9 @@
       failGenerationSession(session, String(e.message || e));
       if (e.code === 'AUTH_REQUIRED') openAuth('login'); else showFail(e.message);
     } finally { if (isPrivateSessionCurrent(account)) renderTaskQueue(); }
+    } finally {
+      _genStarting = false; // v2.276 兜底：准备期任何提前 return / 抛错都释放，杜绝一次失败后永久不能生成
+    }
   }
   function handleEvent(data, session) {
     if (!genSessions.includes(session) || !isPrivateSessionCurrent(session.account)) return;
