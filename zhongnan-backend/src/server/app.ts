@@ -155,11 +155,22 @@ export function createApp(routers: AppRouters = {}, preErrorRouter?: Router | Ro
     res.status(404).json({ error: 'NOT_FOUND' });
   });
   // 前端静态站点（零构建，web/ 目录）：必须在所有 API 与扩展路由之后，只做最后兜底，绝不吞 /api 与测试路由
+  // v2.265 静态资源短缓存：零构建站点无指纹，JS/CSS 给 5 分钟短缓存 + ETag（默认开启），
+  // 命中则 304 零字节回包（重复访问省 100% 传输）；index.html 必须 no-cache 每次回源验证（入口版本正确性优先）。
   const webDir = path.join(__dirname, '../../web');
-  app.use(express.static(webDir));
+  app.use(express.static(webDir, {
+    maxAge: '5m',
+    setHeaders: (res, filePath) => {
+      if (filePath.endsWith('index.html')) {
+        res.setHeader('Cache-Control', 'no-cache');
+      }
+    },
+  }));
   app.get(/^(?!\/api(?:\/|$)|\/health$).*/, (req, res, next) => {
     // 只对浏览器导航（地址栏/刷新，Accept 含 text/html）回退单页；程序化 fetch（*/*）与后置路由放行
     if (!/text\/html/.test(req.headers.accept || '')) return next();
+    // sendFile 不走 static 的 setHeaders：index.html 显式 no-cache（入口版本正确性优先）
+    res.setHeader('Cache-Control', 'no-cache');
     res.sendFile(path.join(webDir, 'index.html'), (err) => err && next());
   });
   // 注意：此处不再加终局 404 —— 测试/扩展会在 createApp 返回后追加注册路由（如 /_test/*），

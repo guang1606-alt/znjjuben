@@ -1,6 +1,6 @@
 {
   "name": "zhongnan-screenwriting-backend",
-  "version": "2.264.0",
+  "version": "2.265.0",
   "description": "终南编剧AI - 后端服务（认证/会员/积分账本/创作编排/模型黑盒代理/订单支付/反馈工单）",
   "main": "dist/index.js",
   "scripts": {
