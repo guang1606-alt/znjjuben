@@ -14,6 +14,7 @@
 
 | 风格 | 参数 | 说明 |
 |---|---|---|
+| v2.292.0 | dogfood 第三十轮（generate/导出链路并发与中断面 lens）单点修复（纯后端 src/routes/generate.ts 一处 + 新增守卫 test/http-generate-inflight.test.cjs，零前端变更、零 API 契约新增——409 错误体走本路由既有 { code, error } 惯例，前端 web/app.js 通用非 SSE 分支读 j.error 直接展示）。勘察实证：POST /api/generate/episodes 对同项目并发重复提交零防线——双请求各自通过在途检查、各建 generationTask、各冻结积分、各读同一 max(epNo)+1 作为集序，双双烧完整条分钟级 LLM 流水线后落库撞 Script `@@unique([projectId, epNo, version])`，败者此刻才走解冻退款：资金虽无损，但整管模型调用成本白烧、用户白等分钟级才见失败。修复：「在途检查 + 建单」收进 withBillingTransaction 账户行锁事务（SELECT ... FOR UPDATE），同用户请求在行锁上串行，封死「双请求同时看到无在途」的 TOCTOU 窗口；在途即 409 PROJECT_GENERATION_IN_FLIGHT，零冻结零模型调用早拒。崩溃残留自愈：只统计 35 分钟内 QUEUED/RUNNING（全局硬超时 30 分钟 + 收尾余量），进程崩溃残留行至多阻塞 35 分钟，绝不永久锁死项目。粒度单项目：跨项目并行创作是合法场景不受影响（守卫测试实证跨项目放行）。守卫测试 6 条：并发双发（mem.script.create 挂 Promise 闸门造确定性在途窗口，B 409 + 零重复扣费 + 仅 1 task 仅落 1 集，B 得结论即放闸防 SSE 死锁）、串行放行 epNo [1,2]、FAILED/CANCELLED 不占坑、40 分钟前 RUNNING 自愈放行 + 新鲜 RUNNING 409 零扣费、跨项目并行放行而项目 A 仍 409、QUEUED 在途同样拦截；signAccess + _seedUser 绕注册限流。既有 http-generate.test.cjs u_free4「免费档在途原子占坑」用例对齐：同项目埋点改跨项目埋点，保留每日额度原意图（v2.292 起同项目在途先被 409 拦截）。TDD 先红 4/6 → GREEN 6/6；变异三轮全红恢复（删在途抛错 → 4 挂；status 过滤丢 RUNNING → 3 挂；去 createdAt.gte 自愈窗 → 测试 4 挂）；全量 5900 条 0 fail（= 5894 + 新增 6）。纯后端 409 JSON 无 UI 面，DEMO 从略。 |
 | 页码式（主风格） | `page`、`pageSize` | `page` 从 1 起；`pageSize` 为每页条数 |
 | 偏移式（别名） | `limit`、`offset` | `offset` 从 0 起；与页码式等价换算 |
 

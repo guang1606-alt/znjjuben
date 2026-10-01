@@ -96,8 +96,12 @@ describe('生成扣费 SSE 资金链路（串行）', { concurrency: 1 }, () => 
 
   it('免费档在途任务原子占坑：QUEUED/RUNNING 计入当日额度，FAILED 不计可重试', async () => {
     const pid = seed('u_free4', 'FREE', 0);
+    // v2.292 起同项目在途由「单项目串行防线」拦截（409），本用例意图是跨项目每日额度：
+    // 在途占坑任务埋在同用户的其他项目上，目标项目自身无在途，才能走到 402 计数分支
     for (let k = 0; k < P.MEMBERSHIP.FREE.freeEpsPerDay; k++) {
-      await mem.generationTask.create({ data: { projectId: pid, status: k % 2 ? 'QUEUED' : 'RUNNING' } });
+      const otherPid = `proj_u_free4_other${k}`;
+      mem._projects.set(otherPid, { id: otherPid, userId: 'u_free4', bible: null });
+      await mem.generationTask.create({ data: { projectId: otherPid, status: k % 2 ? 'QUEUED' : 'RUNNING' } });
     }
     const blocked = await call('u_free4', 'FREE', { projectId: pid, brief });
     assert.strictEqual(blocked.status, 402, '在途占坑满额必须 402，防止并发白嫖');

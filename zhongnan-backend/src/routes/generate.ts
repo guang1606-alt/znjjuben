@@ -2509,9 +2509,33 @@ generateRouter.post('/episodes', authRequired, async (req: AuthRequest, res) => 
   let points = isStaff ? 0 : (isFree ? 0 : charge.points);
   let paidViaQuota = false; // 事务内原子占赠送集成功后置 true（staff 恒 false）
 
-  const task = await prisma.generationTask.create({
-    data: { projectId, stage: 'draft', engineTier: tier, status: 'QUEUED', pointsCost: points },
-  });
+  // v2.292 同项目在途防线：同一项目的分集创作严格串行。集序取 max(epNo)+1 且连续性
+  // 注入依赖前集成稿，并发双发必然撞 @@unique([projectId,epNo,version])——败者白烧整条
+  // LLM 流水线（分钟级真实成本）后才走退款，用户白等。这里把「在途检查 + 建单」收进
+  // 账户行锁事务：同用户请求在行锁上串行，封死「双请求同时看到无在途」的 TOCTOU；
+  // 在途即 409，零冻结零模型调用。崩溃残留自愈：只统计 35 分钟内的在途任务
+  // （全局硬超时 30 分钟 + 收尾余量），进程崩溃残留的 RUNNING 行至多阻塞 35 分钟，
+  // 绝不永久锁死项目。粒度为单项目：跨项目并行创作是合法场景，不受影响。
+  const STALE_IN_FLIGHT_MS = 35 * 60_000;
+  let task: { id: string };
+  try {
+    task = await withBillingTransaction(prisma, user.id, async (tx) => {
+      await tx.lockAccount(user.id);
+      const raw = tx.raw as any;
+      const inFlight = await raw.generationTask.count({
+        where: { projectId, status: { in: ['QUEUED', 'RUNNING'] }, createdAt: { gte: new Date(Date.now() - STALE_IN_FLIGHT_MS) } },
+      });
+      if (inFlight > 0) throw new Error('PROJECT_GENERATION_IN_FLIGHT');
+      return raw.generationTask.create({
+        data: { projectId, stage: 'draft', engineTier: tier, status: 'QUEUED', pointsCost: points },
+      });
+    });
+  } catch (e) {
+    if ((e as Error).message === 'PROJECT_GENERATION_IN_FLIGHT') {
+      return res.status(409).json({ code: 'PROJECT_GENERATION_IN_FLIGHT', error: '该项目有正在进行的创作，完成后（或稍等片刻）再发起下一集' });
+    }
+    throw e;
+  }
 
   // 免费档每日补贴原子占坑：行锁串行化同用户并发 → 计数（已完成剧本 + 在途任务）→ 超限拒绝。
   // 在途 QUEUED/RUNNING 任务即“占坑行”，保证两个并发请求不会同时看到 used=1 而各自放行（刷第3集）；
