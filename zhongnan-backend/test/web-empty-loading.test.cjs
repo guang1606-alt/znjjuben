@@ -410,3 +410,53 @@ describe('v2.255 关键数据加载永久空白族（loadNovelSources/loadHookOp
     assert.ok(/loadHookOptions\(\)/.test(region), '降级态应提供重试入口（重新调用 loadHookOptions）');
   });
 });
+
+/* v2.256 muted 错误态族 + 刷新死按钮清零：
+   v2.224 znErrorHtml 统一视觉语言（⚠ + role=alert）后，仍有 4 处 catch 用
+   <div class="muted"> 渲染错误（灰色弱提示，无警报语义）；data-rrrefresh 零费刷新
+   按钮无 catch 且 finally 不恢复 disabled，openProject 抛错时按钮永久「刷新中…」。 */
+describe('v2.256 muted 错误态族 + rrrefresh 死按钮', () => {
+  it('全仓 muted 包裹动态错误文案的 catch 模式清零（基线恰 4 处）', () => {
+    const hits = src.match(/<div class="muted">\$\{escapeHtml\(e\.message[^}]*\)\}<\/div>/g) || [];
+    assert.strictEqual(hits.length, 0, '不应再有 muted 类渲染 e.message 的错误态（v2.224 znErrorHtml 统一漏网，基线 4 处：openListingDetail/previewListingValue/loadAdmBalances/loadAdmUpdates）');
+  });
+
+  it('openListingDetail 网络异常 catch 走 znErrorHtml（非 muted 裸 e.message）', () => {
+    const s = src.indexOf('async function openListingDetail(');
+    const e = s >= 0 ? src.indexOf("$('mkSort').onchange", s) : -1;
+    const region = s >= 0 && e > s ? src.slice(s, e) : '';
+    assert.ok(region, '应定位到 openListingDetail');
+    assert.ok(/catch\s*(\([^)]*\))?\s*\{[^}]*body\.innerHTML\s*=\s*znErrorHtml/.test(region), '网络异常 catch 应走 znErrorHtml（与同函数 !res.ok 路径同口径；兼容无参 catch 与注释行）');
+  });
+
+  it('previewListingValue 失败 catch 走 znErrorHtml（非 muted）', () => {
+    const s = src.indexOf('async function previewListingValue(');
+    const e = s >= 0 ? src.indexOf('function priceFenFromYuan', s) : -1;
+    const region = s >= 0 && e > s ? src.slice(s, e) : '';
+    assert.ok(region, '应定位到 previewListingValue');
+    assert.ok(/znErrorHtml/.test(region), 'listValue 失败应走 znErrorHtml');
+    assert.doesNotMatch(region, /class="muted">\$\{escapeHtml\(e\.message\)\}<\/div>/, '不应再用 muted 渲染错误');
+  });
+
+  it('loadAdmBalances 与 loadAdmUpdates 失败 catch 走 znErrorHtml（非 muted）', () => {
+    const s1 = src.indexOf('async function loadAdmBalances(');
+    const e1 = s1 >= 0 ? src.indexOf('async function saveAdmBalance', s1) : -1;
+    const r1 = s1 >= 0 && e1 > s1 ? src.slice(s1, e1) : '';
+    assert.ok(r1, '应定位到 loadAdmBalances');
+    assert.ok(/catch\s*\(e\)\s*\{\s*if \(listEl\)\s*listEl\.innerHTML\s*=\s*znErrorHtml/.test(r1), 'balList 失败应走 znErrorHtml');
+
+    const s2 = src.indexOf('async function loadAdmUpdates(');
+    const e2 = s2 >= 0 ? src.indexOf('async function submitAdmUpdate', s2) : -1;
+    const r2 = s2 >= 0 && e2 > s2 ? src.slice(s2, e2) : '';
+    assert.ok(r2, '应定位到 loadAdmUpdates');
+    assert.ok(/catch\s*\(e\)\s*\{\s*if \(listEl\)\s*listEl\.innerHTML\s*=\s*znErrorHtml/.test(r2), 'admUpdList 失败应走 znErrorHtml');
+  });
+
+  it('data-rrrefresh 零费刷新有 catch 提示且 finally 恢复 disabled（失败不死按钮）', () => {
+    const s = src.indexOf("panel.querySelectorAll('[data-rrrefresh]')");
+    const region = s >= 0 ? src.slice(s, s + 1100) : '';
+    assert.ok(region, '应定位到 data-rrrefresh 绑定区');
+    assert.ok(/\bcatch\b\s*(\([^)]*\))?\s*\{/.test(region), '刷新失败应有 catch（xnSay 提示，错误不静默冒泡；兼容无参 catch）');
+    assert.ok(/stale\.disabled\s*=\s*false/.test(region), 'finally 应恢复 stale 按钮 disabled（openProject 抛错时不死在「刷新中…」）');
+  });
+});

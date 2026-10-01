@@ -3286,7 +3286,8 @@
         <div class="listing-foot" style="margin-top:12px"><span class="price-tag">${d.pricePoints} ${t('points')}</span>
           <button class="btn-primary" id="detailBuyBtn">${t('buy')}</button></div>`;
       $('detailBuyBtn').onclick = () => { closeModal('detailModal'); buyListing(id); };
-    } catch (e) { body.innerHTML = `<div class="muted">${escapeHtml(e.message)}</div>`; }
+    // v2.256：网络异常（fetch reject/JSON 解析失败）走本地友好文案，不把浏览器技术信息（Failed to fetch 等）裸上屏
+    } catch { body.innerHTML = znErrorHtml(lang === 'en' ? 'Failed to load, please retry later' : '加载失败，请稍后重试'); }
   }
   $('mkSort').onchange = () => { mkPage = 1; loadListings(); };
   // v2.74 榜单 Tab
@@ -3387,7 +3388,8 @@
             : (lang === 'en' ? `Done, spent ${j.points} credits.` : `已生成，消耗${j.points}积分，可截图用于宣传`));
         } catch (e) { xnSay(e.message); } finally { pbtn.disabled = false; pbtn.textContent = certStaff ? (lang === 'en' ? 'Certified poster · Free' : '生成认证海报（内部免费）') : (lang === 'en' ? 'Certified poster (39 pts)' : '生成认证海报（39积分）'); }
       };
-    } catch (e) { box.innerHTML = `<div class="muted">${escapeHtml(e.message)}</div>`; }
+    // v2.256：错误源已走 Api.jsonOrThrow 脱敏层；muted 弱提示改 znErrorHtml（⚠ + role=alert）
+    } catch (e) { box.innerHTML = znErrorHtml((e && e.message) || (lang === 'en' ? 'Failed to load.' : '加载失败')); }
   }
   // v2.228 对齐后端 validatePriceFen（market.ts：≥1 元且为 0.1 元(1积分)整数倍），
   // 上架/重新上架两入口本地同口径预检，粒度不符（如 10.55）不再白跑后端 400
@@ -6868,7 +6870,9 @@
           xnSay(enLang
             ? 'Refreshed — expand “Past versions” or compare the two versions.'
             : '已刷新到最新版本，可展开“历史版本”或逐行对比改动。');
-        } finally { const stale = panel.querySelector('[data-rrrefresh]'); if (stale) stale.textContent = old; }
+        // v2.256：补 catch（失败 xnSay 提示，不静默冒泡）+ finally 恢复 disabled（否则 openProject 抛错时按钮死在「刷新中…」）
+        } catch { xnSay(enLang ? 'Refresh failed, please try again.' : '刷新失败，请稍后重试'); }
+        finally { const stale = panel.querySelector('[data-rrrefresh]'); if (stale) { stale.disabled = false; stale.textContent = old; } }
       };
     });
     // c202 F3：漂移条“用最新版重新围读”——确认费用事实后跨页把 scriptId 交给编剧室（房间由 /read/open 再做归属校验）
@@ -8502,7 +8506,8 @@
           ? `<div class="muted" style="font-size:12px">未记录余额的供应商：${autoMiss.length} 个可自动查询、${manualMiss.length} 个需手动填值</div>`
           : `<div class="muted" style="font-size:12px">全部供应商均已记录余额</div>`;
       }
-    } catch (e) { if (listEl) listEl.innerHTML = `<div class="muted">${escapeHtml(e.message || '')}</div>`; }
+    // v2.256：错误源已走 Api.jsonOrThrow 脱敏层；muted 弱提示改 znErrorHtml（balRefresh 可重试）
+    } catch (e) { if (listEl) listEl.innerHTML = znErrorHtml((e && e.message) || (lang === 'en' ? 'Failed to load.' : '加载失败')); }
   }
   async function saveAdmBalance() {
     const pid = $('balProvider')?.value; if (!pid) { xnSay('请先选择供应商'); return; }
@@ -8554,7 +8559,8 @@
         const d = a.createdAt ? new Date(a.createdAt).toLocaleString(lang === 'en' ? 'en-US' : 'zh-CN') : '';
         return `<div class="card row-card"><div>${pinned}<b>v${ver}</b> <span>${t1}</span> <span class="muted">${d}</span></div><div class="muted" style="margin-top:4px;white-space:pre-wrap">${b1}</div></div>`;
       }).join('');
-    } catch (e) { if (listEl) listEl.innerHTML = `<div class="muted">${escapeHtml(e.message || '')}</div>`; }
+    // v2.256：错误源已走 Api.jsonOrThrow 脱敏层；muted 弱提示改 znErrorHtml
+    } catch (e) { if (listEl) listEl.innerHTML = znErrorHtml((e && e.message) || (lang === 'en' ? 'Failed to load.' : '加载失败')); }
   }
   async function submitAdmUpdate() {
     const version = $('admUpdVer').value.trim();
