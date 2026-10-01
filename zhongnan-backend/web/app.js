@@ -988,7 +988,7 @@
   let tagChosen = [];        // 流水线面向：始终存中文标签名
   let tagDirector = null;    // 最近一次智能随机结果（含中英文简报/小南解释）
   let tagDimInited = false, tagBusy = false, tagSearchTimer = null, lastPool = [];
-  let tagLeavesSeq = 0; // v2.258：标签维度切换请求序号，慢维度响应不得覆盖新维度标签池
+  let tagPoolSeq = 0; // v2.258 起：标签池共享请求序号（v2.259 维度切换/搜索/清池共用，慢响应不得覆盖新池）
   const outLocale = () => (($('outLang') && $('outLang').value === 'en') ? 'en' : 'zh');
   function tagEnLabel(zh) {
     const items = tagDirector && tagDirector.english && tagDirector.english.items;
@@ -1034,14 +1034,15 @@
     }
   }
   function initTagBench() {
-    Api.request('/api/tags/dimensions').then((r) => r.json()).then(fillTagDimSel).catch(() => {});
+    Api.request('/api/tags/dimensions').then((r) => Api.jsonOrThrow(r)).then(fillTagDimSel)
+      .catch((e) => xnSay((e && e.message) || t('tagRecommendFail')));
     loadBoardStatus();
-    $('tagDim').onchange = () => { if ($('tagDim').value) loadTagLeaves($('tagDim').value); else renderTagPool([]); };
+    $('tagDim').onchange = () => { if ($('tagDim').value) loadTagLeaves($('tagDim').value); else { ++tagPoolSeq; renderTagPool([]); } };
     $('tagSearch').oninput = () => { clearTimeout(tagSearchTimer); tagSearchTimer = setTimeout(searchTagPool, 250); };
     $('tagRandomBtn').onclick = () => smartRandomTags(false);
     $('tagRerollBtn').onclick = () => smartRandomTags(false);
     $('tagRecommendBtn').onclick = () => recommendTags();
-    $('tagClearBtn').onclick = () => { tagChosen = []; tagDirector = null; renderTagChosen(); renderTagPool([]); $('tagWhy').classList.add('hidden'); $('tagReport').textContent = ''; xnSay(lang === 'en' ? 'Cleared.' : '已清空，可重新随机或搜索标签。'); };
+    $('tagClearBtn').onclick = () => { tagChosen = []; tagDirector = null; ++tagPoolSeq; renderTagChosen(); renderTagPool([]); $('tagWhy').classList.add('hidden'); $('tagReport').textContent = ''; xnSay(lang === 'en' ? 'Cleared.' : '已清空，可重新随机或搜索标签。'); };
     const ol = $('outLang'); if (ol) ol.addEventListener('change', () => {
       if (selectedMode === 'tags') smartRandomTags(true);
       // v2.44 输出语言变化时，策略卡（钩子/节奏/台词/情绪/人物）按新语言重载
@@ -1067,21 +1068,32 @@
   }
   async function searchTagPool() {
     const q = $('tagSearch').value.trim();
+    // v2.259：与维度切换共享 tagPoolSeq——入口即自增（空词清池也作废旧在途请求）
+    const seq = ++tagPoolSeq;
     if (!q) { renderTagPool([]); return; }
-    const j = await (await Api.request('/api/tags/search?q=' + encodeURIComponent(q) + '&limit=24')).json();
-    $('tagDim').value = ''; renderTagPool((j.results || []).map((x) => x.name));
+    try {
+      const res = await Api.request('/api/tags/search?q=' + encodeURIComponent(q) + '&limit=24');
+      const j = await Api.jsonOrThrow(res);
+      if (seq !== tagPoolSeq) return;
+      $('tagDim').value = ''; renderTagPool((j.results || []).map((x) => x.name));
+    } catch (e) {
+      if (seq !== tagPoolSeq) return;
+      renderTagPool([]);
+      xnSay((e && e.message) || t('tagRecommendFail'));
+    }
   }
   async function loadTagLeaves(dim) {
     $('tagSearch').value = '';
     // v2.258：连切维度时旧响应作废；取数纳入 jsonOrThrow 脱敏层并补 catch（原为裸 .json() 无 catch）
-    const seq = ++tagLeavesSeq;
+    // v2.259：tagLeavesSeq 升级为标签池共享 tagPoolSeq（与搜索流互斥）
+    const seq = ++tagPoolSeq;
     try {
       const res = await Api.request('/api/tags/leaves?dim=' + encodeURIComponent(dim) + '&limit=40');
       const j = await Api.jsonOrThrow(res);
-      if (seq !== tagLeavesSeq) return;
+      if (seq !== tagPoolSeq) return;
       renderTagPool((j.leaves || []).map((x) => x.name));
     } catch (e) {
-      if (seq !== tagLeavesSeq) return;
+      if (seq !== tagPoolSeq) return;
       renderTagPool([]);
       xnSay((e && e.message) || t('tagRecommendFail'));
     }
@@ -3150,6 +3162,7 @@
   let curSection = '';
   // v2.230 消费侧分页：后端 GET /api/community/posts 纳入 v2.215 六键契约，>50 帖不再静默截断
   let sqPage = 1;
+  let feedReqSeq = 0; // v2.259：广场板块/翻页请求序号，旧板块慢响应不得覆盖当前 Tab
   const SQ_PAGE_SIZE = 50;
   function renderSqTabs() {
     $('sqTabs').innerHTML = SQ_SECTIONS.map((s) =>
@@ -3158,12 +3171,14 @@
   }
   async function loadFeed() {
     renderSqTabs();
+    const seq = ++feedReqSeq; // v2.259：切板块/翻页连点时旧响应作废
     let list = [], total = 0, failed = false;
     try {
       const res = await fetch('/api/community/posts?section=' + curSection + '&page=' + sqPage + '&pageSize=' + SQ_PAGE_SIZE);
       if (!res.ok) failed = true;
       else { const j = await res.json(); if (Array.isArray(j.items)) { list = j.items; total = Number(j.total) || list.length; } }
     } catch { failed = true; }
+    if (seq !== feedReqSeq) return; // v2.259：过期响应不得写 sqEmpty/sqFeed
     const empty = $('sqEmpty'), feed = $('sqFeed');
     empty.innerHTML = failed ? znErrorHtml(t('loadFail')) : znEmptyHtml(t('sqEmpty'));
     empty.classList.toggle('hidden', list.length > 0); feed.innerHTML = '';
@@ -7769,7 +7784,9 @@
     if (!$('pkResult').classList.contains('hidden')) return;
     $('pkSetup').classList.remove('hidden');
   };
+  let pkBoardSeq = 0; // v2.259：战力榜重入请求序号，旧在途失败不覆盖新加载
   async function openPkBoard() {
+    const seq = ++pkBoardSeq;
     $('pkSetup').classList.add('hidden');
     $('pkResult').classList.add('hidden');
     $('pkLoading').classList.add('hidden');
@@ -7779,6 +7796,7 @@
     list.innerHTML = '';
     try {
       const j = await Api.jsonOrThrow(await Api.request('/api/va/pk/leaderboard'));
+      if (seq !== pkBoardSeq) return;
       const b = j.board;
       season.textContent = (lang === 'en' ? `Season ${b.seasonId} · ${b.totalPlayers} ranked · ${b.totalBattles} battles`
         : `${b.seasonId} 赛季 · ${b.totalPlayers} 人上榜 · 共 ${b.totalBattles} 局`);
@@ -7797,6 +7815,7 @@
         list.appendChild(li);
       });
     } catch (e) {
+      if (seq !== pkBoardSeq) return;
       card.innerHTML = znErrorHtml((e && e.message) || (lang === 'en' ? 'Failed to load board.' : '榜单加载失败～'));
     }
   }
@@ -7862,15 +7881,18 @@
   async function openValueCard() {
     if (!Api.isAuthed()) { xnSay(lang === 'en' ? 'Please sign in first.' : '先登录再生成价值证书哦～'); openAuth('login'); return; }
     if (!currentProjectId) { xnSay(lang === 'en' ? 'Generate a script first.' : '先生成剧本再看价值～'); return; }
+    const pid = currentProjectId; // v2.259：固化项目 id，A 项目慢响应不得覆盖 B 项目弹窗
     openModal('valueModal');
     const body = $('valueBody'); $('valueActions').classList.add('hidden');
     body.innerHTML = znSkeletonHtml();
     try {
-      const j = await Api.jsonOrThrow(await Api.request(`/api/generate/projects/${currentProjectId}/value-card?lang=${lang}`));
+      const j = await Api.jsonOrThrow(await Api.request(`/api/generate/projects/${pid}/value-card?lang=${lang}`));
+      if (pid !== currentProjectId) return;
       valueCardCache = j.card;
       renderValueCard(j.card);
       $('valueActions').classList.remove('hidden');
     } catch (e) {
+      if (pid !== currentProjectId) return;
       body.innerHTML = znErrorHtml((e && e.message) ? e.message : (lang === 'en' ? 'Failed to evaluate.' : '评估失败～'));
     }
   }
