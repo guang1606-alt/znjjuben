@@ -19,10 +19,20 @@
     onServerBusy: null,          // (res, path) => void  5xx 服务器忙
   };
 
+  // 写失败（Safari 隐私模式/配额满 QuotaExceededError）降级内存兜底：登录/续期照常完成，
+  // 会话限本页生命周期不持久化；不得让半截写入或 catch 吞错把用户误登出。
+  const memStore = new Map();
   const store = {
-    get(k) { try { return JSON.parse(localStorage.getItem(k)); } catch { return null; } },
-    set(k, v) { localStorage.setItem(k, JSON.stringify(v)); },
-    del(k) { localStorage.removeItem(k); },
+    get(k) {
+      if (memStore.has(k)) { try { return JSON.parse(memStore.get(k)); } catch { return null; } }
+      try { return JSON.parse(localStorage.getItem(k)); } catch { return null; }
+    },
+    set(k, v) {
+      const s = JSON.stringify(v);
+      try { localStorage.setItem(k, s); memStore.delete(k); }
+      catch { memStore.set(k, s); }
+    },
+    del(k) { memStore.delete(k); try { localStorage.removeItem(k); } catch {} },
   };
   // 跨标签页同步参照：本页最后确认过的 user JSON（storage 事件据此区分「他页换号」与「同账号轮换」）
   let lastSeenUserJson = null;
