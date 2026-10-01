@@ -104,6 +104,7 @@
   1. `POST /api/generate/tasks/:id/cancel`（生成取消）——v2.190 后端能力首次有前端入口：frozen SSE 帧 additive 增发 `taskId` → 前端捕获存 `session.taskId` → 进度面板新增「✕ 取消生成」按钮（仅运行中且有 taskId 时显示）→ 调取消口 → 后端 abort+冻结积分退款+发 `cancelled` 帧 → 前端新分支渲染「已取消生成，冻结积分将原路退回」
   2. `POST /api/interview/sessions/:id/close`（采访会话关闭）——采访面板新增「⏹ 结束会话」按钮（会话存在且未关闭时显示，点击调 close 并置 ivClosed 联动 UI）
 - 新发现待拍板 1 项：`POST /api/va/xiaonan`（小南深度共创，10 积分/次付费执行口）——前端无入口；注意与第 8 项 `GET /api/generate/va/xiaonan`（明细单查口）是**不同端点**。如需上线请拍板交互形态（入口位置/展示形式/是否打包进会员权益）
+- **更新（2026-10-01，v2.261.0 已按默认形态上线，待你上手后拍板是否调整）**：入口形态 = 右下角 🐼 悬浮球（xnFloat，此前点击只冒一句话）→ 打开「小南深度共创」问答弹窗（说明静态明示 10 积分/次 + 内部免费 → textarea ≤2000 字 → uiConfirm 双语确认 → 答案气泡 + 本次消耗积分回显）；未登录发送自动跳登录；函数级 `_xnAsking` 锁 + 按钮 disabled 双保险防重入。暂未打包进会员权益（后端按 XIAONAN_DEEP 10 积分固定扣）。如需调整：入口位置/文案/定价/会员打包方式，说一声即可改
 - 补充口径（确认非缺口，无需处理）：
   - `POST /api/order/notify/wechat`、`/alipay`——支付异步回调，服务端专用（第三方支付服务器回调），前端不调属正常
   - `GET /api/admin/board/status`——同第 14 条第 2 项榜单手动口排障口径，维持现状

@@ -2110,6 +2110,10 @@ summary:hover{color:var(--accent-strong)}
 
 /* v2.190 mobile hierarchy and workbench isolation */
 .xn-float.workbench-hidden { display: none; }
+
+/* v2.261 小南深度共创问答弹窗：答案气泡（随主题换色） */
+.xn-qa-a { white-space: pre-wrap; line-height: 1.75; background: var(--panel-2); border-radius: 10px; padding: 12px 14px; max-height: 320px; overflow: auto; font-size: 14px; }
+#xnAskInput { width: 100%; resize: vertical; }
 .tool-card h2, .tool-card h3 { padding-right: 0; }
 .tool-card > .tool-cost {
   position: static;

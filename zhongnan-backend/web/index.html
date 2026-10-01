@@ -1315,6 +1315,18 @@
     </div>
   </div>
 
+  <!-- v2.261 小南深度共创：付费问答弹窗（10 积分/次，内部账户免费），🐼 悬浮球入口 -->
+  <div class="modal-mask hidden" id="xnChatModal" aria-label="小南深度共创">
+    <div class="modal">
+      <button class="modal-x" data-close="xnChatModal">×</button>
+      <h3 style="margin:0 0 8px" id="xnAskTitle">🐼 小南深度共创</h3>
+      <p class="muted" style="margin:0 0 10px" id="xnAskHint">编剧策划 1 对 1 答疑：题材定位、结构卡点、钩子设计、投稿策略都可以问。<b>10 积分/次</b>（内部账户免费），实际扣积分以后端结算为准。</p>
+      <div class="field"><textarea id="xnAskInput" rows="4" maxlength="2000" placeholder="写下你的问题，越具体小南答得越准（2000 字以内）… Ctrl/⌘+Enter 发送"></textarea></div>
+      <div id="xnAskAnswer" class="hidden"></div>
+      <button class="btn-primary" id="xnAskBtn" style="width:100%;margin-top:12px">发送 · 10 积分</button>
+    </div>
+  </div>
+
   <button class="xn-float" id="xnFloat" title="小南">🐼</button>
 
   <footer class="site-footer" id="siteFooter">

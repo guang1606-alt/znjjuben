@@ -63,3 +63,38 @@ describe('v2.260 轻量提交在途锁', () => {
     assertInFlightLock('craftGo', '_craftGoing', 'async function craftGo(', "const craftGoBtn");
   });
 });
+
+/* v2.261 小南深度共创付费问答入口：POST /api/va/xiaonan（10积分/次，员工免费）
+   首次有前端入口（v2.233 审计 #15）。付费动作同样按函数级锁收口：
+   弹窗内发送按钮双击/回车连按不得在途重入（后端虽有 idemWindow 幂等拒重，
+   前端先挡可避免用户看到 409 困惑）。另断言弹窗骨架与价格明示存在。 */
+describe('v2.261 小南深度共创付费问答（函数级在途锁 + 价格明示）', () => {
+  const html = fs.readFileSync(path.join(__dirname, '..', 'web', 'index.html'), 'utf8');
+
+  it('弹窗骨架：#xnChatModal 含问题输入/发送按钮/答案区，且静态文案明示 10 积分', () => {
+    assert.ok(html.includes('id="xnChatModal"'), 'index.html 应有 #xnChatModal 弹窗');
+    assert.ok(html.includes('id="xnAskInput"'), '应有 #xnAskInput 问题输入');
+    assert.ok(html.includes('id="xnAskBtn"'), '应有 #xnAskBtn 发送按钮');
+    assert.ok(html.includes('id="xnAskAnswer"'), '应有 #xnAskAnswer 答案区');
+    assert.ok(/xnChatModal[\s\S]{0,2000}10\s*积分/.test(html), '弹窗内应静态明示 10 积分/次（付费前置知情）');
+  });
+
+  it('askXiaonan：_xnAsking 锁（发送双击/回车连按不在途重入）', () => {
+    assert.ok(/let\s+_xnAsking\s*=\s*false\s*;/.test(src), '应声明 let _xnAsking = false;');
+    assertInFlightLock('askXiaonan', '_xnAsking', 'async function askXiaonan(', '/* ---------- v2.261 小南深度共创入口end');
+  });
+
+  it('askXiaonan：调用 POST /api/va/xiaonan 且经 jsonOrThrow 脱敏层', () => {
+    const w = fnWindow('async function askXiaonan(', '/* ---------- v2.261 小南深度共创入口end');
+    assert.ok(w, '应定位到 askXiaonan');
+    assert.ok(w.includes("'/api/va/xiaonan'") || w.includes('"/api/va/xiaonan"'), '应调用 /api/va/xiaonan');
+    assert.ok(w.includes('jsonOrThrow'), '响应应经 jsonOrThrow 纳入 v2.226 脱敏层');
+  });
+
+  // v2.261 dogfood 实证：裸 closeModal('id') 无定义（唯一出口是 closeModalEl($('id'))），
+  // detailBuyBtn 购买入口因此潜伏 ReferenceError（点购买即抛错、流程中断）——防回归
+  it('全文件无裸 closeModal( 调用（唯一出口 closeModalEl，防 ReferenceError 潜伏 bug 回归）', () => {
+    const m = src.match(/(?<![A-Za-z])closeModal\s*\(/g);
+    assert.ok(!m, `存在裸 closeModal( 调用 ${m && m.length} 处：弹窗关闭统一走 closeModalEl($('id'))`);
+  });
+});

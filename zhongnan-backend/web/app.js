@@ -3338,7 +3338,7 @@
         <div class="v-section"><b>${lang === 'en' ? 'Sample' : '样章'}</b><div class="listing-sample">${escapeHtml(d.sample || (lang==='en'?'No sample':'暂无样章'))}</div></div>
         <div class="listing-foot" style="margin-top:12px"><span class="price-tag">${d.pricePoints} ${t('points')}</span>
           <button class="btn-primary" id="detailBuyBtn">${t('buy')}</button></div>`;
-      $('detailBuyBtn').onclick = () => { closeModal('detailModal'); buyListing(id); };
+      $('detailBuyBtn').onclick = () => { closeModalEl($('detailModal')); buyListing(id); };
     // v2.256：网络异常（fetch reject/JSON 解析失败）走本地友好文案，不把浏览器技术信息（Failed to fetch 等）裸上屏
     // v2.258：过期请求的网络失败不得覆盖当前弹窗
     } catch { if (seq !== detailReqSeq) return; body.innerHTML = znErrorHtml(lang === 'en' ? 'Failed to load, please retry later' : '加载失败，请稍后重试'); }
@@ -8392,7 +8392,62 @@
     }
   };
   $('genBtn').onclick = genClickGuard(() => startGenerate());
-  $('xnFloat').onclick = () => xnSay(lang === 'en' ? 'Xiaonan here — tell me your idea.' : '小南在呢，说说你的创意吧～');
+
+  /* ---------- v2.261 小南深度共创入口（🐼 悬浮球 → 付费问答弹窗） ----------
+     POST /api/va/xiaonan：10积分/次（内部账户免费），后端 idemWindow 幂等拒重。
+     前端仍按 v2.260 资金动作惯例上函数级在途锁：双击发送/Ctrl+Enter 连按不发起第二笔，
+     用户也不会撞上 409 幂等提示。弹窗静态文案为中文默认，打开时按当前语言同步。 */
+  let _xnAsking = false;
+  async function askXiaonan() {
+    if (_xnAsking) return;
+    if (!Api.isAuthed()) { closeModalEl($('xnChatModal')); openAuth('login'); return; }
+    const input = $('xnAskInput'), btn = $('xnAskBtn'), answerBox = $('xnAskAnswer');
+    const question = (input.value || '').trim();
+    const enLang = lang === 'en';
+    if (!question) { xnSay(enLang ? 'Type your question first — the more specific, the sharper the answer.' : '先把问题写上哦，越具体小南答得越准～'); input.focus(); return; }
+    const ok = await uiConfirm({ body: isStaffAcct()
+      ? (enLang ? 'Ask Xiaonan for deep co-creation advice? Free for staff accounts.' : '让小南深度共创答疑？内部账户免费，是否继续？')
+      : (enLang ? 'Ask Xiaonan for deep co-creation advice? 10 pts per question; the server settles actual points.' : '让小南深度共创答疑？10 积分/次，实际扣积分以后端结算为准。是否继续？'), okText: enLang ? 'Continue' : '继续' });
+    if (!ok) return;
+    _xnAsking = true;
+    btn.disabled = true;
+    const oldTxt = btn.textContent;
+    btn.textContent = enLang ? 'Xiaonan is thinking…' : '小南正在思考…';
+    answerBox.classList.add('hidden');
+    answerBox.innerHTML = '';
+    try {
+      const res = await Api.request('/api/va/xiaonan', { method: 'POST', body: JSON.stringify({ question }) });
+      const d = await Api.jsonOrThrow(res);
+      answerBox.innerHTML = `<div class="xn-qa-a">${escapeHtml(d.answer || '')}</div>`
+        + `<div class="muted" style="margin-top:8px;font-size:12px">${d.staff
+          ? (enLang ? 'Free for staff — 0 pts used.' : '内部账户免费，本次 0 积分。')
+          : (enLang ? `${d.points} pts used this time.` : `本次消耗 ${d.points} 积分。`)}</div>`;
+      answerBox.classList.remove('hidden');
+      answerBox.scrollIntoView({ block: 'nearest' });
+    } catch (e) {
+      if (e.message === 'AUTH_REQUIRED') { closeModalEl($('xnChatModal')); openAuth('login'); return; }
+      if (e.message === 'INSUFFICIENT') xnSay(enLang ? 'Not enough points — top up to keep creating with Xiaonan.' : '积分不够啦，充值后小南就能继续陪你聊～');
+      else xnSay(e.message);
+    } finally {
+      btn.disabled = false;
+      btn.textContent = oldTxt;
+      _xnAsking = false;
+    }
+  }
+  $('xnFloat').onclick = () => {
+    const enLang = lang === 'en';
+    $('xnAskTitle').textContent = enLang ? '🐼 Xiaonan Deep Co-creation' : '🐼 小南深度共创';
+    $('xnAskHint').innerHTML = enLang
+      ? '1-on-1 screenwriting advice: premise, structure, hooks, submission strategy — ask anything. <b>10 pts per question</b> (free for staff); the server settles actual points.'
+      : '编剧策划 1 对 1 答疑：题材定位、结构卡点、钩子设计、投稿策略都可以问。<b>10 积分/次</b>（内部账户免费），实际扣积分以后端结算为准。';
+    $('xnAskInput').placeholder = enLang ? 'Type your question — the more specific, the sharper the answer (max 2000 chars)… Ctrl/⌘+Enter to send' : '写下你的问题，越具体小南答得越准（2000 字以内）… Ctrl/⌘+Enter 发送';
+    $('xnAskBtn').textContent = enLang ? 'Send · 10 pts' : '发送 · 10 积分';
+    openModal('xnChatModal');
+    setTimeout(() => $('xnAskInput')?.focus(), 60);
+  };
+  $('xnAskBtn').onclick = () => { askXiaonan(); };
+  $('xnAskInput').addEventListener('keydown', (e) => { if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') { e.preventDefault(); askXiaonan(); } });
+  /* ---------- v2.261 小南深度共创入口end ---------- */
 
   /* ---------- 顶栏控件 ---------- */
   $('themeBtn').onclick = () => { theme = THEMES[(THEMES.indexOf(theme) + 1) % THEMES.length]; LS.s('zn_theme', theme); applyTheme(); };
