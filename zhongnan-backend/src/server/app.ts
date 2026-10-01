@@ -4,6 +4,7 @@
  */
 import express, { Express, Router } from 'express';
 import cors from 'cors';
+import compression from 'compression';
 import path from 'path';
 import { authRouter as defaultAuth } from '../routes/auth';
 import { generateRouter as defaultGenerate } from '../routes/generate';
@@ -48,6 +49,16 @@ export function createApp(routers: AppRouters = {}, preErrorRouter?: Router | Ro
   // 默认信任 1 跳代理（客户端伪造的 XFF 前缀会被忽略，取倒数第 2 跳即代理所报真实地址）；
   // 多层网关用 TRUST_PROXY_HOPS 增加跳数，直连部署设 0 关闭解析。
   app.set('trust proxy', Number(process.env.TRUST_PROXY_HOPS ?? '1') || 0);
+  // v2.264 gzip 压缩：web/ 静态资源 ~1.1MB（app.js 658KB）与 >1KB JSON 响应压缩后传输量降 70%+。
+  // SSE（text/event-stream）显式排除——压缩缓冲会破坏生成进度逐帧推送；
+  // compressible 默认表本不含 event-stream，此处 filter 双保险（防未来 Content-Type 写法漂移）。
+  app.use(compression({
+    filter: (req, res) => {
+      const t = String(res.getHeader('Content-Type') || '');
+      if (t.includes('text/event-stream')) return false;
+      return compression.filter(req, res);
+    },
+  }));
   app.use(express.json({ limit: '12mb' })); // 学习窗口支持上传较大文本/转写稿
   app.use(express.text({ type: 'text/plain', limit: '1mb' })); // veFaaS 定时器 Payload 以 text/plain 透传
   app.use(cors({ origin: (process.env.CORS_ORIGINS || '').split(',').filter(Boolean), credentials: true }));
