@@ -136,9 +136,9 @@
         <div class="tag-board-status muted" id="tagBoardStatus"></div>
       </section>
       <!-- 小南递招：叙事方法卡 + 钩子体系（系统默认推荐，用户可增删，选中自动注入出本创意） -->
-      <section class="panel craft-bench hidden" id="craftBench">
+      <section class="panel craft-bench hidden" id="craftBench" role="region" aria-labelledby="craftBenchTitle">
         <div class="craft-head">
-          <h3 data-i="craftTitle">小南递招 · 方法卡与钩子</h3>
+          <h3 data-i="craftTitle" id="craftBenchTitle">小南递招 · 方法卡与钩子</h3>
           <span class="muted" data-i="craftFree">免费 · 43张方法卡 / 10类钩子</span>
           <span class="spacer"></span>
           <button class="btn-primary" id="craftGoBtn" data-i="craftGo">按当前创意递招</button>
@@ -161,9 +161,9 @@
       </section>
 
       <!-- 免费合法小说素材库（服务小说改编：多语言公版/正版免费来源，绝不做盗版导航） -->
-      <section class="panel novel-src-bench hidden" id="novelSrcBench">
+      <section class="panel novel-src-bench hidden" id="novelSrcBench" role="region" aria-labelledby="novelSrcBenchTitle">
         <div class="craft-head">
-          <h3 data-i="novelSrcTitle">免费合法小说素材库 · 多语言</h3>
+          <h3 data-i="novelSrcTitle" id="novelSrcBenchTitle">免费合法小说素材库 · 多语言</h3>
           <span class="muted" data-i="novelSrcSub2">公版可改编 · 正版免费仅阅读</span>
           <span class="spacer"></span>
           <input id="novelSrcSearch" type="search" class="novel-src-search" data-ph="novelSrcSearchPh" placeholder="搜来源，如 青空 / Gutenberg" />
@@ -226,7 +226,7 @@
         <div id="dvResult"></div>
       </section>
 
-      <section class="panel hidden" id="roomPanel">
+      <section class="panel hidden" id="roomPanel" role="region" aria-label="编剧室">
         <div class="room-tabs">
           <button class="room-tab on" data-rtab="pitch" data-i="tbTabPitch">选题会</button>
           <button class="room-tab" data-rtab="read" data-i="tbTabRead">剧本围读</button>
