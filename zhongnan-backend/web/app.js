@@ -3230,6 +3230,9 @@
   // v2.73 买家详情页：完整价值维度+资方风险+样章，先建立信任再购买
   async function openListingDetail(id) {
     const body = $('detailBody');
+    const dlg = $('detailModal');
+    // v2.249 a11y：打开即重置可访问名为静态兜底，防上一作品标题残留（读屏器误读）
+    dlg.setAttribute('aria-label', lang === 'en' ? 'Listing detail' : '作品详情');
     openModal('detailModal');
     znSkeleton(body);
     try {
@@ -3242,6 +3245,8 @@
         body.innerHTML = znErrorHtml(errText); return;
       }
       const d = await res.json();
+      // v2.249 a11y：数据到达后同步 dialog 可访问名为具体作品名（读屏器报「作品详情：<标题>」）
+      dlg.setAttribute('aria-label', (lang === 'en' ? 'Listing detail: ' : '作品详情：') + d.title);
       const v = d.value; const snap = d.valueSnapshot;
       const gradeColor = { S: '#d4a017', A: '#c0392b', B: '#2e7d32', C: '#5d6d7e', NA: '#888' }[(v && v.grade) || (snap && snap.grade) || 'NA'] || '#888';
       const grade = (v && v.grade) || (snap && snap.grade) || 'NA';
