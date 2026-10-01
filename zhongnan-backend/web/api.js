@@ -181,7 +181,17 @@
   function bindCrossTabSync() {
     if (typeof addEventListener !== 'function') return; // 非浏览器环境（node 测试/SSR）直接跳过
     addEventListener('storage', (e) => {
-      if (!e || (e.key !== K.access && e.key !== K.refresh && e.key !== K.user)) return;
+      if (!e) return;
+      if (e.key === null) {
+        // 他页/扩展 localStorage.clear() 清站点数据：三键全部按清除处理——
+        // memStore 降级副本必须一并失效，否则残留的活 refreshToken 会在下次 401 把已清会话复活。
+        [K.access, K.refresh, K.user].forEach((k) => memStore.delete(k));
+      } else {
+        if (e.key !== K.access && e.key !== K.refresh && e.key !== K.user) return;
+        // 他页写改了该键 → 本页 memStore 降级副本（若有）必然过期，精准失效后直读最新存储；
+        // 按 key 精准失效：token 等未涉事键的 memStore 副本（localStorage 从未写入成功）不得误伤。
+        memStore.delete(e.key);
+      }
       if (!getToken() && !getRefreshToken() && !getUser()) {
         if (lastSeenUserJson === null) return; // 本页本就未登录，无需重复通知
         clearSession(); // 幂等清理（保证 version 递增使在途请求失效）
