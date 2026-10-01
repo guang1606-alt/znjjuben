@@ -2242,9 +2242,12 @@
     const owner = privateAccountId();
     if (privateAccountOwner === undefined) { privateAccountOwner = owner; return; }
     if (owner === privateAccountOwner) return;
+    // v2.280 匿名→登录沉降：旧 owner 为空（本页未登录）时用户已填的创意/资料是本页主动输入、不是上个账号残留，
+    // 保留输入框内容；换号（A→B 双方都有值）与登出（有值→null）仍全清，防串号/防下个使用者看到。
+    const anonSignIn = !privateAccountOwner && !!owner;
     privateAccountOwner = owner;
     privateAccountEpoch++;
-    resetPrivateAccountState();
+    resetPrivateAccountState(anonSignIn ? { keepInputs: true } : undefined);
   }
   function capturePrivateSession() {
     syncPrivateAccount();
@@ -2255,7 +2258,7 @@
       && snapshot.owner === privateAccountId();
   }
   // 只清当前页面与在途任务；作品和按账号保存的采访草稿仍留在原存储中。
-  function resetPrivateAccountState() {
+  function resetPrivateAccountState(opts) {
     curPurchase = null; purchaseViewSeq++;
     genSessions.forEach((session) => session.abortCtrl?.abort());
     abortCtrl?.abort();
@@ -2280,9 +2283,12 @@
       'mineBox', 'fullText', 'fullTitle', 'fullNotice'].forEach((id) => {
       const node = $(id); if (node) node.textContent = '';
     });
-    ['modeBrief', 'sourceText', 'tagIdea', 'tagSearch', 'inNickname', 'inPen', 'inBio', 'inRegion', 'inAgeBand', 'inGender'].forEach((id) => {
-      const node = $(id); if (node) node.value = '';
-    });
+    // v2.280 匿名→登录沉降（keepInputs）保留用户本页已填输入；换号/登出仍清空
+    if (!opts || !opts.keepInputs) {
+      ['modeBrief', 'sourceText', 'tagIdea', 'tagSearch', 'inNickname', 'inPen', 'inBio', 'inRegion', 'inAgeBand', 'inGender'].forEach((id) => {
+        const node = $(id); if (node) node.value = '';
+      });
+    }
     ['cast', 'prop', 'scene'].forEach((family) => {
       const select = $(family + 'AssetSelect');
       if (select) select.innerHTML = `<option value="">${t(family + 'AssetNone')}</option>`;
