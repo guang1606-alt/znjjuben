@@ -1478,7 +1478,7 @@
     catch { return String(s == null ? '' : s); }
   }
   function znSkeletonHtml(kind) {
-    const bar = kind === 'grid' ? 'skeleton s-card' : 'skeleton s-line';
+    const bar = kind === 'grid' || kind === 'cards' ? 'skeleton s-card' : 'skeleton s-line';
     const n = kind === 'grid' ? 6 : 4;
     let bars = ''; for (let i = 0; i < n; i++) bars += `<div class="${bar}"></div>`;
     return `<div class="sk-list${kind === 'grid' ? ' s-grid' : ''}" role="status" aria-busy="true">${bars}</div>`;
@@ -3300,6 +3300,10 @@
   async function loadFeed() {
     renderSqTabs();
     const seq = ++feedReqSeq; // v2.259：切板块/翻页连点时旧响应作废
+    // v2.281 三态补全：慢网取数期铺纵向卡片骨架，隐藏空态与旧分页器；响应回来后由完成路径统一接管
+    $('sqEmpty').classList.add('hidden');
+    $('sqPager').classList.add('hidden');
+    znSkeleton($('sqFeed'), 'cards');
     let list = [], total = 0, failed = false;
     try {
       const res = await fetch('/api/community/posts?section=' + curSection + '&page=' + sqPage + '&pageSize=' + SQ_PAGE_SIZE);
@@ -3393,6 +3397,10 @@
     // v2.258：市场网格共享请求序号——翻页/排序/榜单 Tab 连点时，过期响应作废，不得覆盖新页
     const seq = ++mkReqSeq;
     const sort = $('mkSort').value || 'new';
+    // v2.281 三态补全：慢网取数期铺网格骨架，隐藏空态与旧分页器；响应回来后由完成路径统一接管
+    $('mkEmpty').classList.add('hidden');
+    $('mkPager').classList.add('hidden');
+    znSkeleton($('mkGrid'), 'grid');
     let list = [], total = 0, failed = false;
     try { const res = await fetch('/api/market/listings?sort=' + sort + '&page=' + mkPage + '&pageSize=' + MK_PAGE_SIZE); if (!res.ok) failed = true; else { const j = await res.json(); if (Array.isArray(j.items)) { list = j.items; total = Number(j.total) || list.length; } } } catch { failed = true; }
     if (seq !== mkReqSeq) return; // 期间又翻页/切排序/切榜单：旧响应作废
@@ -3478,6 +3486,10 @@
     document.querySelectorAll('.board-tab').forEach((b) => b.classList.toggle('active', b.dataset.board === type));
     znBindTablist($('mkBoardTabs'), { selector: '.board-tab' }); // v2.270 键盘方向键导航 + ARIA 语义
     if (type === 'all') { $('mkBoardMeta').classList.add('hidden'); loadListings(); return; }
+    // v2.281 榜单三态补全：慢网取数期铺网格骨架（all 分支的骨架由 loadListings 铺）
+    $('mkEmpty').classList.add('hidden');
+    $('mkPager').classList.add('hidden');
+    znSkeleton($('mkGrid'), 'grid');
     let data = { items: [] }, failed = false;
     try { const res = await fetch('/api/market/board?type=' + type + '&limit=' + BOARD_LIMIT); if (!res.ok) failed = true; else data = await res.json(); } catch { failed = true; }
     if (seq !== mkReqSeq) return; // 期间又点了别的榜单 Tab：旧响应作废

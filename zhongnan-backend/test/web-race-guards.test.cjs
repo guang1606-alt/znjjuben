@@ -33,11 +33,13 @@ describe('v2.258 市场区 mkGrid 共享竞态令牌（loadListings/loadBoard �
     assert.ok(awaitPos >= 0 && inc < awaitPos, '自增应发生在 await 取数之前');
     const guard = w.indexOf('seq !== mkReqSeq');
     assert.ok(guard > awaitPos, 'await 之后、渲染之前应校验 seq !== mkReqSeq 并 return');
-    assert.ok(guard < w.indexOf("$('mkGrid')"), '过期校验应在写 mkGrid 之前');
+    // v2.281：fetch 前 znSkeleton(mkGrid) 是本地占位（非响应数据、新请求会自行重铺），不受竞态守卫约束；
+    // 守卫只需早于响应渲染锚点 empty.innerHTML
+    assert.ok(guard < w.indexOf('empty.innerHTML'), '过期校验应在响应渲染（empty.innerHTML）之前');
   });
 
   it('loadBoard 取数前自增序号（且早于 all 分支），渲染前校验未过期', () => {
-    const w = fnWindow('async function loadBoard(type)', null).slice(0, 1600);
+    const w = fnWindow('async function loadBoard(type)', null).slice(0, 2000);
     assert.ok(w, '应定位到 loadBoard');
     const inc = w.indexOf('++mkReqSeq');
     const allBranch = w.indexOf("type === 'all'");
@@ -46,7 +48,8 @@ describe('v2.258 市场区 mkGrid 共享竞态令牌（loadListings/loadBoard �
     assert.ok(allBranch >= 0 && inc < allBranch, '自增必须早于 all 分支（all 分支调 loadListings 会再 ++ 作废旧榜单请求）');
     assert.ok(awaitPos > allBranch, '取数应在 all 分支之后');
     const guard = w.indexOf('seq !== mkReqSeq');
-    assert.ok(guard > awaitPos && guard < w.indexOf("$('mkGrid')"), 'await 后写网格前应校验序号');
+    // v2.281：fetch 前骨架占位豁免（同 loadListings），守卫只需早于响应渲染锚点
+    assert.ok(guard > awaitPos && guard < w.indexOf('empty.innerHTML'), 'await 后响应渲染前应校验序号');
   });
 });
 
@@ -141,9 +144,10 @@ describe('v2.259 loadFeed 交流广场板块/翻页竞态令牌', () => {
     assert.ok(inc >= 0 && inc < awaitPos, '自增应在 await 取数之前');
     const settled = w.indexOf('catch { failed = true; }');
     const guard = w.indexOf('seq !== feedReqSeq');
-    const writePos = w.indexOf("$('sqEmpty')");
+    // v2.281：fetch 前 znSkeleton(sqFeed)/隐藏 sqEmpty 是本地占位，豁免竞态守卫；以响应渲染锚点为准
+    const writePos = w.indexOf('empty.innerHTML');
     assert.ok(settled >= 0 && guard > settled, '序号校验应在 try/catch 结算之后');
-    assert.ok(guard < writePos, '序号校验应在写 sqEmpty/sqFeed 之前');
+    assert.ok(guard < writePos, '序号校验应在响应渲染（empty.innerHTML）之前');
   });
 });
 
