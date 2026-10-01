@@ -1309,9 +1309,21 @@
   };
   let novelAll = [], novelLangs = [], novelCurLang = '', novelSearchTimer = null;
   async function loadNovelSources() {
-    const j = await (await Api.request('/api/novels')).json();
-    novelAll = j.sources || []; novelLangs = j.languages || [];
-    renderNovelLangRow(); renderNovelGrid();
+    try {
+      // v2.255：取数走 jsonOrThrow 脱敏层；失败内部兜底，不再让素材库网格永久空白
+      const r = await Api.request('/api/novels');
+      const j = await Api.jsonOrThrow(r);
+      novelAll = j.sources || []; novelLangs = j.languages || [];
+      renderNovelLangRow(); renderNovelGrid();
+    } catch (e) {
+      const grid = $('novelSrcGrid');
+      if (grid) {
+        grid.innerHTML = znErrorHtml((e && e.message) || (lang === 'en' ? 'Failed to load sources.' : '来源加载失败'))
+          + '<div class="zn-retry-row"><button type="button" class="btn-ghost novel-src-retry">' + (lang === 'en' ? 'Retry' : '重试') + '</button></div>';
+        const rb = grid.querySelector('.novel-src-retry');
+        if (rb) rb.onclick = () => { loadNovelSources().catch(() => {}); };
+      }
+    }
   }
   function renderNovelLangRow() {
     const row = $('novelLangRow'); if (!row) return;
@@ -3723,7 +3735,21 @@
     if (hookOptsLoaded && hookOptsLang === sloc) return;
     hookOptsLang = sloc;
     if (!Api.isAuthed()) return; // 选项需登录，未登录不加载，不影响默认生成
-    const j = await (await Api.request('/api/generate/hook-options?lang=' + encodeURIComponent(sloc))).json();
+    let j;
+    try {
+      // v2.255：取数走 jsonOrThrow 脱敏层；失败内部兜底渲染降级态，外部 .catch(()=>{}) 不再造成永久空白
+      const hr = await Api.request('/api/generate/hook-options?lang=' + encodeURIComponent(sloc));
+      j = await Api.jsonOrThrow(hr);
+    } catch (e) {
+      const eb = $('hookPickers');
+      if (eb) {
+        eb.innerHTML = znErrorHtml((e && e.message) || (lang === 'en' ? 'Failed to load strategies.' : '策略选项加载失败'))
+          + '<div class="zn-retry-row"><button type="button" class="btn-ghost hook-opts-retry">' + (lang === 'en' ? 'Retry' : '重试') + '</button></div>';
+        const rb = eb.querySelector('.hook-opts-retry');
+        if (rb) rb.onclick = () => { loadHookOptions().catch(() => {}); };
+      }
+      return; // hookOptsLoaded 保持 false，重试或下次进入时重新拉取
+    }
     const box = $('hookPickers'); box.innerHTML = '';
     // v2.04 按题材/梗概智能推荐四轴风味（不耗积分）：一键回填微钩/爽点/反转/情绪风味并说明理由
     const recBar = document.createElement('div'); recBar.className = 'hook-group flavor-rec-bar';

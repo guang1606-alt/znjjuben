@@ -1649,6 +1649,8 @@ summary:hover{color:var(--accent-strong)}
 .zn-pager { display: flex; align-items: center; justify-content: center; flex-wrap: wrap; gap: 10px; padding: 12px 0 2px; font-size: .84rem; }
 .zn-pager button:disabled { opacity: .45; cursor: not-allowed; }
 .zn-error-hint { font-size: .8rem; opacity: .85; max-width: 32em; color: var(--text-2); }
+/* v2.255 错误态内嵌重试行（loadNovelSources/loadHookOptions 永久空白族收口共用） */
+.zn-retry-row { display: flex; justify-content: center; margin-top: 2px; }
 
 /* —— 3. View-Stack 视图切换过渡 —— */
 .view-stack { position: relative; }

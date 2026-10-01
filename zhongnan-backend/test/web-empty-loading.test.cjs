@@ -376,3 +376,37 @@ describe('v2.254 创作工作台死 loading + notice 漏网', () => {
     assert.ok(/znErrorHtml\(\s*t\('dashFail'\)\s*\)/.test(region), 'dashFail 应走 znErrorHtml 统一视觉语言');
   });
 });
+
+/* v2.255 关键数据加载「永久空白」族清零（v2.238 loadWorks 静默失败根治的同族漏网）：
+   loadNovelSources 裸 .json() + initNovelBench 静默 catch → 小说素材库网格失败即永久空白；
+   loadHookOptions 裸 .json() + 多处外部 .catch(()=>{}) → 钩子/策略卡区失败即永久空白。
+   收口口径：取数走 jsonOrThrow 脱敏层；内部 catch 在容器渲染 znErrorHtml + 重试入口。 */
+describe('v2.255 关键数据加载永久空白族（loadNovelSources/loadHookOptions）', () => {
+  it('loadNovelSources 内部 catch 兜底：novelSrcGrid 渲染 znErrorHtml 且可重试，取数走脱敏层', () => {
+    const s = src.indexOf('async function loadNovelSources()');
+    const e = s >= 0 ? src.indexOf('function renderNovelLangRow', s) : -1;
+    const region = s >= 0 && e > s ? src.slice(s, e) : '';
+    assert.ok(region, '应定位到 loadNovelSources');
+    assert.ok(/catch\s*\(/.test(region), 'loadNovelSources 应有内部 catch（失败不再由 initNovelBench 静默吞掉）');
+    assert.ok(/novelSrcGrid/.test(region), 'catch 应向 novelSrcGrid 渲染降级态（失败不再永久空白）');
+    assert.ok(/znErrorHtml|znError\(/.test(region), '失败态应走 znErrorHtml/znError（role=alert 即时播报）');
+    assert.ok(/Api\.jsonOrThrow\(/.test(region), '取数应走 Api.jsonOrThrow 脱敏层（替换裸 .json()）');
+    assert.doesNotMatch(region, /\.json\(\)/, '不应再有裸 .json() 消费（错误码不经脱敏层）');
+    assert.ok(/loadNovelSources\(\)/.test(region), '降级态应提供重试入口（重新调用 loadNovelSources）');
+  });
+
+  it('loadHookOptions 取数段内部 catch 兜底：hookPickers 渲染 znErrorHtml 且可重试，不置 loaded', () => {
+    const s = src.indexOf('async function loadHookOptions()');
+    // 窄窗口：函数头到首次清空 box（成功渲染起点），catch 段位于该锚点之前
+    const anchor = s >= 0 ? src.indexOf("box.innerHTML = '';", s) : -1;
+    const region = s >= 0 && anchor > s ? src.slice(s, anchor + 20) : '';
+    assert.ok(region, '应定位到 loadHookOptions 取数段');
+    assert.ok(/Api\.jsonOrThrow\(/.test(region), '取数应走 Api.jsonOrThrow 脱敏层（替换裸 .json()）');
+    assert.doesNotMatch(region, /\.json\(\)/, '不应再有裸 .json() 消费');
+    assert.ok(/catch\s*\(/.test(region), '取数应有内部 catch（外部多处 .catch(()=>{}) 不再静默吞错）');
+    assert.ok(/hookPickers/.test(region), 'catch 应向 hookPickers 渲染降级态（策略卡区不再永久空白）');
+    assert.ok(/znErrorHtml|znError\(/.test(region), '失败态应走 znErrorHtml/znError');
+    assert.ok(/return/.test(region), 'catch 应提前 return（hookOptsLoaded 保持 false，下次可重试）');
+    assert.ok(/loadHookOptions\(\)/.test(region), '降级态应提供重试入口（重新调用 loadHookOptions）');
+  });
+});
