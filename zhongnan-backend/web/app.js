@@ -2430,12 +2430,16 @@
       ws.addEventListener('input', () => { clearTimeout(t); t = setTimeout(loadWorks, 250); });
     }
     if (!Api.isAuthed()) { empty.innerHTML = znEmptyHtml(t('needLogin')); empty.classList.remove('hidden'); $('worksCount').textContent = ''; return; }
+    // v2.278 三态补全：作品列表此前缺骨架态——进入/搜索触发后 grid 已清空、弱网下全白零反馈；
+    // 与资产库三面板同范式，取数前先铺卡片网格骨架
+    znSkeleton(grid, 'grid');
     const q = ($('worksSearch')?.value || '').trim();
     // v2.238 静默失败根治：此前无 try/catch，切视图入口调用点亦无 .catch——请求失败时 grid 已清空、面板全白零提示
     try {
     const res = await Api.request('/api/generate/projects' + (q ? `?q=${encodeURIComponent(q)}` : ''));
     const list = await Api.jsonOrThrow(res);
     if (!isPrivateSessionCurrent(account) || seq !== worksReqSeq) return; // v2.274：换号或旧查询晚回，均不得写 DOM
+    grid.innerHTML = ''; // v2.278：清骨架后渲染真实内容
     $('worksCount').textContent = t('worksCount', { n: list.length });
     empty.classList.toggle('hidden', list.length > 0);
     if (!list.length) empty.innerHTML = znEmptyHtml(t('worksEmpty'));
@@ -2505,6 +2509,7 @@
     });
     } catch {
       if (!isPrivateSessionCurrent(account) || seq !== worksReqSeq) return; // v2.274：旧查询失败晚回也不得冲掉新查询的正确态
+      grid.innerHTML = ''; // v2.278：清骨架后写错误态
       $('worksCount').textContent = '';
       empty.classList.remove('hidden');
       empty.innerHTML = znErrorHtml(t('loadFail'));
