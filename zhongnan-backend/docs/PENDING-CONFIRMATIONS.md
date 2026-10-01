@@ -102,3 +102,8 @@
   - `GET /api/admin/board/status`——同第 14 条第 2 项榜单手动口排障口径，维持现状
   - `DELETE /api/admin/model/providers/:id`——前端 app.js 实有调用（`'.../providers/' + id` 尾拼接形态），v2.233 审计脚本对无尾字面量的拼接缝不匹配，系**审计假阳性**，维持现状
 - 审计假阳性类型学留档（下轮审计脚本改进方向）：①相对路径封装调用（admApi/admDownload/fbAdm/adAdm）；②尾拼接 `'.../' + var` 无尾字面量；③模板串内层引号截断（`${el.getAttribute('x')}`）；④`'/api-directory'` 相对路径 startsWith('/api') 误判
+- 第三轮复核（2026-10-01，脚本化重提取 206 端点 × 158 调用路径 + 人工逐点复核，详见 daily-review 2026-10-01 第二十八段）：
+  - **已获入口（移出孤儿清单）**：`GET /api/admin/model/api-directory/docx`——前端 app.js:8878 `admDownload('/model/api-directory/docx', …)`（v2.54 后台二进制下载封装）
+  - **新登记孤儿 4 条**（逐一读后端语义，均刻意保留/低价值，维持不接入口）：`GET /api/interview/sessions/:id`（单会话详情，前端列表/turn/brief/close 已覆盖，单查冗余）；`GET /api/novels/languages`（语言清单，前端本地化硬编码）；`GET /api/novels/validate`（源 URL 合法性校验，运营排障工具）；`GET /api/generate/scripts/:id`（单剧本详情，前端按项目维度消费 listen/diff，排障单查）
+  - **路径前缀更正**（以 app.ts L77-98 挂载为准）：历史登记的 `/api/knowledge/*` 实为 `/api/admin/knowledge/*`、`/api/admin-model/*` 实为 `/api/admin/model/*`、`/api/handoff/brief` 实为 `/api/admin/handoff/brief`
+  - 结论：孤儿端点全量对照审计收口，后续仅对新增路由做增量复核即可
