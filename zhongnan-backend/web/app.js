@@ -389,7 +389,11 @@
     xnSay(lang === 'en' ? 'X-Script ready. Describe your mature-rated story idea (no explicit porn).' : 'X剧本已就绪，描述你的成熟向创意吧（露骨色情仍会被硬拦截）。');
   };
   $('xMatureRevoke').onclick = async () => {
-    await Api.request('/api/generate/mature/consent/revoke', { method: 'POST' });
+    // v2.285 断网 reject 静默（全局网络 toast 已提示）；HTTP 非 ok 不得乐观提示撤销成功
+    try {
+      const r = await Api.request('/api/generate/mature/consent/revoke', { method: 'POST' });
+      if (!r.ok) { xnSay(znSanitizeErr((await r.json().catch(() => ({}))).error, r.status) || (lang === 'en' ? 'Revoke failed, please try again.' : '撤销失败，请稍后重试')); return; }
+    } catch { return; }
     xnSay(lang === 'en' ? 'Authorization revoked.' : '授权已撤销。');
     openXMature().catch(() => {});
   };
@@ -9440,7 +9444,10 @@
         </div></div>`).join('') : znEmptyHtml('暂无自定义供应商', '岗位全部走三档引擎组合');
     $('pvList').querySelectorAll('[data-pvdel]').forEach((b) => b.onclick = async () => {
       if (!(await uiConfirm({ body: '删除该供应商？相关岗位路由将自动解绑回退。', danger: true, okText: '删除' }))) return;
-      await admApi('/model/providers/' + b.getAttribute('data-pvdel'), { method: 'DELETE' });
+      // v2.285 admApi 经 jsonOrThrow 把网络层与 HTTP 非 ok 都 throw：catch 给失败结论并阻断乐观成功
+      try {
+        await admApi('/model/providers/' + b.getAttribute('data-pvdel'), { method: 'DELETE' });
+      } catch { xnSay('删除失败，请稍后重试'); return; }
       xnSay('已删除并解绑路由'); await loadProviders(); await loadAdmPortfolio();
     });
     $('pvList').querySelectorAll('[data-pvedit]').forEach((b) => b.onclick = () => {
