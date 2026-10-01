@@ -21,7 +21,7 @@
       homeQuickTitle: '快捷创作', homeAllModes: '全部 12 种模式 →',
       homeToolsTitle: '创作工具箱', homeToolsSub: '像真实编剧团队一样开会、判断、围读改稿',
       homeUpdatesTitle: '最新动态', homeUpdatesEmpty: '暂无新动态',
-      zoneCreate: '创作专区', works: '我的作品', market: '剧本交易', square: '交流广场', vip: '会员充值',
+      zoneCreate: '创作专区', works: '我的作品', market: '剧本交易', square: '交流广场', vip: '会员充值', backToList: '返回列表',
       navRoom: '编剧室', navToolbox: '工具箱', navCraft: '递招', navNovel: '素材库', toolboxSub: '拆解爆款、反同质化、互动分支校验——像真实编剧团队一样判断与改稿。',
       navAria: '主导航', breadcrumbAria: '面包屑', adRollAria: '公告与合作位', roomPanelAria: '编剧室', worksSearchPh: '🔍 搜索项目标题…',
       start: '开始创作', modesTitle: '选择创作模式（12 种）', modeTip: '不同会员等级解锁不同模式，越高阶越强', modesEyebrow: 'MODES',
@@ -167,7 +167,7 @@
     en: {
       brand: 'ZhongnanJi · AGI Master',
       footerLine: 'ZhongnanJi · AGI Screenwriting Master — proprietary AGI model and systematic prompt-engineering stack by Zhongnan Yinghua · Shaanxi Zhongnan Yinghua AI Technology Co., Ltd. · +86 18629152777', 
-      zoneCreate: 'Studio', works: 'My Works', market: 'Script Market', square: 'Plaza', vip: 'Membership',
+      zoneCreate: 'Studio', works: 'My Works', market: 'Script Market', square: 'Plaza', vip: 'Membership', backToList: 'Back to list',
       navRoom: 'Writers’ Room', navToolbox: 'Toolbox', navCraft: 'Craft Cards', navNovel: 'Sources', toolboxSub: 'Break down hits, fight copycatting, validate branching—judge and revise like a real writers’ room.',
       navAria: 'Main navigation', breadcrumbAria: 'Breadcrumb', adRollAria: 'Announcements & partners', roomPanelAria: 'Writers’ Room', worksSearchPh: '🔍 Search projects…',
       home: 'Home', homeEyebrow: 'ZHONGNAN · FILM ATELIER',

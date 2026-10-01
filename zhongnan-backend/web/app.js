@@ -55,6 +55,9 @@
     if (typeof syncTagBench === 'function') { const _tagDimWasInited = tagDimInited; syncTagBench(); if (_tagDimWasInited) Api.request('/api/tags/dimensions').then((r) => r.json()).then(fillTagDimSel).catch(() => {}); }
     // 语言切换时同步小南递招面板（钩子/方法卡显示语言）
     if (typeof renderCraftHooks === 'function' && craftTaxonomy) { renderCraftHooks(); renderCraftCards(); renderCraftPicked(); }
+    // v2.267 [P2-2a] 钩子编排摘要按钮（🎣 钩子编排：[系统智能]…）按界面语言重渲染；
+    // refreshHookSummary 内部对元素/数据全空值守卫，钩子卡未初始化时调用安全
+    if (typeof refreshHookSummary === 'function') refreshHookSummary();
     if (typeof renderBoardStatus === 'function') renderBoardStatus();
     if (typeof syncModeBrief === 'function') syncModeBrief();
     _initSyncing = false;
@@ -482,6 +485,16 @@
       }[selectedMode];
       if (_target) openWorkbench(_target);
       else if (selectedMode === 'adapt' || selectedMode === 'novel' || selectedMode === 'hit_lab') openWorkbench('sourceTextPanel');
+    }
+    // v2.267 [P1-1] 纯内联简报模式（shortvideo：有 modeBrief 但无专属工作台面板）：
+    // 点击卡片后把内联简报区平滑滚入视口并聚焦输入框，避免"点了没反应"
+    // （#workbenchLayer 不展开、简报区在卡片网格下方不可见）。初始化/语言同步期间不滚。
+    if (!_initSyncing && !['interview', 'softad', 'hot', 'interactive', 'adapt', 'novel', 'hit_lab', 'tags'].includes(selectedMode)) {
+      const _bp = $('modeBriefPanel');
+      if (_bp && !_bp.hidden) {
+        _bp.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        setTimeout(() => { const _ta = $('modeBrief'); if (_ta && document.contains(_ta)) _ta.focus({ preventScroll: true }); }, 350);
+      }
     }
   }
   /* ---------- v2.93 剧情软广·结构化品牌简报（标签/占位/软性度双语渲染 + 采集 + 合规错误回显） ---------- */
@@ -1205,7 +1218,12 @@
         (j.english && j.english.notes && j.english.notes.length ? `<p class="tag-en-note">${escapeHtml(j.english.notes.join('；'))}</p>` : '');
       why.classList.toggle('hidden', !lines.length);
       validateTagCombo();
-      if (lines[0]) xnSay(lines[0]);
+      // v2.267 [P2-2b] xiaonanLines 语言跟随"剧本输出语言"(#outLang)，与界面语言相互独立；
+      // EN 界面+中文输出时原文行（如"小南提醒：国庆…"）会突兀弹进英文 UI。
+      // 双语言一致才弹原文；否则弹界面语言中性就绪提示，推荐理由原文仍完整展示在 tagWhy 区。
+      if (lines[0]) xnSay(lang === outLocale() ? lines[0]
+        : (lang === 'en' ? 'Fresh tag combo is ready — see why these tags were picked below.'
+          : '新的标签组合已就绪，下方可查看推荐理由。'));
       if (typeof craftGo === 'function') craftGo().catch(() => {}); // 随机标签后自动递招，形成“懂市场→给手法”闭环
     } catch (e) {
       if (!silent) xnSay(lang === 'en' ? 'Tag service is busy, please retry.' : '标签服务开小差了，再点一次试试～');
@@ -2377,6 +2395,8 @@
   window.addEventListener('zn-adaptation-project', (event) => resumeAdaptationProject(event.detail?.project));
   async function loadWorks() {
     const account = capturePrivateSession();
+    // v2.267 [P3-1] 再点 nav「我的作品」/触发搜索即回列表态：收起可能正展开的作品详情
+    $('worksDetail')?.classList.add('hidden');
     const grid = $('worksGrid'), empty = $('worksEmpty'); grid.innerHTML = '';
     const ws = $('worksSearch');
     if (ws && !ws._bound) {
@@ -2548,6 +2568,14 @@
     }
   }
 
+  // v2.267 [P3-1] 作品详情返回列表：收起详情、清空分集加载态、复位当前项目并平滑滚回作品网格
+  function closeWorksDetail() {
+    const detail = $('worksDetail');
+    if (detail) detail.classList.add('hidden');
+    const epsBox = $('epsList'); if (epsBox) epsBox.innerHTML = '';
+    currentWorksProject = null; currentWorksDiagnosis = null;
+    const grid = $('worksGrid'); if (grid) grid.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
   async function openProject(p) {
     const account = capturePrivateSession();
     if (!isPrivateSessionCurrent(account)) return;
@@ -2555,6 +2583,7 @@
     const isCurrentProject = () => isPrivateSessionCurrent(account) && currentWorksProject?.id === p.id;
     const stalePanel = document.getElementById('readRewritePanel'); if (stalePanel) stalePanel.remove(); // c200：切作品即清围读面板，防 A 房意见挂到 B 项目
     const detail = $('worksDetail'); detail.classList.remove('hidden');
+    const worksBackBtn = $('worksBackBtn'); if (worksBackBtn) worksBackBtn.onclick = () => closeWorksDetail();
     $('worksDetailTitle').textContent = p.title;
     znSkeleton('epsList');
     // v2.257：scripts 取数失败必须就地兜底——作品卡片 onclick 为 fire-and-forget 无 catch，
@@ -8887,7 +8916,16 @@
   }
   async function loadAdmUsers() {
     const q = encodeURIComponent($('admUserQ').value.trim());
-    const d = await admApi(`/users?q=${q}&page=${admPage}&pageSize=20`);
+    // v2.267 [P1-2] 403（非超管）必须就地兜底：裸 await 会变 unhandled rejection 上报 pageerror，
+    // 与 models/balances tab 同范式——错误渲染进表区、清空 pager，绝不冒泡。
+    let d;
+    try {
+      d = await admApi(`/users?q=${q}&page=${admPage}&pageSize=20`);
+    } catch (e) {
+      $('admUserTable').innerHTML = znErrorHtml((e && e.message) || (lang === 'en' ? 'Request failed.' : '请求失败'));
+      $('admUserPager').innerHTML = '';
+      return;
+    }
     const head = `<thead><tr>
       <th>${t('admU_user')}</th><th>${t('admU_level')}</th><th>${t('points')}</th><th>${t('admU_works')}</th><th>${t('admU_actions')}</th></tr></thead>`;
     const rows = d.items.map((u) => {
