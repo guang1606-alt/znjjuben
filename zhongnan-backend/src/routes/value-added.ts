@@ -85,7 +85,8 @@ export function createValueAddedRouter(prisma: PrismaLike | any) {
     const p = posterSchema.safeParse(req.body);
     if (!p.success) return res.status(400).json({ error: '参数错误' });
     const key: ValueAddedKey = p.data.tier === 'FLAGSHIP' ? 'POSTER_FLAGSHIP' : 'POSTER_STANDARD';
-    const project = await prisma.project.findFirst({ where: { id: p.data.projectId, userId: req.userId! } });
+    // v2.296：已删=不存在——补 status 过滤（v2.295 修 PK 面时本面漏网；否则已删项目穿透到计费阶段，花 39/199 积分生成海报）
+    const project = await prisma.project.findFirst({ where: { id: p.data.projectId, userId: req.userId!, status: { not: 'deleted' } } });
     if (!project) return res.status(404).json({ error: '项目不存在' });
     const refId = `poster:${req.userId}:${project.id}:${p.data.tier}:${idemWindow()}:${nonceOf(req) || contentHash(p.data.style ?? '')}`;
     const staff = await staffOf(prisma, req.userId!);

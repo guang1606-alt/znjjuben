@@ -200,7 +200,9 @@ export function createTeardownRouter(prisma: PrismaLike | any) {
       const raw = tx.raw as any;
       const candidates = await raw.project.findMany({ where: { userId, bible: { path: ['adaptationDraft', 'recordId'], equals: rec.id } } });
       const related = candidates.filter((x: any) => x.bible?.adaptationDraft?.recordId === rec.id);
-      const matching = related.find((x: any) => isDeepStrictEqual(x.bible.adaptationDraft.outline, rec.outline));
+      // v2.296：已删=不存在——已删项目不构成「已承接」（否则 matching 命中已删项目直接返回，
+      // 记录标 TO_PROJECT 指向已删项目、新项目不创建；排除后照常走原地更新/新建承接）
+      const matching = related.find((x: any) => x.status !== 'deleted' && isDeepStrictEqual(x.bible.adaptationDraft.outline, rec.outline));
       if (matching) {
         await raw.teardownRecord.update({ where: { id: rec.id }, data: { state: 'TO_PROJECT' } });
         return matching;
