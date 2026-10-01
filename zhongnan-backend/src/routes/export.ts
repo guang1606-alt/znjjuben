@@ -46,7 +46,8 @@ export function createExportRouter(prisma: PrismaLike | any) {
     const owner = await prisma.user.findUnique({ where: { id: req.userId! } });
     if (!owner) return res.status(401).json({ error: '用户不存在' });
     if (owner.banned) return res.status(403).json({ error: '账号已封禁' });
-    const project = await prisma.project.findFirst({ where: { id: req.params.projectId, userId: req.userId! } });
+    // v2.295：已删=不存在（与 v2.293 generate 面同口径，导出/物料不得穿透软删除）
+    const project = await prisma.project.findFirst({ where: { id: req.params.projectId, userId: req.userId!, status: { not: 'deleted' } } });
     if (!project) return res.status(404).json({ error: '项目不存在或无权访问' });
     const scripts = latestScripts<any>(await prisma.script.findMany({ where: { projectId: project.id } }));
     if (!scripts.length) return res.status(400).json({ error: '该项目还没有成稿分集，暂无物料可聚合' });
@@ -76,7 +77,8 @@ export function createExportRouter(prisma: PrismaLike | any) {
     const wantNoWm = req.query.noWatermark === '1' || req.query.noWatermark === 'true';
     const noWatermark = wantNoWm && canRemoveWatermark(level);
 
-    const project = await prisma.project.findFirst({ where: { id: req.params.projectId, userId: req.userId! } });
+    // v2.295：已删=不存在（已删项目全剧正文不得再被打包下载）
+    const project = await prisma.project.findFirst({ where: { id: req.params.projectId, userId: req.userId!, status: { not: 'deleted' } } });
     if (!project) return res.status(404).json({ error: '项目不存在或无权访问' });
     let scripts = latestScripts<any>(await prisma.script.findMany({ where: { projectId: project.id } }));
     if (!scripts.length) return res.status(400).json({ error: '该项目还没有成稿分集，暂无可导出内容' });

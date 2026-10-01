@@ -271,7 +271,8 @@ export function createRoomRouter(prisma: PrismaLike | any) {
     if (p.data.scriptId) {
       // 必须校验剧本归属：否则任意登录用户凭 scriptId 即可把他人全文存入围读室再取回（IDOR）
       const sc = await prisma.script.findFirst({ where: { id: p.data.scriptId }, include: { project: true } });
-      if (!sc) return res.status(404).json({ error: '所选剧本不存在' });
+      // v2.295：已删=不存在——已删项目的剧本不得复活进围读室（否则全文入房并可凭邀请码外溢）
+      if (!sc || sc.project?.status === 'deleted') return res.status(404).json({ error: '所选剧本不存在' });
       if (!sc.project || sc.project.userId !== req.userId) return res.status(403).json({ error: '只能围读自己的剧本' });
       scriptText = sc.content;
     }
@@ -399,8 +400,8 @@ export function createRoomRouter(prisma: PrismaLike | any) {
       return res.json({ ok: true, linked: false, ready: false, packs: [], discussionPoints: [] });
     }
     const sc = await prisma.script.findFirst({ where: { id: room.scriptId }, include: { project: true } });
-    if (!sc || !sc.project) {
-      // 分集或项目被删：退化为无落点，不报错（结论本身仍在房内可复制）
+    if (!sc || !sc.project || sc.project.status === 'deleted') {
+      // 分集或项目被删（含软删除，v2.295 名实相符）：退化为无落点，不报错（结论本身仍在房内可复制）
       return res.json({ ok: true, linked: false, ready: false, packs: [], discussionPoints: [] });
     }
     const mine = sc.project.userId === req.userId;

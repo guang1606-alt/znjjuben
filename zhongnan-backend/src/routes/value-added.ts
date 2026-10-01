@@ -143,13 +143,13 @@ export function createValueAddedRouter(prisma: PrismaLike | any) {
       let titleA = '', titleB = '', contentsA: string[] = [], contentsB: string[] = [];
 
       if (useProject) {
-        const projA = await prisma.project.findFirst({ where: { id: p.data.projectAId, userId: req.userId! } });
+        const projA = await prisma.project.findFirst({ where: { id: p.data.projectAId, userId: req.userId!, status: { not: 'deleted' } } });
         if (!projA) { await giveBack(); res.status(404).json({ error: '项目不存在或不属于你' }); return; }
         titleA = projA.title;
         const epsA = await prisma.script.findMany({ where: { projectId: projA.id }, orderBy: { epNo: 'asc' } });
         contentsA = epsA.map((s: any) => s.content);
         if (p.data.projectBId) {
-          const projB = await prisma.project.findFirst({ where: { id: p.data.projectBId, userId: req.userId! } });
+          const projB = await prisma.project.findFirst({ where: { id: p.data.projectBId, userId: req.userId!, status: { not: 'deleted' } } });
           if (!projB) { await giveBack(); res.status(404).json({ error: '对手项目不存在或不属于你' }); return; }
           titleB = projB.title;
           const epsB = await prisma.script.findMany({ where: { projectId: projB.id }, orderBy: { epNo: 'asc' } });
@@ -165,7 +165,8 @@ export function createValueAddedRouter(prisma: PrismaLike | any) {
           prisma.script.findFirst({ where: { id: p.data.scriptAId }, include: { project: true } }),
           prisma.script.findFirst({ where: { id: p.data.scriptBId }, include: { project: true } }),
         ]);
-        if (!a || !b) { await giveBack(); res.status(404).json({ error: '剧本不存在' }); return; }
+        // v2.295：已删=不存在——已删项目的剧本按不存在处理（与归属校验同层的软删除穿透补漏）
+        if (!a || !b || a.project?.status === 'deleted' || b.project?.status === 'deleted') { await giveBack(); res.status(404).json({ error: '剧本不存在' }); return; }
         // A、B 都必须属于当前用户：否则花20积分即可分析/套取任意他人剧本全文（IDOR）
         if (!a.project || a.project.userId !== req.userId || !b.project || b.project.userId !== req.userId) {
           await giveBack();
