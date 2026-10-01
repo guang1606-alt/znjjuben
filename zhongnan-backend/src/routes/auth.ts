@@ -87,19 +87,23 @@ export function createAuthRouter(prisma: PrismaLike | any) {
   authRouter.post('/refresh', async (req, res) => {
     try {
       const { verifyRefresh, signRefresh } = await import('../lib/auth');
-      const { consumeRefreshToken } = await import('../lib/refresh-rotate');
+      const { withRefreshFlight } = await import('../lib/refresh-rotate');
       const { createHash } = await import('crypto');
       const data = verifyRefresh(req.body?.refreshToken);
       // 一次性消费（重放防护）：新格式 token 用 jti；旧格式无 jti 用 token 摘要兜底，同样只放行一次，刷完即升级为轮换 token
+      // v2.291 在途单飞：同 rt 并发续期（双标签页 access 同时到期）共享首个 flight 结果，
+      // 次个请求不再被判 REFRESH_REUSED 误踢全端；flight 完成后重放仍 401（重放防护不破）。
       const key = data.jti ?? `legacy:${createHash('sha256').update(String(req.body?.refreshToken)).digest('hex')}`;
-      if (!consumeRefreshToken(key, data.exp ?? Math.floor(Date.now() / 1000) + 86400)) {
-        return res.status(401).json({ error: 'REFRESH_REUSED' });
-      }
-      const user = await prisma.user.findUnique({ where: { id: data.sub } });
-      if (!user || user.banned) return res.status(401).json({ error: '无效凭证' });
-      const payload = { sub: user.id, level: user.level };
-      // 轮换：每次刷新同时下发新 refreshToken，旧 token 即刻作废
-      res.json({ accessToken: signAccess(payload), refreshToken: signRefresh(payload) });
+      const flight = await withRefreshFlight(key, data.exp ?? Math.floor(Date.now() / 1000) + 86400, async () => {
+        const user = await prisma.user.findUnique({ where: { id: data.sub } });
+        if (!user || user.banned) return null;
+        const payload = { sub: user.id, level: user.level };
+        // 轮换：每次刷新同时下发新 refreshToken，旧 token 即刻作废
+        return { accessToken: signAccess(payload), refreshToken: signRefresh(payload) };
+      });
+      if (!flight.ok) return res.status(401).json({ error: 'REFRESH_REUSED' });
+      if (!flight.value) return res.status(401).json({ error: '无效凭证' });
+      res.json(flight.value);
     } catch {
       res.status(401).json({ error: 'REFRESH_INVALID' });
     }

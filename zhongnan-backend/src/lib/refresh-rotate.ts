@@ -33,3 +33,30 @@ export function resetRefreshRotate(): void {
   consumed.clear();
   lastSweep = Date.now();
 }
+
+/**
+ * 续期在途单飞（v2.291）：同一 key 的并发续期共享首个 flight 的结果。
+ * 场景：双标签页同次登录、access 同时到期 → 两页并发 /refresh 带同一 rt；
+ * 无单飞时次个请求在首个完成后才消费（REFRESH_REUSED）→ 前端 clearSession 清共享
+ * localStorage → 全端误登出。单飞只合并「在途」，flight 完成后同 key 重放仍拒绝——
+ * 不留时间窗，重放防护语义（Auth0 式旋转+重放检测）完全不破。
+ * 原子性：check pending → consume → set pending 之间无 await，Node 单线程 run-to-completion 保证。
+ */
+const pending = new Map<string, Promise<unknown>>();
+
+export async function withRefreshFlight<T>(
+  key: string,
+  expSeconds: number,
+  fn: () => Promise<T>,
+): Promise<{ ok: boolean; value?: T }> {
+  const existing = pending.get(key);
+  if (existing) return { ok: true, value: (await existing) as T };
+  if (!consumeRefreshToken(key, expSeconds)) return { ok: false };
+  const p = fn();
+  pending.set(key, p);
+  try {
+    return { ok: true, value: await p };
+  } finally {
+    pending.delete(key);
+  }
+}
