@@ -8841,12 +8841,15 @@
   }
   // v2.54 后台二进制下载（带鉴权头，不走浏览器直链）
   async function admDownload(path, filename) {
-    const res = await Api.request('/api/admin' + path);
-    if (!res.ok) { xnSay('下载失败，请重试'); return; }
-    const blob = await res.blob();
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a'); a.href = url; a.download = filename; a.click();
-    setTimeout(() => URL.revokeObjectURL(url), 4000);
+    // v2.286 网络层 reject 与 res.blob() 失败均兜底：固定文案，不直送技术 message
+    try {
+      const res = await Api.request('/api/admin' + path);
+      if (!res.ok) { xnSay('下载失败，请重试'); return; }
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a'); a.href = url; a.download = filename; a.click();
+      setTimeout(() => URL.revokeObjectURL(url), 4000);
+    } catch { xnSay('下载失败，请重试'); }
   }
   function enterAdmin() {
     if (!Api.isAuthed()) { openAuth('login'); switchView('studio'); return; }
@@ -9086,8 +9089,16 @@
   let hdCache = null;
   const linesOf = (id) => $(id).value.split('\n').map((s) => s.trim()).filter(Boolean);
   async function loadAdmHandoff() {
-    hdCache = await admApi('/handoff');
-    const { snapshot, data, brief } = hdCache;
+    // v2.286 tab loader 断网/非 ok 就地错误态，绝不冒泡 unhandledrejection
+    let hd;
+    try {
+      hd = await admApi('/handoff');
+    } catch (e) {
+      $('hdSnapshot').innerHTML = znErrorHtml((e && e.message) || (lang === 'en' ? 'Request failed.' : '请求失败'));
+      return;
+    }
+    hdCache = hd;
+    const { snapshot, data, brief } = hd;
     $('hdSnapshot').innerHTML = `<b>${escapeHtml(snapshot.product)} v${escapeHtml(snapshot.version)}</b>　` +
       snapshot.facts.map((f) => `${escapeHtml(f.label)}：${escapeHtml(f.value)}`).join('　｜　');
     $('hdLast').value = data.lastDelivery || '';
@@ -9105,16 +9116,20 @@
     };
   }
   async function saveAdmHandoff() {
-    const j = await admApi('/handoff', { method: 'PUT', body: JSON.stringify(hdBody()) });
-    hdCache = { ...(hdCache || {}), data: j.data, brief: j.brief };
-    $('hdBrief').value = j.brief; xnSay('接续脉络已加密保存');
+    try {
+      const j = await admApi('/handoff', { method: 'PUT', body: JSON.stringify(hdBody()) });
+      hdCache = { ...(hdCache || {}), data: j.data, brief: j.brief };
+      $('hdBrief').value = j.brief; xnSay('接续脉络已加密保存');
+    } catch (e) { xnSay((e && e.message) || (lang === 'en' ? 'Save failed.' : '保存失败')); }
   }
   async function appendAdmHandoff() {
     const version = $('hdLogVer').value.trim(), summary = $('hdLogSum').value.trim();
     if (!version || !summary) { xnSay('版本号与内容都要填'); return; }
-    const j = await admApi('/handoff/append', { method: 'POST', body: JSON.stringify({ version, date: new Date().toISOString().slice(0, 10), summary }) });
-    hdCache = { ...(hdCache || {}), data: j.data };
-    await saveAdmHandoff(); $('hdLogVer').value = ''; $('hdLogSum').value = '';
+    try {
+      const j = await admApi('/handoff/append', { method: 'POST', body: JSON.stringify({ version, date: new Date().toISOString().slice(0, 10), summary }) });
+      hdCache = { ...(hdCache || {}), data: j.data };
+      await saveAdmHandoff(); $('hdLogVer').value = ''; $('hdLogSum').value = '';
+    } catch (e) { xnSay((e && e.message) || (lang === 'en' ? 'Save failed.' : '保存失败')); }
   }
   async function copyHandoffBrief() {
     const txt = $('hdBrief').value;
@@ -9138,7 +9153,14 @@
   }
   // ── 合规规则库（PRD 9.2.6 敏感词库，默认规则只读可停用，自定义可增删）──
   async function loadAdmSafety() {
-    const d = await admApi('/safety/rules');
+    // v2.286 断网/非 ok 就地错误态进表区，不冒泡（切 tab fire-and-forget 无调用点 catch）
+    let d;
+    try {
+      d = await admApi('/safety/rules');
+    } catch (e) {
+      $('sfTbody').innerHTML = `<tr><td colspan="6">${znErrorHtml((e && e.message) || (lang === 'en' ? 'Request failed.' : '请求失败'))}</td></tr>`;
+      return;
+    }
     const c = d.counts || {};
     $('sfCounts').textContent = (lang === 'en'
       ? `Total ${c.total} · active ${c.active} · BLOCK ${c.block} · WARN ${c.warn} · custom ${c.custom} · disabled ${c.disabled}`
@@ -9173,18 +9195,24 @@
     } catch (e) { xnSay(e.message); }
   }
   async function toggleAdmSafety(id, active) {
-    await admApi(`/safety/rules/${encodeURIComponent(id)}/toggle`, { method: 'POST', body: JSON.stringify({ active }) });
-    loadAdmSafety();
+    try {
+      await admApi(`/safety/rules/${encodeURIComponent(id)}/toggle`, { method: 'POST', body: JSON.stringify({ active }) });
+      loadAdmSafety();
+    } catch (e) { xnSay((e && e.message) || (lang === 'en' ? 'Request failed.' : '操作失败')); }
   }
   async function delAdmSafety(id) {
     if (!(await uiConfirm({ body: lang === 'en' ? 'Delete this custom rule?' : '删除该自定义规则？', danger: true, okText: lang === 'en' ? 'Delete' : '删除' }))) return;
-    await admApi(`/safety/rules/${encodeURIComponent(id)}`, { method: 'DELETE' });
-    loadAdmSafety();
+    try {
+      await admApi(`/safety/rules/${encodeURIComponent(id)}`, { method: 'DELETE' });
+      loadAdmSafety();
+    } catch (e) { xnSay((e && e.message) || (lang === 'en' ? 'Request failed.' : '删除失败')); }
   }
   async function resetAdmSafety() {
     if (!(await uiConfirm({ body: lang === 'en' ? 'Reset to built-in rules?' : '恢复为默认规则库？所有自定义与停用将清空', danger: true, okText: lang === 'en' ? 'Reset' : '重置' }))) return;
-    await admApi('/safety/reset', { method: 'POST', body: '{}' });
-    xnSay(lang === 'en' ? 'Reset done.' : '已恢复默认规则库'); loadAdmSafety();
+    try {
+      await admApi('/safety/reset', { method: 'POST', body: '{}' });
+      xnSay(lang === 'en' ? 'Reset done.' : '已恢复默认规则库'); loadAdmSafety();
+    } catch (e) { xnSay((e && e.message) || (lang === 'en' ? 'Request failed.' : '操作失败')); }
   }
   // c199 开设账号（仅主账号）：预设初始密码 + 权限档，可选授副管理员；成功即刷新列表
   async function admCreateUser() {
@@ -9283,7 +9311,13 @@
     return `<div class="stat-card"><b>${val}</b><span>${label}${sub ? `<em>${sub}</em>` : ''}</span></div>`;
   }
   async function loadAdmStats() {
-    const d = await admApi('/stats/overview');
+    let d;
+    try {
+      d = await admApi('/stats/overview');
+    } catch (e) {
+      $('admStatCards').innerHTML = znErrorHtml((e && e.message) || (lang === 'en' ? 'Request failed.' : '请求失败'));
+      return;
+    }
     const cards = [
       statCard(t('admS_users'), d.users.total, `${t('admS_newToday')} ${d.users.newToday} · ${t('admS_banned')} ${d.users.banned}`),
       statCard(t('admS_projects'), d.projects.total, Object.entries(d.projects.byMode).map(([k, v]) => `${k}:${v}`).join(' ')),
@@ -9296,7 +9330,13 @@
     $('admStatCards').innerHTML = cards.join('');
   }
   async function loadAdmFinance() {
-    const d = await admApi('/finance/overview');
+    let d;
+    try {
+      d = await admApi('/finance/overview');
+    } catch (e) {
+      $('admFinanceCards').innerHTML = znErrorHtml((e && e.message) || (lang === 'en' ? 'Request failed.' : '请求失败'));
+      return;
+    }
     $('admFinanceCards').innerHTML =
       statCard(t('admF_revenue'), '¥' + (d.paidRevenueFen / 100).toFixed(2), `${t('admF_paidCount')} ${d.paidOrderCount}`) +
       statCard(t('admF_pointsIn'), d.points.in, '') +
@@ -9307,7 +9347,13 @@
   }
   async function loadAdmPosts() {
     const filter = $('admPostFilter').value;
-    const d = await admApi('/posts?hidden=' + filter);
+    let d;
+    try {
+      d = await admApi('/posts?hidden=' + filter);
+    } catch (e) {
+      $('admPostList').innerHTML = znErrorHtml((e && e.message) || (lang === 'en' ? 'Request failed.' : '请求失败'));
+      return;
+    }
     $('admPostList').innerHTML = d.items.map((p) => `<div class="post-card">
       <h4>${escapeHtml(p.title)} ${p.hidden ? `<b style="color:var(--danger,#e5484d)">[${t('admHidden')}]</b>` : ''}</h4>
       <div class="pc-body">${escapeHtml(p.body)}</div>
@@ -9484,8 +9530,10 @@
   async function saveRoutes() {
     const body = {};
     $('routeList').querySelectorAll('[data-role]').forEach((s) => { body[s.getAttribute('data-role')] = s.value; });
-    await admApi('/model/routing', { method: 'PUT', body: JSON.stringify(body) });
-    xnSay('岗位路由已保存'); await loadProviders(); await loadAdmPortfolio();
+    try {
+      await admApi('/model/routing', { method: 'PUT', body: JSON.stringify(body) });
+      xnSay('岗位路由已保存'); await loadProviders(); await loadAdmPortfolio();
+    } catch (e) { xnSay((e && e.message) || (lang === 'en' ? 'Save failed.' : '保存失败')); }
   }
 
   /* ---------- 管理后台：学习窗口 ---------- */
