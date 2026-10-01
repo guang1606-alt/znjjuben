@@ -2404,6 +2404,19 @@
   }
   window.addEventListener('zn-adaptation-project', (event) => resumeAdaptationProject(event.detail?.project));
   let worksReqSeq = 0; // v2.274：作品搜索同会话请求序号，弱网乱序时旧查询响应一律作废（同 mkReqSeq/feedReqSeq 范式）
+  // v2.275：作品卡片写操作（重命名/克隆/归档/删除）统一在途锁 + 提交中按钮反馈。
+  // 弱网下克隆等非幂等请求在途时重复点击会创建重复副本（dogfood 第十轮实测 clone 被连发 2 次、项目 1→3）。
+  // 函数级锁跨卡片/跨 loadWorks 重渲染持久（同 _sqPosting/_placingOrder 范式）；被点按钮即时 disabled 并
+  // 显示「…中」文案，消除移动端弱网「没点上」的误判。prompt/confirm 思考期不占锁，确认发请求才进入。
+  let _workActionBusy = false;
+  async function runWorkAction(btn, busyText, task) {
+    if (_workActionBusy) return;
+    _workActionBusy = true;
+    const oldTxt = btn.textContent, oldDisabled = btn.disabled;
+    btn.disabled = true; btn.textContent = busyText;
+    try { await task(); }
+    finally { btn.disabled = oldDisabled; btn.textContent = oldTxt; _workActionBusy = false; }
+  }
   async function loadWorks() {
     const account = capturePrivateSession();
     const seq = ++worksReqSeq; // v2.274：发请求前自增，await 回来后据此判新旧（防抖连搜/翻页乱序）
@@ -2446,37 +2459,45 @@
           if (act === 'rename') {
             const newTitle = ((await uiPrompt({ body: lang === 'en' ? 'New title:' : '输入新标题：', value: p.title })) || '').trim();
             if (!newTitle || newTitle === p.title) return;
+            await runWorkAction(btn, lang === 'en' ? 'Renaming…' : '重命名中…', async () => {
             try {
               const r = await Api.request(`/api/generate/projects/${p.id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ title: newTitle }) });
               await Api.jsonOrThrow(r);
               xnSay(lang === 'en' ? 'Renamed.' : '已重命名');
               loadWorks();
             } catch (err) { xnSay((err && err.message) || (lang === 'en' ? 'Rename failed.' : '重命名失败')); }
+            });
           } else if (act === 'clone') {
             const newTitle = ((await uiPrompt({ body: lang === 'en' ? 'Title for the cloned project:' : '克隆项目的新标题：', value: `${p.title} - 副本` })) || '').trim();
             if (!newTitle) return;
+            await runWorkAction(btn, lang === 'en' ? 'Cloning…' : '克隆中…', async () => {
             try {
               const r = await Api.request(`/api/generate/projects/${p.id}/clone`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ title: newTitle }) });
               await Api.jsonOrThrow(r);
               xnSay(lang === 'en' ? 'Cloned. Open it to start a new draft.' : '克隆成功，打开新项目开始创作');
               loadWorks();
             } catch (err) { xnSay((err && err.message) || (lang === 'en' ? 'Clone failed.' : '克隆失败')); }
+            });
           } else if (act === 'archive') {
             const toArchive = p.status !== 'archived';
+            await runWorkAction(btn, toArchive ? (lang === 'en' ? 'Archiving…' : '归档中…') : (lang === 'en' ? 'Restoring…' : '恢复中…'), async () => {
             try {
               const r = await Api.request(`/api/generate/projects/${p.id}/archive`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ archive: toArchive }) });
               await Api.jsonOrThrow(r);
               xnSay(toArchive ? (lang === 'en' ? 'Archived.' : '已归档') : (lang === 'en' ? 'Restored.' : '已恢复'));
               loadWorks();
             } catch (err) { xnSay((err && err.message) || (lang === 'en' ? 'Archive failed.' : '归档失败')); }
+            });
           } else if (act === 'delete') {
             if (!(await uiConfirm({ body: lang === 'en' ? `Delete "${p.title}"? This can be undone later.` : `确定删除"${p.title}"吗？（软删除，可恢复）`, danger: true, okText: lang === 'en' ? 'Delete' : '删除' }))) return;
+            await runWorkAction(btn, lang === 'en' ? 'Deleting…' : '删除中…', async () => {
             try {
               const r = await Api.request(`/api/generate/projects/${p.id}`, { method: 'DELETE' });
               await Api.jsonOrThrow(r);
               xnSay(lang === 'en' ? 'Deleted.' : '已删除');
               loadWorks();
             } catch (err) { xnSay((err && err.message) || (lang === 'en' ? 'Delete failed.' : '删除失败')); }
+            });
           }
         };
       });

@@ -71,6 +71,8 @@ function setup(handler = async () => response([])) {
     curPurchase: null, purchaseViewSeq: 0,
     // v2.274：loadWorks 同会话搜索请求序号（产品侧模块级 let，harness 逐函数 vm 求值需在此预置，同 purchaseViewSeq）
     worksReqSeq: 0,
+    // v2.275：作品卡片写操作在途锁（模块级 let），runWorkAction 内读写，需在 context 预置
+    _workActionBusy: false,
     selectedMode: 'original', LEVEL_ZH: { FREE: '免费' }, LEVEL_EN: { FREE: 'Free' },
     document: {
       createElement: () => element(), getElementById: id => nodes.get(id) || null,
@@ -121,6 +123,8 @@ function setup(handler = async () => response([])) {
   for (const name of [
     'privateAccountId', 'syncPrivateAccount', 'capturePrivateSession', 'isPrivateSessionCurrent',
     'resetPrivateAccountState', 'clearDraftProject', 'renderAuthButton', 'loadWorks', 'openProject',
+    // v2.275：loadWorks 的卡片操作经 runWorkAction（在途锁+按钮态），注入真实实现以解析引用
+    'runWorkAction',
     'viewPurchasedScript',
     // 合并（剧本1）后 renderAuthButton 依赖身份标签函数（v2.193），一并注入真实实现
     'userRoleLabel', 'isStaffAcct',
