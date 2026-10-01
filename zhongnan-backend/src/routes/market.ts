@@ -103,6 +103,8 @@ export function createMarketRouter(prisma: PrismaLike | any) {
       if (scripts[0]) script = await prisma.script.findFirst({ where: { id: scripts[0].id }, include: { project: true } });
     }
     if (!script || !script.project) return null;
+    // v2.297：已删=不存在——软删只改 project.status、scripts 原样保留，已删项目不得进入新增上架/价值预览入口
+    if (script.project.status === 'deleted') return null;
     return { script, scriptId: script.id };
   }
 
