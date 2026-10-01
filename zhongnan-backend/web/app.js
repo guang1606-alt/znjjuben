@@ -2499,8 +2499,20 @@
     const detail = $('worksDetail'); detail.classList.remove('hidden');
     $('worksDetailTitle').textContent = p.title;
     znSkeleton('epsList');
-    const res = await Api.request(`/api/generate/projects/${p.id}/scripts`);
-    const eps = await Api.jsonOrThrow(res);
+    // v2.257：scripts 取数失败必须就地兜底——作品卡片 onclick 为 fire-and-forget 无 catch，
+    // 抛错冒泡会让 epsList 永久停在骨架屏（死骨架，与死 loading 同族）。
+    let eps = [];
+    try {
+      const res = await Api.request(`/api/generate/projects/${p.id}/scripts`);
+      eps = await Api.jsonOrThrow(res);
+    } catch (e) {
+      if (!isCurrentProject()) return;
+      $('epsList').innerHTML = znErrorHtml((e && e.message) || (lang === 'en' ? 'Failed to load episodes.' : '分集加载失败'))
+        + `<div class="zn-retry-row"><button type="button" class="btn-ghost eps-retry">${lang === 'en' ? 'Retry' : '重试'}</button></div>`;
+      const retryBtn = $('epsList').querySelector('.eps-retry');
+      if (retryBtn) retryBtn.onclick = () => { openProject(p).catch(() => {}); };
+      return;
+    }
     if (!isCurrentProject()) return;
     if (!eps.length) {
       const resumeBtn = p.bible?.adaptationDraft?.brief ? `<button type="button" class="btn-primary" id="worksResumeDraft">${lang === 'en' ? 'Continue adaptation' : '继续改编创作'}</button>` : '';

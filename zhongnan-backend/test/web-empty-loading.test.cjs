@@ -460,3 +460,20 @@ describe('v2.256 muted 错误态族 + rrrefresh 死按钮', () => {
     assert.ok(/stale\.disabled\s*=\s*false/.test(region), 'finally 应恢复 stale 按钮 disabled（openProject 抛错时不死在「刷新中…」）');
   });
 });
+
+describe('v2.257 epsList 死骨架收口（openProject 主入口无 catch 兜底）', () => {
+  it('epsList skeleton 后的 scripts 取数有局部 try/catch，失败写 znErrorHtml 且可重试', () => {
+    const s = src.indexOf("znSkeleton('epsList')");
+    assert.ok(s >= 0, '应定位到 epsList skeleton 写入点');
+    // 窗口覆盖：skeleton → 注释 → try → 取数 → catch 错误态+重试（中文注释占宽，需 900）
+    const region = src.slice(s, s + 900);
+    const tryPos = region.indexOf('try {');
+    const catchPos = region.search(/\bcatch\b\s*\([^)]*\)\s*\{/);
+    assert.ok(tryPos >= 0, 'scripts 取数应被 try 包裹（失败不能冒泡到 2351 无 catch 的 onclick 导致死骨架）');
+    assert.ok(catchPos > tryPos, '取数段后应有 catch 兜底');
+    const catchBody = catchPos >= 0 ? region.slice(catchPos, catchPos + 600) : '';
+    assert.ok(catchBody.includes("('epsList')") && catchBody.indexOf('znErrorHtml') >= 0,
+      'catch 应向 epsList 写 znErrorHtml（不能留骨架屏永久占位）');
+    assert.ok(/openProject\(\s*p\s*\)/.test(catchBody), '错误态应提供重试入口（重调 openProject(p)）');
+  });
+});
