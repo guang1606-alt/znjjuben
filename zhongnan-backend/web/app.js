@@ -3335,16 +3335,23 @@
       likeBtn.onclick = async () => {
         if (!Api.isAuthed()) { openAuth('login'); return; }
         const method = likeBtn.dataset.liked === '1' ? 'DELETE' : 'POST';
+        // v2.283 网络层 reject 兜底：断网时 api.js 全局 onNetworkError 已弹 toast，
+        // 此处静默 catch 防 unhandledrejection 冒泡污染监控；业务错误（非 ok）仍走 xnSay
+        try {
         const r = await Api.request(`/api/community/posts/${p.id}/like`, { method });
         if (r.ok) { const j = await r.json().catch(() => ({})); likeBtn.textContent = `♡ ${j.likes ?? p.likes}`; likeBtn.dataset.liked = method === 'POST' ? '1' : '0'; }
         else xnSay(znSanitizeErr((await r.json().catch(() => ({}))).error, r.status) || 'error');
+        } catch { /* 全局网络 toast 已提示，按钮保持原态可再点 */ }
       };
       const delBtn = c.querySelector('.del-post');
       if (delBtn) delBtn.onclick = async () => {
         if (!(await uiConfirm({ body: lang==='en' ? 'Delete this post?' : '确定删除这条帖子吗？', danger: true, okText: lang==='en' ? 'Delete' : '删除' }))) return;
+        // v2.283 同 like handler：网络层异常由全局 toast 提示，静默 catch 防 unhandledrejection
+        try {
         const r = await Api.request(`/api/community/posts/${p.id}`, { method: 'DELETE' });
         if (r.ok) { xnSay(lang==='en'?'Deleted':'已删除'); loadFeed(); }
         else xnSay(znSanitizeErr((await r.json().catch(() => ({}))).error, r.status) || 'error');
+        } catch { /* 全局网络 toast 已提示，卡片保留可再删 */ }
       };
       feed.appendChild(c);
     });
