@@ -704,10 +704,10 @@
       <div class="zn-pager hidden" id="mkPager"></div>
 
       <!-- v2.152 角色资产库管理面板：列表/体检/编辑/删除 -->
-      <div class="modal-mask hidden" id="castLibModal">
+      <div class="modal-mask hidden" id="castLibModal" aria-labelledby="castLibModalTitle">
         <div class="modal modal-wide">
           <button class="modal-x" data-close="castLibModal">×</button>
-          <h3 data-i="castLibTitle">角色资产库</h3>
+          <h3 id="castLibModalTitle" data-i="castLibTitle">角色资产库</h3>
           <!-- v2.167 资产看板入口：跨族热度榜 + 空壳补全优先级 -->
           <button type="button" class="adm-btn" data-open-dash="cast" style="margin:6px 0 8px;padding:6px 12px;font-size:13px" data-i="dashOpenBtn">📊 资产看板（跨族热度/补全优先级）</button>
           <!-- v2.163 资产库检索：跨剧按关键词搜资产 -->
@@ -719,10 +719,10 @@
         </div>
       </div>
       <!-- v2.159 道具资产库管理面板：列表/体检/编辑/删除 -->
-      <div class="modal-mask hidden" id="propLibModal">
+      <div class="modal-mask hidden" id="propLibModal" aria-labelledby="propLibModalTitle">
         <div class="modal modal-wide">
           <button class="modal-x" data-close="propLibModal">×</button>
-          <h3 data-i="propLibTitle">道具资产库</h3>
+          <h3 id="propLibModalTitle" data-i="propLibTitle">道具资产库</h3>
           <!-- v2.167 资产看板入口：跨族热度榜 + 空壳补全优先级 -->
           <button type="button" class="adm-btn" data-open-dash="prop" style="margin:6px 0 8px;padding:6px 12px;font-size:13px" data-i="dashOpenBtn">📊 资产看板（跨族热度/补全优先级）</button>
           <!-- v2.163 资产库检索：跨剧按关键词搜资产 -->
@@ -734,10 +734,10 @@
         </div>
       </div>
       <!-- v2.161 场景资产库管理面板：列表/体检/编辑/删除 -->
-      <div class="modal-mask hidden" id="sceneLibModal">
+      <div class="modal-mask hidden" id="sceneLibModal" aria-labelledby="sceneLibModalTitle">
         <div class="modal modal-wide">
           <button class="modal-x" data-close="sceneLibModal">×</button>
-          <h3 data-i="sceneLibTitle">场景资产库</h3>
+          <h3 id="sceneLibModalTitle" data-i="sceneLibTitle">场景资产库</h3>
           <!-- v2.167 资产看板入口：跨族热度榜 + 空壳补全优先级 -->
           <button type="button" class="adm-btn" data-open-dash="scene" style="margin:6px 0 8px;padding:6px 12px;font-size:13px" data-i="dashOpenBtn">📊 资产看板（跨族热度/补全优先级）</button>
           <!-- v2.163 资产库检索：跨剧按关键词搜资产 -->
@@ -749,19 +749,19 @@
         </div>
       </div>
       <!-- v2.167 资产看板：跨族热度榜 + 空壳补全优先级队列（L3 运营决策面，三族共用入口） -->
-      <div class="modal-mask hidden" id="assetDashboardModal">
+      <div class="modal-mask hidden" id="assetDashboardModal" aria-labelledby="assetDashboardModalTitle">
         <div class="modal modal-wide">
           <button class="modal-x" data-close="assetDashboardModal">×</button>
-          <h3 data-i="dashTitle">资产看板</h3>
+          <h3 id="assetDashboardModalTitle" data-i="dashTitle">资产看板</h3>
           <div id="dashBody"><div class="muted">加载中…</div></div>
         </div>
       </div>
       <!-- 挂卖弹窗 -->
       <!-- v2.185.14 c194 用户反馈中心：提交建议/Bug + 我的工单进度 + 小南暖心回复（后端 /api/feedback 全套此前仅管理员端接线） -->
-      <div class="modal-mask hidden" id="feedbackModal">
+      <div class="modal-mask hidden" id="feedbackModal" aria-labelledby="feedbackModalTitle">
         <div class="modal modal-wide">
           <button class="modal-x" data-close="feedbackModal">×</button>
-          <h3 data-i="fbTitle"></h3>
+          <h3 id="feedbackModalTitle" data-i="fbTitle"></h3>
           <div class="fb-tabs">
             <button class="fb-tab active" id="fbTabSubmit" data-i="fbTabSubmit"></button>
             <button class="fb-tab" id="fbTabMine" data-i="fbTabMine"></button>
@@ -810,10 +810,10 @@
         </div>
       </div>
       <!-- v2.185.14 c194 制式样例馆：新用户 0 积分查看通过格式闸门的达标剧本长什么样（LIVE/AIGC 双制式） -->
-      <div class="modal-mask hidden" id="sampleModal">
+      <div class="modal-mask hidden" id="sampleModal" aria-labelledby="sampleModalTitle">
         <div class="modal modal-wide">
           <button class="modal-x" data-close="sampleModal">×</button>
-          <h3 data-i="sampleTitle"></h3>
+          <h3 id="sampleModalTitle" data-i="sampleTitle"></h3>
           <div class="fb-tabs">
             <button class="fb-tab active" id="smpTabLive" data-i="smpLive"></button>
             <button class="fb-tab" id="smpTabAigc" data-i="smpAigc"></button>
@@ -823,10 +823,10 @@
           <pre class="full-text" id="smpText" style="max-height:58vh"></pre>
         </div>
       </div>
-      <div class="modal-mask hidden" id="listModal">
+      <div class="modal-mask hidden" id="listModal" aria-labelledby="listModalTitle">
         <div class="modal">
           <button class="modal-x" data-close="listModal">×</button>
-          <h3 data-i="mkList"></h3>
+          <h3 id="listModalTitle" data-i="mkList"></h3>
           <div class="field"><label data-i="pickScript" for="listScript"></label><select id="listScript"></select></div>
           <div class="list-value hidden" id="listValue"></div>
           <div class="field"><label data-i="listPrice" for="listPrice"></label><input id="listPrice" type="number" min="1" step="0.1" placeholder="¥ ≥1，0.1 元整数倍" /></div>
@@ -836,7 +836,7 @@
         </div>
       </div>
       <!-- 购买后全本弹窗 -->
-      <div class="modal-mask hidden" id="fullModal">
+      <div class="modal-mask hidden" id="fullModal" aria-labelledby="fullTitle">
         <div class="modal modal-wide">
           <button class="modal-x" data-close="fullModal">×</button>
           <h3 id="fullTitle"></h3>
@@ -850,14 +850,14 @@
         </div>
       </div>
       <!-- v2.73 买家详情弹窗：价值证书维度+样章+价格，先看再买 -->
-      <div class="modal-mask hidden" id="detailModal">
+      <div class="modal-mask hidden" id="detailModal" aria-label="作品详情">
         <div class="modal modal-wide">
           <button class="modal-x" data-close="detailModal">×</button>
           <div id="detailBody"></div>
         </div>
       </div>
       <!-- 听剧本弹窗（高级会员及以上） -->
-      <div class="modal-mask hidden" id="listenModal">
+      <div class="modal-mask hidden" id="listenModal" aria-labelledby="listenTitle">
         <div class="modal modal-wide">
           <button class="modal-x" data-close="listenModal">×</button>
           <h3 id="listenTitle">🎧 听剧本</h3>
@@ -896,7 +896,7 @@
         </div>
       </div>
       <!-- v2.64 导演交付包预览弹窗 -->
-      <div class="modal-mask hidden" id="dpModal">
+      <div class="modal-mask hidden" id="dpModal" aria-labelledby="dpTitle">
         <div class="modal modal-wide">
           <button class="modal-x" data-close="dpModal">×</button>
           <h3 id="dpTitle">导演交付包预览</h3>
@@ -913,7 +913,7 @@
         </div>
       </div>
       <!-- v2.154 制作物料清单 弹窗 -->
-      <div class="modal-mask hidden" id="matModal">
+      <div class="modal-mask hidden" id="matModal" aria-labelledby="matTitle">
         <div class="modal modal-wide">
           <button class="modal-x" data-close="matModal">×</button>
           <h3 id="matTitle">制作物料清单</h3>
@@ -926,10 +926,10 @@
         </div>
       </div>
       <!-- v2.67 剧本PK 弹窗 -->
-      <div class="modal-mask hidden" id="pkModal">
+      <div class="modal-mask hidden" id="pkModal" aria-labelledby="pkModalTitle">
         <div class="modal modal-wide">
           <button class="modal-x" data-close="pkModal">×</button>
-          <h3 data-i="pkTitle">⚔️ 剧本PK</h3>
+          <h3 id="pkModalTitle" data-i="pkTitle">⚔️ 剧本PK</h3>
           <div class="pk-setup" id="pkSetup">
             <p class="muted" data-i="pkSetupHint">选择对手：用你另一个项目对阵，或直接挑战平台标杆本。PK 消耗 20 积分，结果仅作游戏化参考。</p>
             <div class="pk-opponents" id="pkOpponents"></div>
@@ -968,10 +968,10 @@
         </div>
       </div>
       <!-- v2.69 剧本价值证书弹窗 -->
-      <div class="modal-mask hidden" id="valueModal">
+      <div class="modal-mask hidden" id="valueModal" aria-labelledby="valueModalTitle">
         <div class="modal modal-wide">
           <button class="modal-x" data-close="valueModal">×</button>
-          <h3 data-i="valueTitle">💎 剧本价值证书</h3>
+          <h3 id="valueModalTitle" data-i="valueTitle">💎 剧本价值证书</h3>
           <div id="valueBody"><p class="muted" data-i="valueLoading">正在评估剧本价值…</p></div>
           <div class="row-actions hidden" id="valueActions">
             <button class="btn-primary" id="valueShareCopyBtn" data-i="valueCopyShare">一键复制分享文案</button>
@@ -981,10 +981,10 @@
         </div>
       </div>
       <!-- v2.70 立项前智能默认预览弹窗 -->
-      <div class="modal-mask hidden" id="smartModal">
+      <div class="modal-mask hidden" id="smartModal" aria-labelledby="smartModalTitle">
         <div class="modal modal-wide">
           <button class="modal-x" data-close="smartModal">×</button>
-          <h3 data-i="smartTitle">✨ 系统智能默认（生成前可改）</h3>
+          <h3 id="smartModalTitle" data-i="smartTitle">✨ 系统智能默认（生成前可改）</h3>
           <div id="smartBody"><p class="muted" data-i="smartLoading">小南正在结合时令、热趋势和你的偏好整理默认方案…</p></div>
           <div class="row-actions">
             <button class="btn-primary" data-close="smartModal" data-i="smartGotIt">就按这个来</button>
@@ -992,15 +992,15 @@
         </div>
       </div>
       <!-- 我的交易弹窗 -->
-      <div class="modal-mask hidden" id="mineModal">
+      <div class="modal-mask hidden" id="mineModal" aria-labelledby="mineModalTitle">
         <div class="modal modal-wide">
           <button class="modal-x" data-close="mineModal">×</button>
-          <h3 data-i="mkMine"></h3>
+          <h3 id="mineModalTitle" data-i="mkMine"></h3>
           <div id="mineBox"></div>
         </div>
       </div>
       <!-- X剧本成年分级问卷与免责授权（v2.40 前端接线，后端 mature-gating 强校验） -->
-      <div class="modal-mask hidden" id="xMatureModal">
+      <div class="modal-mask hidden" id="xMatureModal" aria-labelledby="xMatureTitle">
         <div class="modal modal-wide">
           <button class="modal-x" data-close="xMatureModal">×</button>
           <h3 id="xMatureTitle"></h3>
@@ -1300,7 +1300,7 @@
     </div>
   </main>
   <!-- 登录/注册模态 -->
-  <div class="modal-mask hidden" id="authModal">
+  <div class="modal-mask hidden" id="authModal" aria-label="登录或注册">
     <div class="modal">
       <button class="modal-x" id="authClose">×</button>
       <div class="auth-tabs">
