@@ -57,7 +57,8 @@ export function bannedGuard(prisma: any) {
       if (banned) return res.status(403).json({ error: '账号已封禁' });
       return next();
     } catch {
-      return next();
+      // v2.302 修复：数据库异常时不得静默放行（封禁穿透）——503 拒绝并提示系统繁忙
+      return res.status(503).json({ error: '系统繁忙，请稍后重试' });
     }
   };
 }

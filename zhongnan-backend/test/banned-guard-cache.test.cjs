@@ -100,6 +100,18 @@ test('bannedGuard：写入超 MAX 条目时缓存 size 始终受控（防无界�
   assert.ok(true, `成功处理 ${over} 个不同 sub 请求而不抛错`);
 });
 
+test('bannedGuard：prisma 异常时 503 拒绝（防封禁穿透，v2.302 修复）', async () => {
+  const prisma = { user: { findUnique: async () => { throw new Error('DB_DOWN'); } } };
+  const token = signAccess({ sub: 'u_any', level: 'BASIC' });
+  const req = makeReq({ token });
+  const res = makeRes();
+  let nextCalled = false;
+  await bannedGuard(prisma)(req, res, () => { nextCalled = true; });
+  assert.strictEqual(res.statusCode, 503, '数据库异常不得静默放行（封禁穿透）');
+  assert.ok(/系统繁忙/.test(res.body.error), '提示语应含系统繁忙');
+  assert.strictEqual(nextCalled, false, '数据库异常不得调用 next()');
+});
+
 test('BANNED_CACHE_MAX 导出且为合理上限', () => {
   assert.ok(typeof BANNED_CACHE_MAX === 'number');
   assert.ok(BANNED_CACHE_MAX >= 1000 && BANNED_CACHE_MAX <= 100000, 'MAX 应在 1K~100K 区间');
