@@ -611,7 +611,7 @@ generateRouter.delete('/character-assets/:id', authRequired, async (req: AuthReq
 });
 // 一键沉淀：项目全局圣经 + 最近成稿 → 确定性提取草稿（零 token），同名覆盖保留 usedCount
 generateRouter.post('/character-assets/from-project/:projectId', authRequired, async (req: AuthRequest, res) => {
-  const project = await prisma.project.findFirst({ where: { id: req.params.projectId, userId: req.userId! } }).catch(() => null as any);
+  const project = await prisma.project.findFirst({ where: { id: req.params.projectId, userId: req.userId!, status: { not: 'deleted' } } }).catch(() => null as any);
   if (!project) return res.status(404).json({ error: 'PROJECT_NOT_FOUND' });
   const lang = String((req.query.lang as string) || 'zh') === 'en' ? 'en' as const : 'zh' as const;
   // bible.characters 三形态归一（字符串/数组/对象）——立项解析与 pipeline 回写形态不同；
@@ -820,7 +820,7 @@ generateRouter.delete('/prop-assets/:id', authRequired, async (req: AuthRequest,
 // 一键沉淀：全部分集成稿 × 信物词典（与信物账本/物料道具总表同词典）→ 确定性聚合草稿（零 token），
 // 同名合并：meaning 属本体语义以一手源刷新；eps/closedEps 跨项目沉淀取并集（v2.160 只增强不降级，历史不丢）；taboo/visualAnchor/tags 不触碰（手动精修不降级）
 generateRouter.post('/prop-assets/from-project/:projectId', authRequired, async (req: AuthRequest, res) => {
-  const project = await prisma.project.findFirst({ where: { id: req.params.projectId, userId: req.userId! } }).catch(() => null as any);
+  const project = await prisma.project.findFirst({ where: { id: req.params.projectId, userId: req.userId!, status: { not: 'deleted' } } }).catch(() => null as any);
   if (!project) return res.status(404).json({ error: 'PROJECT_NOT_FOUND' });
   const allEps = await prisma.script.findMany({
     where: { projectId: project.id }, select: { epNo: true, content: true }, orderBy: { epNo: 'asc' }, take: 500,
@@ -1093,7 +1093,7 @@ generateRouter.delete('/scene-assets/:id', authRequired, async (req: AuthRequest
 // 同名合并：eps 跨项目沉淀取并集（只增强不降级，历史不丢）；meaning/mood/taboo/visualAnchor/tags 不触碰——
 // 场景无"功能"一手源（场头只有地点结构），沉淀稿不臆造语义（创建占位"功能待补"，更新不碰手动精修档）
 generateRouter.post('/scene-assets/from-project/:projectId', authRequired, async (req: AuthRequest, res) => {
-  const project = await prisma.project.findFirst({ where: { id: req.params.projectId, userId: req.userId! } }).catch(() => null as any);
+  const project = await prisma.project.findFirst({ where: { id: req.params.projectId, userId: req.userId!, status: { not: 'deleted' } } }).catch(() => null as any);
   if (!project) return res.status(404).json({ error: 'PROJECT_NOT_FOUND' });
   const allEps = await prisma.script.findMany({
     where: { projectId: project.id }, select: { epNo: true, content: true }, orderBy: { epNo: 'asc' }, take: 500,
@@ -1566,6 +1566,18 @@ generateRouter.post('/projects/:id/archive', authRequired, async (req: AuthReque
 generateRouter.delete('/projects/:id', authRequired, async (req: AuthRequest, res) => {
   const project = await prisma.project.findFirst({ where: { id: req.params.id, userId: req.userId!, status: { not: 'deleted' } } });
   if (!project) return res.status(404).json({ error: '项目不存在' });
+  // v2.293 删除竞态防线：有在途生成任务的项目拒绝删除——在途任务已冻结积分，
+  // 跑完 settle 实扣后成果落进已删项目（列表过滤永远看不到），用户钱扣了成果也看不到。
+  // 要么等任务完成，要么先调 /tasks/:id/cancel 取消（取消即解冻退款）再删。
+  // 35 分钟窗口与 v2.292 同口径自愈：全局硬超时 30 分钟 + 收尾余量，
+  // 进程崩溃残留的 RUNNING 行（进程已死永远不会再收尾）不得永久锁死删除。
+  const inflightSince = new Date(Date.now() - 35 * 60_000);
+  const inflight = await prisma.generationTask.count({
+    where: { projectId: project.id, status: { in: ['QUEUED', 'RUNNING'] }, createdAt: { gte: inflightSince } },
+  });
+  if (inflight > 0) {
+    return res.status(409).json({ code: 'PROJECT_HAS_RUNNING_TASK', error: '有剧集正在生成中，请等待生成完成或先取消任务后再删除项目' });
+  }
   await prisma.project.update({ where: { id: project.id }, data: { status: 'deleted' } });
   res.json({ ok: true, id: project.id });
 });
@@ -1606,7 +1618,7 @@ generateRouter.post('/projects/:id/clone', authRequired, async (req: AuthRequest
 });
 // 某项目下全部剧本（仅本人可读全文；作品库点进去看分集）
 generateRouter.get('/projects/:id/scripts', authRequired, async (req: AuthRequest, res) => {
-  const project = await prisma.project.findFirst({ where: { id: req.params.id, userId: req.userId! } });
+  const project = await prisma.project.findFirst({ where: { id: req.params.id, userId: req.userId!, status: { not: 'deleted' } } });
   if (!project) return res.status(404).json({ error: '项目不存在' });
   const scripts = await prisma.script.findMany({
     where: { projectId: project.id }, orderBy: [{ epNo: 'asc' }, { version: 'asc' }],
@@ -1618,7 +1630,7 @@ generateRouter.get('/projects/:id/scripts', authRequired, async (req: AuthReques
 // 用户为 /fix 付了积分，旧版行也一直保留，必须能逐行看到小南改了什么，而不是只拿到一个新文本。
 // 权限与 /scripts 一致（仅本人）；to 省略时默认该集最新版；对比结果本就是用户自己的两版文本，无新增信息泄露面。
 generateRouter.get('/projects/:id/scripts/diff', authRequired, async (req: AuthRequest, res) => {
-  const project = await prisma.project.findFirst({ where: { id: req.params.id, userId: req.userId! } });
+  const project = await prisma.project.findFirst({ where: { id: req.params.id, userId: req.userId!, status: { not: 'deleted' } } });
   if (!project) return res.status(404).json({ error: '项目不存在' });
   const epNo = Number(req.query.epNo);
   const fromV = Number(req.query.from);
@@ -1660,7 +1672,7 @@ generateRouter.get('/projects/:id/scripts/diff', authRequired, async (req: AuthR
 
 // v2.64 导演交付包预览：导出前先看情绪波形/钩子地图/兑现链/人物成长四页，登录即可（鼓励下载正式 docx/pdf）
 generateRouter.get('/projects/:id/director-pack', authRequired, async (req: AuthRequest, res) => {
-  const project = await prisma.project.findFirst({ where: { id: req.params.id, userId: req.userId! } });
+  const project = await prisma.project.findFirst({ where: { id: req.params.id, userId: req.userId!, status: { not: 'deleted' } } });
   if (!project) return res.status(404).json({ error: '项目不存在' });
   const scripts = await prisma.script.findMany({
     where: { projectId: project.id }, orderBy: [{ epNo: 'asc' }, { version: 'asc' }],
@@ -1703,7 +1715,7 @@ generateRouter.get('/projects/:id/director-pack', authRequired, async (req: Auth
  * 明确标注算法参考、非成交承诺；分享文案不含剧本全文。
  */
 generateRouter.get('/projects/:id/value-card', authRequired, async (req: AuthRequest, res) => {
-  const project = await prisma.project.findFirst({ where: { id: req.params.id, userId: req.userId! } });
+  const project = await prisma.project.findFirst({ where: { id: req.params.id, userId: req.userId!, status: { not: 'deleted' } } });
   if (!project) return res.status(404).json({ error: '项目不存在' });
   const scripts = await prisma.script.findMany({
     where: { projectId: project.id }, orderBy: [{ epNo: 'asc' }, { version: 'asc' }],
@@ -1761,7 +1773,7 @@ generateRouter.post('/smart-defaults', authRequired, async (req: AuthRequest, re
 generateRouter.get('/scripts/:id', authRequired, async (req: AuthRequest, res) => {
   const sc = await prisma.script.findUnique({ where: { id: req.params.id } });
   if (!sc) return res.status(404).json({ error: '剧本不存在' });
-  const project = await prisma.project.findFirst({ where: { id: sc.projectId, userId: req.userId! } });
+  const project = await prisma.project.findFirst({ where: { id: sc.projectId, userId: req.userId!, status: { not: 'deleted' } } });
   if (!project) return res.status(403).json({ error: '无权查看该剧本' });
   res.json(sc);
 });
@@ -1791,7 +1803,7 @@ generateRouter.get('/scripts/:id/listen', authRequired, async (req: AuthRequest,
   if (!gate.allowed) return res.status(403).json({ error: 'ASSISTANT_LEVEL_REQUIRED', needLevel: gate.needLevel, upsell: gate.upsell });
   const sc = await prisma.script.findUnique({ where: { id: req.params.id } });
   if (!sc) return res.status(404).json({ error: '剧本不存在' });
-  const project = await prisma.project.findFirst({ where: { id: sc.projectId, userId: req.userId! } });
+  const project = await prisma.project.findFirst({ where: { id: sc.projectId, userId: req.userId!, status: { not: 'deleted' } } });
   if (!project) return res.status(403).json({ error: '无权查看该剧本' });
   const outLang = normalizeUiLang(typeof req.query.lang === 'string' ? req.query.lang : 'zh');
   const listenLang = outLang === 'en' ? 'en' : 'zh';
@@ -1838,7 +1850,7 @@ generateRouter.get('/projects/:id/listen/playlist', authRequired, async (req: Au
   const level = ((me?.level ?? MemberLevel.FREE) as MemberLevel);
   const gate = assistantGate(level, 'listen_script');
   if (!gate.allowed) return res.status(403).json({ error: 'ASSISTANT_LEVEL_REQUIRED', needLevel: gate.needLevel, upsell: gate.upsell });
-  const project = await prisma.project.findFirst({ where: { id: req.params.id, userId: req.userId! } });
+  const project = await prisma.project.findFirst({ where: { id: req.params.id, userId: req.userId!, status: { not: 'deleted' } } });
   if (!project) return res.status(404).json({ error: '项目不存在' });
   const outLang = normalizeUiLang(typeof req.query.lang === 'string' ? req.query.lang : 'zh');
   const listenLang = outLang === 'en' ? 'en' : 'zh';
@@ -1866,7 +1878,7 @@ generateRouter.get('/projects/:id/listen/playlist', authRequired, async (req: Au
 // 全本质量诊断：对项目下已生成集统一跑 craft/emotion/webnovel/去AI 四套尺子，归一六维评分+优先修改清单
 // 只读、不调用模型、不消耗积分；逐集修改后可重复调用刷新
 generateRouter.get('/projects/:id/diagnosis', authRequired, async (req: AuthRequest, res) => {
-  const project = await prisma.project.findFirst({ where: { id: req.params.id, userId: req.userId! } });
+  const project = await prisma.project.findFirst({ where: { id: req.params.id, userId: req.userId!, status: { not: 'deleted' } } });
   if (!project) return res.status(404).json({ error: '项目不存在' });
   const scripts = await prisma.script.findMany({
     where: { projectId: project.id }, orderBy: [{ epNo: 'asc' }, { version: 'asc' }],
@@ -1884,7 +1896,7 @@ generateRouter.get('/projects/:id/diagnosis', authRequired, async (req: AuthRequ
 
 // v2.38 全剧情绪曲线波形（确定性，与管线逐集节拍同源；不耗积分）
 generateRouter.get('/projects/:id/emotion-wave', authRequired, async (req: AuthRequest, res) => {
-  const project = await prisma.project.findFirst({ where: { id: req.params.id, userId: req.userId! } });
+  const project = await prisma.project.findFirst({ where: { id: req.params.id, userId: req.userId!, status: { not: 'deleted' } } });
   if (!project) return res.status(404).json({ error: '项目不存在' });
   const scriptCount = await prisma.script.count({ where: { projectId: project.id } });
   const planned = (project as { totalEps?: number }).totalEps ?? 0;
@@ -1919,7 +1931,7 @@ generateRouter.post('/projects/:id/fix', authRequired, async (req: AuthRequest, 
   const parsed = fixSchema.safeParse(req.body);
   if (!parsed.success) return res.status(400).json({ error: '参数不合法' });
   const { fix, epNo: wantedEp } = parsed.data;
-  const project = await prisma.project.findFirst({ where: { id: req.params.id, userId: req.userId! } });
+  const project = await prisma.project.findFirst({ where: { id: req.params.id, userId: req.userId!, status: { not: 'deleted' } } });
   if (!project) return res.status(404).json({ error: '项目不存在' });
   const scripts = await prisma.script.findMany({
     where: { projectId: project.id }, orderBy: [{ epNo: 'asc' }, { version: 'asc' }],
@@ -2415,7 +2427,7 @@ generateRouter.post('/episodes', authRequired, async (req: AuthRequest, res) => 
   const allowed = (MEMBERSHIP[level] as { engines: readonly EngineTier[] }).engines;
   if (!isStaff && !allowed.includes(tier)) return res.status(403).json({ error: '当前会员等级不可用该引擎，请升级' });
 
-  const project = await prisma.project.findFirst({ where: { id: projectId, userId: user.id } });
+  const project = await prisma.project.findFirst({ where: { id: projectId, userId: user.id, status: { not: 'deleted' } } });
   if (!project) return res.status(404).json({ error: '项目不存在' });
   // v2.14 归一模式 + 轨道二次校验（防止建项目后越权调用专业轨道）
   const projCanonMode = canonicalModeId((project as Record<string, unknown>).mode as string);
