@@ -37,6 +37,8 @@ function setup(names, extra = {}) {
     renderTaskQueue() {}, renderProgress() {}, resetPanels() {}, refreshListenBtn() {},
     loadMe() {}, loadWorks() {}, loadCatalog() {}, loadFeed() {}, loadListings() {}, enterAdmin() {},
     VIEWS: ['studio', 'works', 'vip', 'square', 'market', 'admin'], _switchAnimToken: 0, _workbenchHideTimer: null,
+    // v2.242 焦点进出：_hideWorkbenchLayer 的 setTimeout 回调读取该变量
+    _workbenchPrevFocus: null,
     // 合并（剧本1）后 switchView 引用导航栈；null 走应用自身的降级守卫（与浏览器缺 nav-stack.js 一致）
     _navStack: null,
     _WORKBENCH_PANEL_IDS: ['sourceTextPanel', 'teardownPanel', 'interviewPanel', 'resultPanel'],

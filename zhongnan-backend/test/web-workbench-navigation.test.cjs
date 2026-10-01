@@ -82,7 +82,7 @@ function setup() {
     activeSessionId: 's1', genSessions: [{ id: 's1', status: 'done', projectId: 'p1', title: '完整作品' }],
   };
   vm.createContext(context);
-  for (const name of ['VIEWS', '_WORKBENCH_PANEL_IDS', 'WORKBENCH_TITLES', '_workbenchInited', '_workbenchHideTimer', '_workbenchPrevHidden', '_GENERATIVE_PANELS', '_navStack']) {
+  for (const name of ['VIEWS', '_WORKBENCH_PANEL_IDS', 'WORKBENCH_TITLES', '_workbenchInited', '_workbenchHideTimer', '_workbenchPrevHidden', '_GENERATIVE_PANELS', '_navStack', '_workbenchPrevFocus']) {
     vm.runInContext(`let ${name} = ${initializers.get(name)};`, context);
   }
   // _syncTopbarOffset（v2.612 topbar 避让）为 _showWorkbenchLayer 依赖；_navStack 的初始化器自带

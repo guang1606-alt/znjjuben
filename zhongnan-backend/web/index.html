@@ -596,7 +596,7 @@
     </div>
 
     <!-- v2.188 工作台独立板块：全屏覆盖层。初始化时把 16 个工作台 panel 从 #view-studio 转移进来，事件绑定不丢 -->
-    <div id="workbenchLayer" class="workbench-layer hidden" aria-hidden="true">
+    <div id="workbenchLayer" class="workbench-layer hidden" aria-hidden="true" role="dialog" aria-modal="true" aria-labelledby="workbenchTitle">
       <div class="workbench-shell">
         <header class="workbench-head">
           <button class="workbench-back" id="workbenchBack" aria-label="返回">← <span data-i="back">返回</span></button>

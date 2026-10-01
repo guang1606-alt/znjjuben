@@ -2019,13 +2019,21 @@
       layer.dataset.current = '';
       $('xnFloat')?.classList.remove('workbench-hidden');
       _workbenchHideTimer = null;
+      // v2.242 恢复焦点到打开前的触发元素（若仍在文档中且可聚焦）
+      if (_workbenchPrevFocus) {
+        try { if (document.contains(_workbenchPrevFocus) && _workbenchPrevFocus.focus) _workbenchPrevFocus.focus(); } catch {}
+        _workbenchPrevFocus = null;
+      }
     }, 220);
     document.removeEventListener('keydown', _workbenchEsc);
   }
+  let _workbenchPrevFocus = null; // v2.242 工作台打开时存触发焦点，关闭时恢复
   function openWorkbench(id) {
     _initWorkbenchLayer();
     const layer = $('workbenchLayer');
     const el = $(id); if (!el) return;
+    // 存当前焦点（打开后关闭时恢复）
+    if (!_workbenchPrevFocus) _workbenchPrevFocus = document.activeElement;
     // 初始化同步和后台更新都可能留下未登记到 dataset.current 的面板。
     // 每次打开都以目标面板为唯一真源，避免工作台串页。
     _WORKBENCH_PANEL_IDS.forEach((panelId) => {
