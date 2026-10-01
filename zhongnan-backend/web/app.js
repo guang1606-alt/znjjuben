@@ -51,7 +51,8 @@
     // v2.188 初始化同步守卫：applyLang 期间 syncTagBench/syncModeBrief 不主动调 openWorkbench（避免 layer 自动展开覆盖 12 模式主页）
     _initSyncing = true;
     // 语言切换时同步标签工作台（维度下拉与已选标签的显示语言）
-    if (typeof syncTagBench === 'function') { syncTagBench(); if (tagDimInited) Api.request('/api/tags/dimensions').then((r) => r.json()).then(fillTagDimSel).catch(() => {}); }
+    // v2.266 快照防双发：syncTagBench→initTagBench 首次取数并置 tagDimInited=true，活读标志会当轮再取一次；改用调用前快照
+    if (typeof syncTagBench === 'function') { const _tagDimWasInited = tagDimInited; syncTagBench(); if (_tagDimWasInited) Api.request('/api/tags/dimensions').then((r) => r.json()).then(fillTagDimSel).catch(() => {}); }
     // 语言切换时同步小南递招面板（钩子/方法卡显示语言）
     if (typeof renderCraftHooks === 'function' && craftTaxonomy) { renderCraftHooks(); renderCraftCards(); renderCraftPicked(); }
     if (typeof renderBoardStatus === 'function') renderBoardStatus();
@@ -243,12 +244,25 @@
     // 拉取最新动态
     loadHomeUpdates();
   }
+  // v2.266 最新公告共享取数：loadHomeUpdates 与 initUpdateBanner 同源，60s TTL + 在途合并（启动不再双发）
+  let _latestAnnCache = null; let _latestAnnAt = 0; let _latestAnnInflight = null;
+  async function fetchLatestAnnouncement() {
+    if (_latestAnnCache !== null && Date.now() - _latestAnnAt < 60000) return _latestAnnCache;
+    if (_latestAnnInflight) return _latestAnnInflight;
+    _latestAnnInflight = (async () => {
+      try {
+        const res = await Api.request('/api/updates/latest');
+        const data = res.ok ? await Api.jsonOrThrow(res) : null;
+        _latestAnnCache = data; _latestAnnAt = Date.now();
+        return data;
+      } finally { _latestAnnInflight = null; }
+    })();
+    return _latestAnnInflight;
+  }
   async function loadHomeUpdates() {
     const body = $('homeUpdatesBody'); if (!body) return;
     try {
-      const r = await Api.request('/api/updates/latest');
-      if (!r.ok) { body.innerHTML = `<div class="muted">${escapeHtml(t('homeUpdatesEmpty'))}</div>`; return; }
-      const d = await Api.jsonOrThrow(r);
+      const d = await fetchLatestAnnouncement();
       const a = d && d.announcement;
       if (!a) { body.innerHTML = `<div class="muted">${escapeHtml(t('homeUpdatesEmpty'))}</div>`; return; }
       const isEn = lang === 'en';
@@ -1945,6 +1959,7 @@
   let _initSyncing = false; // v2.188 初始化同步守卫：applyLang 期间为 true，syncTagBench/syncModeBrief 不主动调 openWorkbench（避免 layer 自动展开覆盖 12 模式主页）
   let _workbenchHideTimer = null; // v2.188 _hideWorkbenchLayer 的 setTimeout id，_showWorkbenchLayer 内 clearTimeout，避免切换 panel 时旧 timer 异步关闭 layer
   const _workbenchPrevHidden = {}; // 记录上次 hidden 状态，只在变化时行动（避免 view-in 等无关类变化触发死循环）
+  let _workbenchOpenToken = ''; // v2.266 用户显式打开令牌：openWorkbench 设令牌，Observer 消费一次即放行 view-studio 守卫（后台直达 classList 无令牌仍被拦）
   // v2.189 生成类工作台：在这些 panel 内显示"生成剧本"按钮（举一反三：tagBench/craftBench/branchBriefPanel/interviewPanel/brandPanel/trendPanel/sourceTextPanel）
   const _GENERATIVE_PANELS = new Set(['tagBench', 'craftBench', 'branchBriefPanel', 'interviewPanel', 'brandPanel', 'trendPanel', 'sourceTextPanel']);
   function _syncWorkbenchTopInset() {
@@ -1983,7 +1998,18 @@
         const nowHidden = el.classList.contains('hidden');
         if (_workbenchPrevHidden[el.id] === nowHidden) continue; // 状态没变，跳过
         _workbenchPrevHidden[el.id] = nowHidden;
-        if (!nowHidden) _showWorkbenchLayer(el.id);
+        if (!nowHidden) {
+          // v2.266 守卫下移（修复 nav 编剧室/递招/素材库断链）：令牌标识用户显式打开，直接放行；
+          // 无令牌的后台直达 classList 迟到更新，创作专区不可见时不劫持作品/会员等页面（aa95653 本意保留）
+          const isUserOpen = _workbenchOpenToken === el.id;
+          if (isUserOpen) _workbenchOpenToken = '';
+          if (layer.dataset.current === el.id) continue; // openWorkbench 同步兜底已打开
+          if (!isUserOpen) {
+            const studio = $('view-studio');
+            if (!studio || studio.classList.contains('hidden')) { el.classList.add('hidden'); continue; }
+          }
+          _showWorkbenchLayer(el.id);
+        }
         else if (layer.dataset.current === el.id) _hideWorkbenchLayer();
       }
     });
@@ -1999,10 +2025,8 @@
     const layer = $('workbenchLayer'); if (!layer) return;
     const body = $('workbenchBody');
     const el = $(id); if (!el) return;
-    // 面板已移出 view-studio；后台任务的迟到更新不能覆盖作品/会员等页面，
-    // 也不能取消导航触发的关闭定时器。隐藏面板，避免返回创作页时混入其他工作台。
-    const studio = $('view-studio');
-    if (!studio || studio.classList.contains('hidden')) { el.classList.add('hidden'); return; }
+    // v2.266 view-studio 守卫已上移至 MutationObserver 回调（只拦无令牌的后台直达路径）；
+    // 本函数同时服务 openWorkbench 用户显式打开，不得再拦（曾致 nav 编剧室/递招/素材库断链）。
     // Observer、入口点击和后台同步最终都会经过这里；统一保证工作台只显示目标面板。
     _WORKBENCH_PANEL_IDS.forEach((panelId) => {
       if (panelId !== id) $(panelId)?.classList.add('hidden');
@@ -2084,9 +2108,12 @@
     _WORKBENCH_PANEL_IDS.forEach((panelId) => {
       if (panelId !== id) $(panelId)?.classList.add('hidden');
     });
+    _workbenchOpenToken = id; // v2.266 用户显式打开令牌：Observer 凭令牌放行 view-studio 守卫（消费一次）
     el.classList.remove('hidden'); // 触发 Observer _showWorkbenchLayer
     // 兜底：若 Observer 没反应（如已是非 hidden）
     if (layer && !layer.dataset.current) _showWorkbenchLayer(id);
+    // 令牌仅本轮有效：Promise.then 微任务排在 MutationObserver 回调之后，Observer 消费后再清除
+    Promise.resolve().then(() => { if (_workbenchOpenToken === id) _workbenchOpenToken = ''; });
   }
   function closeWorkbench() {
     const layer = $('workbenchLayer'); if (!layer) return;
@@ -9506,9 +9533,7 @@
   }
   async function initUpdateBanner() {
     try {
-      const res = await Api.request('/api/updates/latest');
-      if (!res.ok) return;
-      const data = await Api.jsonOrThrow(res);
+      const data = await fetchLatestAnnouncement(); // v2.266 共享取数（与首页动态同源，60s TTL 不双发）
       if (data && data.announcement) showUpdateBanner(data.announcement);
     } catch { /* 静默失败：弹窗不阻断主应用 */ }
   }
