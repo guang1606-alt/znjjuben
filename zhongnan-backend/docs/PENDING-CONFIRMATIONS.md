@@ -62,11 +62,17 @@
 - 在清零前：**任何人不要直接 autogenerate 迁移**（会混入 40 对噪音操作），新迁移继续手写
 - 追加（2026-09-30 凌晨二轮）：新增 `tests/test_model_registration.py` 子进程守护测试——全新解释器只 `import app.models`（模拟 alembic env），表集合必须等于遍历 models 目录全量导入的集合，漏导出即红；正负向均已验证。另做了一次「外键无前导索引」元数据审计，约 35 处（community_*/workshop_*/ai_literacy_*/intervention_records 等高频表的 student_id/course_id/author_id 等），但其中大部分 DB 物理上有遗留索引（即上述命名漂移的同批对象），**待方案 A/B 拍板后随命名对齐一并复核**：物理上确缺的补索引迁移，物理上有的只对齐名称
 - 更新（2026-09-30 03:41）：协作者已提交 `96d6f3c`——采用方案 A 思路对齐（family.py 15 模型 21 列补 FK 声明、2 处 timezone、uq 唯一约束声明），并重写 `alembic/env.py` 钩子过滤注释哨兵噪声（368 条注释噪音清零）；`alembic check` 收敛至 2 条真实缺 FK（daily_checkins/farm_states 建表遗漏）。方案 B 的「仅改名迁移」是否仍需要，明早与协作者对齐 check 最新输出后定
+- 三读实测（2026-10-01 晚，只读勘察，本地库已在 head `c2a8837569e7`）：**40 对索引命名噪音已随 0063→0069 系列迁移全部清零**，`alembic check` 现仅剩 7 条小漂移，其中发现 1 个真实迁移缺陷：
+  1. **【真实缺陷】0067 索引列序建错**：`app/models/family.py` 声明 `idx_encourage_child_created (child_id, created_at DESC) + WHERE deleted_at IS NULL`，而 `0067_parent_encouragement.py` 建成了 `(child_id, created_at)` **ASC**——新库/已迁移库的最新一条鼓励查询（ORDER BY created_at DESC LIMIT）吃不到索引逆序。修法：模型不动（模型即设计意图），新增 0070 迁移 DROP 旧部分索引→按 DESC 重建（约 10 行，先 CREATE 后 DROP）
+  2. 两个迁移已建、模型未声明的性能索引（check 报 removed index）：`ix_workshop_work_likes_work_id`（0066）、`ix_topic_replies_user_topic_created`（0069）——按方案 A 在 workshop.py/topic.py 的 `__table_args__` 补 `Index(...)` 声明即可，纯模型改动
+  3. 4 条注释漂移：class_topics.date / friendships 表注释 / parent_encouragements.content+related_event_type / topic_replies.user_id+nickname——迁移里写了注释、模型没写或文案不一致，按方案 A 补 `comment=` 即可
+- 建议（待拍板一句话）：**方案 A 继续，分两个 commit**——①模型补 2 索引声明 + 4 处注释（零迁移，check 消 6 条）；②0070 修复 0067 DESC 索引（check 消最后 1 条，随后 alembic check 全绿，autogenerate 禁令可解除）。协作者 0066-0069 已落，如仍在动 family/topic/workshop 模型区请先打个招呼避免撞车
 
 ## 12.【高】迁移 0063 待确认执行：先删 farm_states 645 行孤儿数据再补 FK
 - 背景：协作者 `96d6f3c` 备好迁移 `backend/alembic/versions/0063_add_missing_student_fks.py`，给 daily_checkins / farm_states 补建表时遗漏的 student_id 外键
 - 风险点：farm_states 存在 **645 行孤儿数据**（student_id 在 users 表无对应行），加 FK 前迁移脚本会先删除这些行
 - 待确认：① 是否认可直接硬删 645 行（建议先 `alembic upgrade head` 前导出备份：`CREATE TABLE farm_states_orphan_bak AS SELECT * FROM farm_states WHERE student_id NOT IN (SELECT id FROM users)`）；② 确认后再执行迁移。**执行前不要跑 autogenerate**（#11 漂移未完全清零）
+- 更新（2026-10-01 晚只读核验）：**本地开发库已在 head `c2a8837569e7`，0063 已随链执行完毕**——`farm_states_student_id_fkey` / `daily_checkins_student_id_fkey` 均在，farm_states 现存 0 行（645 孤儿已按迁移设计删除，本地无备份必要）。本地侧事项关闭；**生产库执行决策仍待拍板**：上线前建议按上面的 `CREATE TABLE ... AS SELECT` 先备份孤儿行，再 `alembic upgrade head`
 
 ## 13.【已根治】zhongnan 全量测试偶发 flaky（高负载时段）→ v2.222.0 并发上限
 - 现象：2026-10-01 期间全量 `npm test` 偶发失败（3 次 5~11 条，1 次 36 条），复跑即全绿；失败模式均为 `fetch failed`（每文件自起 HTTP 服务器的测试在启动竞争中连接被拒）
