@@ -1928,6 +1928,12 @@
     });
   }
   document.querySelectorAll('.nav [data-view]').forEach((b) => b.onclick = () => switchView(b.getAttribute('data-view')));
+  // v2.272 skip link：激活后把焦点（含读屏光标）真正移到 <main>——裸 hash 跳转在部分浏览器只滚动不聚焦
+  document.querySelectorAll('.skip-link').forEach((a) => a.addEventListener('click', (e) => {
+    const id = (a.getAttribute('href') || '').slice(1);
+    const target = id ? document.getElementById(id) : null;
+    if (target) { e.preventDefault(); target.focus(); target.scrollIntoView({ block: 'start' }); }
+  }));
   // v2.191 编剧室/递招/素材库 等独立模块：直接打开对应工作台面板
   document.querySelectorAll('.nav [data-open]').forEach((b) => b.onclick = () => {
     const id = b.getAttribute('data-open'); if (!id) return;

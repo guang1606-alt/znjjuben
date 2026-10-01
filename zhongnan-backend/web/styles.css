@@ -1688,6 +1688,30 @@ summary:hover{color:var(--accent-strong)}
   transition: box-shadow var(--motion-fast, .14s) var(--ease-out, cubic-bezier(.22,.61,.36,1));
 }
 
+/* —— v2.272 skip link：默认离屏不可见，键盘聚焦时滑入（鼠标用户无感）—— */
+.skip-link {
+  position: absolute;
+  left: -9999px;
+  top: 0;
+  z-index: 10000;
+  padding: 10px 18px;
+  border-radius: 0 0 10px 0;
+  background: var(--accent);
+  color: #fff;
+  font-size: .9rem;
+  font-weight: 600;
+  text-decoration: none;
+  white-space: nowrap;
+  box-shadow: 0 4px 16px rgba(0,0,0,.28);
+}
+.skip-link:focus,
+.skip-link:focus-visible {
+  left: 0;
+  z-index: 10000;
+  outline: none;
+  box-shadow: 0 0 0 3px var(--accent-weak), 0 4px 16px rgba(0,0,0,.28);
+}
+
 /* —— 6. 按钮通用 press 反馈（magnetic 物理感）—— */
 :where(.btn-primary, .btn-ghost, button.btn):not(:disabled) {
   transition: transform var(--motion-fast, .14s) var(--ease-out, cubic-bezier(.22,.61,.36,1)),
