@@ -3147,14 +3147,14 @@
         const method = likeBtn.dataset.liked === '1' ? 'DELETE' : 'POST';
         const r = await Api.request(`/api/community/posts/${p.id}/like`, { method });
         if (r.ok) { const j = await r.json().catch(() => ({})); likeBtn.textContent = `♡ ${j.likes ?? p.likes}`; likeBtn.dataset.liked = method === 'POST' ? '1' : '0'; }
-        else xnSay((await r.json().catch(() => ({}))).error || 'error');
+        else xnSay(znSanitizeErr((await r.json().catch(() => ({}))).error, r.status) || 'error');
       };
       const delBtn = c.querySelector('.del-post');
       if (delBtn) delBtn.onclick = async () => {
         if (!(await uiConfirm({ body: lang==='en' ? 'Delete this post?' : '确定删除这条帖子吗？', danger: true, okText: lang==='en' ? 'Delete' : '删除' }))) return;
         const r = await Api.request(`/api/community/posts/${p.id}`, { method: 'DELETE' });
         if (r.ok) { xnSay(lang==='en'?'Deleted':'已删除'); loadFeed(); }
-        else xnSay((await r.json().catch(() => ({}))).error || 'error');
+        else xnSay(znSanitizeErr((await r.json().catch(() => ({}))).error, r.status) || 'error');
       };
       feed.appendChild(c);
     });
@@ -3318,7 +3318,7 @@
   $('mkListBtn').onclick = async () => {
     if (!Api.isAuthed()) { openAuth('login'); return; }
     const res = await Api.request('/api/generate/projects');
-    if (!res.ok) { xnSay((await res.json().catch(() => ({}))).error || 'error'); return; }
+    if (!res.ok) { xnSay(znSanitizeErr((await res.json().catch(() => ({}))).error, res.status) || 'error'); return; }
     const projects = await res.json();
     if (!projects.length) { xnSay(lang === 'en' ? 'Create a script first.' : '请先创作一部剧本再上架'); return; }
     $('listScript').innerHTML = projects.map((p) => `<option value="${p.id}">${escapeHtml(p.title)}（${p.totalEps || 0} eps）</option>`).join('');
@@ -3501,7 +3501,7 @@
     $('mineBox').querySelectorAll('[data-delist]').forEach((b) => b.onclick = async () => {
       if (!(await uiConfirm({ body: lang === 'en' ? 'Delist this script? It will be removed from the marketplace.' : '确认下架该剧本？下架后将从交易广场移除。', danger: true, okText: lang === 'en' ? 'Delist' : '下架' }))) return;
       const r = await Api.request(`/api/market/listings/${b.getAttribute('data-delist')}/delist`, { method: 'PATCH' });
-      if (r.ok) { xnSay(lang === 'en' ? 'Delisted' : '已下架'); $('mkMineBtn').click(); } else { xnSay((await r.json()).error || '失败'); }
+      if (r.ok) { xnSay(lang === 'en' ? 'Delisted' : '已下架'); $('mkMineBtn').click(); } else { xnSay(znSanitizeErr((await r.json()).error, r.status) || '失败'); }
     });
     $('mineBox').querySelectorAll('[data-relist]').forEach((b) => b.onclick = async () => {
       const newPrice = await uiPrompt({ body: lang === 'en' ? 'New price in yuan (leave empty to keep current):' : '输入新售价（元），留空保持原价：' });
@@ -3513,7 +3513,7 @@
         body.priceFen = fen;
       }
       const r = await Api.request(`/api/market/listings/${b.getAttribute('data-relist')}/relist`, { method: 'PATCH', body: JSON.stringify(body) });
-      if (r.ok) { xnSay(lang === 'en' ? 'Relisted' : '已重新上架'); $('mkMineBtn').click(); } else { xnSay((await r.json()).error || '失败'); }
+      if (r.ok) { xnSay(lang === 'en' ? 'Relisted' : '已重新上架'); $('mkMineBtn').click(); } else { xnSay(znSanitizeErr((await r.json()).error, r.status) || '失败'); }
     });
     openModal('mineModal');
   };
@@ -3737,7 +3737,7 @@
         const brief = (tagBrief && tagBrief.trim()) ? tagBrief : ($('modeBrief')?.value || '');
         const res = await Api.request('/api/generate/flavor-recommend', { method: 'POST', body: JSON.stringify({ brief, lang: lang === 'en' ? 'en' : 'zh' }) });
         const d = await res.json();
-        if (!res.ok) throw new Error(d.error || 'recommend failed');
+        if (!res.ok) throw new Error(znSanitizeErr(d.error, res.status) || 'recommend failed');
         hookPref.microFlavors = (d.microFlavors || []).map((x) => x.id);
         beatPref.payoffFlavors = (d.payoffFlavors || []).map((x) => x.id);
         beatPref.reversalFlavors = (d.reversalFlavors || []).map((x) => x.id);
@@ -3776,8 +3776,8 @@
           Api.request('/api/generate/creation-strategy/recommend', { method: 'POST', body: JSON.stringify(payload) }),
         ]);
         const hd = await hRes.json(), cd = await cRes.json();
-        if (!hRes.ok) throw new Error(hd.error || 'hook recommend failed');
-        if (!cRes.ok) throw new Error(cd.error || 'creation recommend failed');
+        if (!hRes.ok) throw new Error(znSanitizeErr(hd.error, hRes.status) || 'hook recommend failed');
+        if (!cRes.ok) throw new Error(znSanitizeErr(cd.error, cRes.status) || 'creation recommend failed');
         // 回填五个策略变量（端点本场景全部 auto=true）
         hookStrategy = hd.strategy?.id || '';
         paceStrategy = cd.pace?.card?.id || '';
@@ -4084,7 +4084,7 @@
         if (hookStrategy) payload.strategy = hookStrategy;
         const res = await Api.request('/api/generate/hooks/palette', { method: 'POST', body: JSON.stringify(payload) });
         const d = await res.json();
-        if (!res.ok) throw new Error(d.error || 'palette failed');
+        if (!res.ok) throw new Error(znSanitizeErr(d.error, res.status) || 'palette failed');
         hookPaletteData = d; renderBody();
         xnSay(lang === 'en' ? 'Palette ready: ★ is the system default, tap any alternative to take over.' : '逐点方案已生成：★为系统默认，点备选即可接管该位置，未改的位置系统自动补～');
       } catch (e) { xnSay(String(e.message || e)); } finally { genBtn.disabled = false; }
@@ -4174,7 +4174,7 @@
         };
         const res = await Api.request('/api/generate/beats/palette', { method: 'POST', body: JSON.stringify(payload) });
         const d = await res.json();
-        if (!res.ok) throw new Error(d.error || 'palette failed');
+        if (!res.ok) throw new Error(znSanitizeErr(d.error, res.status) || 'palette failed');
         beatPaletteData = d; renderBody();
         xnSay(lang === 'en' ? 'Beat plan ready: ★ is the system default, tap any alternative to take over. No credits used.' : '逐集节拍方案已生成：★为系统默认（与实际生成一致），点备选即可接管该节拍位，不耗积分～');
       } catch (e) { xnSay(String(e.message || e)); } finally { genBtn.disabled = false; }
@@ -4285,7 +4285,7 @@
         prevBtn.disabled = true;
         const res = await Api.request('/api/generate/emotion/director', { method: 'POST', body: JSON.stringify(basePayload()) });
         const d = await res.json();
-        if (!res.ok) throw new Error(d.error || 'wave failed');
+        if (!res.ok) throw new Error(znSanitizeErr(d.error, res.status) || 'wave failed');
         waveDirData = d;
         fromInput.max = String(d.episodeCount); toInput.max = String(d.episodeCount);
         if (!toInput.value || parseInt(toInput.value, 10) > d.episodeCount) toInput.value = String(d.episodeCount);
@@ -4305,7 +4305,7 @@
         applyBtn.disabled = true;
         const res = await Api.request('/api/generate/emotion/director', { method: 'POST', body: JSON.stringify(basePayload({ from: a, to: b, intent: selectedIntent })) });
         const d = await res.json();
-        if (!res.ok || !d.patch) throw new Error(d.error || 'range failed');
+        if (!res.ok || !d.patch) throw new Error(znSanitizeErr(d.error, res.status) || 'range failed');
         Object.entries(d.patch.manual).forEach(([k, id]) => { beatManual[k] = id; waveDirPlaced.add(k); });
         beatPref.mode = 'hybrid';
         waveDirData = d;

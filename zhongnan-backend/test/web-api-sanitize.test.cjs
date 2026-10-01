@@ -138,3 +138,79 @@ describe('v2.239 消费侧收口：绕过脱敏层的裸码路径清零', () => 
     assert.ok(/return \{ ok: res\.ok, status: res\.status, data \}/.test(region), 'raw() 应保持 {ok,status,data} 契约（5 处调用点零改动）');
   });
 });
+
+/* v2.251 消费侧收口第二弹：策略推荐/调色板/情绪曲线 throw 族 + 社区/市场 xnSay 族共 12 处裸码清零
+ * 背景：v2.239 清完资产保存/反馈导出/余额后，仍有 12 处绕过脱敏层——
+ *  A 族（7 处）：推荐与调色板类 POST 失败时 `throw new Error(d.error || '...')`，外层 catch 一律
+ *    `xnSay(String(e.message||e))` 上屏——500 时用户直接看到 INTERNAL_ERROR 裸码；
+ *    涉及 flavor-recommend / hook-strategy / creation-strategy / hooks·beats palette / emotion director×2。
+ *  B 族（5 处）：社区点赞/删帖、上架弹窗项目列表、下架/重新上架失败时 `xnSay((await r.json()).error || ...)`，
+ *    500 同样裸码上屏。
+ * 修复：12 处全部为 body 已消费路径，统一就地 znSanitizeErr(code, status) 脱敏（与 v2.239 startGenerate 同口径）；
+ *  fallback 由 `x.error || '兜底'` 改为 `znSanitizeErr(x.error, status) || '兜底'`——500 无 body 也回落友好文案。
+ */
+describe('v2.251 消费侧收口第二弹：throw 族 + xnSay 族 12 处裸码清零', () => {
+  it('A 族清零：不再存在 throw new Error(X.error || ...) 裸投掷（推荐/调色板/情绪曲线 7 处）', () => {
+    const bare = appSrc.match(/throw new Error\([a-z]{1,3}\.error \|\|/g) || [];
+    assert.strictEqual(bare.length, 0,
+      `仍有 ${bare.length} 处裸投掷 d.error（500 会把 INTERNAL_ERROR 糊给用户），应经 znSanitizeErr：${bare.join(' ; ')}`);
+  });
+
+  it('B 族清零：不再存在 xnSay((await X.json()...) 直接上屏（社区/市场 5 处）', () => {
+    const bare = appSrc.match(/xnSay\(\(await [a-z]+\.json\(\)/g) || [];
+    assert.strictEqual(bare.length, 0,
+      `仍有 ${bare.length} 处 xnSay 直接消费 r.json().error，应经 znSanitizeErr：${bare.join(' ; ')}`);
+  });
+
+  it('znSanitizeErr 调用面扩齐：定义 1 + v2.239 既有 2 + 本轮新增 12 = 至少 15 处', () => {
+    const n = (appSrc.match(/znSanitizeErr\(/g) || []).length;
+    assert.ok(n >= 15, `znSanitizeErr( 出现 ${n} 次，应 ≥15（定义1+v2.239两处+本轮12处）`);
+  });
+
+  it('A 族 7 处逐点核验：投掷语句经 znSanitizeErr 且带上响应 status', () => {
+    const marks = [
+      ['/api/generate/flavor-recommend', 'res.status'],
+      ['/api/generate/hook-strategy/recommend', 'hRes.status'],
+      ['/api/generate/creation-strategy/recommend', 'cRes.status'],
+      ['/api/generate/hooks/palette', 'res.status'],
+      ['/api/generate/beats/palette', 'res.status'],
+      ['/api/generate/emotion/director', 'res.status'], // wave（首次出现）
+    ];
+    for (const [mark, st] of marks) {
+      const i = appSrc.indexOf(mark);
+      assert.ok(i >= 0, `应定位到 ${mark}`);
+      const win = appSrc.slice(i, i + 600);
+      assert.ok(new RegExp(`znSanitizeErr\\([a-z]{1,3}\\.error, ${st.replace('.', '\\.')}\\)`).test(win),
+        `${mark} 失败投掷应经 znSanitizeErr(X.error, ${st})`);
+    }
+    // emotion/director 第二处（range）：窗口内需第二处 znSanitizeErr
+    const first = appSrc.indexOf('/api/generate/emotion/director');
+    const second = appSrc.indexOf('/api/generate/emotion/director', first + 10);
+    assert.ok(second > first, 'emotion/director 应有 wave 与 range 两处调用');
+    const win2 = appSrc.slice(second, second + 600);
+    assert.ok(/znSanitizeErr\(d\.error, res\.status\)/.test(win2), 'emotion/director range 投掷应经 znSanitizeErr(d.error, res.status)');
+  });
+
+  it('B 族 5 处逐点核验：上屏前经 znSanitizeErr 且带 status', () => {
+    const marks = [
+      "/like`, { method }",                 // 社区点赞
+      "posts/${p.id}`, { method: 'DELETE' }", // 社区删帖
+      "$('mkListBtn').onclick",              // 上架弹窗项目列表（/api/generate/projects 首现在他处，锚到按钮）
+      '/delist',                             // 下架
+      '/relist',                             // 重新上架
+    ];
+    for (const mark of marks) {
+      const i = appSrc.indexOf(mark);
+      assert.ok(i >= 0, `应定位到 ${mark}`);
+      const win = appSrc.slice(i, i + 700);
+      assert.ok(/xnSay\(znSanitizeErr\(/.test(win), `${mark} 失败上屏应经 znSanitizeErr`);
+      assert.ok(/znSanitizeErr\([\s\S]{0,160}?[a-z]+\.status\)/.test(win), `${mark} 脱敏应带 status 参数`);
+    }
+  });
+
+  it('v2.239 断言面不回归：helper 定义与 startGenerate 两处仍在', () => {
+    assert.ok(/function znSanitizeErr\(/.test(appSrc), 'znSanitizeErr 定义应保留');
+    assert.ok(/znSanitizeErr\(ej\.message \|\| ej\.error/.test(appSrc), 'startGenerate 建项投掷脱敏应保留');
+    assert.ok(/msg = znSanitizeErr\(msg, res\.status\)/.test(appSrc), 'startGenerate 响应失败脱敏应保留');
+  });
+});
