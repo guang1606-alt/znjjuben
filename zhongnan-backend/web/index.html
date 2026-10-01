@@ -9,7 +9,7 @@
 <body>
   <header class="topbar">
     <div class="brand"><b id="brandName">终南集 · AGI编剧大师</b><span id="brandSlogan"></span></div>
-    <nav class="nav" aria-label="主导航">
+    <nav class="nav" aria-label="主导航" data-i-aria="navAria">
       <button class="on nav-item active" data-view="home" data-i="home" aria-current="page"></button>
       <button class="nav-item" data-view="studio" data-i="zoneCreate"></button>
       <button class="nav-item" data-open="roomPanel" data-i="navRoom">编剧室</button>
@@ -22,7 +22,7 @@
       <button class="nav-item" data-view="market" data-i="market"></button>
       <button data-view="admin" class="admin-only hidden nav-item" data-i="adminZone"></button>
     </nav>
-    <nav class="breadcrumb" id="breadcrumb" aria-label="面包屑"></nav>
+    <nav class="breadcrumb" id="breadcrumb" aria-label="面包屑" data-i-aria="breadcrumbAria"></nav>
     <div class="spacer"></div>
     <div class="ctl">
       <button class="chip" id="langBtn" title="中文 / English">中 / EN</button>
@@ -106,7 +106,7 @@
         <p id="heroSub"></p>
       </section>
 
-      <div class="ad-roll hidden" id="adRoll" aria-label="公告与合作位"></div>
+      <div class="ad-roll hidden" id="adRoll" aria-label="公告与合作位" data-i-aria="adRollAria"></div>
 
       <div class="section-title"><span class="eyebrow" data-i="modesEyebrow">MODES</span><h2 data-i="modesTitle"></h2><small data-i="modeTip"></small><button class="chip" id="sampleEntryBtn" data-i="sampleEntry" style="margin-left:auto"></button></div>
       <div class="grid" id="modeGrid"></div>
@@ -226,7 +226,7 @@
         <div id="dvResult"></div>
       </section>
 
-      <section class="panel hidden" id="roomPanel" role="region" aria-label="编剧室">
+      <section class="panel hidden" id="roomPanel" role="region" aria-label="编剧室" data-i-aria="roomPanelAria">
         <div class="room-tabs">
           <button class="room-tab on" data-rtab="pitch" data-i="tbTabPitch">选题会</button>
           <button class="room-tab" data-rtab="read" data-i="tbTabRead">剧本围读</button>
@@ -645,7 +645,7 @@
         </div>
       </section>
       <div class="section-title"><h2 data-i="works"></h2><small id="worksCount"></small></div>
-      <input id="worksSearch" class="input" style="margin-bottom:12px" placeholder="🔍 搜索项目标题…" />
+      <input id="worksSearch" class="input" style="margin-bottom:12px" placeholder="🔍 搜索项目标题…" data-ph="worksSearchPh" />
       <div class="grid" id="worksGrid"></div>
       <div class="hidden" id="worksEmpty"></div>
       <section class="panel hidden" id="worksDetail">
@@ -891,7 +891,7 @@
           <div class="listen-segments" id="listenSegments"></div>
           <div class="row-actions">
             <button class="btn-ghost" id="listenCopy" data-i="listenCopy">复制整篇朗读稿</button>
-            <button class="btn-ghost" data-close="listenModal">关闭</button>
+            <button class="btn-ghost" data-close="listenModal" data-i="close">关闭</button>
           </div>
         </div>
       </div>
@@ -908,7 +908,7 @@
             <button class="btn-ghost" data-dp-fmt="docx" data-i="dlDocx">DOCX</button>
             <button class="btn-ghost" data-dp-fmt="pdf" data-i="dlPdf">PDF</button>
             <button class="btn-ghost" id="dpCopy" data-i="dpCopy">复制当前页</button>
-            <button class="btn-ghost" data-close="dpModal">关闭</button>
+            <button class="btn-ghost" data-close="dpModal" data-i="close">关闭</button>
           </div>
         </div>
       </div>

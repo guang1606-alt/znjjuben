@@ -70,6 +70,7 @@
   function renderStaticText() {
     document.querySelectorAll('[data-i]').forEach((el) => { el.textContent = t(el.getAttribute('data-i')); });
     document.querySelectorAll('[data-ph]').forEach((el) => { el.setAttribute('placeholder', t(el.getAttribute('data-ph'))); });
+    document.querySelectorAll('[data-i-aria]').forEach((el) => { el.setAttribute('aria-label', t(el.getAttribute('data-i-aria'))); });
     $('brandSlogan').textContent = lang === 'en' ? 'Human-grade, AI-undetectable vertical short-drama studio' : '人类级、无AI感的竖屏短剧创作工作台';
     $('heroTitle').textContent = lang === 'en' ? 'Turn one idea into a full AI writers’ room' : '把一个灵感，交给一整支AI编剧团队';
     $('heroSub').textContent = lang === 'en'
