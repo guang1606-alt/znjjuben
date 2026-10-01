@@ -3547,6 +3547,8 @@
   znBindTablist($('mkBoardTabs'), { selector: '.board-tab' }); // v2.270 初始绑定（loadBoard 前即可用方向键）
   $('mkListBtn').onclick = async () => {
     if (!Api.isAuthed()) { openAuth('login'); return; }
+    // v2.284 网络层 reject 兜底：断网由全局 onNetworkError toast 提示，静默 catch 防 unhandledrejection
+    try {
     const res = await Api.request('/api/generate/projects');
     if (!res.ok) { xnSay(znSanitizeErr((await res.json().catch(() => ({}))).error, res.status) || 'error'); return; }
     const projects = await res.json();
@@ -3556,6 +3558,7 @@
     $('listScript').onchange = () => previewListingValue($('listScript').value);
     if (projects.length) previewListingValue(projects[0].id);
     openModal('listModal');
+    } catch { /* 全局网络 toast 已提示，弹窗未开可再点 */ }
   };
   // v2.72 上架前价值预览：确定性免费，给卖家定价参考（等级徽章+指数+单集/全集区间+一键用建议价）
   async function previewListingValue(scriptId) {
@@ -3745,8 +3748,11 @@
     $('mineBox').querySelectorAll('[data-view-purchase]').forEach((b) => b.onclick = () => viewPurchasedScript(b.getAttribute('data-view-purchase')));
     $('mineBox').querySelectorAll('[data-delist]').forEach((b) => b.onclick = async () => {
       if (!(await uiConfirm({ body: lang === 'en' ? 'Delist this script? It will be removed from the marketplace.' : '确认下架该剧本？下架后将从交易广场移除。', danger: true, okText: lang === 'en' ? 'Delist' : '下架' }))) return;
+      // v2.284 网络层 reject 兜底（含非 ok 分支 r.json 次生 throw）；全局 toast 已提示，catch 静默
+      try {
       const r = await Api.request(`/api/market/listings/${b.getAttribute('data-delist')}/delist`, { method: 'PATCH' });
       if (r.ok) { xnSay(lang === 'en' ? 'Delisted' : '已下架'); $('mkMineBtn').click(); } else { xnSay(znSanitizeErr((await r.json()).error, r.status) || '失败'); }
+      } catch { /* 全局网络 toast 已提示，卡片保留可再操作 */ }
     });
     $('mineBox').querySelectorAll('[data-relist]').forEach((b) => b.onclick = async () => {
       const newPrice = await uiPrompt({ body: lang === 'en' ? 'New price in yuan (leave empty to keep current):' : '输入新售价（元），留空保持原价：' });
@@ -3757,8 +3763,11 @@
         if (fen === null) { xnSay(lang === 'en' ? 'Price min ¥1, in 0.1-yuan (1 credit) steps.' : '价格不低于 1 元，且需为 0.1 元(1积分)的整数倍'); return; }
         body.priceFen = fen;
       }
+      // v2.284 网络层 reject 兜底；全局 toast 已提示，catch 静默
+      try {
       const r = await Api.request(`/api/market/listings/${b.getAttribute('data-relist')}/relist`, { method: 'PATCH', body: JSON.stringify(body) });
       if (r.ok) { xnSay(lang === 'en' ? 'Relisted' : '已重新上架'); $('mkMineBtn').click(); } else { xnSay(znSanitizeErr((await r.json()).error, r.status) || '失败'); }
+      } catch { /* v2.284 全局网络 toast 已提示， catch 静默防 unhandledrejection */ }
     });
     openModal('mineModal');
   };
