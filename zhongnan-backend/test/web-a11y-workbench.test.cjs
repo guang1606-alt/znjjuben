@@ -36,3 +36,38 @@ describe('v2.242 a11y：工作台面板 dialog 语义与焦点进出', () => {
     assert.match(html, /id="workbenchTitle"/, '缺 #workbenchTitle（aria-labelledby 目标）');
   });
 });
+
+// v2.243 a11y 第三梯队续：工作台焦点 trap（Tab 循环限制在面板内，复用 modal 已有 _uiTrapTab 先例）
+// + 打开时焦点移入面板（键盘/读屏用户立即可操作，焦点不在 layer 内才移动防打字偷焦）
+// + 8 个 JS 侧已有必填校验的输入补 aria-required（bbBrand/bbSelling/tbName/tbHeat/brMain/brChoice/authPhone/authPwd）
+describe('v2.243 a11y：工作台焦点 trap 与焦点移入', () => {
+  it('_workbenchEsc 同时处理 Tab：调用 _uiTrapTab(e, layer) 把焦点循环限制在面板内', () => {
+    const m = appSrc.match(/function _workbenchEsc\(e\)\s*\{[\s\S]*?\n\s*\}/);
+    assert.ok(m, '应定位到 _workbenchEsc');
+    assert.match(m[0], /e\.key === 'Tab'/, '_workbenchEsc 未处理 Tab 键');
+    assert.match(m[0], /_uiTrapTab\(e, layer\)/, '_workbenchEsc 未调用 _uiTrapTab(e, layer)（应复用 modal 焦点 trap 先例）');
+  });
+
+  it('_showWorkbenchLayer 打开时焦点移入面板（#workbenchBack），且仅在焦点不在 layer 内时移动', () => {
+    const region = sliceBetween(appSrc, 'function _showWorkbenchLayer(id)', 'function _syncTopbarOffset');
+    assert.ok(region.length > 0, '应定位到 _showWorkbenchLayer');
+    assert.match(region, /workbenchBack/, '_showWorkbenchLayer 未引用 #workbenchBack 作为焦点落点');
+    assert.match(region, /workbenchBack'\)\?\.focus\(\)|workbenchBack"\)\?\.focus\(\)|workbenchBack'\)\.focus\(\)|workbenchBack"\)\.focus\(\)/, '_showWorkbenchLayer 未调用 #workbenchBack focus()');
+    assert.match(region, /layer\.contains\(/, '焦点移入缺 layer.contains 守卫（防打字中被偷焦）');
+  });
+
+  it('_uiTrapTab 先例仍存在（modal 焦点循环工具，workbench 复用的前提）', () => {
+    assert.match(appSrc, /function _uiTrapTab\(e, modal\)/, '_uiTrapTab 定义不存在');
+  });
+});
+
+describe('v2.243 a11y：必填输入 aria-required（JS 侧已有必填校验，语义层补齐）', () => {
+  const REQUIRED_IDS = ['bbBrand', 'bbSelling', 'tbName', 'tbHeat', 'brMain', 'brChoice', 'authPhone', 'authPwd'];
+  for (const id of REQUIRED_IDS) {
+    it(`#${id} 带 aria-required="true"`, () => {
+      const m = html.match(new RegExp('<(input|textarea)[^>]*\\bid="' + id + '"[^>]*>'));
+      assert.ok(m, `应存在 #${id} 输入控件`);
+      assert.match(m[0], /aria-required="true"/, `#${id} 缺 aria-required="true"`);
+    });
+  }
+});

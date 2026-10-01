@@ -1986,10 +1986,12 @@
     // v2.189 生成类工作台显示"生成剧本"按钮（举一反三：所有"配置完即出本"的工作台都提供入口，避免用户返回主页找按钮）
     const genBtn = $('workbenchGenBtn');
     if (genBtn) genBtn.classList.toggle('hidden', !_GENERATIVE_PANELS.has(id));
-    // ESC 键关闭
+    // ESC 键关闭 + v2.243 Tab 焦点循环（复用 modal 的 _uiTrapTab，把焦点限制在面板内）
     document.addEventListener('keydown', _workbenchEsc);
     $('xnFloat')?.classList.add('workbench-hidden');
     if (body) body.scrollTop = 0;
+    // v2.243 焦点移入面板：键盘/读屏用户打开后立即可操作；焦点已在 layer 内（如面板重显）不偷焦
+    try { if (!layer.contains(document.activeElement)) $('workbenchBack')?.focus(); } catch {}
   }
   // v2.191 顶部留白统一同步：topbar 换行后高度不定，同步更新 workbench / toast / 模态框的顶部偏移，
   // 避免 topbar 浮岛压住返回键、toast 压在导航上、高模态框顶部被挡
@@ -2049,7 +2051,14 @@
     _WORKBENCH_PANEL_IDS.forEach((id) => { const el = $(id); if (el) el.classList.add('hidden'); });
     _hideWorkbenchLayer();
   }
-  function _workbenchEsc(e) { if (e.key === 'Escape') closeWorkbench(); }
+  function _workbenchEsc(e) {
+    if (e.key === 'Escape') { closeWorkbench(); return; }
+    // v2.243 Tab 焦点循环：复用 modal 的 _uiTrapTab，把 Tab/Shift+Tab 限制在工作台面板内
+    if (e.key === 'Tab') {
+      const layer = $('workbenchLayer');
+      if (layer && !layer.classList.contains('hidden')) _uiTrapTab(e, layer);
+    }
+  }
 
   // 5 工具卡 → 工作台 panel（toolPitch/toolRead → 编剧室；toolTeardown → 拆爆款；toolDiversity → 去重；toolBranch → 分支）
   const _TOOL_TO_PANEL = { toolPitch: 'roomPanel', toolRead: 'roomPanel', toolTeardown: 'teardownPanel', toolDiversity: 'diversityPanel', toolBranch: 'branchPanel' };

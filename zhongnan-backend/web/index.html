@@ -370,9 +370,9 @@
         </div>
         <div class="muted" id="bbTip" style="margin:6px 0 10px"></div>
         <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px">
-          <div class="field" style="margin:0"><label id="bbLBrand" for="bbBrand"></label><input id="bbBrand" maxlength="40" /></div>
+          <div class="field" style="margin:0"><label id="bbLBrand" for="bbBrand"></label><input id="bbBrand" maxlength="40" aria-required="true" /></div>
           <div class="field" style="margin:0"><label id="bbLProduct" for="bbProduct"></label><input id="bbProduct" maxlength="60" /></div>
-          <div class="field" style="margin:0;grid-column:1/-1"><label id="bbLSelling" for="bbSelling"></label><input id="bbSelling" maxlength="120" /></div>
+          <div class="field" style="margin:0;grid-column:1/-1"><label id="bbLSelling" for="bbSelling"></label><input id="bbSelling" maxlength="120" aria-required="true" /></div>
           <div class="field" style="margin:0"><label id="bbLAudience" for="bbAudience"></label><input id="bbAudience" maxlength="60" /></div>
           <div class="field" style="margin:0"><label id="bbLSymbol" for="bbSymbol"></label><input id="bbSymbol" maxlength="60" /></div>
           <div class="field" style="margin:0"><label id="bbLCta" for="bbCta"></label><input id="bbCta" maxlength="60" /></div>
@@ -390,10 +390,10 @@
         </div>
         <div class="muted" id="tbTip" style="margin:6px 0 10px"></div>
         <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px">
-          <div class="field" style="margin:0;grid-column:1/-1"><label id="tbLName" for="tbName"></label><input id="tbName" maxlength="60" /></div>
+          <div class="field" style="margin:0;grid-column:1/-1"><label id="tbLName" for="tbName"></label><input id="tbName" maxlength="60" aria-required="true" /></div>
           <div class="field" style="margin:0"><label id="tbLKind" for="tbKind"></label><select id="tbKind"><option value="social" selected></option><option value="film"></option><option value="festival"></option><option value="industry"></option></select></div>
           <div class="field" style="margin:0"><label id="tbLApproach" for="tbApproach"></label><select id="tbApproach"><option value="persona_spin"></option><option value="setting_remix"></option><option value="formula_clone" selected></option><option value="reversal"></option></select></div>
-          <div class="field" style="margin:0;grid-column:1/-1"><label id="tbLHeat" for="tbHeat"></label><textarea id="tbHeat" rows="2" maxlength="200" style="width:100%"></textarea></div>
+          <div class="field" style="margin:0;grid-column:1/-1"><label id="tbLHeat" for="tbHeat"></label><textarea id="tbHeat" rows="2" maxlength="200" style="width:100%" aria-required="true"></textarea></div>
           <div class="field" style="margin:0;grid-column:1/-1"><label id="tbLAngle" for="tbAngle"></label><textarea id="tbAngle" rows="2" maxlength="200" style="width:100%"></textarea></div>
           <div class="field" style="margin:0;grid-column:1/-1"><label id="tbLAvoid" for="tbAvoid"></label><input id="tbAvoid" maxlength="200" /></div>
         </div>
@@ -408,8 +408,8 @@
         </div>
         <div class="muted" id="brTip" style="margin:6px 0 10px"></div>
         <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px">
-          <div class="field" style="margin:0;grid-column:1/-1"><label id="brLMain" for="brMain"></label><textarea id="brMain" rows="2" maxlength="200" style="width:100%"></textarea></div>
-          <div class="field" style="margin:0;grid-column:1/-1"><label id="brLChoice" for="brChoice"></label><textarea id="brChoice" rows="2" maxlength="200" style="width:100%"></textarea></div>
+          <div class="field" style="margin:0;grid-column:1/-1"><label id="brLMain" for="brMain"></label><textarea id="brMain" rows="2" maxlength="200" style="width:100%" aria-required="true"></textarea></div>
+          <div class="field" style="margin:0;grid-column:1/-1"><label id="brLChoice" for="brChoice"></label><textarea id="brChoice" rows="2" maxlength="200" style="width:100%" aria-required="true"></textarea></div>
           <div class="field" style="margin:0"><label id="brLMainN" for="brMainN"></label><input id="brMainN" type="number" min="1" max="3" value="1" /></div>
           <div class="field" style="margin:0"><label id="brLHiddenN" for="brHiddenN"></label><input id="brHiddenN" type="number" min="0" max="2" value="1" /></div>
           <div class="field" style="margin:0"><label id="brLBadN" for="brBadN"></label><input id="brBadN" type="number" min="0" max="2" value="1" /></div>
@@ -1307,8 +1307,8 @@
         <button class="on" id="tabLogin" data-i="login"></button>
         <button id="tabRegister"></button>
       </div>
-      <div class="field"><label for="authPhone">手机号</label><input id="authPhone" inputmode="numeric" placeholder="11 位手机号" maxlength="11" /></div>
-      <div class="field"><label for="authPwd">密码</label><input id="authPwd" type="password" placeholder="至少 8 位，需含字母和数字" maxlength="64" /></div>
+      <div class="field"><label for="authPhone">手机号</label><input id="authPhone" inputmode="numeric" placeholder="11 位手机号" maxlength="11" aria-required="true" /></div>
+      <div class="field"><label for="authPwd">密码</label><input id="authPwd" type="password" placeholder="至少 8 位，需含字母和数字" maxlength="64" aria-required="true" /></div>
       <div class="field hidden" id="inviteWrap"><label for="authInvite">邀请码（选填）</label><input id="authInvite" maxlength="20" /></div>
       <div class="notice err hidden" id="authErr"></div>
       <button class="btn-primary" id="authSubmit" style="width:100%;margin-top:12px"></button>
