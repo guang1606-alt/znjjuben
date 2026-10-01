@@ -115,3 +115,9 @@
   - **新登记孤儿 4 条**（逐一读后端语义，均刻意保留/低价值，维持不接入口）：`GET /api/interview/sessions/:id`（单会话详情，前端列表/turn/brief/close 已覆盖，单查冗余）；`GET /api/novels/languages`（语言清单，前端本地化硬编码）；`GET /api/novels/validate`（源 URL 合法性校验，运营排障工具）；`GET /api/generate/scripts/:id`（单剧本详情，前端按项目维度消费 listen/diff，排障单查）
   - **路径前缀更正**（以 app.ts L77-98 挂载为准）：历史登记的 `/api/knowledge/*` 实为 `/api/admin/knowledge/*`、`/api/admin-model/*` 实为 `/api/admin/model/*`、`/api/handoff/brief` 实为 `/api/admin/handoff/brief`
   - 结论：孤儿端点全量对照审计收口，后续仅对新增路由做增量复核即可
+
+## 16.【低】超管演示账号（18891995171）名下弱网取证早期测试残留项目待清理（需拍板）
+- 背景：v2.275/v2.276 两轮「移动端弱网写路径」dogfood，在取证脚本改成零副作用（`context.route` 直接 fulfill 假项目、不转后端）**之前**，曾在超管无项目数上限账号下真实建过若干演示项目（标题如「古代发明·女性互助·黄金三秒开场」「宿敌变恋人·厨师·爱而不得」等机器生成的测试题材）。v2.276 起取证脚本对 POST /projects 一律 fulfill `{id:'fake-N'}`、/episodes 挂起，不再产生任何真实脏数据
+- 待确认：是否认可删除该账号下这批纯测试残留项目
+- 建议方式（确认后执行）：先导出候选 id/标题清单供你过目，再走作品库 UI 软删（可恢复）或直接 SQL 按 id 批量删；真实用户/演示用正式项目不在删除范围
+- 本轮（v2.276）未自行删除任何真实项目，仅登记待确认
