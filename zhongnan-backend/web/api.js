@@ -110,18 +110,42 @@
   // 401 → 用 refresh 换新 access 重试一次；仍失败则清登录态并抛 AUTH_REQUIRED
   // /refresh 单飞：并发 401 共享同一次续期（配合后端轮换的一次性消费语义，避免并发重复调用被判重放）。
   // 同一账号在途共享；跨账号（user 不同）各开各的 flight。
-  let refreshFlight = null; // { key, promise, done }
+  // v2.288 flight 取消语义=持有者组合：续期是所有并发 401 请求的共享操作，不属于任一发起者——
+  // ①旧契约（v2.186，web-api-session-races）：唯一持有者 abort 时连其 refresh 一起取消（随后
+  //   ensureActive 把结果转 AbortError，不清会话不跳登录）；
+  // ②新修：持有者中只要还有一个未取消（无 signal 的 GET 视为不可取消），flight 继续——否则长任务
+  //   POST（生成剧集，唯一传 signal 的调用点）在 refresh 在途被「停止」abort，会把共享 flight 的
+  //   并发 GET 连累成二次 401→清会话跳登录；
+  // ③全部持有者均 abort 时才中止 flight。timeout 不继承任一业务请求，续期统一走默认 30s 预算。
+  let refreshFlight = null; // { key, promise, done, ctrl, holders }
+  function joinRefreshFlight(flight, signal) {
+    if (!signal) { flight.holders.push(null); return; } // null=无 signal 持有者：永不要求取消
+    if (signal.aborted) { flight.holders.push({ dead: true }); reevalRefreshFlight(flight); return; }
+    const holder = { dead: false };
+    holder.onAbort = () => { holder.dead = true; reevalRefreshFlight(flight); };
+    signal.addEventListener('abort', holder.onAbort, { once: true });
+    flight.holders.push(holder);
+  }
+  function reevalRefreshFlight(flight) {
+    if (flight.done || flight.ctrl.signal.aborted) return;
+    const anyAlive = flight.holders.some((h) => h === null || !h.dead);
+    if (!anyAlive) flight.ctrl.abort();
+  }
   function refreshSession(snapshot, opts) {
     const rtNow = store.get(K.refresh);
     if (!rtNow) return Promise.resolve(null);
     const key = snapshot.user || '';
-    if (refreshFlight && !refreshFlight.done && refreshFlight.key === key) return refreshFlight.promise;
-    const flight = { key, promise: null, done: false };
+    if (refreshFlight && !refreshFlight.done && refreshFlight.key === key) {
+      joinRefreshFlight(refreshFlight, opts && opts.signal);
+      return refreshFlight.promise;
+    }
+    const flight = { key, promise: null, done: false, ctrl: new AbortController(), holders: [] };
+    joinRefreshFlight(flight, opts && opts.signal);
     flight.promise = (async () => {
       try {
         const rr = await fetchWithTimeout('/api/auth/refresh', {
           method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ refreshToken: rtNow }), signal: opts.signal, timeout: opts.timeout,
+          body: JSON.stringify({ refreshToken: rtNow }), signal: flight.ctrl.signal,
         });
         if (!rr || !rr.ok) return null;
         const txt = await rr.text();
