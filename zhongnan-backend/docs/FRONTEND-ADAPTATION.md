@@ -14,6 +14,7 @@
 
 | 风格 | 参数 | 说明 |
 |---|---|---|
+| v2.305 | 2026-10-02 | 前端 esc 统一性深审：teardown-view.js esc 补全单引号 &#39; 转义；全端 esc/escapeHtml 五字符全覆盖静态守卫（& < > " ' + &#39; 映射断言）；变异红黑两轮；全量 5954 条 0 fail |
 | v2.304 | 2026-10-02 | 社区/资料面 UGC 污点透出审计；nickname HTML 元字符入库拒绝（profile PATCH + admin 开设账号双路径同口径，对齐 v2.303 原则）；变异红黑两轮；全量 5953 条 0 fail |
 | v2.303 | 2026-10-02 | auth/refresh 链深审；avatarUrl 协议白名单（防伪协议 stored-XSS 入库）；daily-review 脚本自蚀根因修复（mergeManual 保留手工段，require.main guard）；isBlocked 等 @deprecated；全量 5952 条 0 fail |
 | v2.302 | 2026-10-02 | middleware 面深审；bannedGuard 异常静默放行 → 503 系统繁忙；变异红黑两轮；全量 5947 条 0 fail |
