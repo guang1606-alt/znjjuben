@@ -55,6 +55,22 @@ describe('v2.71 显式画像字段与个性化总开关', { concurrency: 1 }, ()
     assert.strictEqual((await patch({ gender: '外星人' })).status, 400);
   });
 
+  it('v2.303 avatarUrl 协议白名单：javascript:/data: 等危险协议 400，http(s)/站内相对/空串放行', async () => {
+    // 危险协议：伪 URL 入库后任何消费端 href 渲染即 XSS（纵深防御，入库前拒绝）
+    assert.strictEqual((await patch({ avatarUrl: 'javascript:alert(1)' })).status, 400, 'javascript: 必须拒绝');
+    assert.strictEqual((await patch({ avatarUrl: '  JavaScript:alert(1)' })).status, 400, '大小写/前导空白混淆必须拒绝');
+    assert.strictEqual((await patch({ avatarUrl: 'data:text/html,<script>alert(1)</script>' })).status, 400, 'data:text/html 必须拒绝');
+    assert.strictEqual((await patch({ avatarUrl: 'vbscript:msgbox(1)' })).status, 400, 'vbscript: 必须拒绝');
+    // 合法形态
+    assert.strictEqual((await patch({ avatarUrl: 'https://cdn.example.com/a.png' })).status, 200, 'https 放行');
+    assert.strictEqual((await patch({ avatarUrl: 'http://example.com/a.png' })).status, 200, 'http 放行');
+    assert.strictEqual((await patch({ avatarUrl: '/api/files/avatar/u1.png' })).status, 200, '站内相对路径放行（头像上传位）');
+    const cleared = await patch({ avatarUrl: '' });
+    assert.strictEqual(cleared.status, 200, '空串清空放行');
+    const j = await cleared.json();
+    assert.strictEqual(j.avatarUrl, null, '空串语义为清空头像');
+  });
+
   it('显式地域+性别画像 → 智能默认小南播报地域取向（地域走话术，性别/年龄走受众）', async () => {
     boardStore.clear();
     const r = await sd({ tags: ['逆袭'], lang: 'zh' });

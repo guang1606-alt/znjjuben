@@ -11,9 +11,14 @@ const fs = require('node:fs');
 const path = require('node:path');
 
 const ROOT = path.resolve(__dirname, '..');
-const quiet = process.argv.includes('--quiet');
 const sh = (c) => { try { return execSync(c, { cwd: ROOT, encoding: 'utf8', timeout: 30_000 }).trim(); } catch { return ''; } };
 const line = (t) => '- ' + t;
+
+// v2.303：手工段边界标记——标记行之后为 agent 手工追加的编号日报（六十一/六十二…），自动重写只覆盖标记之前
+const MANUAL_MARKER = '*报告入库共享（多人协作可见）；每日一条，历史可追溯。*';
+
+function main() {
+  const quiet = process.argv.includes('--quiet');
 
 /* ---------- 1. 同步状态 ---------- */
 sh('git fetch --all --prune');
@@ -108,7 +113,9 @@ ${[
 const outDir = path.join(ROOT, 'docs', 'daily-review');
 fs.mkdirSync(outDir, { recursive: true });
 const outPath = path.join(outDir, `${today}.md`);
-fs.writeFileSync(outPath, report);
+// v2.303：保留旧报告标记之后的手工编号段（实证：曾整体覆盖吞掉六十一~八十四共 335 行手工日报）
+const oldReport = fs.existsSync(outPath) ? fs.readFileSync(outPath, 'utf8') : '';
+fs.writeFileSync(outPath, mergeManual(oldReport, report));
 
 if (!quiet) {
   console.log(`✅ 报告已生成: docs/daily-review/${today}.md`);
@@ -116,3 +123,22 @@ if (!quiet) {
   console.log(`   协作: ${authorLines.length} 人活跃 | 分支风险: ${branchRisks.length} 项 | 版本: ${pkg.version}`);
   console.log(`   待确认: ${pending ? '有（见报告第五节）' : '无'}`);
 }
+}
+
+/**
+ * 合并旧报告的手工段（纯函数，无 IO）：
+ * 自动区（文件开头至 MANUAL_MARKER 行，含标记）由新报告整体重写；
+ * 标记之后的手工编号段逐字拼回。旧内容为空或无可信标记边界（更老格式/他文）时原样返回新报告，不做猜测性保留。
+ */
+function mergeManual(oldContent, newReport, marker = MANUAL_MARKER) {
+  if (!oldContent) return newReport;
+  const idx = oldContent.indexOf(marker);
+  if (idx < 0) return newReport;
+  const manual = oldContent.slice(idx + marker.length).trim();
+  if (!manual) return newReport;
+  return newReport.trimEnd() + '\n\n' + manual + '\n';
+}
+
+module.exports = { mergeManual, MANUAL_MARKER };
+
+if (require.main === module) main();

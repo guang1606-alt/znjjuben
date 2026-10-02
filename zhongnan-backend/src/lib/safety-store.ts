@@ -66,7 +66,11 @@ export async function scanWithStore(text: string, p: any = defaultPrisma): Promi
   return scanContent(text, rules);
 }
 
-/** 互动分支/多段文本统一入口 */
+/**
+ * 互动分支/多段文本统一入口（走 effectiveRules，含运营覆写，无绕过风险）。
+ * @note v2.303 盘点：当前零业务调用，作为多段扫描的对称 API 预留（互动分支接入时启用）；
+ * 若连续版本仍无调用面可在确认无互动分支计划后删除。
+ */
 export async function scanManyWithStore(texts: Array<string | undefined | null>, p: any = defaultPrisma): Promise<ScanResult> {
   const rules = await effectiveRules(p);
   return scanMany(texts, rules);

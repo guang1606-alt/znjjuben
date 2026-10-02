@@ -254,7 +254,12 @@ export function scanMany(texts: Array<string | undefined | null>, rules: SafetyR
   return merged;
 }
 
-/** 便捷判定：是否硬拦截（路由层用） */
+/**
+ * 便捷判定：是否硬拦截（仅内置默认规则）。
+ * @deprecated v2.303 起业务路由禁止使用——本函数只吃内置规则，绕过运营在后台的
+ * 规则停用/自定义覆写（lib/safety-store 的 effectiveRules）。凡需拦截判定一律走
+ * `scanWithStore`（单段）或 `scanManyWithStore`（多段）。仅保留供纯规则单测引用。
+ */
 export function isBlocked(text: string): boolean {
   return scanContent(text).level === 'block';
 }

@@ -153,7 +153,12 @@ export function createAuthRouter(prisma: PrismaLike | any) {
     nickname: z.string().trim().min(1).max(24).optional(),
     penName: z.string().trim().min(2).max(20).regex(/^[\u4e00-\u9fa5A-Za-z0-9_·\-]+$/, '笔名仅支持中英文数字与 _·-').optional().or(z.literal('')),
     bio: z.string().trim().max(300).optional().or(z.literal('')),
-    avatarUrl: z.string().max(500).optional(),
+    // v2.303 协议白名单（纵深防御）：仅放行 http(s) 外链与站内相对路径，空串=清空；
+    // javascript:/data:text/html/vbscript: 等伪协议一律拒绝——该字段经 /me 与 community 列表透出，
+    // 一旦任何消费端以 href/window.open 渲染即 XSS，必须在入库前阻断（不依赖每个渲染点转义）。
+    avatarUrl: z.string().trim().max(500)
+      .refine((v) => v === '' || /^https?:\/\//i.test(v) || v.startsWith('/'), '头像地址仅支持 http(s) 链接或站内路径')
+      .optional(),
     // v2.71 显式画像：枚举白名单校验，非法值直接 400；空串=清空
     region: z.string().trim().max(12).refine((v) => v === '' || PROFILE_REGIONS.includes(v), '地区不在可选范围').optional(),
     ageBand: z.string().trim().max(8).refine((v) => v === '' || AGE_BAND_IDS.includes(v), '年龄段不合法').optional(),
