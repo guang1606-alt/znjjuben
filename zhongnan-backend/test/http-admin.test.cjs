@@ -126,6 +126,13 @@ test('管理员后台：完整闭环', async (t) => {
     assert.strictEqual((await req('POST', '/api/admin/users', adminTok, { phone: '13911115555', initialPassword: 'short7', level: 'FREE' })).status, 400);
     assert.strictEqual((await req('POST', '/api/admin/users', adminTok, { phone: '13911115555', initialPassword: 'init12345', level: 'VIP' })).status, 400);
     assert.strictEqual((await req('POST', '/api/admin/users', adminTok, { phone: '12345', initialPassword: 'init12345', level: 'FREE' })).status, 400);
+    // v2.304 nickname HTML 元字符拒绝（与 profile PATCH 同口径）：超管开设账号同样不得注入
+    assert.strictEqual((await req('POST', '/api/admin/users', adminTok, {
+      phone: '13911117777', initialPassword: 'init12345', level: 'FREE', nickname: '<img src=x onerror=alert(1)>',
+    })).status, 400, '开设账号 nickname 含 < 必须 400');
+    assert.strictEqual((await req('POST', '/api/admin/users', adminTok, {
+      phone: '13911117777', initialPassword: 'init12345', level: 'FREE', nickname: 'a&b',
+    })).status, 400, '开设账号 nickname 含 & 必须 400');
   });
 
   // c199 副管理员（2026-09-29「超管一人独大」口径）：超管仍可授予 isAdmin 身份标记，

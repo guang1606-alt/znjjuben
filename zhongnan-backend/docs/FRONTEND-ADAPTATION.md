@@ -14,6 +14,7 @@
 
 | 风格 | 参数 | 说明 |
 |---|---|---|
+| v2.304 | 2026-10-02 | 社区/资料面 UGC 污点透出审计；nickname HTML 元字符入库拒绝（profile PATCH + admin 开设账号双路径同口径，对齐 v2.303 原则）；变异红黑两轮；全量 5953 条 0 fail |
 | v2.303 | 2026-10-02 | auth/refresh 链深审；avatarUrl 协议白名单（防伪协议 stored-XSS 入库）；daily-review 脚本自蚀根因修复（mergeManual 保留手工段，require.main guard）；isBlocked 等 @deprecated；全量 5952 条 0 fail |
 | v2.302 | 2026-10-02 | middleware 面深审；bannedGuard 异常静默放行 → 503 系统繁忙；变异红黑两轮；全量 5947 条 0 fail |
 | v2.301.0 | 2026-10-02 | 勘察轮收官（dogfood 第三十九轮，lib/engine 边界深审三面证伪无缺口）：lens 为 lib/ 与 engine/ 计费·合规边界——①staff-billing 内部账户 0 元通道：幂等差值计数（OUT>REFUND 即 409）+ idempotencyKey @unique DB 唯一约束兜底并发双写，interview/teardown/value-added(poster/pk/xiaonan)/room 四路由 charge/refund 配对完整，staff 短路先于计费无反穿；staffRefundTx 无原扣款存在性校验但 amount=0 不动钱，仅理论审计噪音。②safety-store 合规规则库：运营覆写合并+60s 缓存+无库回退默认规则绝不炸，scanWithStore 六处业务调用（interview×2/generate×3/community/knowledge）全部走 store 入口，后台改词全局生效链完整；scanManyWithStore 与 isBlocked 为零调用导出（死代码观察项，无链路影响）。③engine 计费边界：engine/ 全目录仅 engine/interview.ts 两处模型调用且走 callText 统一入口（model-proxy 成本归集），无绕过网关直连；generate staff 三面差异各有设计理由（/episodes 幂等由在途防线+Script 唯一约束承担故零流水，/fix 幂等键含 version 需 aN 重试计数故写 STAFF_FREE 流水，VA 面走 staffChargeTx）——身份短路三不口径（不查余额/不依赖赠送/不写库充值）三面一致。零代码变更，纯勘察结论沉淀。 |

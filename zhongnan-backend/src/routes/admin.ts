@@ -103,7 +103,10 @@ export function createAdminRouter(prisma: PrismaLike | any) {
     phone: z.string().regex(/^1[3-9]\d{9}$/, '手机号格式不正确'),
     initialPassword: z.string().min(8, '初始密码至少8位').max(64),
     level: z.enum(LEVELS),
-    nickname: z.string().trim().min(1).max(24).optional(),
+    // v2.304 与 profile PATCH 同口径：nickname 入库侧拒绝 HTML 元字符
+    nickname: z.string().trim().min(1).max(24)
+      .refine((v) => !/[<>&"']/.test(v), '昵称不可包含 < > & " \' 字符')
+      .optional(),
     isAdmin: z.boolean().optional(),
   });
   r.post('/users', ...admin, async (req: AuthRequest, res) => {

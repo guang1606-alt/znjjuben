@@ -71,6 +71,20 @@ describe('v2.71 显式画像字段与个性化总开关', { concurrency: 1 }, ()
     assert.strictEqual(j.avatarUrl, null, '空串语义为清空头像');
   });
 
+  it('v2.304 nickname HTML 元字符拒绝：跨用户透出身份字段入库前阻断（对齐 v2.303 原则）', async () => {
+    // nickname 经 community 帖子/市场列表/榜单/后台多点透出，当前仅靠渲染侧 escapeHtml 兜底，
+    // 且 web 端 6+ 份独立 esc 实现已漂移（teardown-view 缺 '）——入库侧拒绝 HTML 元字符，
+    // 不依赖每个渲染点转义。合法昵称（中文/emoji/·）不受影响。
+    assert.strictEqual((await patch({ nickname: '<img src=x onerror=alert(1)>' })).status, 400, '<> 必须拒绝');
+    assert.strictEqual((await patch({ nickname: '"><script>alert(1)</script>' })).status, 400, '"> 必须拒绝');
+    assert.strictEqual((await patch({ nickname: "O'Brien" })).status, 400, "单引号必须拒绝（属性注入面）");
+    assert.strictEqual((await patch({ nickname: 'a"b' })).status, 400, '双引号必须拒绝');
+    assert.strictEqual((await patch({ nickname: 'a&b' })).status, 400, '& 必须拒绝');
+    // 合法形态：中文/emoji/· 全部放行
+    assert.strictEqual((await patch({ nickname: '编剧小李🎬' })).status, 200, 'emoji 昵称放行');
+    assert.strictEqual((await patch({ nickname: '终南·张三' })).status, 200, '中文+间隔号放行');
+  });
+
   it('显式地域+性别画像 → 智能默认小南播报地域取向（地域走话术，性别/年龄走受众）', async () => {
     boardStore.clear();
     const r = await sd({ tags: ['逆袭'], lang: 'zh' });

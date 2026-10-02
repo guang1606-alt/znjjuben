@@ -150,7 +150,10 @@ export function createAuthRouter(prisma: PrismaLike | any) {
   });
   // 修改笔名/昵称/简介（笔名会成为剧本水印；长度与字符合规校验，防注入与超长）
   const profileSchema = z.object({
-    nickname: z.string().trim().min(1).max(24).optional(),
+    // v2.304 nickname 入库侧拒绝 HTML 元字符（对齐 v2.303 原则：跨用户透出字段不依赖每个渲染点转义）
+    nickname: z.string().trim().min(1).max(24)
+      .refine((v) => !/[<>&"']/.test(v), '昵称不可包含 < > & " \' 字符')
+      .optional(),
     penName: z.string().trim().min(2).max(20).regex(/^[\u4e00-\u9fa5A-Za-z0-9_·\-]+$/, '笔名仅支持中英文数字与 _·-').optional().or(z.literal('')),
     bio: z.string().trim().max(300).optional().or(z.literal('')),
     // v2.303 协议白名单（纵深防御）：仅放行 http(s) 外链与站内相对路径，空串=清空；
