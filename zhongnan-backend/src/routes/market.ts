@@ -397,7 +397,10 @@ export function createMarketRouter(prisma: PrismaLike | any) {
     if (!listing) return res.status(404).json({ error: '上架记录不存在' });
     if (listing.sellerId !== req.userId) return res.status(403).json({ error: '只能下架自己的剧本' });
     if (listing.status !== 'ON_SHELF') return res.status(409).json({ error: '仅在售中剧本可下架，托管中/已成交/已下架不可操作' });
-    await prisma.listing.update({ where: { id: listing.id }, data: { status: 'OFF_SHELF' } });
+    // v2.308 竞态加固：条件抢占 ON_SHELF→OFF_SHELF，与购买侧 ESCROW 抢占原子互斥——
+    // 读取快照后若买家事务已抢先（ESCROW），count=0 → 409，不再裸写把托管中商品翻下架
+    const del = await prisma.listing.updateMany({ where: { id: listing.id, status: 'ON_SHELF' }, data: { status: 'OFF_SHELF' } });
+    if (!del || del.count === 0) return res.status(409).json({ error: '剧本状态刚变化（可能刚被买走托管中），请刷新后重试' });
     res.json({ ok: true, id: listing.id, status: 'OFF_SHELF' });
   });
 
