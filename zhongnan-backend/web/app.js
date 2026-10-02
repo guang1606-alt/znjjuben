@@ -8521,6 +8521,10 @@
         yb.disabled = true; yb.textContent = lang === 'en' ? 'Loading latest…' : '载入新版中…';
         try {
           await onRetry();
+        } catch {
+          // v2.306：onRetry 回调跨函数传入（8601 面回调内裸 await openProject/reopenWorksDiagnosis），
+          // reject 不得冒泡——提示后由 finally 恢复按钮可点，用户可再次手动重试
+          xnSay(lang === 'en' ? 'Retry failed, please try again.' : '重试失败，请稍后重试');
         } finally {
           // onRetry 通常已把旧面板重绘（本组按钮随旧 DOM 一起销毁）；仍在页面上说明重试没发出去，恢复可点
           if (document.body.contains(yb)) { yb.disabled = false; yb.textContent = oldTxt; }
@@ -9424,7 +9428,8 @@
   /* ---------- v2.41 组合全景 + 供应商池 + 九岗路由 ---------- */
   let pfCache = null, pvCache = { providers: [], routing: {} }, editingPvId = '';
   async function loadAdmPortfolio() {
-    pfCache = await admApi('/model/portfolio');
+    // v2.306 裸 await 收口：admApi reject（断网/非 ok）不得冒泡 unhandledrejection——失败提示后早退，面板保旧
+    try { pfCache = await admApi('/model/portfolio'); } catch (e) { xnSay(e.message); return; }
     const j = pfCache;
     $('admPfSummary').textContent = `顺序自检：${j.orderErrors.length ? '❌ ' + j.orderErrors.join('；') : '✅ 合法（市场前置→架构→…→市场终评）'} · 自定义路由每集估算裸成本 ${j.routedCostFenPerEp} 分`;
     const orderTxt = j.order.map((s) => `${s.order}.${s.label}`).join(' → ');

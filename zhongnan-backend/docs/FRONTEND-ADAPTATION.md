@@ -14,6 +14,7 @@
 
 | 风格 | 参数 | 说明 |
 |---|---|---|
+| v2.306 | 2026-10-02 | 裸 async handler 设卡沉淀（AST-lite 守卫扫 web/*.js 内联/引用双形态绑定；放行=无 await / try+catch / 自管函数与 UI 原语白名单）+ 两处漏网修复：loadAdmPortfolio 裸 await admApi 包 try 早退（v2.285 行政面漏网）、yb.onRetry try/finally 补 catch 双语提示（c204 重试面）；变异两轮咬红恢复；全量 5965 条 0 fail |
 | v2.305 | 2026-10-02 | 前端 esc 统一性深审：teardown-view.js esc 补全单引号 &#39; 转义；全端 esc/escapeHtml 五字符全覆盖静态守卫（& < > " ' + &#39; 映射断言）；变异红黑两轮；全量 5954 条 0 fail |
 | v2.304 | 2026-10-02 | 社区/资料面 UGC 污点透出审计；nickname HTML 元字符入库拒绝（profile PATCH + admin 开设账号双路径同口径，对齐 v2.303 原则）；变异红黑两轮；全量 5953 条 0 fail |
 | v2.303 | 2026-10-02 | auth/refresh 链深审；avatarUrl 协议白名单（防伪协议 stored-XSS 入库）；daily-review 脚本自蚀根因修复（mergeManual 保留手工段，require.main guard）；isBlocked 等 @deprecated；全量 5952 条 0 fail |
