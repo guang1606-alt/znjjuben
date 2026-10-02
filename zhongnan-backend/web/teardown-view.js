@@ -128,7 +128,19 @@
       </div>`;
     $('tdToProject').addEventListener('click', toProject);
     $('tdCopyOutline').addEventListener('click', () => {
-      navigator.clipboard?.writeText(box.innerText).then(() => toastOk(t.copied));
+      // v2.307（c199 同族）：clipboard API 拒绝/非安全上下文时静默失败用户无感知；
+      // 统一 clipboard + execCommand 兜底，reject 走降级并照常给"已复制"反馈。
+      const done = () => toastOk(t.copied);
+      const legacy = () => {
+        const ta = document.createElement('textarea');
+        ta.value = box.innerText; ta.style.position = 'fixed'; ta.style.opacity = '0';
+        document.body.appendChild(ta); ta.select();
+        try { document.execCommand('copy'); } catch (_) { /* 老浏览器也失败时无降级可做 */ }
+        ta.remove();
+      };
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(box.innerText).then(done).catch(() => { legacy(); done(); });
+      } else { legacy(); done(); }
     });
   }
   async function outline() {
