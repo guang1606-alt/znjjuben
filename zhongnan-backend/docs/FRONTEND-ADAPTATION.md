@@ -2,7 +2,7 @@
 
 > 面向前端（`web/` 原生 JS 站点及后续独立前端/移动端）的后端 API 契约与适配说明。
 > 后端每次破坏性契约变更都会在此登记：变更内容 → 迁移对照 → 前端已同步点。
-> 版本对齐 `package.json`，当前基线：**v2.313.0**。
+> 版本对齐 `package.json`，当前基线：**v2.314.0**。
 
 ---
 
@@ -14,6 +14,7 @@
 
 | 风格 | 参数 | 说明 |
 |---|---|---|
+| v2.314 | 2026-10-04 | 积分充值发货并发丢更新修复：响应/路由契约零变化、前端零改动。deliverPaidOrder 积分入账由「findUnique 读余额→整体覆盖写 balance」改为 `{ increment }` 原子增量（UPDATE col=col+$n 语句级行锁）——裸 $transaction 默认 Read Committed 不串行账户读改写，两笔充值并发或充值与 billing 扣款并发时后写覆盖先写（一笔充值蒸发、ledger balanceAfter 失真）；订单级 updateMany PENDING 抢占只防同单重复回调，不防跨单账户竞争。流水快照取增量后回读值。内存桩 pointsAccount 补 increment 语义。test/order-recharge-race 写屏障交错确定性复现（旧码 1100 覆盖 2100 咬红，新码 3100、流水 2100/3100），变异三轮（回退覆盖/桩去 increment/流水预读值）均咬红；全量 6001 条 0 fail。支付渠道未接通（create 503、notify 关闭），本修为接通前资金工具正确性收口；会员等级 user.update 并发覆盖为独立缺口已登记下轮 |
 | v2.313 | 2026-10-04 | 守卫接线元守卫（guard of guards）：纯测试基建变更，API 契约零变化、前端零改动。scripts/guard-*.cjs 家族（v2.298 deleted-filter / v2.307 promise-chain / v2.311 async-handler / v2.312 conditional-write）此前靠人工纪律各自配对 test 常驻 npm test，新增守卫若漏建 test / CLI 红灯 / 不导出统一接口会静默失效；新增 test/guards-wiring.test.cjs 枚举全部守卫强制三契约——A 配对 test 存在且 ≥200 字节（防空壳）、B CLI 直跑退出 0 且输出 0 violation（真实代码库全量扫描，配对 test 被 skip/改错仍抓红）、C 导出 scanProject 统一接口；家族数量基线 ≥4（只增不减，废弃须显式改基线并日报留证）。变异三轮（无 test 探针/src 假违规/去导出）三契约分别咬红；全量 6000 条 0 fail |
 | v2.312 | 2026-10-04 | 拆爆款改编大纲 TOCTOU 修复 + 条件原子写常驻守卫沉淀：①POST /api/teardown/:id/outline 落库由裸 update 改为条件原子写 updateMany({ where:{ id, direction: 快照方向 } })——同记录两个不同方向在途时（幂等窗按 direction+pickedTags 哈希放行不同内容），旧实现败者整体覆盖 outline/direction/pickedTags（胜者付费大纲丢失）且 pointsCost 双扣；新实现 PG 行锁下仅先落库者 count=1，败者 count=0 退款并返 409 OUTLINE_RACE「另一方向的改编大纲刚已生成，请刷新查看后按需重新生成」（新增 409 错误码，经 jsonOrThrow → xnSay 惯例展示，契约结构不变）；②v2.308-311 同族四例（market delist 状态抢占/room join 条件 push/interview turnCount 乐观锁/brief 状态翻转）样本攒够，沉淀 AST-lite 常驻守卫 scripts/guard-conditional-write.cjs：对 update( where 仅单 id 键且写 status/state/payload/bible/materials/transcript 的裸写设卡，放行规则=where 多键/前 40 行事务行锁/前置 updateMany/文件级白名单(admin)/行级白名单 17 条证伪面固化（避免重复勘察耗 token）；测试：teardown-outline-race freezeOn 冻结快照确定性复现（先红后绿），guard-conditional-write 真实扫描 0 violation + 8 fixture 变异自证；变异三轮（M1 回退裸写 race 咬红 / M2 去敏感字段规则守卫 3 红 fixture 咬红 / M3 清空白名单真实扫描 14 violation 咬红）全部还原转绿；内存桩 teardownRecord defaults 补 direction:null 对齐 Prisma NULL 语义；全量 5987 条 0 fail |
 | v2.311 | 2026-10-04 | 创意简报状态翻转 TOCTOU 加固：POST /api/interview/sessions/:id/brief 就绪归档由「读快照判 status==='ACTIVE' → 裸 update → CONVERTED」改为条件原子写 updateMany({ where:{ id, status:'ACTIVE' }, data:{ status:'CONVERTED' } })——与并发 close（裸 update → CLOSED）竞态时，旧实现后写覆盖先写，用户主动关闭的会话被静默复活为 CONVERTED；新实现 close 已落库则 count=0 静默跳过，CLOSED 终态不被推翻；响应 status 由「ready 即报 CONVERTED」改为按 count>0 判定真实翻转结果，并发下不再误报；close 端点不修（业务语义允许关闭任意状态会话，覆盖 CONVERTED 是设计内行为）；响应契约结构不变，前端零改动；test/interview-brief-toctou.test.cjs 冻结 ACTIVE 快照确定性复现（先红后绿），变异 M1（去 status 条件）/M2（回退裸 update）咬红恢复、M3（废 count 判定）无效变异已还原；全量 5973 条 0 fail |
