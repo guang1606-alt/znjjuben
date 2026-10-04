@@ -2,7 +2,7 @@
 
 > 面向前端（`web/` 原生 JS 站点及后续独立前端/移动端）的后端 API 契约与适配说明。
 > 后端每次破坏性契约变更都会在此登记：变更内容 → 迁移对照 → 前端已同步点。
-> 版本对齐 `package.json`，当前基线：**v2.310.0**。
+> 版本对齐 `package.json`，当前基线：**v2.311.0**。
 
 ---
 
@@ -14,6 +14,7 @@
 
 | 风格 | 参数 | 说明 |
 |---|---|---|
+| v2.311 | 2026-10-04 | 创意简报状态翻转 TOCTOU 加固：POST /api/interview/sessions/:id/brief 就绪归档由「读快照判 status==='ACTIVE' → 裸 update → CONVERTED」改为条件原子写 updateMany({ where:{ id, status:'ACTIVE' }, data:{ status:'CONVERTED' } })——与并发 close（裸 update → CLOSED）竞态时，旧实现后写覆盖先写，用户主动关闭的会话被静默复活为 CONVERTED；新实现 close 已落库则 count=0 静默跳过，CLOSED 终态不被推翻；响应 status 由「ready 即报 CONVERTED」改为按 count>0 判定真实翻转结果，并发下不再误报；close 端点不修（业务语义允许关闭任意状态会话，覆盖 CONVERTED 是设计内行为）；响应契约结构不变，前端零改动；test/interview-brief-toctou.test.cjs 冻结 ACTIVE 快照确定性复现（先红后绿），变异 M1（去 status 条件）/M2（回退裸 update）咬红恢复、M3（废 count 判定）无效变异已还原；全量 5973 条 0 fail |
 | v2.310 | 2026-10-04 | 采访轮次并发覆盖加固：POST /api/interview/sessions/:id/turn 落库由裸 update（读快照→整体覆盖 transcript/materials/turnCount）改为乐观条件更新 updateMany({ where:{ id, turnCount: 快照轮数 } })——同一会话两条不同回答在途时（幂等窗按文本哈希/clientToken 放行不同内容），旧实现败者一轮付费回答与素材抽取被胜者顶掉、turnCount 少算、两扣 INTERVIEW_TURN 只落一轮；新实现 PG 行锁下仅先落库者 count=1，败者 count=0 收 409 IDEMPOTENT_REPLAY「上一轮回答刚已提交，请刷新后基于最新问题继续」并**退还本轮积分**；正常顺序多轮与同文本双击幂等不受影响；前端处理：409 走既有 jsonOrThrow/xnSay 提示后刷新会话（GET /sessions/:id 拿最新 currentQuestion），无需改契约结构；test/interview-turn-race.test.cjs stale 快照确定性复现（先红后绿），变异三轮（删 turnCount 条件 / 废 count 守卫 / 吞退款）咬红恢复；内存桩 interviewSession 补 updateMany；全量 5972 条 0 fail |
 | v2.309 | 2026-10-04 | 围读协作房并发加入竞态加固：/read/join 的 participantIds「读快照→整体数组覆盖」改为条件原子追加 updateMany({ where:{ id, NOT:{ participantIds:{ has:uid } } }, data:{ participantIds:{ push:uid } } })——两人凭同一邀请码同时加入不再后写覆盖先写（旧缺陷下被覆盖者收 200、留了进入消息，但 accessibleRoom 恒 403：发言/读消息/AI 围读全被拒，加入成功却进不去）；count=0 即已在房间，幂等 200 且不重复写「进入围读室」；响应契约不变（仍 { ok, roomId, readMode }），前端零改动；test/room-join-race.test.cjs stale 快照确定性复现（先红后绿），变异三轮（删 NOT 条件 / 删 count 守卫 / 退回整体覆盖）咬红恢复；内存桩补 NOT 语义与 scalar list { push }；全量 5969 条 0 fail |
 | v2.308 | 2026-10-02 | 市场下架 TOCTOU 竞态加固：delist 读→判→裸 update 改为条件抢占 updateMany({ id, status: ON_SHELF })，与购买侧 ESCROW 抢占/放款 SOLD 翻页原子互斥——竞态窗口内买家已抢占则 count=0 → 409「剧本状态刚变化（可能刚被买走托管中），请刷新后重试」（新增 409 文案，经 jsonOrThrow → xnSay 惯例展示，无契约结构变更）；test/market-delist-race.test.cjs stale 快照确定性复现竞态（先红后绿）；变异两轮（回裸 update / 丢 count 短路）咬红恢复；全量 5965 条 0 fail |
