@@ -313,13 +313,18 @@ export function createRoomRouter(prisma: PrismaLike | any) {
       return res.status(403).json({ error: '该围读模式不支持邀请加入（仅“双人围读/我与他人小南”可拉人）' });
     }
     clearJoinFail(ip, code);
-    // c203：重复 join 幂等——已是参与者直接返回成功，不再重复写“进入围读室”消息刷屏
-    if ((room.participantIds || []).includes(req.userId!)) {
-      return res.json({ ok: true, roomId: room.id, readMode: room.readMode });
+    // v2.309：参与者集合改条件原子追加，消除「读快照 → 整体数组覆盖」的 lost update：
+    //  两人凭同一邀请码在同一窗口加入时，旧写法后写覆盖先写，被覆盖者虽收 200、留了进入消息，
+    //  accessibleRoom 却恒 403（加入成功却进不去）。PG 行锁串行两个 array_append，
+    //  NOT has 条件按最新行版本评估；count=0 即已在房间（重复 join / 同用户并发请求已胜出），
+    //  幂等返回且不重复写进入消息。
+    const applied = await prisma.writersRoom.updateMany({
+      where: { id: room.id, NOT: { participantIds: { has: req.userId! } } },
+      data: { participantIds: { push: req.userId! } },
+    });
+    if (applied.count > 0) {
+      await addMsg(room.id, { speakerType: 'USER', speakerUserId: req.userId!, content: (room.payload as any)?.lang === 'en' ? 'Joined the read room' : '进入围读室' });
     }
-    const ids = [...(room.participantIds || []), req.userId!];
-    await prisma.writersRoom.update({ where: { id: room.id }, data: { participantIds: ids } });
-    await addMsg(room.id, { speakerType: 'USER', speakerUserId: req.userId!, content: (room.payload as any)?.lang === 'en' ? 'Joined the read room' : '进入围读室' });
     res.json({ ok: true, roomId: room.id, readMode: room.readMode });
   });
 

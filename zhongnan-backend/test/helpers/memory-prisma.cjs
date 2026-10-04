@@ -318,6 +318,19 @@ function createMemoryPrisma() {
       return arg.select ? r.map((x) => projectRow(x, arg.select)) : r;
     },
     async update({ where, data }) { const x = writersRooms.find((y) => y.id === where.id); if (!x) throw new Error('WR_NOT_FOUND'); Object.assign(x, data); x.updatedAt = new Date(); return x; },
+    // v2.309：条件批量更新，scalar list 支持 { push } 原子追加（对齐 Prisma/PG array_append 语义）
+    async updateMany({ where = {}, data }) {
+      let c = 0;
+      writersRooms.forEach((x) => {
+        if (!matchWhere(x, where)) return;
+        Object.entries(data).forEach(([k, v]) => {
+          if (v && typeof v === 'object' && 'push' in v) { x[k] = [...(Array.isArray(x[k]) ? x[k] : []), ...(Array.isArray(v.push) ? v.push : [v.push])]; }
+          else x[k] = v;
+        });
+        x.updatedAt = new Date(); c += 1;
+      });
+      return { count: c };
+    },
   };
   // —— 采访式创作会话（v2.92）：多轮采访 + 四维记忆空间 ——
   const interviewSessions = [];
@@ -336,6 +349,8 @@ function createMemoryPrisma() {
   // 通用 where 匹配（支持 OR/in/has/contains/lt/not 与等值）、排序、select 投影（含一层关联）
   const matchWhere = (row, where = {}) => Object.entries(where).every(([k, cond]) => {
     if (k === 'OR') return Array.isArray(cond) && cond.some((sub) => matchWhere(row, sub));
+    // v2.309：NOT 支持对象/数组（数组=NOT(任一命中)），供 writersRoom 条件追加 NOT has 判定
+    if (k === 'NOT') return Array.isArray(cond) ? !cond.some((sub) => matchWhere(row, sub)) : !matchWhere(row, cond);
     if (cond && typeof cond === 'object') {
       if ('in' in cond) return cond.in.includes(row[k]);
       if ('has' in cond) return Array.isArray(row[k]) && row[k].includes(cond.has);
