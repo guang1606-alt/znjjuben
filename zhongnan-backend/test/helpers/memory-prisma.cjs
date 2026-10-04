@@ -20,7 +20,13 @@ function createMemoryPrisma() {
     async create({ data }) { const a = { balance: 0, frozen: 0, bonusGranted: 0, ...data }; accounts.set(data.userId, a); return a; },
     async update({ where, data }) {
       const a = accounts.get(where.userId) ?? { balance: 0, frozen: 0, bonusGranted: 0 };
-      Object.keys(data).forEach((k) => { if (data[k] !== undefined) a[k] = data[k]; });
+      Object.keys(data).forEach((k) => {
+        if (data[k] === undefined) return;
+        // v2.314：对齐 Prisma 原子操作符（UPDATE col=col+$n 语句级行锁，不依赖调用方读快照）
+        a[k] = (data[k] && typeof data[k] === 'object' && 'increment' in data[k])
+          ? (a[k] ?? 0) + data[k].increment
+          : data[k];
+      });
       accounts.set(where.userId, a); return a;
     },
   };

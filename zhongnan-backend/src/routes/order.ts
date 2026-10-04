@@ -44,13 +44,19 @@ export function createDeliver(prisma: PrismaLike | any) {
       await tx.payment.create({ data: { orderId, channel: 'provider', amountFen: o.amountFen, success: true } });
 
       if (o.kind === 'POINTS' && o.points > 0) {
-        const acc = await tx.pointsAccount.findUnique({ where: { userId: o.userId } });
-        const balanceAfter = (acc?.balance ?? 0) + o.points;
-        await tx.pointsAccount.update({ where: { userId: o.userId }, data: { balance: balanceAfter } });
+        // v2.314：原子增量入账（UPDATE balance=balance+$1，语句级行锁），不得先 findUnique 再整体覆盖——
+        // 裸 $transaction 默认 Read Committed 不串行账户读改写，两笔充值（或充值与 billing 扣款）并发时
+        // 后写覆盖先写，一笔充值蒸发；increment 基于最新已提交值，与 prisma-tx.updateAccount 同范式。
+        await tx.pointsAccount.update({
+          where: { userId: o.userId },
+          data: { balance: { increment: o.points } },
+        });
+        // 流水余额快照取增量落库后的回读值（含交错中已先提交的其他入账），不允许用预读快照推算
+        const accAfter = await tx.pointsAccount.findUnique({ where: { userId: o.userId } });
         await tx.ledgerEntry.create({
           data: {
             userId: o.userId, direction: 'IN', bucket: 'RECHARGE', amount: o.points,
-            balanceAfter, reason: 'RECHARGE', refType: 'order', refId: o.id, idempotencyKey: `pay:${o.id}`,
+            balanceAfter: accAfter.balance, reason: 'RECHARGE', refType: 'order', refId: o.id, idempotencyKey: `pay:${o.id}`,
           },
         });
       }
