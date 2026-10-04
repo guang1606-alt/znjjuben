@@ -443,7 +443,8 @@ function createMemoryPrisma() {
   const listing = crud(listings, 'ls', { status: 'ON_SHELF', sample: '' });
   const purchase = crud(purchases, 'pu', { status: 'ESCROW' });
   const roomMessage = crud(roomMessages, 'rm', {});
-  const teardownRecord = crud(teardownRecords, 'td', { pickedTags: [], report: null, outline: null, state: 'ANALYZED', pointsCost: 0 });
+  // v2.312：defaults 补 direction:null——对齐 Prisma NULL 语义（updateMany where direction:null 匹配未生成过方向的行）
+  const teardownRecord = crud(teardownRecords, 'td', { pickedTags: [], report: null, outline: null, direction: null, state: 'ANALYZED', pointsCost: 0 });
   const advert = crud(adverts, 'ad', { active: true, sort: 0, clicks: 0, priceFenDay: 0 });
   // —— v2.151 角色资产库（L3"角色可资产化"）：crud 面 + delete + updatedAt 时间戳（列表按 updatedAt desc）——
   const characterAssets = [];

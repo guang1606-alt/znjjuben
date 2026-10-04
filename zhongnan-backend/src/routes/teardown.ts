@@ -156,10 +156,17 @@ export function createTeardownRouter(prisma: PrismaLike | any) {
       const r0 = await charge(userId, level, 'TEARDOWN_OUTLINE', refId, staff);
       idem = r0.idem; points = r0.points; charged = true;
       const outline = buildAdaptOutline(rec.report as any, p.data.pickedTags, p.data.direction, (rec.report as any).lang === 'en' ? 'en' : 'zh');
-      await prisma.teardownRecord.update({
-        where: { id: rec.id },
+      // v2.312：条件原子写防 TOCTOU——同记录两个不同方向在途时仅先落库者命中；
+      // 败者若裸写会整体覆盖 outline/direction/pickedTags（付费大纲丢失 + pointsCost 双扣）。
+      // 拒入败者并退款，前端提示后刷新即拿到最新方向；PG 行锁串行两个条件更新，只有一个 count=1。
+      const applied = await prisma.teardownRecord.updateMany({
+        where: { id: rec.id, direction: rec.direction },
         data: { pickedTags: p.data.pickedTags, direction: p.data.direction, outline: outline as object, state: 'OUTLINED', pointsCost: { increment: points } },
       });
+      if (applied.count === 0) {
+        if (charged) await refund(userId, points, 'TEARDOWN_OUTLINE', refId, idem, staff).catch(() => {});
+        return res.status(409).json({ error: 'OUTLINE_RACE', message: '另一方向的改编大纲刚已生成，请刷新查看后按需重新生成' });
+      }
       res.json({ outline, points, staff });
     } catch (e: any) {
       if (e?.code === 'IDEMPOTENT_REPLAY') return res.status(409).json({ error: 'IDEMPOTENT_REPLAY', message: '相同选择刚已提交，请勿重复生成' });
