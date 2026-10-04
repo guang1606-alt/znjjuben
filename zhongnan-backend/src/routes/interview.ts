@@ -226,8 +226,13 @@ export function createInterviewRouter(prisma: PrismaLike) {
     const ready = readyCheck(m, s.turnCount, lang);
     const brief = buildBrief(m, lang);
     // 就绪时归档：会话转入 CONVERTED，防重复消费；未就绪也允许拿简报（由用户自行决定是否直接生成）
-    if (ready && s.status === 'ACTIVE') await prisma.interviewSession.update({ where: { id: s.id }, data: { status: 'CONVERTED' } }).catch(() => {});
-    res.json({ ok: true, brief, ready, gaps: gapReport(m, lang), turnCount: s.turnCount, status: ready ? 'CONVERTED' : s.status });
+    // v2.311：条件原子写防 TOCTOU——并发 close 已落库时不再覆盖回 CONVERTED（count=0 即并发改变，静默跳过）
+    let newStatus = s.status;
+    if (ready && s.status === 'ACTIVE') {
+      const r = await prisma.interviewSession.updateMany({ where: { id: s.id, status: 'ACTIVE' }, data: { status: 'CONVERTED' } }).catch(() => ({ count: 0 }));
+      if (r.count > 0) newStatus = 'CONVERTED';
+    }
+    res.json({ ok: true, brief, ready, gaps: gapReport(m, lang), turnCount: s.turnCount, status: newStatus });
   });
 
   /* ---------------- 关闭会话 ---------------- */
