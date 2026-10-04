@@ -344,6 +344,15 @@ function createMemoryPrisma() {
       return r;
     },
     async update({ where, data }) { const x = interviewSessions.find((y) => y.id === where.id); if (!x) throw new Error('IV_NOT_FOUND'); Object.assign(x, data, { updatedAt: new Date() }); return x; },
+    // v2.310：条件更新（乐观并发，where.turnCount 防同会话并发轮次互相覆盖 transcript/materials）
+    async updateMany({ where = {}, data }) {
+      let c = 0;
+      interviewSessions.forEach((x) => {
+        if (!matchWhere(x, where)) return;
+        Object.assign(x, data, { updatedAt: new Date() }); c += 1;
+      });
+      return { count: c };
+    },
   };
 
   // 通用 where 匹配（支持 OR/in/has/contains/lt/not 与等值）、排序、select 投影（含一层关联）

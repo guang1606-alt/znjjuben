@@ -104,7 +104,7 @@ export function createInterviewRouter(prisma: PrismaLike) {
   async function runTurn(
     req: AuthRequest, res: any,
     args: { userId: string; sessionId?: string; text: string; lang: Lang; tier: EngineTier; title?: string; staff: boolean },
-    prev: { materials: InterviewMaterials; transcript: { q: string; a: string }[]; lastQuestion: string },
+    prev: { materials: InterviewMaterials; transcript: { q: string; a: string }[]; lastQuestion: string; turnCount: number },
   ) {
     const refId = `iv:${args.userId}:${args.sessionId ?? 'new'}:${idemWindow()}:${nonceOf(req) || contentHash(args.text)}`;
     let idem = '';
@@ -132,7 +132,19 @@ export function createInterviewRouter(prisma: PrismaLike) {
       };
       let sid = args.sessionId;
       if (sid) {
-        await prisma.interviewSession.update({ where: { id: sid }, data });
+        // v2.310：turnCount 乐观条件更新。同一会话两个在途轮次持同一旧快照时仅先落库者命中；
+        // 败者若裸写会整体覆盖 transcript/materials——付费一轮的回答与素材抽取永久丢失（资金+内容双伤）。
+        // 拒入败者并退款，前端提示后刷新即拿到最新问题；PG 行锁串行两个条件更新，只有一个 count=1。
+        const applied = await prisma.interviewSession.updateMany({ where: { id: sid, turnCount: prev.turnCount }, data });
+        if (applied.count === 0) {
+          if (charged) await refund(args.userId, 'INTERVIEW_TURN', refId, idem, args.staff).catch(() => {});
+          return res.status(409).json({
+            error: 'IDEMPOTENT_REPLAY',
+            message: args.lang === 'en'
+              ? 'Your previous answer was just saved — refresh and continue from the latest question.'
+              : '上一轮回答刚已提交，请刷新后基于最新问题继续',
+          });
+        }
       } else {
         const created = await prisma.interviewSession.create({
           data: { userId: args.userId, title: (args.title ?? '').slice(0, 120) || args.text.slice(0, 40), lang: args.lang, status: 'ACTIVE', ...data },
@@ -167,7 +179,7 @@ export function createInterviewRouter(prisma: PrismaLike) {
       userId: req.userId!, text: p.data.idea, lang: normLang(p.data.lang),
       tier: p.data.engineTier ?? EngineTier.STANDARD, title: p.data.title,
       staff: await staffOf(prisma, req.userId!),
-    }, { materials: emptyMaterials(), transcript: [], lastQuestion: '' });
+    }, { materials: emptyMaterials(), transcript: [], lastQuestion: '', turnCount: 0 });
   });
 
   /* ---------------- 追问一轮 ---------------- */
@@ -188,7 +200,7 @@ export function createInterviewRouter(prisma: PrismaLike) {
       userId: req.userId!, sessionId: s.id, text: p.data.text,
       lang: normLang(s.lang), tier: p.data.engineTier ?? EngineTier.STANDARD,
       staff: await staffOf(prisma, req.userId!),
-    }, { materials: asMaterials(s.materials), transcript: asTranscript(s.transcript), lastQuestion: currentQuestion(s.materials) });
+    }, { materials: asMaterials(s.materials), transcript: asTranscript(s.transcript), lastQuestion: currentQuestion(s.materials), turnCount: Number(s.turnCount) || 0 });
   });
 
   /* ---------------- 会话查询 ---------------- */
