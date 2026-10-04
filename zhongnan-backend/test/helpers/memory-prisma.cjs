@@ -50,6 +50,26 @@ function createMemoryPrisma() {
       return u;
     },
     async update({ where, data }) { const u = users.get(where.id); if (!u) throw new Error('USER_NOT_FOUND'); Object.assign(u, data); return u; },
+    // 支持会员身份条件原子写（v2.315）：OR 内识别 levelExpireAt:null/{lt} 与 level:{in:[]}
+    async updateMany({ where = {}, data } = {}) {
+      let n = 0;
+      for (const u of users.values()) {
+        if (where.id && u.id !== where.id) continue;
+        if (Array.isArray(where.OR)) {
+          const hit = where.OR.some((c) => {
+            if (Object.prototype.hasOwnProperty.call(c, 'levelExpireAt')) {
+              if (c.levelExpireAt === null) return u.levelExpireAt == null;
+              if (c.levelExpireAt?.lt) return u.levelExpireAt != null && new Date(u.levelExpireAt) < c.levelExpireAt.lt;
+            }
+            if (c.level?.in) return c.level.in.includes(u.level);
+            return false;
+          });
+          if (!hit) continue;
+        }
+        Object.assign(u, data); n++;
+      }
+      return { count: n };
+    },
     async findFirst({ where = {} } = {}) { for (const u of users.values()) { if (where.id && u.id !== where.id) continue; return u; } return null; },
     async findMany() { return [...users.values()]; }, // 后台用户列表：全量，过滤/分页在路由层
   };

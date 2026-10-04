@@ -86,15 +86,26 @@ export function createDeliver(prisma: PrismaLike | any) {
         } else {
           await tx.membership.create({ data: { userId: o.userId, level: o.level, expireAt, quotaTotal: quotaMonthly, orderId: o.id } });
         }
-        // 修复②付费只升不降：当前等级高于新购等级且仍在有效期时，保留当前高级身份
-        // （其到期后的降级由会员到期处理逻辑负责）；新购等级≥当前或当前已过期才切换。
-        const LEVEL_RANK: Record<string, number> = { FREE: 0, BASIC: 1, ADVANCED: 2, PRO: 3 };
-        const u = await tx.user.findUnique({ where: { id: o.userId } });
-        const curLevel: string = u?.level ?? 'FREE';
-        const curActive = !!(u?.levelExpireAt && new Date(u.levelExpireAt) > now);
-        if (!curActive || LEVEL_RANK[o.level] >= LEVEL_RANK[curLevel]) {
-          await tx.user.update({ where: { id: o.userId }, data: { level: o.level, levelExpireAt: expireAt } });
-        }
+        // 修复②付费只升不降（v2.315 加固）：等级判断不允许「读快照→裸 update」——两笔不同等级订单
+        // 并发回调时双方都可能读到旧身份通过判断，后写的低档覆盖先写的高档（付费年卡权益蒸发）。
+        // 改为条件原子写：身份已过期（null/早于 now）放行新购；有效期内仅当当前等级在新购等级的
+        // 升级阶梯内才写。并发下高档先提交时，低档 updateMany count=0 静默跳过，身份终态只升不降。
+        const LEVEL_LADDER: Record<string, MemberLevel[]> = {
+          BASIC: [MemberLevel.FREE, MemberLevel.BASIC],
+          ADVANCED: [MemberLevel.FREE, MemberLevel.BASIC, MemberLevel.ADVANCED],
+          PRO: [MemberLevel.FREE, MemberLevel.BASIC, MemberLevel.ADVANCED, MemberLevel.PRO],
+        };
+        await tx.user.updateMany({
+          where: {
+            id: o.userId,
+            OR: [
+              { levelExpireAt: null },
+              { levelExpireAt: { lt: now } },
+              { level: { in: LEVEL_LADDER[o.level] } },
+            ],
+          },
+          data: { level: o.level, levelExpireAt: expireAt },
+        });
       }
       return { skipped: false };
     });
