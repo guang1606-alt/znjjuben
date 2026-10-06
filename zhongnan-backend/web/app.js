@@ -778,14 +778,17 @@
       ivStop: '⏹ End session',
       restart: '🎬 New interview (5 pts/turn)', restoring: 'Restoring your interview…',
       restoreFailed: 'Could not restore your interview. Reopen this panel to retry, or start a new interview.',
-      answer: 'Answer in your own words…', hintStart: 'Write your idea in the box above, then start.',
+      answer: 'Answer in your own words…',
+      answerIdea: 'Tell Xiaonan your idea right here (at least 4 characters)…',
+      startWithIdea: '🎬 Start with this idea',
+      hintStart: 'Write your idea in the box below, then start — Xiaonan interviews you one question at a time.',
       hintOpen: 'One question per round — materials are captured automatically.',
       round: (n) => `Round ${n}`, ready: 'Ready to draft',
       gaps: { desire: 'Desire', conflict: 'Conflict', stakes: 'Stakes', turn: 'Turn' },
       gapHead: 'Story elements: ', you: 'You', xn: '🎙️ Xiaonan',
       briefDone: 'Brief filled into the idea box — review it and hit Generate.',
       closed: 'Interview finished. Review the brief, then generate.',
-      needIdea: 'Write your idea above first (at least 4 characters).',
+      needIdea: 'Write your idea in the box below first (at least 4 characters).',
       readySay: 'Materials look solid — build the brief whenever you like.',
     } : {
       heading: '采访式创作 · 小南来采访你',
@@ -793,14 +796,17 @@
       ivStop: '⏹ 结束会话',
       restart: '🎬 新建采访（5积分/轮）', restoring: '正在恢复已保存的采访…',
       restoreFailed: '采访恢复失败。可重新打开面板重试，或主动新建采访。',
-      answer: '想到哪说到哪，像聊天一样…', hintStart: '先在上方创意框写下你的想法，再点「开始采访」。',
+      answer: '想到哪说到哪，像聊天一样…',
+      answerIdea: '把你的创意直接写在这里（至少4个字），小南就开始采访你…',
+      startWithIdea: '🎬 就用这个创意开始',
+      hintStart: '在下面框里写下你的创意（至少4个字），点「开始采访」——小南会一轮只问一个问题，像聊天一样帮你把设定补立体。',
       hintOpen: '一轮只问一个问题——你的素材会被自动记录归档。',
       round: (n) => `第 ${n} 轮`, ready: '素材已就绪，可以出本',
       gaps: { desire: '欲望', conflict: '冲突', stakes: '代价', turn: '转折' },
       gapHead: '戏剧四要素：', you: '你', xn: '🎙️ 小南',
       briefDone: '简报已回填到创意框，检查后点「生成剧本」即可出本。',
       closed: '采访已完成。检查简报后即可生成剧本。',
-      needIdea: '先在上方创意框写你的想法（至少4个字）。',
+      needIdea: '先在下面这个框里写下你的创意（至少4个字），小南才好开口采访你～',
       readySay: '素材够立体了，随时可以生成简报出本～',
     };
   }
@@ -830,9 +836,10 @@
     $('ivStatus').textContent = ivLoading ? T.restoring : ivClosed ? T.closed : ivSessionId ? (ivReady ? T.ready : T.round(ivTurn)) : T.hintStart;
     $('ivHeading').textContent = T.heading;
     $('ivStartBtn').textContent = ivSessionId ? T.restart : (isStaffAcct() ? (lang === 'en' ? '🎬 Start interview · Free' : '🎬 开始采访（内部免费）') : T.start);
-    $('ivSendBtn').textContent = T.reply;
+    // v2.317 未开会话时，内嵌输入框即创意入口：按钮文案/placeholder 随之切换，杜绝“写在A框、校验B框”
+    $('ivSendBtn').textContent = ivSessionId ? T.reply : T.startWithIdea;
     $('ivBriefBtn').textContent = T.briefBtn;
-    $('ivAnswer').placeholder = T.answer;
+    $('ivAnswer').placeholder = ivSessionId ? T.answer : T.answerIdea;
     $('ivStartBtn').classList.remove('hidden');
     $('ivBriefBtn').classList.toggle('hidden', !ivSessionId || !ivReady || ivClosed);
     $('ivStopBtn').textContent = T.ivStop; // v2.233 会话关闭入口
@@ -928,13 +935,24 @@
     ivRenderStatus();
     return pending;
   }
+  // v2.317 创意取数：主创意框优先，空则认采访面板内嵌框（用户视线所在即输入所在）
+  function ivCollectIdea() {
+    const fromMain = ($('modeBrief')?.value || '').trim();
+    if (fromMain) return fromMain;
+    return ($('ivAnswer')?.value || '').trim();
+  }
+  function ivSyncIdeaToMain(idea) {
+    const main = $('modeBrief');
+    if (main && !main.value.trim()) { main.value = idea; ivIdeaValue = idea; }
+  }
   async function ivStart() {
     const owner = ivSyncOwner();
     if (!owner) { xnSay(t('needLogin')); openAuth('login'); return; }
     if (ivBusy) return;
     const T = ivT();
-    const idea = ($('modeBrief')?.value || '').trim();
-    if (idea.length < 4) { xnSay(T.needIdea); $('modeBrief')?.focus(); return; }
+    const idea = ivCollectIdea();
+    if (idea.length < 4) { xnSay(T.needIdea); $('ivAnswer')?.focus(); return; }
+    ivSyncIdeaToMain(idea); // 回填主创意框，保证随后「生成剧本」读到的是同一份创意
     const epoch = ivEpoch;
     ivBusy = true; ivRenderStatus();
     try {
@@ -6043,9 +6061,21 @@
       projTitle = tagProjectTitle();
     } else {
       brief = ($('modeBrief')?.value || '').trim();
+      // v2.317 采访模式：主创意框为空时，认采访面板内嵌框里已写的创意并回填，不再让用户重抄一遍
+      if (!brief && selectedMode === 'interview') {
+        const fromIv = ($('ivAnswer')?.value || '').trim();
+        if (fromIv.length >= 4) {
+          brief = fromIv;
+          if ($('modeBrief')) $('modeBrief').value = fromIv;
+          ivIdeaValue = fromIv;
+        }
+      }
       if (!brief) {
-        xnSay(lang === 'en' ? 'Please fill in your idea above first.' : '先在上方输入框写清你的创意，小南才能开工～');
-        $('modeBrief')?.focus(); $('modeBriefPanel')?.classList.remove('hidden');
+        xnSay(selectedMode === 'interview'
+          ? ivT().needIdea
+          : (lang === 'en' ? 'Please fill in your idea above first.' : '先在上方输入框写清你的创意，小南才能开工～'));
+        if (selectedMode === 'interview') { $('interviewPanel')?.classList.remove('hidden'); $('ivAnswer')?.focus(); }
+        else { $('modeBrief')?.focus(); $('modeBriefPanel')?.classList.remove('hidden'); }
         return;
       }
       projTitle = generationDraft?.title || brief.slice(0, 40);

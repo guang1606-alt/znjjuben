@@ -148,6 +148,15 @@ export function pickInferenceParams(baseUrl: string, model: string): InferencePa
   return { temperature: 0.9, reasoningEffort: 'minimal' };
 }
 
+/** v2.317 剥离内联思维链：移除闭合的 <think>…</think> 块；未闭合的 think（思考中被截断）其后内容一并丢弃 */
+export function stripThink(s: string): string {
+  if (!s.includes('<think')) return s;
+  return s
+    .replace(/<think>[\s\S]*?<\/think>\s*/g, '') // 闭合思维链整块移除（业务输出在标签之后）
+    .replace(/<think>[\s\S]*$/g, '')              // 未闭合：截断的思考后无可信业务答案
+    .trim();
+}
+
 /** 单候选端点调用：瞬态错误同模型退避重试（3 次），请求级错误（400/401/403 等）立即上抛不重试 */
 async function tryCandidate(
   c: Candidate, prompt: string, maxTokens: number, timeoutMs: number, signal?: AbortSignal,
@@ -184,14 +193,26 @@ async function tryCandidate(
           : new Error(`MODEL_FATAL_HTTP_${resp.status}:${detail}`);
       } else {
         const data = await resp.json() as {
-          choices: { message: { content: string } }[];
+          choices?: { message?: { content?: string; reasoning_content?: string } }[];
           usage?: { prompt_tokens: number; completion_tokens: number };
         };
+        // v2.317 思维链剥离：MiniMax-M3 / 部分 Qwen 思考档把推理过程以 <think>…</think> 内联在 content 里
+        // （不是 reasoning_content 字段），业务 JSON/正文在闭合标签之后；不剥会导致结构化岗抓到思维链里的
+        // JSON 片段而解析失败。未闭合的 <think> 说明模型在思考中被截断，其后无可信业务输出，整段丢弃。
+        const rawContent = typeof data.choices?.[0]?.message?.content === 'string' ? data.choices[0].message.content : '';
+        const content = stripThink(rawContent);
+        // v2.317 HTTP200 空响应治理：供应商安全静默/截断/抖动也会返回 200，但 choices 缺失、
+        // message 缺失或 content 为空白（内容可能只落在 reasoning_content，或带 completion_tokens=maxTokens 的假 usage）。
+        // 业务正文只认 content；空内容按瞬态失败处理（同模型重试→候选链切池→耗尽整集失败退款），
+        // 绝不静默返回空正文（上层曾因此误判沙盘、套静态人物卡产出真假混合稿），也不按假 usage 满额计费。
+        if (content.trim() === '') {
+          throw new Error('MODEL_EMPTY_CONTENT:HTTP200 choices/message/content 为空（可能仅返回 reasoning_content）');
+        }
         const tokensIn = data.usage?.prompt_tokens ?? Math.ceil(prompt.length / 2);
         // usage 缺失时输出 token 按 maxTokens 的 70% 保守估算，宁可成本高估也不能漏算导致毛利熔断失效
         const tokensOut = data.usage?.completion_tokens ?? Math.ceil(maxTokens * 0.7);
         const costYuan = (tokensIn / 1e6) * c.inY + (tokensOut / 1e6) * c.outY;
-        return { text: data.choices?.[0]?.message?.content ?? '', tokensIn, tokensOut, costFen: yuanToFen(costYuan) };
+        return { text: content, tokensIn, tokensOut, costFen: yuanToFen(costYuan) };
       }
     } catch (e) {
       // 超时/中断/网络错误/坏 JSON：一律按瞬态处理（供应商异常页也常以网络异常形态出现）
@@ -259,7 +280,8 @@ export async function callText(
       markSuccess(k);
       if (idx > 0) {
         out.fellback = true;
-        console.warn(`[model-failover] text role=${role} 首选端点失败，已由替补完成 -> ${c.baseUrl} :: ${c.model}`);
+        const why = lastErr instanceof Error ? lastErr.message.slice(0, 160) : String(lastErr ?? '').slice(0, 160);
+        console.warn(`[model-failover] text role=${role} 首选端点失败，已由替补完成 -> ${c.baseUrl} :: ${c.model}；首选末次错误：${why}`);
       }
       return out;
     } catch (e) {
@@ -278,6 +300,63 @@ export interface ImageResult { images: string[]; costFen: number; /** 首选端�
 
 interface ImageCandidate { baseUrl: string; model: string; key: string; perImageFen: number }
 
+/** v2.317 通义万相走 DashScope 原生异步协议（compatible-mode/images/generations 对 wanx2.1 实测 404） */
+const WANX_HOST_RE = /dashscope\.aliyuncs\.com/i;
+/** OpenAI 尺寸 → 万相原生参数（星号分隔；竖版海报映射 720*1280） */
+function wanxSize(size: string): string {
+  const map: Record<string, string> = { '1024x1024': '1024*1024', '1024x1536': '720*1280', '1536x1024': '1280*720' };
+  return map[size] ?? '1024*1024';
+}
+interface WanxTaskResp { output?: { task_id?: string; task_status?: string; code?: string; message?: string; results?: { url?: string; b64_image?: string }[] } }
+
+/** v2.317 万相原生异步一次尝试：POST 提交任务（X-DashScope-Async: enable）→ GET 轮询至 SUCCEEDED。
+ *  成功即计费：内容审核类 FAILED 标 FATAL 绝不重试；系统/限流类标 TRANSIENT，由外层统一重试1次或换候选。 */
+async function wanxAsyncOnce(
+  c: ImageCandidate, prompt: string, n: number, size: string, timeoutMs: number, signal?: AbortSignal,
+): Promise<string[]> {
+  const origin = new URL(c.baseUrl).origin; // 配置 baseUrl 含 /compatible-mode/v1，异步端点固定在 /api/v1
+  const transport = __injectedTransport ?? httpPost;
+  const auth = { Authorization: `Bearer ${c.key}` };
+  const submitBody = JSON.stringify({ model: c.model, input: { prompt }, parameters: { size: wanxSize(size), n } });
+  const sr = await transport(`${origin}/api/v1/services/aigc/text2image/image-synthesis`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...auth, 'X-DashScope-Async': 'enable', 'Content-Length': Buffer.byteLength(submitBody) },
+    body: submitBody, timeoutMs, signal,
+  });
+  if (!sr.ok) {
+    const detail = (await sr.text()).slice(0, 200);
+    throw new Error(`${isTransientStatus(sr.status) ? 'IMAGE_TRANSIENT' : 'IMAGE_FATAL'}_HTTP_${sr.status}:${detail}`);
+  }
+  const sj = await sr.json() as WanxTaskResp;
+  const taskId = sj.output?.task_id;
+  if (!taskId) throw new Error('IMAGE_BAD_RESPONSE: 万相提交任务未返回 task_id');
+  const pollMs = process.env.WANX_POLL_MS ? Number(process.env.WANX_POLL_MS) : 3000;
+  const maxPolls = Math.max(1, Math.floor(timeoutMs / Math.max(pollMs, 500)));
+  for (let i = 0; i < maxPolls; i++) {
+    await new Promise((r) => setTimeout(r, pollMs));
+    if (signal?.aborted) throw new Error('CANCELLED');
+    const pr = await transport(`${origin}/api/v1/tasks/${taskId}`, { method: 'GET', headers: auth, body: '', timeoutMs, signal });
+    if (!pr.ok) throw new Error(`IMAGE_TRANSIENT_HTTP_${pr.status}:${(await pr.text()).slice(0, 200)}`);
+    const pj = await pr.json() as WanxTaskResp;
+    const out = pj.output;
+    const st = out?.task_status;
+    if (st === 'SUCCEEDED') {
+      const images = (out?.results ?? [])
+        .map((d) => d.url || (d.b64_image ? `data:image/png;base64,${d.b64_image}` : ''))
+        .filter(Boolean);
+      if (images.length === 0) throw new Error('IMAGE_BAD_RESPONSE: 万相任务成功但无图片结果');
+      return images;
+    }
+    if (st === 'FAILED' || st === 'CANCELED' || st === 'UNKNOWN') {
+      const detail = `${out?.code ?? ''} ${out?.message ?? ''}`.trim().slice(0, 200);
+      const audit = /DataInspection|content.?audit|sensitive|违规|审核/i.test(detail);
+      throw new Error(audit ? `IMAGE_FATAL_HTTP_400:${detail}` : `IMAGE_TRANSIENT_HTTP_500:${detail}`);
+    }
+    // PENDING/RUNNING/QUEUED：继续轮询
+  }
+  throw new Error(`IMAGE_TRANSIENT_HTTP_408: 万相任务轮询超时 task=${taskId}`);
+}
+
 /** 单图片候选端点：瞬态错误（429/5xx/超时/网络/坏结构）最多重试 1 次；
  *  图片调用耗时且成功即计费，重试次数比文本保守；400（含内容审核拒绝）/401/403 立即上抛不白烧钱 */
 async function tryImageCandidate(
@@ -293,6 +372,10 @@ async function tryImageCandidate(
       else signal.addEventListener('abort', () => controller.abort(), { once: true });
     }
     try {
+      // v2.317 万相（DashScope）：OpenAI 兼容图片端点实测 404，按域名分流原生异步提交+轮询协议
+      if (WANX_HOST_RE.test(c.baseUrl)) {
+        return await wanxAsyncOnce(c, prompt, n, size, timeoutMs, controller.signal);
+      }
       const url = `${c.baseUrl.replace(/\/$/, '')}/images/generations`;
       const body = JSON.stringify({ model: c.model, prompt, n, size });
       const transport = __injectedTransport ?? httpPost;
@@ -374,7 +457,8 @@ export async function callImage(
       const images = await tryImageCandidate(c, prompt, n, size, timeoutMs, opts.signal);
       markSuccess(k);
       if (idx > 0) {
-        console.warn(`[model-failover] image tier=${tier} 首选端点失败，已由替补完成 -> ${c.baseUrl} :: ${c.model}`);
+        const why = lastErr instanceof Error ? lastErr.message.slice(0, 160) : String(lastErr ?? '').slice(0, 160);
+        console.warn(`[model-failover] image tier=${tier} 首选端点失败，已由替补完成 -> ${c.baseUrl} :: ${c.model}；首选末次错误：${why}`);
         return { images, costFen: c.perImageFen * n, fellback: true };
       }
       return { images, costFen: c.perImageFen * n };

@@ -509,22 +509,40 @@ function normalizeCast(raw: unknown): Cast {
   return obj as Cast;
 }
 
-/** 结构化岗位：优先真实模型JSON，失败/沙盘走 fallback，保证协议不塌 */
+/** 结构化岗位。
+ *  v2.317 语义彻底分离：
+ *  - 零端点沙盘（r.sandbox===true，开发/演示/自动化测试）：走静态 fallback 并标 sandbox，是唯一允许静态资产的分支；
+ *  - 真实模型故障（HTTP 空响应 MODEL_EMPTY_CONTENT、网络耗尽等）：callText 直接抛错向上传播，整集失败退款，
+ *       绝不静默套 fallback——否则真人稿会与静态沙盘人物（林晚/陈总）拼成真假混合稿；
+ *  - 真模型返回非 JSON 文本：同岗立即重试 1 次（强化 JSON-only 约束），仍坏抛 MODEL_BAD_JSON 失败退款，不无底限烧钱。 */
 async function jsonRole<T>(tier: EngineTier, role: Role, prompt: string, fallback: T, cost: { n: number; fellbacks?: string[] }, signal?: AbortSignal): Promise<{ data: T; sandbox: boolean }> {
   if (signal?.aborted) throw new Error('CANCELLED');
-  const r = await callText(tier, role, prompt, { signal });
-  cost.n += r.costFen;
-  if (r.fellback) (cost.fellbacks ??= []).push(role);
-  if (r.sandbox || !r.text) return { data: fallback, sandbox: true };
-  return { data: extractJson<T>(r.text) ?? fallback, sandbox: false };
+  for (let attempt = 0; attempt < 2; attempt++) {
+    const retryPrompt = attempt === 0
+      ? prompt
+      : `${prompt}\n只输出JSON本体：不要寒暄、不要解释、不要代码块围栏，首个字符必须是 { 或 [`;
+    // v2.317 结构化岗 16384 预算：DeepSeek-V4-Pro/Qwen3.8-Max 等思考模型 completion_tokens 由 reasoning+content 共享，
+    // 默认 4096 曾被思维链全部吃光（finish_reason=length、content 为空或 JSON 截断）。按真实 usage 计费，成本可控。
+    const r = await callText(tier, role, retryPrompt, { signal, maxTokens: 16384 }); // 模型故障由此直接上抛
+    cost.n += r.costFen;
+    if (r.fellback) (cost.fellbacks ??= []).push(role);
+    if (r.sandbox) return { data: fallback, sandbox: true }; // 零配置沙盘：唯一允许静态资产的分支
+    const data = extractJson<T>(r.text);
+    if (data !== null) return { data, sandbox: false };
+    if (attempt === 0) continue; // 首次坏 JSON：同岗重试 1 次
+    throw new Error(`MODEL_BAD_JSON:${role}:模型连续2次未返回合法JSON，末段输出=${String(r.text).slice(0, 120)}`);
+  }
+  throw new Error('MODEL_BAD_JSON:unreachable');
 }
-/** 文本岗位：真实模型返回正文；沙盘返回空（润色岗据此保留撰写稿） */
+/** 文本岗位：真实模型返回正文；沙盘返回空（润色岗据此保留撰写稿）；模型故障由 callText 抛错上传播出失败退款 */
 async function textRole(tier: EngineTier, role: Role, prompt: string, cost: { n: number; fellbacks?: string[] }, signal?: AbortSignal): Promise<{ text: string; sandbox: boolean }> {
   if (signal?.aborted) throw new Error('CANCELLED');
   const r = await callText(tier, role, prompt, { signal });
   cost.n += r.costFen;
   if (r.fellback) (cost.fellbacks ??= []).push(role);
-  return { text: r.sandbox ? '' : r.text, sandbox: !!r.sandbox };
+  if (r.sandbox) return { text: '', sandbox: true };
+  if (!r.text) throw new Error(`MODEL_EMPTY_CONTENT:${role}:文本岗位返回空正文`); // v2.317 防御：非沙盘空文本不得静默
+  return { text: r.text, sandbox: false };
 }
 
 /** 一致性校验（规则版）：本集是否成稿、已立人物是否登场联动 */

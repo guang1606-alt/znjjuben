@@ -442,3 +442,219 @@ test('pickInferenceParams：非 o1/o3/o4 开头的 OpenAI 模型（如 gpt-4o）
   assert.strictEqual(p.temperature, 0.9);
   assert.strictEqual(p.reasoningEffort, 'minimal');
 });
+
+/* ================= v2.317 HTTP200 空响应治理：200 但无 content 当瞬态失败，重试/切候选/耗尽抛错，绝不静默成功、不满额计费 ================= */
+
+// 200 + 大 usage，但 choices/message/content 为空——供应商安全静默/截断/抖动的典型形态
+function emptyContentResp(choice) {
+  return {
+    ok: true, status: 200, text: async () => '',
+    json: async () => ({ choices: [choice ?? { message: { content: '' }, finish_reason: 'length' }], usage: { prompt_tokens: 100, completion_tokens: 4096 } }),
+  };
+}
+
+test('v2.317 HTTP200 空 content：按瞬态同模型重试，第2次成功则不换候选/不沙盘', async () => {
+  MP.__resetModelHealth();
+  process.env.MODEL_TEXT_ECONOMY_KEY = 'sk-test';
+  process.env.MODEL_GATEWAY_BASE_URL = 'https://primary.local/v1';
+  MP.__setProviderSource(async () => ({ providers: [], routing: {} }));
+  let calls = 0;
+  MP.__setHttpTransport(async () => { calls += 1; return calls === 1 ? emptyContentResp() : okResp('救回正文'); });
+  try {
+    const r = await MP.callText(P.EngineTier.ECONOMY, 'writer', 'p');
+    assert.strictEqual(r.text, '救回正文');
+    assert.strictEqual(calls, 2); // 同端点第2次成功，未切候选
+    assert.notStrictEqual(r.sandbox, true);
+  } finally { failoverCleanup(); }
+});
+
+test('v2.317 HTTP200 choices 空数组 / message 缺失：同属空响应瞬态，重试成功', async () => {
+  MP.__resetModelHealth();
+  process.env.MODEL_TEXT_ECONOMY_KEY = 'sk-test';
+  process.env.MODEL_GATEWAY_BASE_URL = 'https://primary.local/v1';
+  MP.__setProviderSource(async () => ({ providers: [], routing: {} }));
+  let calls = 0;
+  MP.__setHttpTransport(async () => {
+    calls += 1;
+    if (calls === 1) return { ok: true, status: 200, text: async () => '', json: async () => ({ choices: [], usage: {} }) };
+    if (calls === 2) return { ok: true, status: 200, text: async () => '', json: async () => ({ choices: [{ finish_reason: 'length' }], usage: {} }) };
+    return okResp('救回正文');
+  });
+  try {
+    const r = await MP.callText(P.EngineTier.ECONOMY, 'writer', 'p');
+    assert.strictEqual(r.text, '救回正文');
+    assert.strictEqual(calls, 3);
+  } finally { failoverCleanup(); }
+});
+
+test('v2.317 空 content 重试耗尽：切池替补成功且 fellback；空响应不计费（成本只含成功调用一次）', async () => {
+  MP.__resetModelHealth();
+  process.env.MODEL_TEXT_ECONOMY_KEY = 'sk-test';
+  process.env.MODEL_GATEWAY_BASE_URL = 'https://primary.local/v1';
+  MP.__setProviderSource(async () => ({ providers: [poolEntry()], routing: {} }));
+  const primaryHits = [];
+  MP.__setHttpTransport(async (url) => {
+    if (url.startsWith('https://primary.local')) { primaryHits.push(url); return emptyContentResp(); }
+    return okResp('备份正文');
+  });
+  try {
+    const r = await MP.callText(P.EngineTier.ECONOMY, 'writer', 'p');
+    assert.strictEqual(r.text, '备份正文');
+    assert.strictEqual(primaryHits.length, 3); // 主候选重试3次才换
+    assert.strictEqual(r.fellback, true);
+    // 空响应带 completion_tokens=4096 的假 usage：若被当成功满额估算，成本会混入档位价；
+    // 500 分=替补单次成本（2元/1M入+6元/0.5M出），证明空响应一次都没计费
+    assert.strictEqual(r.costFen, 500);
+  } finally { failoverCleanup(); }
+});
+
+test('v2.317 仅有 reasoning_content 无 content：业务 JSON 只认 content，判空响应并切候选', async () => {
+  MP.__resetModelHealth();
+  process.env.MODEL_TEXT_ECONOMY_KEY = 'sk-test';
+  process.env.MODEL_GATEWAY_BASE_URL = 'https://primary.local/v1';
+  MP.__setProviderSource(async () => ({ providers: [poolEntry()], routing: {} }));
+  const primaryHits = [];
+  MP.__setHttpTransport(async (url) => {
+    if (url.startsWith('https://primary.local')) {
+      primaryHits.push(url);
+      return emptyContentResp({ message: { content: '', reasoning_content: '模型想了很多但最终什么都没输出' }, finish_reason: 'stop' });
+    }
+    return okResp('备份正文');
+  });
+  try {
+    const r = await MP.callText(P.EngineTier.ECONOMY, 'architect', 'p');
+    assert.strictEqual(r.text, '备份正文');
+    assert.strictEqual(primaryHits.length, 3);
+    assert.strictEqual(r.fellback, true);
+  } finally { failoverCleanup(); }
+});
+
+test('v2.317 思维链污染：<think>...</think> 包裹的业务JSON自动剥离思维链，首调成功不重试', async () => {
+  MP.__resetModelHealth();
+  process.env.MODEL_TEXT_ECONOMY_KEY = 'sk-test';
+  process.env.MODEL_GATEWAY_BASE_URL = 'https://primary.local/v1';
+  MP.__setProviderSource(async () => ({ providers: [], routing: {} }));
+  let calls = 0;
+  const polluted = '<think>先分析：大纲里 beats: ["一","二"]，需要两个人物</think>\n\n{\n  "老桂": { "want": "守住口碑" }\n}';
+  MP.__setHttpTransport(async () => { calls += 1; return {
+    ok: true, status: 200, text: async () => '',
+    json: async () => ({ choices: [{ message: { content: polluted }, finish_reason: 'stop' }], usage: { prompt_tokens: 100, completion_tokens: 800 } }),
+  }; });
+  try {
+    const r = await MP.callText(P.EngineTier.ECONOMY, 'designer', 'p');
+    assert.strictEqual(calls, 1, '剥离后即合法业务输出，不触发重试');
+    assert.ok(!r.text.includes('<think>') && !r.text.includes('</think>'), '思维链标签已剥离');
+    assert.deepStrictEqual(MP.extractJson(r.text), { 老桂: { want: '守住口碑' } }, '剥离后直接是可解析JSON');
+  } finally { failoverCleanup(); }
+});
+
+test('v2.317 只有未闭合 <think>（模型想完没给答案）：剥后为空按空响应重试，第2次正常成功', async () => {
+  MP.__resetModelHealth();
+  process.env.MODEL_TEXT_ECONOMY_KEY = 'sk-test';
+  process.env.MODEL_GATEWAY_BASE_URL = 'https://primary.local/v1';
+  MP.__setProviderSource(async () => ({ providers: [], routing: {} }));
+  let calls = 0;
+  MP.__setHttpTransport(async () => {
+    calls += 1;
+    const c = calls === 1 ? '<think>我想了很多但 token 用完了，最终答案……' : '正常正文';
+    return {
+      ok: true, status: 200, text: async () => '',
+      json: async () => ({ choices: [{ message: { content: c }, finish_reason: 'length' }], usage: { prompt_tokens: 100, completion_tokens: 4096 } }),
+    };
+  });
+  try {
+    const r = await MP.callText(P.EngineTier.ECONOMY, 'writer', 'p');
+    assert.strictEqual(r.text, '正常正文');
+    assert.strictEqual(calls, 2);
+  } finally { failoverCleanup(); }
+});
+
+/* ================= v2.317 通义万相原生异步协议（compatible-mode 实测 404，只能 /api/v1 提交任务+轮询） ================= */
+
+function wanxPool(over = {}) {
+  return poolEntry({ id: 'pvw', name: '通义-万相', modality: 'image', baseUrl: 'https://dashscope.aliyuncs.com/compatible-mode/v1', model: 'wanx2.1-t2i-turbo', ...over });
+}
+function wanxSetup() {
+  MP.__resetModelHealth();
+  process.env.WANX_POLL_MS = '1';
+  MP.__setProviderSource(async () => ({ providers: [wanxPool()], routing: {} }));
+}
+function sresp(obj) { return { ok: true, status: 200, text: async () => '', json: async () => obj }; }
+
+test('v2.317 万相异步happy path：提交任务→轮询SUCCEEDED拿URL；X-DashScope-Async头、竖版size映射720*1280、n透传', async () => {
+  wanxSetup();
+  const reqs = [];
+  let polls = 0;
+  MP.__setHttpTransport(async (url, init) => {
+    reqs.push({ url, init });
+    if (url.includes('/image-synthesis')) {
+      return sresp({ output: { task_id: 't1', task_status: 'PENDING' } });
+    }
+    if (url.includes('/tasks/')) {
+      polls += 1;
+      if (polls === 1) return sresp({ output: { task_id: 't1', task_status: 'RUNNING' } });
+      return sresp({ output: { task_id: 't1', task_status: 'SUCCEEDED', results: [{ url: 'https://cdn.local/wanx.png' }] } });
+    }
+    return badResp(404);
+  });
+  try {
+    const r = await MP.callImage(P.EngineTier.STANDARD, '民宿海报', 1); // 默认竖版 1024x1536
+    assert.strictEqual(r.images[0], 'https://cdn.local/wanx.png');
+    assert.strictEqual(r.costFen, 10);
+    const submit = reqs.find((x) => x.url.includes('/image-synthesis'));
+    assert.ok(submit, '必须走 /api/v1/services/aigc/text2image/image-synthesis 提交');
+    assert.strictEqual(submit.init.headers['X-DashScope-Async'], 'enable', '异步提交必须带 X-DashScope-Async: enable');
+    const sb = JSON.parse(submit.init.body);
+    assert.strictEqual(sb.model, 'wanx2.1-t2i-turbo');
+    assert.strictEqual(sb.input.prompt, '民宿海报');
+    assert.strictEqual(sb.parameters.size, '720*1280', '竖版 OpenAI 尺寸映射为万相近似值（星号分隔）');
+    assert.strictEqual(sb.parameters.n, 1);
+    assert.ok(reqs.some((x) => x.url.endsWith('/api/v1/tasks/t1')), '必须轮询 /api/v1/tasks/t1');
+  } finally { imageCleanup(); delete process.env.WANX_POLL_MS; }
+});
+
+test('v2.317 万相内容审核失败(DataInspection)：不重试不换候选，立即抛 IMAGE_FATAL_HTTP_400 不白烧钱', async () => {
+  wanxSetup();
+  let submits = 0;
+  MP.__setHttpTransport(async (url) => {
+    if (url.includes('/image-synthesis')) { submits += 1; return sresp({ output: { task_id: 't2', task_status: 'PENDING' } }); }
+    return sresp({ output: { task_id: 't2', task_status: 'FAILED', code: 'DataInspection.Failed', message: 'data inspection failed' } });
+  });
+  try {
+    await assert.rejects(() => MP.callImage(P.EngineTier.STANDARD, '违规海报', 1), /IMAGE_FATAL_HTTP_400/);
+    assert.strictEqual(submits, 1, '审核拒绝只提交1次');
+  } finally { imageCleanup(); delete process.env.WANX_POLL_MS; }
+});
+
+test('v2.317 万相系统错误首次失败：按瞬态整体重试（重新提交任务），第2次SUCCEEDED', async () => {
+  wanxSetup();
+  let round = 0;
+  let polls = 0;
+  MP.__setHttpTransport(async (url) => {
+    if (url.includes('/image-synthesis')) {
+      round += 1; polls = 0;
+      return sresp({ output: { task_id: `t${round}`, task_status: 'PENDING' } });
+    }
+    polls += 1;
+    if (round === 1) return sresp({ output: { task_id: 't1', task_status: 'FAILED', code: 'InternalError', message: 'boom' } });
+    return sresp({ output: { task_id: 't2', task_status: 'SUCCEEDED', results: [{ url: 'https://cdn.local/wanx2.png' }] } });
+  });
+  try {
+    const r = await MP.callImage(P.EngineTier.STANDARD, '民宿海报', 1);
+    assert.strictEqual(r.images[0], 'https://cdn.local/wanx2.png');
+    assert.strictEqual(round, 2, '系统错误瞬态：重新提交第2次任务');
+  } finally { imageCleanup(); delete process.env.WANX_POLL_MS; }
+});
+
+test('v2.317 所有候选持续空 content：耗尽抛 MODEL_EMPTY_CONTENT，绝不返回空成功或进沙盘', async () => {
+  MP.__resetModelHealth();
+  process.env.MODEL_TEXT_ECONOMY_KEY = 'sk-test';
+  process.env.MODEL_GATEWAY_BASE_URL = 'https://primary.local/v1';
+  MP.__setProviderSource(async () => ({ providers: [poolEntry()], routing: {} }));
+  let calls = 0;
+  MP.__setHttpTransport(async () => { calls += 1; return emptyContentResp(); });
+  try {
+    await assert.rejects(() => MP.callText(P.EngineTier.ECONOMY, 'designer', 'p'), /MODEL_EMPTY_CONTENT/);
+    assert.strictEqual(calls, 6); // 主候选3次 + 池替补3次，全部真实尝试后才失败（上层据此退款）
+  } finally { failoverCleanup(); }
+});

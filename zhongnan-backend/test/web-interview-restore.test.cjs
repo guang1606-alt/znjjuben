@@ -184,6 +184,33 @@ test('reopening after a failed restore retries for free, but not during an expli
   assert.equal(h.bubbles().length, 4);
 });
 
+test('an idea typed in the interview box (main brief empty) starts the session and syncs back to the main brief', async () => {
+  const h = setup(async (_url, opts) => opts.method === 'POST'
+    ? { sessionId: 'new-session', question: '他最怕被谁发现？', turnCount: 1, ready: false, gaps: {} }
+    : { sessions: [] });
+  await h.c.initInterviewPanel();
+  assert.match(h.$('ivSendBtn').textContent, /开始/); // 未开会话：内嵌框右侧按钮就是“用此创意开始”
+  h.$('modeBrief').value = '';
+  h.$('ivAnswer').value = '80后男生，中年危机';
+  await h.c.ivStart();
+  const post = h.requests.find(r => r.url === '/api/interview/sessions' && r.opts.method === 'POST');
+  assert.ok(post, '应当真的发起开会话请求');
+  assert.equal(JSON.parse(post.opts.body).idea, '80后男生，中年危机');
+  assert.equal(h.$('modeBrief').value, '80后男生，中年危机'); // 同步回主创意框，后续“生成剧本”可读
+  assert.equal(h.$('ivAnswer').value, ''); // 开会后输入框清空，转为逐轮回答用途
+  assert.equal(h.$('ivSendBtn').textContent, '回答并继续');
+});
+
+test('with no idea in either box starting is blocked and points to the interview box', async () => {
+  const h = setup(async () => ({ sessions: [] }));
+  await h.c.initInterviewPanel();
+  h.$('modeBrief').value = '';
+  h.$('ivAnswer').value = '';
+  await h.c.ivStart();
+  assert.equal(h.requests.filter(r => r.opts.method === 'POST').length, 0);
+  assert.match(h.messages.join('|'), /下面/);
+});
+
 test('finishing a brief allows another interview and resets closed controls', async () => {
   const h = setup(async (url, opts) => url.endsWith('/brief') ? { brief: '完成的结构化简报' }
     : opts.method === 'POST' ? { ...saved({ ready: false }), sessionId: 'new-session', question: '全新采访问题' } : { sessions: [saved()] });

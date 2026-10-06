@@ -246,11 +246,127 @@ test('v2.114 爽点密度评分：终稿返回 coolMoment 评分卡', async () =
   assert.ok(r.coolMoment, '返回值含 coolMoment');
   assert.ok(typeof r.coolMoment.score === 'number' && r.coolMoment.score >= 0 && r.coolMoment.score <= 100, 'coolMoment score 0-100');
   assert.ok(typeof r.coolMoment.count === 'number' && r.coolMoment.count >= 0, 'coolMoment count 为非负数');
-  assert.ok(typeof r.coolMoment.variety === 'number' && r.coolMoment.variety >= 0, 'coolMoment variety 为非负数');
+  assert.ok(typeof r.coolMoment.variety === 'number' && r.coolMoment.variety >= 0, 'coolMoment variety 为非负整数');
   assert.ok(typeof r.coolMoment.distribution === 'object', 'coolMoment distribution 为对象');
   assert.ok('head' in r.coolMoment.distribution && 'mid' in r.coolMoment.distribution && 'tail' in r.coolMoment.distribution, 'distribution 含 head/mid/tail');
   assert.ok(typeof r.coolMoment.hasBuildup === 'boolean', 'coolMoment hasBuildup 为布尔');
   assert.ok(Array.isArray(r.coolMoment.hits), 'coolMoment hits 为数组');
   assert.ok(Array.isArray(r.coolMoment.issues), 'coolMoment issues 为数组');
+});
+
+/* ================= v2.317 模型故障≠沙盘：岗位空响应/坏JSON 必须整集失败，不得套静态资产产出"真稿+假人设" ================= */
+
+const MPX = require('../dist/lib/model-proxy.js');
+const ARCH_KEY = '只输出JSON Outline';   // architect 提示词尾部标记（G.outlineOnly）
+const CAST_KEY = '只输出JSON人物卡Cast'; // designer 提示词尾部标记（G.castOnly）
+const OUTLINE_JSON = JSON.stringify({
+  hookType: 'face_slap_pre', logline: '测试用大纲logline', beats: ['节拍一', '节拍二', '节拍三', '节拍四'],
+  payoffs: ['兑付一'], cliffhanger: '测试悬念', subplots: [],
+});
+const CAST_JSON = JSON.stringify({
+  周德海: { want: '保住自己的猪场', voice: '大嗓门、爱抬杠', arc: '从顶撞到配合', hidden: ['倔强', '怕女儿受委屈'] },
+});
+
+function xResp(content) {
+  return {
+    ok: true, status: 200, text: async () => '',
+    json: async () => ({ choices: [{ message: { content }, finish_reason: 'stop' }], usage: { prompt_tokens: 50, completion_tokens: 20 } }),
+  };
+}
+function xSetSource() {
+  MPX.__setProviderSource(async () => ({
+    providers: [{ id: 'px', name: '故障注入文本', modality: 'text', baseUrl: 'https://x.local/v1', apiKey: 'k', model: 'm', enabled: true }],
+    routing: {},
+  }));
+}
+// 文件顶部约定全局为空 provider 源（沙盘隔离），故障注入用例后必须还原
+function xCleanup() {
+  MPX.__setHttpTransport(null);
+  MPX.__resetModelHealth();
+  MPX.__setProviderSource(async () => ({ providers: [], routing: {} }));
+}
+function promptOf(init) { return JSON.parse(init.body).messages[0].content; }
+
+test('v2.317 人设岗持续空响应：runEpisode 抛 MODEL_EMPTY_CONTENT，不得用静态沙盘人物卡静默成稿', async () => {
+  MPX.__resetModelHealth();
+  xSetSource();
+  MPX.__setHttpTransport(async (url, init) => {
+    const p = promptOf(init);
+    if (p.includes(CAST_KEY)) return xResp(''); // designer 永远空（architect 先行，始终给合法大纲）
+    return xResp(OUTLINE_JSON);
+  });
+  // 修复前：designer 空响应被当沙盘 → 管线拿 SANDBOX_CAST（林晚/陈总）继续写稿，silent 出"真假混合稿"
+  await assert.rejects(
+    () => runEpisode(EngineTier.ECONOMY, emptyBible(), '县城兽医brief', () => {}),
+    /MODEL_EMPTY_CONTENT/,
+  );
+  xCleanup();
+});
+
+test('v2.317 结构化岗首次返回非JSON散文：同岗立即重试一次拿到JSON救场，不套沙盘', async () => {
+  MPX.__resetModelHealth();
+  xSetSource();
+  const hits = { arch: 0, cast: 0, other: 0 };
+  MPX.__setHttpTransport(async (url, init) => {
+    const p = promptOf(init);
+    if (p.includes(CAST_KEY)) { hits.cast += 1; return xResp(hits.cast === 1 ? '抱歉，这个我没法帮你写，你换个题目吧。' : CAST_JSON); }
+    if (p.includes(ARCH_KEY)) { hits.arch += 1; return xResp(OUTLINE_JSON); }
+    hits.other += 1;
+    return xResp(''); // writer 等后续岗位：空响应重试耗尽后抛 MODEL_EMPTY_CONTENT 收尾，本用例只验证 designer 救场
+  });
+  await assert.rejects(
+    () => runEpisode(EngineTier.ECONOMY, emptyBible(), '县城兽医brief', () => {}),
+    /MODEL_EMPTY_CONTENT/,
+  );
+  assert.strictEqual(hits.arch, 1, 'architect 一次成功不重试');
+  assert.strictEqual(hits.cast, 2, 'designer 坏JSON后同岗重试1次救场');
+  xCleanup();
+});
+
+test('v2.317 结构化岗持续返回非JSON：重试1次后抛 MODEL_BAD_JSON 失败退款，绝不静默套静态资产', async () => {
+  MPX.__resetModelHealth();
+  xSetSource();
+  const hits = { arch: 0, cast: 0 };
+  const maxTokensSeen = [];
+  MPX.__setHttpTransport(async (url, init) => {
+    const p = promptOf(init);
+    if (p.includes(CAST_KEY) || p.includes(ARCH_KEY)) maxTokensSeen.push(JSON.parse(init.body).max_tokens);
+    if (p.includes(CAST_KEY)) { hits.cast += 1; return xResp('我无法输出JSON格式，但我可以给你一些建议：第一……'); }
+    if (p.includes(ARCH_KEY)) { hits.arch += 1; return xResp(OUTLINE_JSON); }
+    return xResp(OUTLINE_JSON);
+  });
+  await assert.rejects(
+    () => runEpisode(EngineTier.ECONOMY, emptyBible(), '县城兽医brief', () => {}),
+    /MODEL_BAD_JSON/,
+  );
+  assert.strictEqual(hits.cast, 2, '坏JSON最多重试1次即失败，不无底限烧钱');
+  assert.ok(maxTokensSeen.length >= 3, `architect+designer重试共应>=3次请求，实际${maxTokensSeen.length}`);
+  assert.ok(maxTokensSeen.every((m) => m === 16384),
+    `思考模型 reasoning/content 共享预算，结构化岗必须 16384 防思考吃光预算，实际：${JSON.stringify(maxTokensSeen)}`);
+  xCleanup();
+});
+
+test('v2.317 人设岗返回 <think> 思维链包裹的JSON（MiniMax-M3 真实形态）：剥离救场，管线越过人设岗不重试不失败', async () => {
+  MPX.__resetModelHealth();
+  xSetSource();
+  const hits = { arch: 0, cast: 0 };
+  const pollutedCast = `<think>先分析大纲：beats 有 ["一","二","三","四"]，需要两个人物，再检查 arc 字段……</think>\n\n${CAST_JSON}`;
+  MPX.__setHttpTransport(async (url, init) => {
+    const p = promptOf(init);
+    if (p.includes(CAST_KEY)) { hits.cast += 1; return xResp(pollutedCast); }
+    if (p.includes(ARCH_KEY)) { hits.arch += 1; return xResp(OUTLINE_JSON); }
+    return xResp(''); // writer 空响应收尾：若 designer 未救场会先抛 MODEL_BAD_JSON:designer
+  });
+  const notes = [];
+  // designer 救场成功 → 管线推进到 writer 才失败；错误不得含 designer
+  await assert.rejects(
+    () => runEpisode(EngineTier.ECONOMY, emptyBible(), '县城兽医brief', (ev) => { if (ev?.role === 'designer') notes.push(ev); }),
+    (e) => /MODEL_EMPTY_CONTENT/.test(e.message) && !/designer/.test(e.message),
+  );
+  assert.strictEqual(hits.cast, 1, 'think 污染首调剥离即成功，不重试');
+  const castDone = notes.find((n) => n.status === 'done');
+  assert.ok(castDone, 'designer 正常完成并播报名单');
+  assert.ok(/周德海/.test(castDone.note || ''), `人物卡名单必须是真实JSON里的周德海，实际：${castDone.note}`);
+  xCleanup();
 });
 
