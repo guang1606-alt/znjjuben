@@ -32,6 +32,7 @@ const MOUNT = {
   'community.ts': '/api/community', 'export.ts': '/api/export', 'tags.ts': '/api/tags',
   'novel-sources.ts': '/api/novels', 'admin-handoff.ts': '/api/admin/handoff',
   'updates.ts': '/api', 'submission.ts': '/api/submission', 'craft.ts': '/api/craft',
+  'production-console.ts': '/api/admin/production',
 };
 const WRAP = { admApi: '/api/admin', admDownload: '/api/admin', fbAdm: '/api/feedback', adAdm: '/api/ads' };
 

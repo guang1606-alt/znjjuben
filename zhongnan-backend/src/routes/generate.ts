@@ -113,13 +113,14 @@ import { buildScriptValue } from '../lib/script-value';
 import { buildSmartDefaults } from '../lib/smart-defaults';
 import { boardStore } from '../services/board-store';
 import { toEngineUserProfile } from '../lib/profile-mapping';
+import { setActiveAbort, getActiveAbort, deleteActiveAbort } from '../lib/active-tasks';
 
 type PrismaLike = typeof defaultPrisma;
 export function createGenerateRouter(prisma: PrismaLike | any) {
 const generateRouter = asyncRouter();
 
-// v2.190 用户显式取消：按 taskId 注册 AbortController，取消端点调 abort() 停止后续 LLM 扣费
-const _activeAborts = new Map<string, AbortController>();
+// v2.190 用户显式取消 / v2.318 管理台干预：AbortController 注册表迁至共享模块 src/lib/active-tasks.ts，
+// 生成路由负责注册/删除/abort，制作中管理台凭同一份事实做 live 标记与跨端取消
 
 // v2.54 小南能力矩阵：前端按此灰显/引导升级，服务端各能力点独立硬校验
 generateRouter.get('/assistant/capabilities', authRequired, async (req: AuthRequest, res) => {
@@ -2598,7 +2599,7 @@ generateRouter.post('/episodes', authRequired, async (req: AuthRequest, res) => 
 
   // v2.190 用户显式取消信号：注册到全局 map，取消端点 abort() 后停止后续 LLM 调用
   const abortController = new AbortController();
-  _activeAborts.set(task.id, abortController);
+  setActiveAbort(task.id, abortController);
   // v2.191 全局硬超时 30 分钟：防止候选链×重试×10 岗位叠加导致最坏 180 分钟无法中断
   const GLOBAL_TIMEOUT_MS = 30 * 60_000;
   const globalTimeout = setTimeout(() => abortController.abort(), GLOBAL_TIMEOUT_MS);
@@ -3753,7 +3754,7 @@ generateRouter.post('/episodes', authRequired, async (req: AuthRequest, res) => 
     await prisma.generationTask.update({ where: { id: task.id }, data: { status: isCancelled ? 'CANCELLED' : 'FAILED', errorMsg: (err as Error).message } });
     send({ stage: isCancelled ? 'cancelled' : 'failed_refunded', error: sanitizeClientError((err as Error).message) });
   } finally {
-    _activeAborts.delete(task.id);
+    deleteActiveAbort(task.id);
     clearTimeout(globalTimeout);
     clearInterval(heartbeat);
     if (!res.writableEnded && !res.destroyed) res.end();
@@ -3761,13 +3762,21 @@ generateRouter.post('/episodes', authRequired, async (req: AuthRequest, res) => 
 });
 
 // v2.190 用户显式取消生成：abort 当前 task 的 AbortController，pipeline 在下一岗位调用前抛 CANCELLED
+// v2.318 回归修复：GenerationTask 表本无 userId 字段，旧码判 task.userId 恒 undefined → 用户取消线上必 404；
+// 改为 include project 判 project.userId（项目主人即任务归属人），行为测试锁定
 generateRouter.post('/tasks/:id/cancel', authRequired, async (req: AuthRequest, res) => {
   const taskId = req.params.id;
-  const task = await prisma.generationTask.findUnique({ where: { id: taskId } }).catch(() => null);
-  if (!task || task.userId !== req.userId) return res.status(404).json({ error: '任务不存在' });
+  const task = await prisma.generationTask.findUnique({
+    where: { id: taskId },
+    include: { project: { select: { userId: true } } },
+  }).catch(() => null);
+  if (!task || task.project?.userId !== req.userId) return res.status(404).json({ error: '任务不存在' });
   if (task.status !== 'RUNNING') return res.status(409).json({ error: '任务不在运行中' });
-  const ctrl = _activeAborts.get(taskId);
-  if (ctrl) ctrl.abort();
+  const ctrl = getActiveAbort(taskId);
+  if (ctrl) {
+    ctrl.abort();
+    deleteActiveAbort(taskId); // v2.318 取消即出表：管理台 live 归零，管线收尾自行翻 CANCELLED 并解冻
+  }
   res.json({ ok: true, taskId });
 });
 

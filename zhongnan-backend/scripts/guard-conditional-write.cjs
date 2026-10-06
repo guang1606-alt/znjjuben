@@ -30,6 +30,7 @@ const SRC_ROOT = path.join(__dirname, '..', 'src');
 /** 文件级白名单：后台管理面（管理员语义， LLW 可接受） */
 const ALLOW_FILES = [
   'src/routes/admin.ts',
+  'src/routes/production-console.ts', // v2.318 制作中管理台：仅超管主账号，僵尸清理/取消为管理员主动干预语义
 ];
 
 /** 行级白名单：逐条锚定已证伪面（marker 须为该调用行 ±2 行内独有子串）

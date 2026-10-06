@@ -2867,10 +2867,12 @@
     $('inAgeBand').innerHTML = opt('', en ? 'Not set' : '不限/未填') + PF_AGES.map(([v, k]) => opt(v, t(k))).join('');
     $('inGender').innerHTML = opt('', en ? 'Not set' : '不限/未填') + opt('男', en ? 'Male' : '男') + opt('女', en ? 'Female' : '女') + opt('保密', en ? 'Prefer not to say' : '保密');
   }
-  // 仅管理员显示「管理后台」入口（依据 /me 返回的 isAdmin）
+  // 仅管理员显示「管理后台」入口（依据 /me 返回的 isAdmin）；super-only 进一步仅超管主账号可见（v2.318 制作中管理台）
   function refreshAdminNav() {
     const isAdm = !!(meCache && meCache.isAdmin);
     document.querySelectorAll('.admin-only').forEach((el) => el.classList.toggle('hidden', !isAdm));
+    const isSuper = !!(meCache && meCache.isSuperAdmin);
+    document.querySelectorAll('.super-only').forEach((el) => el.classList.toggle('hidden', !isSuper));
   }
   $('editProfileBtn').onclick = () => $('profileEdit').classList.toggle('hidden');
   $('saveProfileBtn').onclick = async () => {

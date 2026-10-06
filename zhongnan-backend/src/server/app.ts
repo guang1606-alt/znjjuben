@@ -26,6 +26,7 @@ import { tagsRouter as defaultTags } from '../routes/tags';
 import { craftRouter as defaultCraft } from '../routes/craft';
 import { novelSourcesRouter as defaultNovels } from '../routes/novel-sources';
 import { adminHandoffRouter as defaultAdminHandoff } from '../routes/admin-handoff';
+import { productionConsoleRouter as defaultProductionConsole } from '../routes/production-console';
 import { updatesRouter as defaultUpdates } from '../routes/updates';
 import { submissionRouter as defaultSubmission } from '../routes/submission';
 import { bannedGuard } from '../middleware/auth';
@@ -34,7 +35,7 @@ import { prisma as defaultPrisma } from '../lib/prisma';
 
 export interface AppRouters {
   auth?: Router; generate?: Router; va?: Router; order?: Router; feedback?: Router;
-  knowledge?: Router; market?: Router; community?: Router; export?: Router; adminModel?: Router; adminSafety?: Router; admin?: Router; room?: Router; teardown?: Router; ads?: Router; tags?: Router; craft?: Router; novels?: Router; adminHandoff?: Router; interview?: Router; updates?: Router; submission?: Router;
+  knowledge?: Router; market?: Router; community?: Router; export?: Router; adminModel?: Router; adminSafety?: Router; admin?: Router; room?: Router; teardown?: Router; ads?: Router; tags?: Router; craft?: Router; novels?: Router; adminHandoff?: Router; interview?: Router; updates?: Router; submission?: Router; productionConsole?: Router;
 }
 
 export interface AppDeps {
@@ -105,6 +106,7 @@ export function createApp(routers: AppRouters = {}, preErrorRouter?: Router | Ro
   app.use('/api/craft', routers.craft ?? defaultCraft);
   app.use('/api/novels', routers.novels ?? defaultNovels);
   app.use('/api/admin/handoff', routers.adminHandoff ?? defaultAdminHandoff);
+  app.use('/api/admin/production', routers.productionConsole ?? defaultProductionConsole);
   app.use('/api', routers.updates ?? defaultUpdates);
   app.use('/api/submission', routers.submission ?? defaultSubmission);
   // 扩展挂载位：位于统一错误中间件之前，保证其 async 抛错也能被 JSON 兜底（测试/后续模块复用）
