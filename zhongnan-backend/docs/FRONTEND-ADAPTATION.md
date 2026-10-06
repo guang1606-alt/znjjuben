@@ -2,7 +2,7 @@
 
 > 面向前端（`web/` 原生 JS 站点及后续独立前端/移动端）的后端 API 契约与适配说明。
 > 后端每次破坏性契约变更都会在此登记：变更内容 → 迁移对照 → 前端已同步点。
-> 版本对齐 `package.json`，当前基线：**v2.315.0**。
+> 版本对齐 `package.json`，当前基线：**v2.316.0**。
 
 ---
 
@@ -14,6 +14,7 @@
 
 | 风格 | 参数 | 说明 |
 |---|---|---|
+| v2.316 | 2026-10-06 | 会员「行」层两处并发修复：响应/路由契约零变化、前端零改动；**部署前须手工执行 `prisma/add-membership-active-unique.sql`**（内含建索引前历史重复行查重 SQL，重复行须先人工合并：expireAt 取周期叠加最晚值、quota 取最新单），随后建部分唯一索引 `membership_active_user_level_uniq ON "Membership"("userId","level") WHERE "expireAt">now()`。①同档续期丢周期：deliverPaidOrder 续期 updateMany 由裸 `where:{id}`（两笔同档单并发都从读时到期点 T 起算，后写覆盖先写，付两笔只落一个周期）改为 where 锚定读时 expireAt 快照的乐观追加循环——count=0 重读最新到期点再追加，最多 3 次，仍失败抛 MEMBERSHIP_RENEW_RACE 回滚交渠道重试；user 身份到期联动 finalExpireAt（v2.315 阶梯条件写的到期值不得再用读时预计算值）。②无在保行双 create：两单都查不到行各自 create 产生同用户同档两条 active 行（额度重复计算），由部分唯一索引兜底，败者撞 P2002；PG 事务内语句出错即整体 abort 不能同事务 catch 续作，故事务整体回滚 + 外层仅对 P2002 幂等重试（最多 2 次），重跑查到对方行自动走续期。内存桩补三语义：membership.create 模拟在保行唯一冲突 P2002、updateMany 补 userId/level 过滤与 expireAt 锚点毫秒等值、$transaction 补回滚（top 存 base 快照，嵌套独立事务提交只记写入增量，top 失败恢复 base 后重放增量——嵌套可见外层脏写，整体 checkpoint 会把外层抢占的订单 PAID 状态错误固化）。test/order-membership-rows-race 写屏障两用例确定性复现（续期 ~1080 天/双单 ~60 天+支付凭证不重复，旧码 720 与 P2002 冒泡咬红），变异三轮（M1 去锚点→720 吞周期 / M2 去 P2002 重试→冒泡 / M3 桩去锚比较→①红②绿）；全量 6004 条 0 fail |
 | v2.315 | 2026-10-04 | 会员发货身份并发降级修复：响应/路由契约零变化、前端零改动。deliverPaidOrder 会员分支 user 身份落库由「findUnique 读 level/到期快照→内存只升不降判断→裸 update」改为等级阶梯条件原子写 updateMany：OR[到期 null（未开通）、到期 < now（已过期任意换购）、level in 新购等级升级阶梯（同档续期/低升高）]——两笔不同等级订单（BASIC 月卡/PRO 年卡）并发回调时双方可能都读到旧身份通过判断，后写低档覆盖先写高档（年卡权益蒸发、到期 ~390 天砍到 ~30 天）；高档先提交时低档 count=0 静默跳过，同档续期仍放行叠加。内存桩 user 补 updateMany 及 OR/null/lt/in 语义。test/order-member-race 写屏障确定性复现（旧码 BASIC/~30 天咬红，新码 PRO/>385 天），变异三轮（回退裸写/阶梯放开/桩失 in）均咬红；全量 6002 条 0 fail。membership 行同档并发续期少叠加周期与无行并发双 create 为独立缺口已登记下轮 |
 | v2.314 | 2026-10-04 | 积分充值发货并发丢更新修复：响应/路由契约零变化、前端零改动。deliverPaidOrder 积分入账由「findUnique 读余额→整体覆盖写 balance」改为 `{ increment }` 原子增量（UPDATE col=col+$n 语句级行锁）——裸 $transaction 默认 Read Committed 不串行账户读改写，两笔充值并发或充值与 billing 扣款并发时后写覆盖先写（一笔充值蒸发、ledger balanceAfter 失真）；订单级 updateMany PENDING 抢占只防同单重复回调，不防跨单账户竞争。流水快照取增量后回读值。内存桩 pointsAccount 补 increment 语义。test/order-recharge-race 写屏障交错确定性复现（旧码 1100 覆盖 2100 咬红，新码 3100、流水 2100/3100），变异三轮（回退覆盖/桩去 increment/流水预读值）均咬红；全量 6001 条 0 fail。支付渠道未接通（create 503、notify 关闭），本修为接通前资金工具正确性收口；会员等级 user.update 并发覆盖为独立缺口已登记下轮 |
 | v2.313 | 2026-10-04 | 守卫接线元守卫（guard of guards）：纯测试基建变更，API 契约零变化、前端零改动。scripts/guard-*.cjs 家族（v2.298 deleted-filter / v2.307 promise-chain / v2.311 async-handler / v2.312 conditional-write）此前靠人工纪律各自配对 test 常驻 npm test，新增守卫若漏建 test / CLI 红灯 / 不导出统一接口会静默失效；新增 test/guards-wiring.test.cjs 枚举全部守卫强制三契约——A 配对 test 存在且 ≥200 字节（防空壳）、B CLI 直跑退出 0 且输出 0 violation（真实代码库全量扫描，配对 test 被 skip/改错仍抓红）、C 导出 scanProject 统一接口；家族数量基线 ≥4（只增不减，废弃须显式改基线并日报留证）。变异三轮（无 test 探针/src 假违规/去导出）三契约分别咬红；全量 6000 条 0 fail |
