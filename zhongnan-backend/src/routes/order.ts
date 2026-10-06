@@ -31,7 +31,11 @@ export function createDeliver(prisma: PrismaLike | any) {
    * 用条件更新 UPDATE ... WHERE status='PENDING' 做并发幂等（数据库行锁天然串行，且不依赖原生 SQL 方言）。
    */
   return async function deliverPaidOrder(orderId: string, channelTradeNo: string) {
-    return prisma.$transaction(async (tx: any) => {
+    // v2.316：会员在保行有部分唯一索引 (userId,level) WHERE expireAt>now()。无行并发双 create 时
+    // 败者撞 P2002——PG 事务内语句出错后整个事务已 abort，不能在同事务 catch 续作，必须让事务整体
+    // 回滚（订单随之回 PENDING，积分/支付写入一并撤销），外层重跑：重跑时查到对方刚建的在保行，
+    // 自然走续期路径把时长追加到同一行。P2002 重试对其他唯一约束同样幂等（全量回滚重来）。
+    const runOnce = () => prisma.$transaction(async (tx: any) => {
       const before = await tx.order.findUnique({ where: { id: orderId } });
       if (!before) throw new Error('ORDER_NOT_FOUND');
       if (before.status !== 'PENDING') return { skipped: true };
@@ -77,13 +81,31 @@ export function createDeliver(prisma: PrismaLike | any) {
         });
         const baseDate = sameLevel ? new Date(sameLevel.expireAt) : (anyActive ? new Date(anyActive.expireAt) : now);
         const expireAt = new Date(baseDate.getTime() + addMs);
+        // 身份写到期点必须与会员行最终落库值一致（并发重读追加后可能晚于读时预计算的 expireAt）
+        let finalExpireAt = expireAt;
         if (sameLevel) {
-          // 修复③复用同一等级进行中的会员行（延期+额度重置），避免每单新建一行导致额度被重复计算
-          await tx.membership.updateMany({
-            where: { id: sameLevel.id },
-            data: { expireAt, quotaTotal: quotaMonthly, quotaUsed: 0, orderId: o.id },
-          });
+          // 修复③复用同一等级进行中的会员行（延期+额度重置），避免每单新建一行导致额度被重复计算。
+          // v2.316：where 锚定读时 expireAt 快照做乐观追加——两笔同档单并发都从 T 起算时，先写者
+          // 落 T+周期；后写者 where expireAt=T 匹配 0 行（值已被推进），重读最新到期点再追加一个周期，
+          // 付两笔必得两个周期。若锚写始终失败（极端活竞争）直接抛错让事务回滚、渠道重试回调，绝不裸写。
+          let anchor: { id: string; expireAt: Date } | null = sameLevel;
+          let renewed = false;
+          for (let attempt = 0; attempt < 3 && anchor; attempt++) {
+            const anchorExpireAt = new Date(anchor.expireAt);
+            const nextExpireAt = new Date(anchorExpireAt.getTime() + addMs);
+            const r = await tx.membership.updateMany({
+              where: { id: anchor.id, expireAt: anchorExpireAt },
+              data: { expireAt: nextExpireAt, quotaTotal: quotaMonthly, quotaUsed: 0, orderId: o.id },
+            });
+            if (r.count > 0) { renewed = true; finalExpireAt = nextExpireAt; break; }
+            anchor = await tx.membership.findFirst({
+              where: { userId: o.userId, level: o.level, expireAt: { gt: now } },
+              orderBy: { expireAt: 'desc' },
+            });
+          }
+          if (!renewed) throw new Error('MEMBERSHIP_RENEW_RACE');
         } else {
+          // 无在保行：部分唯一索引兜底双 create，P2002 冒泡到外层整事务重试（见 runOnce 外层）
           await tx.membership.create({ data: { userId: o.userId, level: o.level, expireAt, quotaTotal: quotaMonthly, orderId: o.id } });
         }
         // 修复②付费只升不降（v2.315 加固）：等级判断不允许「读快照→裸 update」——两笔不同等级订单
@@ -104,11 +126,20 @@ export function createDeliver(prisma: PrismaLike | any) {
               { level: { in: LEVEL_LADDER[o.level] } },
             ],
           },
-          data: { level: o.level, levelExpireAt: expireAt },
+          data: { level: o.level, levelExpireAt: finalExpireAt },
         });
       }
       return { skipped: false };
     });
+    // 见函数头注释：仅 P2002（在保行唯一冲突等）可整单幂等重试；其他错误照常上抛
+    for (let attempt = 0; ; attempt++) {
+      try {
+        return await runOnce();
+      } catch (e: any) {
+        if (e?.code === 'P2002' && attempt < 2) continue;
+        throw e;
+      }
+    }
   };
 }
 

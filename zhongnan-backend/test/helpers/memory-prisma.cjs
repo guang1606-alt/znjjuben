@@ -238,7 +238,16 @@ function createMemoryPrisma() {
   };
   const payment = { async create({ data }) { const row = { id: `pay_${++seq}`, ...data }; payments.push(row); return row; } };
   const membership = {
-    async create({ data }) { const row = { id: `ms_${++seq}`, startedAt: new Date(), quotaUsed: 0, ...data }; memberships.push(row); return row; },
+    // v2.316：对齐生产部分唯一索引 membership_active_user_level_uniq
+    // ON (userId, level) WHERE expireAt > now()——同用户同档仅允许一条在保行
+    async create({ data }) {
+      if (memberships.some((m) => m.userId === data.userId && m.level === data.level && new Date(m.expireAt) > new Date())) {
+        const e = new Error('Unique constraint failed on the fields: (`userId`,`level`)');
+        e.code = 'P2002'; e.meta = { modelName: 'Membership', target: ['userId', 'level'] };
+        throw e;
+      }
+      const row = { id: `ms_${++seq}`, startedAt: new Date(), quotaUsed: 0, ...data }; memberships.push(row); return row;
+    },
     async findFirst({ where = {}, orderBy } = {}) {
       let r = memberships.filter((m) =>
         (!where.userId || m.userId === where.userId) &&
@@ -251,6 +260,10 @@ function createMemoryPrisma() {
       let n = 0;
       for (const m of memberships) {
         if (where.id && m.id !== where.id) continue;
+        if (where.userId && m.userId !== where.userId) continue;
+        if (where.level && m.level !== where.level) continue;
+        // v2.316：expireAt 锚点等值（乐观续期），Date 按毫秒比较
+        if (where.expireAt && new Date(m.expireAt).getTime() !== new Date(where.expireAt).getTime()) continue;
         if (where.quotaUsed?.lt != null && !(m.quotaUsed < where.quotaUsed.lt)) continue;
         if (where.quotaUsed?.gt != null && !(m.quotaUsed > where.quotaUsed.gt)) continue;
         if (data.quotaUsed?.increment) m.quotaUsed += data.quotaUsed.increment;
@@ -546,10 +559,92 @@ function createMemoryPrisma() {
   // 行锁 SELECT ... FOR UPDATE 在内存实现里为空操作（单线程测试无并发竞争）
   const $queryRaw = async () => [];
   const tx = { user, invitation, pointsAccount, storageObject, ledgerEntry, project, script, generationTask, modelCallLog, feedback, order, payment, membership, post, postLike, poster, pkBattle, knowledgeItem, learningReport, announcement, modelConfig, safetyConfig, listing, purchase, writersRoom, roomMessage, teardownRecord, advert, characterAsset, propAsset, sceneAsset, matureConsent, interviewSession, providerBalance, $queryRaw };
+  // v2.316：$transaction 回滚语义（对齐 PG——回调抛错则本事务全部写入撤销）。
+  // 交错测试会在 A 事务内嵌套跑 B 的独立发货事务：嵌套事务视为独立已提交事务
+  // （测试用嵌套 await 模拟另一连接的独立提交），其提交点做 checkpoint，
+  // A 失败回滚到最后 checkpoint，只撤销 A 自己的写入，不误杀 B 已提交数据。
+  const __txContainers = {
+    users, byPhone, byInvite, accounts, projects, invitations, ledgers, scripts, tasks, callLogs,
+    storageObjects, feedbacks, orders, payments, memberships, posts, postLikes, posters, pkBattles,
+    writersRooms, roomMessages, teardownRecords, adverts, interviewSessions, knowledgeItems, listings,
+    purchases, learningReports, modelConfigRows, announcements, characterAssets, propAssets, sceneAssets,
+    consents, providerBalances,
+  };
+  const __snapshotTx = () => {
+    const snap = {};
+    for (const [k, c] of Object.entries(__txContainers)) snap[k] = structuredClone(c);
+    return snap;
+  };
+  const __restoreTx = (snap) => {
+    for (const [k, c] of Object.entries(__txContainers)) {
+      const s = snap[k];
+      if (c instanceof Map) { c.clear(); for (const [kk, vv] of s) c.set(kk, vv); }
+      else { c.length = 0; c.push(...s); }
+    }
+  };
+  // 嵌套「独立事务」的写入增量（相对其开始时的状态）：回滚外层时先恢复 base，
+  // 再按提交顺序重放增量——嵌套事务能读到外层未提交数据，但其提交点快照包含外层
+  // 脏写，不能整体恢复（否则外层已抢占的订单状态会被错误固化）。
+  const __deepEqual = (a, b) => {
+    if (a === b) return true;
+    if (typeof a !== 'object' || a === null || typeof b !== 'object' || b === null) return false;
+    if (a instanceof Date || b instanceof Date) return a instanceof Date && b instanceof Date && a.getTime() === b.getTime();
+    if (Array.isArray(a) || Array.isArray(b)) return Array.isArray(a) && Array.isArray(b) && a.length === b.length && a.every((x, i) => __deepEqual(x, b[i]));
+    const ka = Object.keys(a), kb = Object.keys(b);
+    return ka.length === kb.length && ka.every((k) => __deepEqual(a[k], b[k]));
+  };
+  const __diffTx = (before, after) => {
+    const ops = [];
+    for (const k of Object.keys(__txContainers)) {
+      const p = before[k], q = after[k];
+      if (q instanceof Map) {
+        for (const [kk, vv] of q) {
+          if (!p.has(kk) || !__deepEqual(p.get(kk), vv)) ops.push(['mapSet', k, kk, vv]);
+        }
+      } else {
+        for (let i = 0; i < q.length; i++) {
+          if (i >= p.length || !__deepEqual(p[i], q[i])) ops.push(['arrPut', k, i, q[i]]);
+        }
+      }
+    }
+    return ops;
+  };
+  const __applyTx = (ops) => {
+    for (const [op, k, i, v] of ops) {
+      const c = __txContainers[k];
+      if (op === 'mapSet') c.set(i, structuredClone(v));
+      else { c[i] = structuredClone(v); if (c.length <= i) c.length = i + 1; }
+    }
+  };
+  let __txDepth = 0;
+  let __txBase = null;
+  let __txNestedStack = []; // 嵌套事务开始快照
+  let __txCommittedDeltas = []; // 已提交嵌套事务的写入增量
   return {
     user, invitation, pointsAccount, ledgerEntry, project, script, generationTask, modelCallLog, feedback,
     order, payment, membership, post, postLike, poster, pkBattle, knowledgeItem, learningReport, announcement, modelConfig, safetyConfig, listing, purchase, storageObject, writersRoom, roomMessage, teardownRecord, advert, characterAsset, propAsset, sceneAsset, matureConsent, interviewSession, providerBalance,
-    async $transaction(fn) { return fn(tx); },
+    async $transaction(fn) {
+      const isTop = __txDepth === 0;
+      if (isTop) { __txBase = __snapshotTx(); __txCommittedDeltas = []; }
+      const nestedBefore = isTop ? null : __snapshotTx();
+      if (!isTop) __txNestedStack.push(nestedBefore);
+      __txDepth++;
+      try {
+        const r = await fn(tx);
+        if (!isTop) __txCommittedDeltas.push(__diffTx(nestedBefore, __snapshotTx()));
+        return r;
+      } catch (e) {
+        if (isTop) {
+          __restoreTx(__txBase);          // 抹掉外层全部写入
+          for (const d of __txCommittedDeltas) __applyTx(d); // 保留嵌套独立事务的已提交写入
+        }
+        throw e;
+      } finally {
+        __txDepth--;
+        if (!isTop) __txNestedStack.pop();
+        if (isTop) { __txBase = null; __txCommittedDeltas = []; __txNestedStack = []; }
+      }
+    },
     _users: users, _accounts: accounts, _projects: projects, _scripts: scripts, _tasks: tasks, _ledgers: ledgers,
     _orders: orders, _payments: payments, _memberships: memberships, _posts: posts, _postLikes: postLikes, _posters: posters, _pkBattles: pkBattles,
     _knowledgeItems: knowledgeItems, _listings: listings, _purchases: purchases, _writersRooms: writersRooms, _roomMessages: roomMessages, _teardownRecords: teardownRecords, _adverts: adverts, _consents: consents, _interviewSessions: interviewSessions, _characterAssets: characterAssets, _propAssets: propAssets, _sceneAssets: sceneAssets, _announcements: announcements,
