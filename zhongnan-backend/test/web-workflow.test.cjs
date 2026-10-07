@@ -25,11 +25,12 @@ function setup(names, extra = {}) {
       const classes = new Set(['hidden']);
       nodes.set(id, { id, value: '', checked: false, textContent: '', innerHTML: '', dataset: {}, style: {},
         classList: { add: (...xs) => xs.forEach(x => classes.add(x)), remove: (...xs) => xs.forEach(x => classes.delete(x)), contains: x => classes.has(x), toggle(x, on) { if (on ?? !classes.has(x)) classes.add(x); else classes.delete(x); } },
-        setAttribute() {}, appendChild() {}, focus() {}, remove() {}, querySelector: () => null });
+        setAttribute() {}, appendChild() {}, focus() {}, remove() {}, querySelector: () => null,
+        addEventListener(ev, fn) { (this._listeners ||= {})[ev] = fn; }, dispatchEvent() {} });
     }
     return nodes.get(id);
   };
-  const context = { $, lang: 'zh', console, AbortController, TextDecoder, PV: () => ProgressView,
+  const context = { $, lang: 'zh', console, AbortController, TextDecoder, Event, CustomEvent, PV: () => ProgressView,
     capturePrivateSession: () => ({ owner: 'fixture', epoch: 0 }), isPrivateSessionCurrent: () => true,
     document: { getElementById: () => null, querySelector: () => null, querySelectorAll: () => [], removeEventListener() {}, createElement: () => $('created') },
     setTimeout: fn => { timers.push(fn); return timers.length; }, clearTimeout() {},
@@ -170,8 +171,9 @@ test('expired authentication opens the real login modal', () => {
   assert.equal(c.authMode, 'login');
 });
 
-test('opening an adaptation draft offers a resume action with the saved brief', async () => {
-  const project = { id: 'draft1', title: '改编草稿', mode: 'adapt', totalEps: 20, engineTier: 'STANDARD', format: 'LIVE_ACTION', bible: { adaptationDraft: { brief: '保存的改编人物和主线', recordId: 'td1' } } };
+test('opening an adaptation draft offers a resume action with the saved brief and restores sourceText (v2.319)', async () => {
+  const project = { id: 'draft1', title: '改编草稿', mode: 'adapt', totalEps: 20, engineTier: 'STANDARD', format: 'LIVE_ACTION',
+    bible: { sourceText: '承接时持久化的爆款原文内容，足够十个字', adaptationDraft: { brief: '保存的改编人物和主线', recordId: 'td1' } } };
   const { context: c, $ } = setup(['openProject', 'resumeAdaptationProject', 'syncDraftProject', 'clearDraftProject'], {
     draftProject: null, Api: { request: async () => ({}), jsonOrThrow: async () => [] },
     closeWorkbench() {}, switchView() {}, renderModes() {}, syncTagBench() {}, syncModeBrief() {},
@@ -180,6 +182,7 @@ test('opening an adaptation draft offers a resume action with the saved brief', 
   assert.match($('epsList').innerHTML, /worksResumeDraft/);
   $('worksResumeDraft').onclick();
   assert.equal($('modeBrief').value, '保存的改编人物和主线');
+  assert.equal($('sourceText').value, '承接时持久化的爆款原文内容，足够十个字', '恢复改编草稿必须回填原文，续写版权闸门不中断');
   assert.equal(c.draftProject.id, 'draft1');
   assert.equal($('episodes').value, 20);
   assert.equal($('episodes').disabled, true);
@@ -206,6 +209,55 @@ test('submitting a resumed adaptation uses its project without creating a duplic
   assert.equal(requests[0].url, '/api/generate/episodes');
   assert.equal(requests[0].data.projectId, 'draft1');
   assert.equal(requests[0].data.brief, '编辑后的改编简报');
+});
+
+test('v2.319 tags mode creates the project with structured Chinese tags (not just a text brief)', async () => {
+  const requests = [];
+  const { context: c, $ } = setup(['startGenerate', 'failGenerationSession'], {
+    selectedMode: 'tags', selectedTrack: '', draftProject: null,
+    tagChosen: ['逆袭', '都市'], TAG_MAX: 14,
+    loadCastAssets: async () => {}, loadPropAssets: async () => {}, loadSceneAssets: async () => {},
+    buildTagBrief: () => '标签组合：逆袭、都市……的自然语言简报', tagProjectTitle: () => '标签剧标题', rememberPrefTags() {},
+    brandBriefPayload: () => ({}), trendBriefPayload: () => ({}), branchBriefPayload: () => ({}),
+    hookPayload: () => ({}), beatPayload: () => ({}), castAssetPayload: () => ({}), propAssetPayload: () => ({}), sceneAssetPayload: () => ({}), aigcPayload: () => ({}), sourceTextPayload: () => ({}), outLocale: () => 'zh',
+    PV: () => ({ createProgress: () => ({}) }), closeWorkbench() {}, showFail() {},
+    Api: { isAuthed: () => true, request: async (url, opts) => {
+      requests.push({ url, data: JSON.parse(opts.body) });
+      return url.endsWith('/projects') ? { ok: true, json: async () => ({ id: 'ptag', title: '标签剧标题', mode: 'tags' }) }
+        : { ok: true, body: { getReader: () => ({ read: async () => ({ done: true }) }), cancel: async () => {} } };
+    } },
+  });
+  $('tagBench').classList.remove('hidden');
+  $('episodes').value = '20'; $('engine').value = 'STANDARD';
+  await c.startGenerate();
+  const create = requests.find(r => r.url === '/api/generate/projects');
+  assert.ok(create, '标签模式必须走立项请求');
+  assert.deepEqual(create.data.tags, ['逆袭', '都市'], '立项 payload 必须携带结构化中文标签');
+  assert.equal(create.data.sourceText, undefined, '标签模式不得携带原文');
+});
+
+test('v2.319 adapt mode persists sourceText at project creation so resume/regeneration keeps the copyright gate', async () => {
+  const requests = [];
+  const { context: c, $ } = setup(['startGenerate', 'failGenerationSession', 'sourceTextPayload'], {
+    selectedMode: 'adapt', selectedTrack: 'signature_scene', draftProject: null,
+    loadCastAssets: async () => {}, loadPropAssets: async () => {}, loadSceneAssets: async () => {},
+    brandBriefPayload: () => ({}), trendBriefPayload: () => ({}), branchBriefPayload: () => ({}),
+    hookPayload: () => ({}), beatPayload: () => ({}), castAssetPayload: () => ({}), propAssetPayload: () => ({}), sceneAssetPayload: () => ({}), aigcPayload: () => ({}), outLocale: () => 'zh',
+    PV: () => ({ createProgress: () => ({}) }), closeWorkbench() {}, showFail() {},
+    Api: { isAuthed: () => true, request: async (url, opts) => {
+      requests.push({ url, data: JSON.parse(opts.body) });
+      return url.endsWith('/projects') ? { ok: true, json: async () => ({ id: 'padapt', title: '改编创意', mode: 'adapt' }) }
+        : { ok: true, body: { getReader: () => ({ read: async () => ({ done: true }) }), cancel: async () => {} } };
+    } },
+  });
+  $('modeBrief').value = '改编创意'; $('episodes').value = '20'; $('engine').value = 'STANDARD';
+  $('sourceText').value = '  这是用户粘贴的原创小说原文，长度足够启用 n-gram 闸门。  ';
+  await c.startGenerate();
+  const create = requests.find(r => r.url === '/api/generate/projects');
+  assert.ok(create);
+  assert.equal(create.data.sourceText, '这是用户粘贴的原创小说原文，长度足够启用 n-gram 闸门。', '立项即持久化 trim 后的原文');
+  const gen = requests.find(r => r.url === '/api/generate/episodes');
+  assert.equal(gen.data.sourceText, '这是用户粘贴的原创小说原文，长度足够启用 n-gram 闸门。', '生成请求继续透传原文');
 });
 
 test('switching from a saved draft to another mode unlocks the project settings', () => {
@@ -247,7 +299,7 @@ test('teardown hands the persisted project to the editor with the selected gener
   const requests = [], events = [];
   let restored = false;
   const { context: c, $ } = setup([], {
-    state: { recordId: 'td1' }, btn: () => () => { restored = true; },
+    state: { recordId: 'td1', sourceText: '  拆爆款时粘贴的爆款原文，长度足够启用闸门。  ' }, btn: () => () => { restored = true; },
     raw: async (url, body) => { requests.push({ url, body }); return { ok: true, data: { project } }; },
     T: () => ({ projOk: '草稿已保存' }), toast() {}, toastErr() {}, toastOk() {}, alert: assert.fail, needLogin: () => false, failMsg: e => e.message,
     CustomEvent: class { constructor(type, init) { this.type = type; this.detail = init.detail; } },
@@ -259,7 +311,46 @@ test('teardown hands the persisted project to the editor with the selected gener
   assert.equal(requests[0].url, '/api/teardown/td1/to-project');
   assert.equal(requests[0].body.totalEps, 12);
   assert.equal(requests[0].body.engineTier, 'ECONOMY');
+  assert.equal(requests[0].body.sourceText, '拆爆款时粘贴的爆款原文，长度足够启用闸门。', 'v2.319 承接改编必须携带 trim 后原文');
   assert.equal(events[0].type, 'zn-adaptation-project');
   assert.equal(events[0].detail.project, project);
   assert.equal(restored, true);
+
+  // v2.319 短于 10 字的残留文本不携带（后端 min 10 会拒，前端先净化）
+  requests.length = 0;
+  c.state.sourceText = '九个字啊啊啊啊';
+  await c.toProject();
+  assert.equal(requests[0].body.sourceText, undefined);
+});
+
+test('v2.319 brief/document extraction routes adapt/novel/hit_lab text into the source box, others into the brief box', async () => {
+  class FakeFileReader {
+    readAsDataURL(file) { this.result = file.dataUrl; this.onload(); }
+  }
+  const tick = () => new Promise(r => setImmediate(r));
+  const run = async (mode, { existingSource = '' } = {}) => {
+    const requests = [];
+    const { context: c, $ } = setup(['initBriefUpload'], {
+      briefUploadInited: false, selectedMode: mode, FileReader: FakeFileReader, xnSay() {},
+      Api: { request: async (url, opts) => { requests.push({ url, opts }); return {}; }, jsonOrThrow: async () => ({ text: '提取出的正文内容', chars: 8 }) },
+    });
+    $('sourceText').value = existingSource;
+    c.initBriefUpload();
+    const input = $('briefFile');
+    input.files = [{ name: '原稿.docx', size: 1024, dataUrl: 'data:application/octet-stream;base64,QUJDREU=' }];
+    await input._listeners.change();
+    await tick();
+    return { $, requests };
+  };
+  const adapt = await run('adapt');
+  assert.equal(adapt.$('sourceText').value, '提取出的正文内容', '改编模式：提取正文进原文框，版权闸门可生效');
+  assert.equal(adapt.$('modeBrief').value, '');
+  assert.equal(adapt.requests[0].url, '/api/generate/extract-source');
+
+  const withExisting = await run('novel', { existingSource: ' 已有原文内容 ' });
+  assert.equal(withExisting.$('sourceText').value, '提取出的正文内容\n\n已有原文内容', '新提取内容置顶，旧原文保留');
+
+  const tags = await run('tags');
+  assert.equal(tags.$('modeBrief').value, '提取出的正文内容', '非原文模式仍进创意简报框');
+  assert.equal(tags.$('sourceText').value, '');
 });

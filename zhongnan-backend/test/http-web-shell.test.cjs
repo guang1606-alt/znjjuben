@@ -67,6 +67,57 @@ describe('前端站点托管 + 项目创建端点', { concurrency: 1 }, () => {
     });
     assert.strictEqual(r.status, 400);
   });
+
+  it('v2.319 tags 立项即结构化落库：trim/去空/去重/单项截断/封顶60，不依赖自然语言 brief', async () => {
+    const r = await fetch(base + '/api/generate/projects', {
+      method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${tok}` },
+      body: JSON.stringify({ title: '标签清洗剧', mode: 'tags', tags: [' 逆袭 ', '', ' 逆袭', '都市', 'x'.repeat(40)] }),
+    });
+    assert.strictEqual(r.status, 200);
+    const p = await r.json();
+    assert.deepStrictEqual(p.tags, ['逆袭', '都市', 'x'.repeat(24)]);
+  });
+
+  it('v2.319 tags 全为空白/超量：静默清洗为空或截断到 60，不阻断建项目', async () => {
+    const blank = await fetch(base + '/api/generate/projects', {
+      method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${tok}` },
+      body: JSON.stringify({ title: '空标签剧', mode: 'tags', tags: ['', '   '] }),
+    });
+    assert.strictEqual(blank.status, 200);
+    assert.deepStrictEqual((await blank.json()).tags, []);
+    const many = await fetch(base + '/api/generate/projects', {
+      method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${tok}` },
+      body: JSON.stringify({ title: '超量标签剧', mode: 'tags', tags: Array.from({ length: 65 }, (_, i) => `标签${String(i).padStart(2, '0')}`) }),
+    });
+    assert.strictEqual(many.status, 200);
+    const saved = (await many.json()).tags;
+    assert.strictEqual(saved.length, 60);
+    assert.strictEqual(saved[0], '标签00');
+  });
+
+  it('v2.319 adapt 立项携带原文 → bible.sourceText 持久化，续写/刷新不丢版权闸门', async () => {
+    const sourceText = '这是一段足够长的原创小说正文，用于改编时的 n-gram 重合度版权检测。';
+    const r = await fetch(base + '/api/generate/projects', {
+      method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${tok}` },
+      body: JSON.stringify({ title: '原文持久化剧', mode: 'adapt', sourceText }),
+    });
+    assert.strictEqual(r.status, 200);
+    const p = await r.json();
+    assert.strictEqual(p.bible.sourceText, sourceText);
+    const persisted = await mem.project.findFirst({ where: { id: p.id } });
+    assert.strictEqual(persisted.bible.sourceText, sourceText);
+  });
+
+  it('v2.319 非原文模式即使携带 sourceText 也不落库（防越权注入提示词）', async () => {
+    const r = await fetch(base + '/api/generate/projects', {
+      method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${tok}` },
+      body: JSON.stringify({ title: '采访剧', mode: 'interview', sourceText: '这是一段足够长的文本内容企图混入改编指令' }),
+    });
+    assert.strictEqual(r.status, 200);
+    const p = await r.json();
+    const bible = p.bible || {};
+    assert.strictEqual(bible.sourceText, undefined);
+  });
 });
 
 mem._seedUser({ id: 'u2', level: 'FREE' });

@@ -600,3 +600,29 @@ export function screenModeGate(modeRaw: string | undefined | null, text: string,
     default: return { ...EMPTY, mode: canon };
   }
 }
+
+/* ---------- v2.319 原作原文解析：episodes 版权闸门的统一取数口 ----------
+ * 背景：原文有两条到生成链路的路径——①直选 adapt/novel/hit_lab 在前端框粘贴（episodes body）；
+ * ②立项时随 POST /projects 持久化进 project.bible.sourceText（含拆爆款承接改编）。
+ * 用户刷新页面、清空前端框、从草稿续写时 body 会缺原文，若不兜底 n-gram 重合闸门即静默失效。
+ * 规则：仅三原文模式启用；请求显式携带优先；bible.sourceText → bible.adaptationDraft.sourceText 依次兜底；
+ * trim 后不足 10 字视为无原文（与 zod 校验同口径）；统一截断 50000 字防历史脏值撑爆提示词。纯函数零 IO。 */
+export const SOURCE_TEXT_LIMIT = 50000;
+export function resolveEpisodeSourceText(input: {
+  bodySourceText?: unknown;
+  project?: { bible?: unknown } | null;
+  canonMode?: string | null;
+}): string | undefined {
+  const mode = input.canonMode;
+  if (mode !== 'adapt' && mode !== 'novel' && mode !== 'hit_lab') return undefined;
+  const pick = (v: unknown): string | undefined => {
+    if (typeof v !== 'string') return undefined;
+    const s = v.trim();
+    if (s.length < 10) return undefined;
+    return s.slice(0, SOURCE_TEXT_LIMIT);
+  };
+  const bible = (input.project as { bible?: any } | null | undefined)?.bible;
+  return pick(input.bodySourceText)
+    ?? pick(bible?.sourceText)
+    ?? pick(bible?.adaptationDraft?.sourceText);
+}

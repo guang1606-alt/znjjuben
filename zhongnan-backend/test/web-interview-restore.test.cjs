@@ -58,13 +58,43 @@ test('opening interview restores saved questions, answers, readiness and the ori
   assert.equal(h.bubbles().length, 4);
 });
 
-test('restoration skips finished sessions and preserves a newly typed idea', async () => {
-  const h = setup(async () => ({ sessions: [saved({ id: 'finished', status: 'CONVERTED' }), saved({ ready: false, turnCount: 3 })] }));
+test('restoration prefers an ACTIVE session over a converted one and preserves a newly typed idea', async () => {
+  const h = setup(async () => ({ sessions: [saved({ id: 'finished', status: 'CONVERTED', brief: '已完成的简报' }), saved({ ready: false, turnCount: 3 })] }));
   h.$('modeBrief').value = '刚写下的新故事';
   await h.c.initInterviewPanel();
   assert.equal(h.$('modeBrief').value, '刚写下的新故事');
   assert.match(h.$('ivStatus').textContent, /第 3 轮/);
   assert.equal(h.$('ivBriefBtn').classList.contains('hidden'), true);
+});
+
+test('v2.319 a converted session is restorable after refresh: transcript + closed UI + deterministic brief', async () => {
+  const h = setup(async (_url, opts) => opts.method === 'POST'
+    ? { ...saved({ status: 'ACTIVE', ready: false }), sessionId: 'new-session', question: '新的追问' }
+    : { sessions: [saved({ id: 'converted-one', status: 'CONVERTED', brief: '【采访式创作 · 创意简报】\n确定性简报正文' })] });
+  await h.c.initInterviewPanel();
+  assert.deepEqual(h.bubbles(), ['女记者寻找失踪姐姐', '她会失去什么？', '她会失去唯一的线索', '她决定如何反击？']);
+  assert.equal(h.$('modeBrief').value, '【采访式创作 · 创意简报】\n确定性简报正文', 'CONVERTED 简报必须随列表回填');
+  assert.match(h.$('ivStatus').textContent, /采访已完成/);
+  assert.equal(h.$('ivAnswer').disabled, true, '终态会话禁止继续回答');
+  assert.equal(h.$('ivSendBtn').disabled, true);
+  assert.equal(h.$('ivBriefBtn').classList.contains('hidden'), true, '终态不再显示生成简报按钮');
+  assert.equal(h.$('ivStopBtn').classList.contains('hidden'), true);
+  const requestsBefore = h.requests.length;
+  await h.c.ivReply();
+  assert.equal(h.requests.length, requestsBefore, 'closed 态追问必须被前端拦截，不打付费 turn 请求');
+  // 「新建采访」仍可开新会话，不被终态锁死
+  h.$('modeBrief').value = '一个全新的反击故事';
+  h.$('ivAnswer').value = '她换了身份重新开始';
+  await h.c.ivStart();
+  const post = h.requests.find(r => r.opts.method === 'POST' && r.url === '/api/interview/sessions');
+  assert.ok(post);
+});
+
+test('v2.319 restoring a converted session never overwrites a brief the user already edited', async () => {
+  const h = setup(async () => ({ sessions: [saved({ status: 'CONVERTED', brief: '服务器上的确定性简报' })] }));
+  h.$('modeBrief').value = '我自己手动改过的创意';
+  await h.c.initInterviewPanel();
+  assert.equal(h.$('modeBrief').value, '我自己手动改过的创意');
 });
 
 test('a restored interview continues against its saved ID and blocks duplicate paid replies', async () => {

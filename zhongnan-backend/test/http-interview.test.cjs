@@ -172,6 +172,22 @@ describe('采访式创作·HTTP 闭环', { concurrency: 1 }, () => {
     const t = await post(`/api/interview/sessions/${global.ivSession}/turn`, { text: '再补充一点细节可以吗' }, 'rich');
     assert.strictEqual(t.status, 409);
   });
+  it('v2.319 CONVERTED 会话刷新后可回看确定性简报（列表/详情均附 brief）；ACTIVE/CLOSED 不附', async () => {
+    const list = await (await get('/api/interview/sessions', 'rich')).json();
+    const listed = list.sessions.find((s) => s.id === global.ivSession);
+    assert.strictEqual(listed.status, 'CONVERTED');
+    assert.ok(listed.brief && listed.brief.includes('【采访式创作 · 创意简报】'), '列表必须附简报供刷新/换设备回看');
+    assert.ok(listed.brief.includes('被辞退的女厨师想夺回自己的餐厅'), '简报由素材确定性重算，不丢原始事实源');
+    const detail = await (await get(`/api/interview/sessions/${global.ivSession}`, 'rich')).json();
+    assert.strictEqual(detail.session.brief, listed.brief, '详情与列表的简报必须一致（同一确定性拼装）');
+
+    // ACTIVE（未转化）与 CLOSED 会话不得携带简报，避免未完成采访被当成成稿
+    const otherList = await (await get('/api/interview/sessions', 'other')).json();
+    const active = otherList.sessions.find((s) => s.status === 'ACTIVE');
+    if (active) assert.strictEqual(active.brief, undefined, 'ACTIVE 会话不附简报');
+    const closed = otherList.sessions.find((s) => s.status === 'CLOSED');
+    if (closed) assert.strictEqual(closed.brief, undefined, 'CLOSED 会话不附简报');
+  });
   it('关闭会话', async () => {
     const o = await post('/api/interview/sessions', { idea: '另一个还没聊完的案子，先收尾处理' }, 'other');
     const oj = await o.json();

@@ -8,6 +8,7 @@ import { EngineTier, MemberLevel, MEMBERSHIP, episodePoints, FEN_PER_POINT, reso
 import { freeze, settle, unfreeze, consumeFlexible, refundFlexible } from '../lib/billing';
 import { withBillingTransaction } from '../lib/prisma-tx';
 import { runEpisode, Bible } from '../agents/pipeline';
+import { resolveEpisodeSourceText, SOURCE_TEXT_LIMIT } from '../engine/mode-gate'; // v2.319 episodes 原文统一取数（body 优先 + bible 兜底，版权闸门不中断）
 import { latestScripts } from '../lib/latest-scripts';
 import { hooksByLayer, ALL_HOOKS, CueMode, Strength, VALID_FLAVORS, HOOK_FLAVORS, FLAVOR_META, describeHook } from '../engine/hook-system';
 import { BEAT_LIBRARY, localizeBeat, PAYOFF_FLAVORS, PAYOFF_FLAVOR_META, VALID_PAYOFF_FLAVORS, REVERSAL_FLAVORS, REVERSAL_FLAVOR_META, VALID_REVERSAL_FLAVORS, EMOTION_FLAVORS, EMOTION_FLAVOR_META, VALID_EMOTION_FLAVORS, normalizeBeatPref } from '../engine/beat-system';
@@ -191,6 +192,24 @@ generateRouter.post('/mature/consent/revoke', authRequired, async (req: AuthRequ
   res.json({ ok: true });
 });
 
+// v2.319 结构化标签入库前统一清洗：trim → 去空 → 去重 → 单项截 24 字 → 封顶 60 个。
+// 标签是 tags 模式的一类输入（不再只拼进自然语言 brief），消费端（creation-context/海报/克隆）
+// 与审核端（scanWithStore）都按结构化字段使用，故必须在入口净化而非依赖前端自觉。
+function sanitizeProjectTags(tags: unknown): string[] {
+  if (!Array.isArray(tags)) return [];
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const raw of tags) {
+    if (typeof raw !== 'string') continue;
+    const s = raw.trim().slice(0, 24);
+    if (!s || seen.has(s)) continue;
+    seen.add(s);
+    out.push(s);
+    if (out.length >= 60) break;
+  }
+  return out;
+}
+
 // 创建项目（发起 SSE 生成的前置，作品库数据源）
 const projectSchema = z.object({
   title: z.string().min(1, '项目名不能为空').max(120),
@@ -198,7 +217,10 @@ const projectSchema = z.object({
   track: z.string().min(1).max(40).optional(), // v2.14 名场面工作台内部轨道 signature_scene/hit_reverse
   totalEps: z.number().int().min(1).max(500).optional(),
   engineTier: z.nativeEnum(EngineTier).optional(),
-  tags: z.array(z.string()).max(60).optional(),
+  // v2.319 入参上限放宽到 100 防恶意大包，静默清洗到 60（不阻断建项目）；落库恒为 string[]
+  tags: z.array(z.string()).max(100).optional().transform(sanitizeProjectTags),
+  // v2.319 立项即持久化原文（adapt/novel/hit_lab）：刷新续写/草稿恢复时 n-gram 版权闸门不依赖前端框状态
+  sourceText: z.string().max(SOURCE_TEXT_LIMIT).optional(),
   format: z.enum(['LIVE_ACTION', 'AIGC']).optional(),
   investWan: z.number().min(0).max(100000).optional(),     // 预估投资额（万），用于三类分级备案
   specialTopic: z.boolean().optional(),                   // 特殊题材（政治/军事/民族宗教等）一律一类
@@ -352,7 +374,11 @@ generateRouter.post('/projects', authRequired, async (req: AuthRequest, res) => 
       });
     }
   }
+  // v2.319 原文仅三模式持久化（其余模式即使夹带也不入库，防越权注入提示词）；trim 后不足 10 字忽略
+  const projectSourceText = (canonMode === 'adapt' || canonMode === 'novel' || canonMode === 'hit_lab')
+    && typeof d.sourceText === 'string' ? d.sourceText.trim().slice(0, SOURCE_TEXT_LIMIT) : '';
   const bibleCue = {
+    ...(projectSourceText.length >= 10 ? { sourceText: projectSourceText } : {}),
     ...(hookPrefs ? { hookPrefs } : {}),
     ...(beatPrefs ? { beatPrefs } : {}),
     // v2.148 视觉画风编号：仅 AIGC 项目接受，非法编号静默丢弃（不阻断建项目）
@@ -2432,6 +2458,12 @@ generateRouter.post('/episodes', authRequired, async (req: AuthRequest, res) => 
   if (!project) return res.status(404).json({ error: '项目不存在' });
   // v2.14 归一模式 + 轨道二次校验（防止建项目后越权调用专业轨道）
   const projCanonMode = canonicalModeId((project as Record<string, unknown>).mode as string);
+  // v2.319 原文统一取数：body 优先，缺失时从立项/拆爆款承接持久化的 bible 兜底（仅三原文模式）
+  const effectiveSourceText = resolveEpisodeSourceText({
+    bodySourceText: parsed.data.sourceText,
+    project: project as { bible?: unknown },
+    canonMode: projCanonMode,
+  });
   const epTrack = parsed.data.track ? canonicalHitLabTrack(parsed.data.track) : undefined;
   if (!isStaff && projCanonMode === 'hit_lab' && !trackAvailable(projCanonMode, epTrack, level)) {
     return res.status(403).json({ error: 'TRACK_LOCKED', needLevel: trackUnlockLevel(projCanonMode, epTrack), track: 'hit_reverse', message: '「爆款逆向批量」为专业版轨道' });
@@ -3109,8 +3141,8 @@ generateRouter.post('/episodes', authRequired, async (req: AuthRequest, res) => 
       // v2.95 互动分支·结构化分支简报（已过闭环校验），注入架构师/撰写师
       ...(branchBrief ? { branchBrief } : {}),
       // v2.96 原作/小说/名场面原文：adapt/novel/hit_lab 模式启用 n-gram 重合度侵权检测
-      ...((projCanonMode === 'adapt' || projCanonMode === 'novel' || projCanonMode === 'hit_lab') && parsed.data.sourceText
-        ? { sourceText: parsed.data.sourceText } : {}),
+      // v2.319 body 缺原文（刷新续写/草稿恢复/前端框被清空）时从 project.bible 兜底，闸门不静默失效
+      ...(effectiveSourceText ? { sourceText: effectiveSourceText } : {}),
       // v2.99 项目标题，用于传播端前13字公式校验
       title: project.title,
       prevEpisode,

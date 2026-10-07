@@ -90,6 +90,9 @@ export function createInterviewRouter(prisma: PrismaLike) {
       ready: readyCheck(materials, Number(s.turnCount) || 0, lang),
       gaps: gapReport(materials, lang),
       turnCount: s.turnCount, createdAt: s.createdAt, updatedAt: s.updatedAt,
+      // v2.319 CONVERTED（已转创意简报）会话刷新后仍可回看简报：确定性现算随读返回，不额外持久化；
+      // ACTIVE/CLOSED 不附（采访中/已废弃，前端不需要）。列表与详情同源 pubSession，天然一致。
+      ...(s.status === 'CONVERTED' ? { brief: buildBrief(materials, lang) } : {}),
     };
   };
 

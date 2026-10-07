@@ -67,6 +67,10 @@ const ALLOW_MARKERS = [
   { file: 'src/routes/knowledge.ts', marker: `status: 'REJECTED'` }, // 超管驳回：幂等同态翻转
   { file: 'src/routes/knowledge.ts', marker: `status: 'PENDING', pruneReason: null` }, // 超管恢复归档：幂等同态翻转
   { file: 'src/services/auto-learning.ts', marker: `status: 'ARCHIVED', pruneReason: a.reason` }, // 服务内批量淘汰：循环幂等
+  // —— v2.319 拆爆款承接改编 ——
+  // teardown to-project 三处 TO_PROJECT 翻转均在 withBillingTransaction + lockAccount 事务内：
+  // 记录只属于本人（上方 rec.userId 校验），OUTLINED→TO_PROJECT 为一次性承接语义，重复翻转幂等无资金/内容损失。
+  { file: 'src/routes/teardown.ts', marker: `data: { state: 'TO_PROJECT' }` },
 ];
 
 const UPDATE_RE = /\.update\(\s*\{/g;

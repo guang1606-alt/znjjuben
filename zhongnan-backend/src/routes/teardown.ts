@@ -182,6 +182,9 @@ export function createTeardownRouter(prisma: PrismaLike | any) {
       title: z.string().trim().min(1).max(120).optional(), totalEps: z.number().int().min(1).max(500).default(20),
       engineTier: z.nativeEnum(EngineTier).default(EngineTier.STANDARD),
       format: z.enum(['LIVE_ACTION', 'AIGC']).default('LIVE_ACTION'),
+      // v2.319 拆爆款承接改编：前端分析框原文随承接请求落进改编项目 bible.sourceText，
+      // 之后生成/续写时 n-gram 版权闸门有原文可用（TeardownRecord 不加字段，原文只活在请求当下）
+      sourceText: z.string().max(50000).optional(),
     });
     const p = schema.safeParse(req.body);
     if (!p.success) return res.status(400).json({ error: '项目名不合法' });
@@ -209,8 +212,24 @@ export function createTeardownRouter(prisma: PrismaLike | any) {
       const related = candidates.filter((x: any) => x.bible?.adaptationDraft?.recordId === rec.id);
       // v2.296：已删=不存在——已删项目不构成「已承接」（否则 matching 命中已删项目直接返回，
       // 记录标 TO_PROJECT 指向已删项目、新项目不创建；排除后照常走原地更新/新建承接）
+      // v2.319：matching 只按 outline 判定，sourceText 不参与比较（补原文不应导致重复建项目）
       const matching = related.find((x: any) => x.status !== 'deleted' && isDeepStrictEqual(x.bible.adaptationDraft.outline, rec.outline));
+      // v2.319 原文继承口径：本次显式携带优先；否则从同记录既有草稿/项目继承（幂等再承接、开写后另建不丢原文）
+      const carriedSourceText = typeof p.data.sourceText === 'string' ? p.data.sourceText.trim().slice(0, 50000) : '';
+      const priorSourceText = related
+        .map((x: any) => (typeof x.bible?.sourceText === 'string' ? x.bible.sourceText : ''))
+        .find((s: string) => s.trim().length >= 10);
+      const finalSourceText = carriedSourceText.length >= 10
+        ? carriedSourceText
+        : (priorSourceText ? priorSourceText.trim().slice(0, 50000) : '');
+      const withSource = (bibleObj: any): any => (finalSourceText ? { ...bibleObj, sourceText: finalSourceText } : bibleObj);
       if (matching) {
+        // 既有承接项目缺原文而本次/历史有原文：补齐版权闸门输入；已有原文一律保留不覆盖
+        if (finalSourceText && typeof matching.bible?.sourceText !== 'string') {
+          const mergedBible = withSource(matching.bible);
+          await raw.project.update({ where: { id: matching.id }, data: { bible: mergedBible } });
+          matching.bible = mergedBible;
+        }
         await raw.teardownRecord.update({ where: { id: rec.id }, data: { state: 'TO_PROJECT' } });
         return matching;
       }
@@ -220,7 +239,7 @@ export function createTeardownRouter(prisma: PrismaLike | any) {
         const updated = await raw.project.update({ where: { id: candidate.id }, data: {
           title, totalEps: p.data.totalEps, engineTier: p.data.engineTier, format: p.data.format,
           tags: Array.from(new Set([...(rec.pickedTags || []), '拆爆款改编'])).slice(0, 30),
-          bible: { ...candidate.bible, adaptationDraft: { recordId: rec.id, brief, outline: rec.outline } },
+          bible: withSource({ ...candidate.bible, adaptationDraft: { recordId: rec.id, brief, outline: rec.outline } }),
         } });
         await raw.teardownRecord.update({ where: { id: rec.id }, data: { state: 'TO_PROJECT' } });
         return updated;
@@ -234,7 +253,7 @@ export function createTeardownRouter(prisma: PrismaLike | any) {
           userId, title, mode: 'adapt', totalEps: p.data.totalEps, engineTier: p.data.engineTier,
           tags: Array.from(new Set([...(rec.pickedTags || []), '拆爆款改编'])).slice(0, 30),
           format: p.data.format, status: 'draft',
-          bible: { adaptationDraft: { recordId: rec.id, brief, outline: rec.outline } },
+          bible: withSource({ adaptationDraft: { recordId: rec.id, brief, outline: rec.outline } }),
         },
       });
       await raw.teardownRecord.update({ where: { id: rec.id }, data: { state: 'TO_PROJECT' } });

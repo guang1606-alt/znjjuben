@@ -883,11 +883,16 @@
         const res = await Api.request('/api/interview/sessions');
         const j = await Api.jsonOrThrow(res);
         if (!ivIsCurrent(owner, epoch)) return;
-        const session = (Array.isArray(j?.sessions) ? j.sessions : []).find(s => s.status === 'ACTIVE');
+        const sessions = Array.isArray(j?.sessions) ? j.sessions : [];
+        // v2.319 ACTIVE 优先（可继续采访）；无 ACTIVE 时恢复最近一个 CONVERTED（已转简报的终态，刷新后可回看/直接生成）
+        const session = sessions.find(s => s.status === 'ACTIVE')
+          || sessions.find(s => s.status === 'CONVERTED')
+          || null;
         ivLoaded = true;
         if (!session) return;
+        const isConverted = session.status === 'CONVERTED';
         ivSessionId = session.id; ivTurn = Number(session.turnCount) || 0; ivReady = !!session.ready;
-        ivGaps = session.gaps; ivMaterials = session.materials;
+        ivGaps = session.gaps; ivMaterials = session.materials; ivClosed = isConverted;
         const transcript = Array.isArray(session.transcript) ? session.transcript : [];
         const box = $('ivTranscript'); box.innerHTML = '';
         transcript.forEach(row => {
@@ -897,8 +902,10 @@
         if (session.question) box.appendChild(ivBubble(session.question, 'xn'));
         box.scrollTop = box.scrollHeight;
         const idea = $('modeBrief');
-        if (selectedMode === 'interview' && idea && !idea.value.trim() && transcript[0]?.a) {
-          idea.value = transcript[0].a; ivIdeaValue = idea.value;
+        if (selectedMode === 'interview' && idea && !idea.value.trim()) {
+          // CONVERTED 回填服务端确定性简报（采访内容已蒸馏进简报）；ACTIVE 沿用首轮创意
+          const restoreText = isConverted ? (typeof session.brief === 'string' ? session.brief : '') : (transcript[0]?.a || '');
+          if (restoreText) { idea.value = restoreText; ivIdeaValue = idea.value; }
         }
       } catch (e) {
         if (ivIsCurrent(owner, epoch)) ivRestoreError = true;
@@ -1024,8 +1031,11 @@
           const res = await Api.request('/api/generate/extract-source', { method: 'POST', body: JSON.stringify({ filename: file.name, dataBase64: b64 }) });
           const j = await Api.jsonOrThrow(res);
           if (!j.text) { setStatus(j.note || (lang === 'en' ? 'No text extracted' : '未提取到文本'), true); return; }
-          const ta = $('modeBrief');
-          ta.value = j.text + (ta.value.trim() ? '\n\n' + ta.value.trim() : '');
+          // v2.319 原文三模式（改编/小说/名场面）提取的正文是「被改编原作」，必须进原文框供 n-gram 版权闸门使用，
+          // 绝不能混进创意 brief（那会把原作原文当成用户自己的创意喂给架构师）；其余模式仍进创意简报框。
+          const isSourceMode = selectedMode === 'adapt' || selectedMode === 'novel' || selectedMode === 'hit_lab';
+          const ta = isSourceMode ? $('sourceText') : $('modeBrief');
+          if (ta) ta.value = j.text + (ta.value.trim() ? '\n\n' + ta.value.trim() : '');
           const ch = j.chapters && j.chapters.length ? (lang === 'en' ? `, ${j.chapters.length} chapters` : `，识别 ${j.chapters.length} 章`) : '';
           setStatus((lang === 'en' ? `Extracted ${j.chars} chars${ch}` : `已提取 ${j.chars} 字${ch}`) + (j.truncated ? (lang === 'en' ? ' (truncated)' : '（已截断）') : ''));
           if (j.note) xnSay(j.note);
@@ -2430,7 +2440,9 @@
       $('scriptFormatSel').value = project.format || 'LIVE_ACTION';
       $('scriptFormatSel').dispatchEvent?.(new Event('change'));
     }
-    if ($('sourceText')) $('sourceText').value = '';
+    // v2.319 承接改编/草稿恢复时回填持久化原文（bible.sourceText；旧草稿兼容 adaptationDraft.sourceText），
+    // 续写生成时版权闸门继续生效；无原文才清空，不能再无条件清空使闸门裸奔
+    if ($('sourceText')) $('sourceText').value = project.bible?.sourceText || draft.sourceText || '';
     syncDraftProject(); closeWorkbench();
     $('modeBrief').focus();
     xnSay(lang === 'en' ? 'Your adaptation brief is ready. Review it, then generate this project.' : '已恢复改编大纲，确认简报后点击「生成剧本」即可继续这个项目。');
@@ -6105,6 +6117,10 @@
       if (!project) {
         const pr = await Api.request('/api/generate/projects', { method: 'POST', body: JSON.stringify({
           title: projTitle, mode: selectedMode, ...(selectedMode === 'hit_lab' ? { track: selectedTrack } : {}), totalEps, engineTier: $('engine').value,
+          // v2.319 tags 模式：选中标签结构化上传（中文原名，服务端消费端按中文精确匹配；不再只依赖纯文本 brief）
+          ...(useTagBench ? { tags: tagChosen.slice(0, TAG_MAX) } : {}),
+          // v2.319 adapt/novel/hit_lab：原文立项即持久化进 bible，刷新续写/草稿恢复版权闸门不中断（与 episodes 同口径）
+          ...sourceTextPayload(),
           format: $('scriptFormatSel') ? $('scriptFormatSel').value : 'LIVE_ACTION', investWan, specialTopic, ...hookPayload(), ...beatPayload(), ...castAssetPayload(), ...propAssetPayload(), ...sceneAssetPayload() }) });
         if (!isPrivateSessionCurrent(account)) return;
         if (!pr.ok) {

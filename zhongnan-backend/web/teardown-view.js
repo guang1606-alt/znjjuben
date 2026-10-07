@@ -44,7 +44,9 @@
   const idemToken = () => `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
   const failMsg = (e, fallback) => (e && e.code === 'AUTH_REQUIRED') ? '' : ((e && (e.message || e.error)) || fallback);
   const needLogin = (e) => { if (e && e.code === 'AUTH_REQUIRED') { window.dispatchEvent(new CustomEvent('zn-auth-required')); return true; } return false; };
-  let state = { recordId: null, report: null, directions: [], picked: [], direction: 'swap_persona', lastOutline: null, restoreTags: null };
+  let state = { recordId: null, report: null, directions: [], picked: [], direction: 'swap_persona', lastOutline: null, restoreTags: null,
+    // v2.319 本次分析用的原作原文（仅活在页面会话内，TeardownRecord 不落库）：承接改编时带进项目 bible.sourceText
+    sourceText: null };
   async function raw(path, body) {
     const res = await window.Api.request(path, body ? { method: 'POST', body: JSON.stringify(body) } : {});
     const data = await res.json().catch(() => ({}));
@@ -102,6 +104,7 @@
       if (!r.ok) { toastErr(r.data.message || r.data.error || T().analyzeFail); return; }
       state.recordId = r.data.recordId; state.report = r.data.report; state.directions = r.data.directions;
       state.direction = 'swap_persona'; state.restoreTags = null; state.lastOutline = null;
+      state.sourceText = text; // v2.319 留存本次分析原文（trim 后），承接改编时随 to-project 持久化进项目
       renderResult();
       toastOk(r.data.staff ? freeDone() : T().done(r.data.points));
     } catch (e) {
@@ -159,9 +162,12 @@
   async function toProject() {
     const restore = btn('tdToProject');
     try {
+      // v2.319 携带本次拆解原文（trim 后 ≥10 字才带，5 万字封顶）：承接项目生成时 n-gram 版权闸门有原文可用
+      const sourceForProject = typeof state.sourceText === 'string' ? state.sourceText.trim().slice(0, 50000) : '';
       const r = await raw(`/api/teardown/${state.recordId}/to-project`, {
         totalEps: Math.max(1, Math.min(300, parseInt($('episodes')?.value, 10) || 20)),
         engineTier: $('engine')?.value || 'STANDARD', format: $('scriptFormatSel')?.value || 'LIVE_ACTION',
+        ...(sourceForProject.length >= 10 ? { sourceText: sourceForProject } : {}),
       });
       if (!r.ok) {
         if (r.data.error === 'REACH_PROJECT_LIMIT') { toastErr(r.data.message || T().projLimit); return; }
@@ -209,6 +215,8 @@
       state.recordId = rec.id; state.report = rec.report; state.directions = rec.directions || [];
       state.restoreTags = rec.pickedTags || []; state.direction = rec.direction || 'swap_persona';
       state.lastOutline = rec.outline || null;
+      // v2.319 历史记录不存原文（零 schema 迁移）：恢复后不回填源文，避免把旧原文当本次输入误传
+      state.sourceText = null;
       renderResult();
       if (state.lastOutline) renderOutline(state.lastOutline);
       $('tdHistoryBox').classList.add('hidden');
