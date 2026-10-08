@@ -230,9 +230,12 @@ export function createInterviewRouter(prisma: PrismaLike) {
     const brief = buildBrief(m, lang);
     // 就绪时归档：会话转入 CONVERTED，防重复消费；未就绪也允许拿简报（由用户自行决定是否直接生成）
     // v2.311：条件原子写防 TOCTOU——并发 close 已落库时不再覆盖回 CONVERTED（count=0 即并发改变，静默跳过）
+    // v2.320：CLOSED 状态（用户已结束采访但未生成简报）生成简报且就绪时也应转 CONVERTED。
+    // where 条件跟随读到的快照状态：快照 ACTIVE 只更 ACTIVE 行（close 已改成 CLOSED 则 count=0 不覆盖，保 TOCTOU）；
+    // 快照 CLOSED 只更 CLOSED 行（用户在 CLOSED 态主动点生成简报，正常转 CONVERTED）。
     let newStatus = s.status;
-    if (ready && s.status === 'ACTIVE') {
-      const r = await prisma.interviewSession.updateMany({ where: { id: s.id, status: 'ACTIVE' }, data: { status: 'CONVERTED' } }).catch(() => ({ count: 0 }));
+    if (ready && (s.status === 'ACTIVE' || s.status === 'CLOSED')) {
+      const r = await prisma.interviewSession.updateMany({ where: { id: s.id, status: s.status }, data: { status: 'CONVERTED' } }).catch(() => ({ count: 0 }));
       if (r.count > 0) newStatus = 'CONVERTED';
     }
     res.json({ ok: true, brief, ready, gaps: gapReport(m, lang), turnCount: s.turnCount, status: newStatus });

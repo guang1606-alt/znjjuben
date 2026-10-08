@@ -196,6 +196,22 @@ describe('采访式创作·HTTP 闭环', { concurrency: 1 }, () => {
     const one = await get(`/api/interview/sessions/${oj.sessionId}`, 'other');
     assert.strictEqual((await one.json()).session.status, 'CLOSED');
   });
+  // v2.320 CLOSED 状态（用户已结束采访但未生成简报）下点生成简报，就绪应转 CONVERTED，
+  // 否则用户刷新后按 CLOSED 恢复、可反复生成简报，无法进入终态。
+  it('v2.320 CLOSED 会话生成简报且就绪时转 CONVERTED', async () => {
+    const o = await post('/api/interview/sessions', { idea: '被辞退的女厨师想夺回自己的餐厅，前合伙人处处阻挠打压她' }, 'other');
+    const oj = await o.json();
+    await post(`/api/interview/sessions/${oj.sessionId}/turn`, { text: '她决定用旧账本证明前合伙人违规操作，但对手处处阻挠打压她' }, 'other');
+    await post(`/api/interview/sessions/${oj.sessionId}/close`, {}, 'other');
+    const before = await (await get(`/api/interview/sessions/${oj.sessionId}`, 'other')).json();
+    assert.strictEqual(before.session.status, 'CLOSED');
+    const r = await post(`/api/interview/sessions/${oj.sessionId}/brief`, {}, 'other');
+    assert.strictEqual(r.status, 200);
+    const j = await r.json();
+    assert.strictEqual(j.status, 'CONVERTED', 'CLOSED 就绪态生成简报应转 CONVERTED');
+    const after = await (await get(`/api/interview/sessions/${oj.sessionId}`, 'other')).json();
+    assert.strictEqual(after.session.status, 'CONVERTED');
+  });
 });
 
 describe('采访式创作·内部账户免费（串行）', { concurrency: 1 }, () => {

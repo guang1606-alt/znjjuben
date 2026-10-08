@@ -285,3 +285,31 @@ test('restoring a converted session then starting a new interview overwrites the
   assert.equal(h.$('modeBrief').value, '刷新后想写一个全新的古装复仇故事',
     'CONVERTED 回填的简报在开新采访时必须被新创意覆盖');
 });
+
+// v2.320 下游闭环：用户采访结束（CLOSED）但未生成简报时，刷新页面不应丢失采访记录——
+// 旧逻辑 ivRestoreSession 只恢复 ACTIVE/CONVERTED，CLOSED 被当空会话丢弃，用户只能重新采访。
+// 修复：CLOSED 会话也应恢复（回看 transcript、禁回答），但保留生成简报入口（补转 CONVERTED）。
+test('v2.320 a CLOSED session is restorable after refresh: transcript visible, answers blocked, brief button available', async () => {
+  const h = setup(async () => ({ sessions: [saved({ status: 'CLOSED', ready: true })] }));
+  await h.c.initInterviewPanel();
+  assert.deepEqual(h.bubbles(), ['女记者寻找失踪姐姐', '她会失去什么？', '她会失去唯一的线索', '她决定如何反击？'],
+    'CLOSED 采访记录应可回看，不应被丢弃');
+  assert.equal(h.$('ivAnswer').disabled, true, 'CLOSED 禁止继续回答');
+  assert.equal(h.$('ivSendBtn').disabled, true);
+  assert.equal(h.$('ivBriefBtn').classList.contains('hidden'), false, 'CLOSED 应允许生成简报（补转 CONVERTED）');
+  assert.equal(h.$('ivStopBtn').classList.contains('hidden'), true, 'CLOSED 不再显示结束按钮');
+  assert.match(h.$('ivStatus').textContent, /采访已完成|已结束/);
+});
+
+// v2.320 CLOSED 状态下点生成简报：简报回填主框，会话进入终态（不再显示生成按钮）。
+test('v2.320 a CLOSED session can still generate a brief and enter terminal state', async () => {
+  const h = setup(async (url, opts) => url.endsWith('/brief')
+    ? { brief: 'CLOSED 后补生成的简报', status: 'CONVERTED', ready: true }
+    : { sessions: [saved({ status: 'CLOSED', ready: true })] });
+  await h.c.initInterviewPanel();
+  assert.equal(h.$('ivBriefBtn').classList.contains('hidden'), false);
+  await h.c.ivBrief();
+  assert.equal(h.$('modeBrief').value, 'CLOSED 后补生成的简报');
+  assert.equal(h.$('ivBriefBtn').classList.contains('hidden'), true, '生成简报后进入终态，不再显示生成按钮');
+  assert.equal(h.$('ivAnswer').disabled, true);
+});

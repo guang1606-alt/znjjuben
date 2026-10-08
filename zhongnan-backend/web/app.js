@@ -769,7 +769,7 @@
   let briefUploadInited = false;
   /* ---------- v2.92 采访式创作会话：一轮一问 + 四维记忆空间，就绪后产出结构化简报回填 ---------- */
   let ivInited = false, ivSessionId = null, ivTurn = 0, ivReady = false;
-  let ivOwner = null, ivEpoch = 0, ivLoaded = false, ivLoading = null, ivBusy = false, ivClosed = false;
+  let ivOwner = null, ivEpoch = 0, ivLoaded = false, ivLoading = null, ivBusy = false, ivClosed = false, ivConverted = false;
   let ivGaps = null, ivMaterials = null, ivIdeaValue = '', ivRestoreError = false;
   // v2.319 下游闭环：ivBrief / 刷新恢复 CONVERTED 时，简报会被回填进主创意框供「生成剧本」直接使用。
   // 若用户不开新采访直接生成，主框就是简报（正常）；但若用户在采访框写新创意并开新采访，必须用新创意
@@ -845,7 +845,8 @@
     $('ivBriefBtn').textContent = T.briefBtn;
     $('ivAnswer').placeholder = ivSessionId ? T.answer : T.answerIdea;
     $('ivStartBtn').classList.remove('hidden');
-    $('ivBriefBtn').classList.toggle('hidden', !ivSessionId || !ivReady || ivClosed);
+    // v2.320 CLOSED 也显示生成简报按钮（补转 CONVERTED）；仅 CONVERTED 终态隐藏
+    $('ivBriefBtn').classList.toggle('hidden', !ivSessionId || !ivReady || ivConverted);
     $('ivStopBtn').textContent = T.ivStop; // v2.233 会话关闭入口
     $('ivStopBtn').classList.toggle('hidden', !ivSessionId || ivClosed);
     $('ivStartBtn').disabled = ivBusy;
@@ -862,7 +863,7 @@
     if (owner !== ivOwner) {
       // 登录态改变时废弃旧请求，不能让上一账号的迟到响应重新填入面板。
       ivEpoch++; ivOwner = owner;
-      ivSessionId = null; ivTurn = 0; ivReady = false; ivClosed = false;
+      ivSessionId = null; ivTurn = 0; ivReady = false; ivClosed = false; ivConverted = false;
       ivLoaded = false; ivLoading = null; ivBusy = false; ivRestoreError = false;
       ivGaps = null; ivMaterials = null;
       $('ivTranscript').innerHTML = ''; $('ivAnswer').value = '';
@@ -889,14 +890,20 @@
         if (!ivIsCurrent(owner, epoch)) return;
         const sessions = Array.isArray(j?.sessions) ? j.sessions : [];
         // v2.319 ACTIVE 优先（可继续采访）；无 ACTIVE 时恢复最近一个 CONVERTED（已转简报的终态，刷新后可回看/直接生成）
+        // v2.320 再兜底 CLOSED：用户结束采访但未生成简报时，刷新不应丢弃采访记录——CLOSED 可回看 + 补生成简报
         const session = sessions.find(s => s.status === 'ACTIVE')
           || sessions.find(s => s.status === 'CONVERTED')
+          || sessions.find(s => s.status === 'CLOSED')
           || null;
         ivLoaded = true;
         if (!session) return;
         const isConverted = session.status === 'CONVERTED';
+        const isClosed = session.status === 'CLOSED';
         ivSessionId = session.id; ivTurn = Number(session.turnCount) || 0; ivReady = !!session.ready;
-        ivGaps = session.gaps; ivMaterials = session.materials; ivClosed = isConverted;
+        ivGaps = session.gaps; ivMaterials = session.materials;
+        // CLOSED 与 CONVERTED 都禁言（不可继续回答），但只有 CONVERTED 是终态（不可再生成简报）
+        ivClosed = isConverted || isClosed;
+        ivConverted = isConverted;
         const transcript = Array.isArray(session.transcript) ? session.transcript : [];
         const box = $('ivTranscript'); box.innerHTML = '';
         transcript.forEach(row => {
@@ -926,7 +933,7 @@
     ivBusy = true; ivRenderStatus();
     try {
       await Api.request(`/api/interview/sessions/${ivSessionId}/close`, { method: 'POST' });
-      ivClosed = true;
+      ivClosed = true; ivConverted = false; // CLOSED 非终态：禁回答，但保留生成简报入口（补转 CONVERTED）
     } catch (e) {
       xnSay((e && e.message) || (lang === 'en' ? 'Failed to end the session, try again later.' : '结束失败，请稍后重试'));
     }
@@ -982,7 +989,7 @@
       if (!ivIsCurrent(owner, epoch)) return;
       ivSessionId = j.sessionId; ivTurn = j.turnCount || 1; ivReady = !!j.ready;
       ivGaps = j.gaps; ivMaterials = j.materials; ivIdeaValue = idea;
-      ivLoaded = true; ivClosed = false; ivRestoreError = false;
+      ivLoaded = true; ivClosed = false; ivConverted = false; ivRestoreError = false;
       const box = $('ivTranscript'); box.innerHTML = '';
       box.appendChild(ivBubble(idea, 'me'));
       if (j.question) box.appendChild(ivBubble(j.question, 'xn'));
@@ -1017,7 +1024,7 @@
   }
   async function ivBrief() {
     const owner = ivSyncOwner();
-    if (!ivSessionId || ivBusy || ivClosed || !ivReady) return;
+    if (!ivSessionId || ivBusy || ivConverted || !ivReady) return;
     const epoch = ivEpoch;
     ivBusy = true; ivRenderStatus();
     try {
@@ -1027,7 +1034,7 @@
       const ta = $('modeBrief');
       if (ta) { ta.value = j.brief; ivIdeaValue = ta.value; ta.focus(); }
       ivBriefFilledMain = true; // 主框是采访回填的简报：直接生成即用，开新采访则被新创意覆盖
-      ivClosed = true;
+      ivClosed = true; ivConverted = true;
       xnSay(ivT().briefDone);
     } catch (e) { if (ivIsCurrent(owner, epoch)) xnSay(e.message || 'FAIL'); }
     finally { if (ivIsCurrent(owner, epoch)) { ivBusy = false; ivRenderStatus(); } }
