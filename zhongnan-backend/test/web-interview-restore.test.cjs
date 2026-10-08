@@ -255,3 +255,33 @@ test('finishing a brief allows another interview and resets closed controls', as
   assert.equal(h.$('ivSendBtn').disabled, false);
   assert.deepEqual(h.bubbles(), ['第二个全新故事', '全新采访问题']);
 });
+
+// v2.319 下游闭环：ivBrief 把简报回填进主创意框后，若用户不开新采访直接生成，主框就是简报（正常）；
+// 但若用户在采访框写新创意并点「开始新采访」，主框必须被新创意覆盖——否则 ivCollectIdea 优先读主框，
+// 新创意根本采集不到，生成剧本会沿用上一轮简报（张冠李戴）。
+test('after a brief is filled, starting a new interview overwrites the main brief box with the new idea', async () => {
+  const h = setup(async (url, opts) => url.endsWith('/brief') ? { brief: '上一轮采访的结构化简报' }
+    : opts.method === 'POST' ? { ...saved({ ready: false }), sessionId: 'new-session', question: '新采访的问题' } : { sessions: [saved()] });
+  await h.c.initInterviewPanel();
+  await h.c.ivBrief();
+  assert.equal(h.$('modeBrief').value, '上一轮采访的结构化简报', 'ivBrief 应回填简报到主框');
+  // 用户不生成，改在采访框写新创意并开新采访
+  h.$('ivAnswer').value = '这一次想写一个关于快递员的都市逆袭故事';
+  await h.c.ivStart();
+  assert.equal(h.$('modeBrief').value, '这一次想写一个关于快递员的都市逆袭故事',
+    '开新采访时主框必须被新创意覆盖，不能残留上一轮简报');
+  assert.deepEqual(h.bubbles(), ['这一次想写一个关于快递员的都市逆袭故事', '新采访的问题']);
+});
+
+// 同口径：刷新页面恢复 CONVERTED 会话（简报回填主框）后开新采访，主框同样须被新创意覆盖。
+test('restoring a converted session then starting a new interview overwrites the filled brief', async () => {
+  const h = setup(async (url, opts) => opts.method === 'POST'
+    ? { ...saved({ ready: false }), sessionId: 'new-session', question: '刷新后新采访的问题' }
+    : { sessions: [saved({ status: 'CONVERTED', ready: true, brief: '刷新恢复的采访简报' })] });
+  await h.c.initInterviewPanel();
+  assert.equal(h.$('modeBrief').value, '刷新恢复的采访简报', 'CONVERTED 回填简报');
+  h.$('ivAnswer').value = '刷新后想写一个全新的古装复仇故事';
+  await h.c.ivStart();
+  assert.equal(h.$('modeBrief').value, '刷新后想写一个全新的古装复仇故事',
+    'CONVERTED 回填的简报在开新采访时必须被新创意覆盖');
+});

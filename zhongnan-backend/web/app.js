@@ -771,6 +771,10 @@
   let ivInited = false, ivSessionId = null, ivTurn = 0, ivReady = false;
   let ivOwner = null, ivEpoch = 0, ivLoaded = false, ivLoading = null, ivBusy = false, ivClosed = false;
   let ivGaps = null, ivMaterials = null, ivIdeaValue = '', ivRestoreError = false;
+  // v2.319 下游闭环：ivBrief / 刷新恢复 CONVERTED 时，简报会被回填进主创意框供「生成剧本」直接使用。
+  // 若用户不开新采访直接生成，主框就是简报（正常）；但若用户在采访框写新创意并开新采访，必须用新创意
+  // 覆盖主框——否则 ivCollectIdea 优先读主框，新创意根本采集不到，生成会沿用上一轮简报（张冠李戴）。
+  let ivBriefFilledMain = false;
   function ivT() {
     return lang === 'en' ? {
       heading: 'Interview Mode · Xiaonan asks, you answer',
@@ -905,7 +909,7 @@
         if (selectedMode === 'interview' && idea && !idea.value.trim()) {
           // CONVERTED 回填服务端确定性简报（采访内容已蒸馏进简报）；ACTIVE 沿用首轮创意
           const restoreText = isConverted ? (typeof session.brief === 'string' ? session.brief : '') : (transcript[0]?.a || '');
-          if (restoreText) { idea.value = restoreText; ivIdeaValue = idea.value; }
+          if (restoreText) { idea.value = restoreText; ivIdeaValue = idea.value; if (isConverted) ivBriefFilledMain = true; }
         }
       } catch (e) {
         if (ivIsCurrent(owner, epoch)) ivRestoreError = true;
@@ -936,6 +940,8 @@
       $('ivBriefBtn').onclick = ivBrief;
       $('ivStopBtn').onclick = ivClose;
       $('ivAnswer').addEventListener('keydown', (e) => { if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); ivReply(); } });
+      // v2.319 用户手动编辑主创意框，说明不再认「采访回填的简报」，开新采访时不应被自动清空
+      const _mb = $('modeBrief'); if (_mb) _mb.addEventListener('input', () => { ivBriefFilledMain = false; });
       window.addEventListener('storage', (e) => { if (!e.key || e.key === 'zn_user' || e.key === 'zn_token') initInterviewPanel(); });
     }
     const pending = ivRestoreSession();
@@ -956,6 +962,14 @@
     const owner = ivSyncOwner();
     if (!owner) { xnSay(t('needLogin')); openAuth('login'); return; }
     if (ivBusy) return;
+    // v2.319 若主框里仍是上一轮采访回填的简报（未被用户手动编辑），开新采访前清空——
+    // 让 ivCollectIdea 从采访框取新创意，随后 ivSyncIdeaToMain 写回主框；
+    // 用户若手动改过主框（值已异于回填简报），则保留用户输入，不清空。
+    if (ivBriefFilledMain) {
+      const mb = $('modeBrief');
+      if (mb && mb.value === ivIdeaValue) mb.value = '';
+      ivBriefFilledMain = false;
+    }
     const T = ivT();
     const idea = ivCollectIdea();
     if (idea.length < 4) { xnSay(T.needIdea); $('ivAnswer')?.focus(); return; }
@@ -1012,6 +1026,7 @@
       if (!ivIsCurrent(owner, epoch)) return;
       const ta = $('modeBrief');
       if (ta) { ta.value = j.brief; ivIdeaValue = ta.value; ta.focus(); }
+      ivBriefFilledMain = true; // 主框是采访回填的简报：直接生成即用，开新采访则被新创意覆盖
       ivClosed = true;
       xnSay(ivT().briefDone);
     } catch (e) { if (ivIsCurrent(owner, epoch)) xnSay(e.message || 'FAIL'); }
