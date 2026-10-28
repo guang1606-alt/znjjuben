@@ -362,6 +362,27 @@ export function isLegacyMode(raw: string | null | undefined): boolean {
   return !!raw && !!LEGACY_MODE_MAP[String(raw).trim().toLowerCase()];
 }
 
+/**
+ * 成品形态 → 方法论 key（v2.331）。
+ * v2.329 把「互动剧/短视频/软广/电影/长系列」从模式下沉为剧本类型后，新路径（8 模式 + 类型）
+ * 不再经过 LEGACY_CRAFT_KEY，必须按类型补回该形态的方法论，否则「tag + 互动剧」拿不到
+ * 真选择/分支闭环、「spark + 广告脚本」拿不到 3 秒钩子/每镜口播/CTA。
+ * 只登记确实有专属方法论的形态：电视剧/AIGC/真人短剧共用模式方法论，不在此重复。
+ */
+const SCRIPT_TYPE_CRAFT_KEY: Partial<Record<ScriptTypeId, string>> = {
+  short_video: 'video_short',
+  ad_script: 'video_short', // 广告/软广共用短视频条目里的「剧情软广子轨道」
+  promo_script: 'video_short',
+  interactive_drama: 'interactive',
+  feature_film: 'film',
+  long_series: 'long_ip',
+};
+
+export function scriptTypeCraftKeyOf(scriptType: string | null | undefined): string | undefined {
+  const canon = canonicalScriptTypeId(scriptType);
+  return canon ? SCRIPT_TYPE_CRAFT_KEY[canon] : undefined;
+}
+
 /* ------------------------------------------------------------------ *
  * 六、会员闸门
  * ------------------------------------------------------------------ */

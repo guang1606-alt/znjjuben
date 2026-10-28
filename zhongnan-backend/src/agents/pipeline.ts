@@ -38,7 +38,7 @@ import {
 import { auditNarrativeCoherence, episodeCoherenceNote, alignBeatsToHooks } from '../engine/narrative-orchestrator';
 import { buildCraftStackDirective } from '../engine/craft-registry';
 import { buildHitLabDirective, buildLongIpDirective, buildModeCraftDirective, buildMethodTraceDirective, buildFilmActDirective, buildPurposeGateDirective, buildRangeLensDirective } from '../engine/mode-craft';
-import { canonicalModeId, craftKeyOf, canonicalSparkTrack, isSourceTextMode, OUTPUT_LANGUAGES, type ScriptTypeId, type LanguageCode } from '../config/modes'; // v2.327 历史 raw 模式归一；v2.329 8 模式×剧本类型×输出语言三维
+import { canonicalModeId, craftKeyOf, canonicalSparkTrack, isSourceTextMode, scriptTypeCraftKeyOf, OUTPUT_LANGUAGES, type ScriptTypeId, type LanguageCode } from '../config/modes'; // v2.327 历史 raw 模式归一；v2.329 8 模式×剧本类型×输出语言三维；v2.331 类型补位方法论
 import { buildBrandDirective, type BrandBriefInput } from '../engine/brand-brief';
 import { buildTrendDirective, type TrendBriefInput, type TrendRiskReport } from '../engine/trend-brief';
 import { buildBranchDirective, type BranchBriefInput } from '../engine/branch-brief';
@@ -325,6 +325,26 @@ export function buildEpisodeHookDirective(ep: EpisodePlan, lang: 'zh' | 'en' = '
     ? 'Hooks must serve plot and character and grow naturally; never paste labels or hook for hook’s sake; never place the same hook type back-to-back — alternate tension and release.'
     : '钩子要服务剧情与人物、自然生长，禁止生硬贴标签或为钩而钩；同类钩子不紧邻连用，张弛有度留呼吸');
   return lines.join('\n');
+}
+
+/**
+ * v2.331 成品形态方法论补位（纯函数·零 IO）。
+ * v2.329 把互动剧/短视频/软广/电影/长系列从「模式」下沉为「剧本类型」后，新路径（8 模式 + 类型）
+ * 不再经过 LEGACY_CRAFT_KEY：tag + 互动剧拿不到真选择/分支闭环，spark + 广告脚本拿不到 3 秒钩子/每镜口播/CTA。
+ * 此处按类型补回该形态的方法论；与模式方法论叠加而非替换，且同 key 不重复注入。
+ */
+export function buildTypeCraftDirective(
+  scriptType: string | undefined,
+  craftModeKey: string,
+  episodeIndex: number,
+  episodeCount: number,
+  lang: 'zh' | 'en',
+): string {
+  const key = scriptTypeCraftKeyOf(scriptType);
+  if (!key || key === craftModeKey) return '';
+  if (key === 'film') return buildFilmActDirective(key, episodeIndex, episodeCount, lang);
+  if (key === 'long_ip') return buildLongIpDirective(key, lang);
+  return buildModeCraftDirective(key, lang);
 }
 
 export interface Bible {
@@ -725,7 +745,9 @@ export async function runEpisode(
   // v2.83 其余模式方法论（采访/日记/灵感/标签/热点/角色自述/双人对撞/世界线推演），与上面两个专属指令互斥
   // v2.87 电影模式三幕片段定位：按 episodeIndex/episodeCount 推导幕次与幕内段落，兑现 film 指令的标注承诺
   const filmActDirective = buildFilmActDirective(craftModeKey, episodeIndex, episodeCount, hookLang);
-  const modeCraftDirective = (((!hitLabDirective && !longIpDirective) ? buildModeCraftDirective(options.mode ?? canonMode, hookLang, options.modeTrack) : '') + filmActDirective).trim();
+  // v2.331 成品形态补位：类型为互动剧/短视频/软广/电影/长系列时，补回该形态专属方法论（与模式方法论叠加）
+  const typeCraftDirective = buildTypeCraftDirective(options.scriptType, craftModeKey, episodeIndex, episodeCount, hookLang);
+  const modeCraftDirective = (((!hitLabDirective && !longIpDirective) ? buildModeCraftDirective(options.mode ?? canonMode, hookLang, options.modeTrack) : '') + filmActDirective + typeCraftDirective).trim();
   // v2.326 Method Trace：成稿末尾显式输出"本集创作方法论"清单（对应视频"深度维度"——AI 不只给结果，还要把用了什么方法显式化）
   const depthTier = options.depthTier ?? 'balanced';
   const methodTraceDirective = buildMethodTraceDirective(options.mode ?? canonMode, hookLang, depthTier, options.modeTrack);
