@@ -208,6 +208,11 @@
           </aside>
         </div>
         <details style="margin-top:8px">
+          <summary class="muted" style="cursor:pointer" data-i="tbBrClues">线索链（选填 · 与节点联合校验）</summary>
+          <textarea id="brCluesG" rows="4" style="width:100%;font-family:monospace;font-size:12.5px;margin-top:6px" placeholder="锈钥匙 | 真 | 老管家在杂物间递出 | 选择点3,支线B | 隐藏结局1 | | | 隐藏结局1"></textarea>
+          <div class="muted" style="font-size:12px;margin-top:4px" data-i="tbBrCluesTip">每行一条：名称 | 真假 | 来源 | 可得处 | 可解锁的门控或结局 | 前置线索 | 拆穿点 | 必需此线索的结局。校验会核对：可得处是否真的在图里、是否从起点可达、声明必需的结局能否绕过该线索。</div>
+        </details>
+        <details style="margin-top:8px">
           <summary class="muted" style="cursor:pointer" data-i="tbBrJson">JSON 视图（可粘贴导入 / 复制导出）</summary>
           <textarea id="brGraph" rows="7" style="width:100%;font-family:monospace;font-size:12.5px;margin-top:6px" placeholder='{"start":"start","nodes":{...}}'></textarea>
           <div style="margin-top:4px">

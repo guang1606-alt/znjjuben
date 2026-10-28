@@ -9,7 +9,8 @@ import {
   CHARACTER_DEPTH_CARDS, NARRATIVE_DEVICE_CARDS, RELATIONSHIP_CARDS, GENRE_TOOLKIT_CARDS,
 } from '../engine/narrative-craft';
 import { pickDiverseSeeds, diversityAudit, type VersionInput } from '../engine/multi-version';
-import { validateBranches, buildBranchSkeleton, applyMutator, autoLayout, type BranchGraph, type MutateOp } from '../engine/interactive-branch';
+import { validateBranches, buildBranchSkeleton, applyMutator, autoLayout, validateClueGraph, type BranchGraph, type MutateOp } from '../engine/interactive-branch';
+import { normalizeClues, BranchBriefError, type ClueSpec } from '../engine/branch-brief';
 
 const CARD_GROUPS = [
   { key: 'character', name: '人物内驱·缺陷·弧光', cards: CHARACTER_DEPTH_CARDS },
@@ -21,6 +22,15 @@ const CARD_GROUPS = [
 export function createCraftRouter() {
   const r = asyncRouter();
   const asStrArr = (v: unknown): string[] => (Array.isArray(v) ? v.map((x) => String(x)).filter(Boolean) : []);
+  // v2.334 线索 × 分支图联合校验：clues 选填，非法线索规格按 400 拒绝（不静默丢）
+  const parseClues = (raw: unknown, lang: 'zh' | 'en'): ClueSpec[] | { error: string; field: string } => {
+    if (raw === undefined || raw === null) return [];
+    try { return normalizeClues(raw); }
+    catch (e) {
+      const err = e as BranchBriefError;
+      return { error: err.message || (lang === 'en' ? 'Invalid clue spec' : '线索规格不合法'), field: 'clues' };
+    }
+  };
 
   // 全量工艺分类浏览：10类钩子 + 4组方法卡（标题/公式层，点开才看步骤，避免信息过载）
   r.get('/taxonomy', (_req, res) => {
@@ -81,7 +91,9 @@ export function createCraftRouter() {
     }
     if (!g.nodes[g.start]) return res.status(400).json({ error: lang === 'en' ? 'Start node is missing from nodes' : '起点 start 在 nodes 中不存在' });
     if (Object.keys(g.nodes).length > 400) return res.status(400).json({ error: lang === 'en' ? 'At most 400 nodes per graph' : '单图节点不能超过 400 个' });
-    res.json({ graph: g, report: validateBranches(g, lang), layout: autoLayout(g) });
+    const clues = parseClues(req.body?.clues, lang);
+    if (!Array.isArray(clues)) return res.status(400).json(clues);
+    res.json({ graph: g, report: validateBranches(g, lang), layout: autoLayout(g), clueIssues: validateClueGraph(clues, g, lang) });
   });
   // 互动短剧：可视化编辑器单次结构增删改（纯函数、自动维护边一致性），返回新图+校验+布局
   r.post('/branch-mutate', (req, res) => {
@@ -90,9 +102,11 @@ export function createCraftRouter() {
     const op = req.body?.op as MutateOp | undefined;
     if (!g || typeof g.start !== 'string' || !g.nodes || typeof g.nodes !== 'object') return res.status(400).json({ error: lang === 'en' ? 'Provide a valid branch graph' : '请提供合法分支图' });
     if (!op || typeof op.op !== 'string') return res.status(400).json({ error: lang === 'en' ? 'Missing edit op' : '缺少编辑操作 op' });
+    const clues = parseClues(req.body?.clues, lang);
+    if (!Array.isArray(clues)) return res.status(400).json(clues);
     try {
       const graph = applyMutator(g, op, lang);
-      res.json({ graph, report: validateBranches(graph, lang), layout: autoLayout(graph) });
+      res.json({ graph, report: validateBranches(graph, lang), layout: autoLayout(graph), clueIssues: validateClueGraph(clues, graph, lang) });
     } catch (e) {
       res.status(400).json({ error: (e as Error).message });
     }

@@ -788,6 +788,8 @@
       requires: list(cols[5]), exposeAt: cols[6] || '', requiredFor: list(cols[7]),
     };
   }
+  // v2.334：分支可视化编辑器复用同一条解析口径，避免两处文本格式漂移
+  window.znParseClueLine = parseClueLine;
   function branchBriefPayload() {
     if (!isInteractiveType(selectedScriptType) || !$('brMain')) return {};
     const v = (id) => String($(id)?.value || '').trim();

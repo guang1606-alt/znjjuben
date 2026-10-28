@@ -8,6 +8,7 @@
  *  - 死循环：某条非结局路径永远到不了任何结局
  *  - 多结局：主线/隐藏/坏结局齐全度统计与建议
  */
+import type { ClueSpec } from './branch-brief';
 
 export type NodeType = 'scene' | 'choice' | 'ending';
 export type EndingType = 'main' | 'hidden' | 'bad';
@@ -342,4 +343,130 @@ export function autoLayout(g: BranchGraph, opts: { colWidth?: number; rowHeight?
     col.forEach((id, i) => { pos[id] = { x: 40 + d * colWidth, y: 40 + i * rowHeight, depth: d === 99 ? -1 : d }; });
   });
   return pos;
+}
+
+/* ------------------------------------------------------------------ *
+ * v2.334 线索 × 节点联合可达性（线索声明必须真的落在分支图上）
+ * v2.333 的线索校验只看线索之间的字符串关系，不知道分支图长什么样：
+ *   · 声明「可得于 选择点3」，图上却没有这个节点（或它不可达）→ 玩家永远拿不到；
+ *   · 声明某结局必需某线索，图上却存在绕过该线索的路径 → 结局逻辑不自洽；
+ *   · 假线索的拆穿点落在不可达节点 → 玩家永远看不到揭晓。
+ * 规则：high = 可得点不存在 / 可得点不可达 / 结局可绕过；mid = 可解锁目标不认识 / 拆穿点不可达。
+ * 约束：纯函数、零 IO、零模型调用；只做 id/标签/结局类型三层名称解析，不做语义猜测。
+ * ------------------------------------------------------------------ */
+export type ClueGraphIssueType =
+  | 'clue_gain_unknown' | 'clue_gain_unreachable' | 'clue_ending_bypass'
+  | 'clue_opens_unknown' | 'clue_expose_unreachable';
+
+export interface ClueGraphIssue {
+  severity: 'high' | 'mid';
+  type: ClueGraphIssueType;
+  clue: string;
+  evidence: string;
+  advice: string;
+}
+
+const key = (s: string) => String(s || '').trim().toLowerCase().replace(/\s+/g, ' ');
+const ENDING_ALIAS: Record<string, EndingType> = {
+  main: 'main', 'main ending': 'main', '主线': 'main', '主线结局': 'main',
+  hidden: 'hidden', 'hidden ending': 'hidden', '隐藏': 'hidden', '隐藏结局': 'hidden',
+  bad: 'bad', 'bad ending': 'bad', '坏': 'bad', '坏结局': 'bad',
+};
+
+function resolveNodes(g: BranchGraph, entry: string): string[] {
+  const k = key(entry);
+  if (!k) return [];
+  return Object.keys(g.nodes).filter((id) => g.nodes[id] && (key(id) === k || key(g.nodes[id].label || '') === k));
+}
+
+function resolveEndings(g: BranchGraph, entry: string): string[] {
+  const k = key(entry);
+  if (!k) return [];
+  const alias = ENDING_ALIAS[k];
+  return Object.keys(g.nodes).filter((id) => {
+    const n = g.nodes[id];
+    if (!n || n.type !== 'ending') return false;
+    if (key(id) === k || key(n.label || '') === k) return true;
+    return !!alias && (n.endingType || 'main') === alias;
+  });
+}
+
+function reachSkipping(g: BranchGraph, blocked: Set<string>): Set<string> {
+  const seen = new Set<string>();
+  const q: string[] = [];
+  if (!blocked.has(g.start) && g.nodes[g.start]) { seen.add(g.start); q.push(g.start); }
+  while (q.length) {
+    const id = q.shift()!;
+    for (const t of g.nodes[id]?.to || []) {
+      if (blocked.has(t) || seen.has(t) || !g.nodes[t]) continue;
+      seen.add(t); q.push(t);
+    }
+  }
+  return seen;
+}
+
+export function validateClueGraph(clues: ClueSpec[], g: BranchGraph, lang: BranchLang = 'zh'): ClueGraphIssue[] {
+  const issues: ClueGraphIssue[] = [];
+  const ids = Object.keys(g?.nodes || {});
+  if (!clues?.length || !ids.length || !g.nodes[g.start]) return issues;
+  const en = lang === 'en';
+  const adj: Record<string, string[]> = {};
+  ids.forEach((id) => { adj[id] = g.nodes[id].to || []; });
+  const reachable = bfs(g.start, adj);
+  const push = (severity: 'high' | 'mid', type: ClueGraphIssueType, clue: string, evidence: string, advice: string) => {
+    if (issues.length < 60) issues.push({ severity, type, clue, evidence, advice });
+  };
+
+  for (const c of clues) {
+    const gainNodes = [...new Set(c.gainAt.flatMap((e) => resolveNodes(g, e)))];
+    if (c.gainAt.length && !gainNodes.length) {
+      push('high', 'clue_gain_unknown', c.id,
+        en ? `Clue "${c.id}" says it is obtained at "${c.gainAt[0]}", but no node with that id or label exists in the branch graph`
+           : `线索「${c.id}」声明可得于「${c.gainAt[0]}」，但分支图里没有这个节点`,
+        en ? 'Use the node id or label that really exists, or create that choice point / route'
+           : '改成图上真实存在的节点 id 或标签，或补建该选择点/支线');
+    } else if (gainNodes.length && !gainNodes.some((n) => reachable.has(n))) {
+      push('high', 'clue_gain_unreachable', c.id,
+        en ? `Clue "${c.id}" can only be obtained at ${gainNodes.join(' / ')}, none of which is reachable from the start`
+           : `线索「${c.id}」只能从「${gainNodes.join(' / ')}」拿到，但这些节点从起点都不通`,
+        en ? 'Connect the route holding this clue into the main branch, or move the clue to a reachable node'
+           : '把承载该线索的支线接进主分支，或把线索挪到可达的节点上');
+    }
+    // 结局绕过：图上存在不经过任何可得处就抵达该结局的路径 → 「必需」声明与结构矛盾
+    if (gainNodes.length && !gainNodes.includes(g.start)) {
+      const seen = reachSkipping(g, new Set(gainNodes));
+      for (const entry of c.requiredFor) {
+        const ends = resolveEndings(g, entry);
+        if (!ends.length) continue;
+        const bypass = ends.find((e) => seen.has(e));
+        if (bypass) {
+          push('high', 'clue_ending_bypass', c.id,
+            en ? `Clue "${c.id}" is declared required for "${entry}", but the ending "${bypass}" is reachable without ever obtaining it`
+               : `线索「${c.id}」声明为「${entry}」的必需线索，但结局「${bypass}」存在不拿到它就抵达的路径`,
+            en ? 'Gate that ending behind the clue (a choice that requires it), or drop the required-for claim'
+               : '在该结局前加一道以该线索为条件的门控，或去掉「必需」声明');
+          break;
+        }
+      }
+    }
+    const unknownOpen = c.opens.find((o) => !resolveNodes(g, o).length && !resolveEndings(g, o).length);
+    if (unknownOpen) {
+      push('mid', 'clue_opens_unknown', c.id,
+        en ? `Clue "${c.id}" claims to unlock "${unknownOpen}", which matches no node or ending in the graph`
+           : `线索「${c.id}」声称可解锁「${unknownOpen}」，但图上没有对应节点或结局`,
+        en ? 'Align the name with a real gate / ending, or treat it as flavor evidence'
+           : '把名称对齐到真实的门控/结局，或明确它只是氛围证据');
+    }
+    if (c.exposeAt) {
+      const exp = resolveNodes(g, c.exposeAt);
+      if (exp.length && !exp.some((n) => reachable.has(n))) {
+        push('mid', 'clue_expose_unreachable', c.id,
+          en ? `Clue "${c.id}" is exposed at "${c.exposeAt}", which is unreachable from the start — the reveal never happens`
+             : `线索「${c.id}」的拆穿点「${c.exposeAt}」从起点不可达 —— 玩家永远看不到揭晓`,
+          en ? 'Move the reveal to a reachable node, or connect this branch into the main line'
+             : '把拆穿挪到可达节点，或把该支线接进主线');
+      }
+    }
+  }
+  return issues;
 }

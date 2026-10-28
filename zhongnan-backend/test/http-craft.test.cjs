@@ -111,6 +111,50 @@ describe('互动短剧分支（v1.82）', () => {
   });
 });
 
+// v2.334 线索 × 分支图联合校验：clues 选填；不传时响应与 v2.333 逐字兼容
+describe('互动分支·线索联合校验（v2.334）', () => {
+  const g = {
+    start: 's',
+    nodes: {
+      s: { type: 'choice', to: ['c1', 'c2'], label: '开场对峙' },
+      c1: { type: 'scene', to: ['e1'], label: '选择点1' },
+      c2: { type: 'scene', to: ['e1'], label: '选择点2' },
+      e1: { type: 'ending', endingType: 'main', label: '主线结局' },
+    },
+  };
+  it('不传 clues → clueIssues 为空数组，结构报告不变', async () => {
+    const r = await fetch(base + M + '/branch-validate', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ graph: g }) });
+    assert.strictEqual(r.status, 200);
+    const j = await r.json();
+    assert.deepStrictEqual(j.clueIssues, []);
+    assert.strictEqual(j.report.closedLoop, true);
+  });
+  it('线索可得处落在图外 → clue_gain_unknown', async () => {
+    const r = await fetch(base + M + '/branch-validate', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ graph: g, clues: [{ id: '锈钥匙', trust: '真', gainAt: ['第三幕'], opens: ['主线结局'] }] }),
+    });
+    assert.strictEqual(r.status, 200);
+    const j = await r.json();
+    assert.ok(j.clueIssues.some((i) => i.type === 'clue_gain_unknown' && i.severity === 'high'));
+  });
+  it('branch-mutate 同样回线索联合校验；非法线索规格 400 带 field', async () => {
+    const ok = await fetch(base + M + '/branch-mutate', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ graph: g, op: { op: 'addNode', nodeType: 'scene' }, clues: [{ id: '锈钥匙', gainAt: ['选择点2'], requiredFor: ['主线结局'] }] }),
+    });
+    assert.strictEqual(ok.status, 200);
+    const j = await ok.json();
+    assert.ok(j.clueIssues.some((i) => i.type === 'clue_ending_bypass'));
+    const bad = await fetch(base + M + '/branch-mutate', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ graph: g, op: { op: 'addNode', nodeType: 'scene' }, clues: [{ trust: '真' }] }),
+    });
+    assert.strictEqual(bad.status, 400);
+    assert.strictEqual((await bad.json()).field, 'clues');
+  });
+});
+
 describe('互动分支可视化编辑（v1.85）', () => {
   it('branch-mutate 增节点并回布局；非法操作400', async () => {
     const g0 = { start: 's', nodes: { s: { type: 'scene', to: [] } } };

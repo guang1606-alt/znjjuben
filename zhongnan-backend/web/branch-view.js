@@ -18,6 +18,7 @@
       score: (s) => `结构评分 ${s}/100 · `, closed: '✅ 全分支闭环', notClosed: '❌ 未完全闭环',
       reach: (a, b) => `可达 ${a}/${b} · 选择点 `, endCount: (c, m, h, b) => ` · 结局 主${m}/隐${h}/坏${b}`,
       sevHigh: '严重', sevMid: '中等', sevLow: '建议', structOk: '结构合法，可进入剧本生成。',
+      clueHead: '线索 × 节点联合校验', clueOk: '线索声明与分支图一致：可得处可达，必需结局无法绕过。',
       newScene: '新剧情', newChoice: '新选择点', newEnding: '新结局',
       jsonFail: (m) => 'JSON 解析失败：' + m, jsonCopied: '分支图 JSON 已复制',
     },
@@ -32,6 +33,7 @@
       score: (s) => `Structure ${s}/100 · `, closed: '✅ all branches closed', notClosed: '❌ not fully closed',
       reach: (a, b) => `Reachable ${a}/${b} · choices `, endCount: (c, m, h, b) => ` · endings main${m}/hidden${h}/bad${b}`,
       sevHigh: 'High', sevMid: 'Mid', sevLow: 'Hint', structOk: 'Structure valid — ready to generate.',
+      clueHead: 'Clue × node joint check', clueOk: 'Clue declarations match the graph: obtain points are reachable and required endings cannot bypass them.',
       newScene: 'New scene', newChoice: 'New choice', newEnding: 'New ending',
       jsonFail: (m) => 'JSON parse failed: ' + m, jsonCopied: 'Branch graph JSON copied',
     },
@@ -41,7 +43,17 @@
   let graph = null;            // 当前 BranchGraph
   let layout = {};             // id -> {x,y,depth}
   let posOverride = {};        // 用户拖拽覆盖坐标 id->{x,y}
-  let selected = null, lastReport = null;
+  let selected = null, lastReport = null, lastClueIssues = [];
+  /* v2.334 线索链：与生成表单同一条「名称 | 真假 | 来源 | 可得处 | 可解锁 | 前置 | 拆穿点 | 必需结局」文本格式，
+     解析复用 app.js 的 parseClueLine（window.znParseClueLine），避免两处口径漂移。 */
+  function cluePayload() {
+    const ta = $('brCluesG'); if (!ta) return undefined;
+    const lines = String(ta.value || '').split('\n').map((l) => l.trim()).filter(Boolean);
+    if (!lines.length || typeof window.znParseClueLine !== 'function') return undefined;
+    const clues = lines.map(window.znParseClueLine).filter(Boolean);
+    return clues.length ? clues : undefined;
+  }
+  const withClues = (body) => { const clues = cluePayload(); return clues ? { ...body, clues } : body; };
   async function getJson(path) { const r = await window.Api.request(path); return window.Api.jsonOrThrow(r); }
   async function postJson(path, body) {
     const r = await window.Api.request(path, { method: 'POST', body: JSON.stringify(body || {}) });
@@ -55,7 +67,7 @@
   }
   async function mutate(op) {
     if (!graph) return;
-    try { const j = await postJson('/api/craft/branch-mutate', { graph, op, lang: en() ? 'en' : 'zh' }); setState(j.graph, j.layout); renderReport(j.report); }
+    try { const j = await postJson('/api/craft/branch-mutate', withClues({ graph, op, lang: en() ? 'en' : 'zh' })); setState(j.graph, j.layout); renderReport(j.report, j.clueIssues); }
     catch (e) { window.xnSay ? window.xnSay(e.message) : console.error(e.message); }
   }
   function render() {
@@ -154,9 +166,10 @@
     box.querySelectorAll('.br-unlink').forEach((b) => b.onclick = () => mutate({ op: 'unlink', from: id, to: b.dataset.to }));
     $('brDel').onclick = () => { if (id === graph.start) { window.xnSay && window.xnSay(t.startNoDel); return; } selected = null; mutate({ op: 'removeNode', id }); };
   }
-  function renderReport(report) {
+  function renderReport(report, clueIssues) {
     const box = $('brResult'); if (!box || !report) return;
-    lastReport = report; const t = T();
+    lastReport = report; if (clueIssues !== undefined) lastClueIssues = Array.isArray(clueIssues) ? clueIssues : [];
+    const t = T();
     const e = report.endings || {}, issues = report.issues || [];
     const head = `<div class="dv-row" style="margin-top:8px"><div class="dv-row-head"><b>${t.score(report.score)}${report.closedLoop ? t.closed : t.notClosed}</b></div>
       <div class="muted">${t.reach(report.reachableCount, report.totalCount)}${report.choiceCount}${t.endCount(0, e.main || 0, e.hidden || 0, e.bad || 0)}</div></div>`;
@@ -165,19 +178,36 @@
       const sev = i.severity === 'high' ? t.sevHigh : i.severity === 'mid' ? t.sevMid : t.sevLow;
       return `<li><b style="color:${c}">[${sev}${i.node ? '·' + esc(i.node) : ''}]</b> ${esc(i.evidence)} <span class="muted">→ ${esc(i.advice)}</span></li>`;
     }).join('')}</ul>` : `<div class="tag-report ok" style="margin-top:8px">${t.structOk}</div>`;
-    box.innerHTML = head + list;
+    // v2.334 线索联合校验结果单独成段（结构与线索两类问题分开定位，避免混在一起看不出是谁的问题）
+    let clueBlock = '';
+    if (cluePayload()) {
+      clueBlock = lastClueIssues.length
+        ? `<div class="muted" style="margin-top:10px"><b>${t.clueHead}</b></div><ul class="plan-perks" style="margin-top:6px">${lastClueIssues.map((i) => {
+          const c = i.severity === 'high' ? '#d4473b' : '#d98a16';
+          const sev = i.severity === 'high' ? t.sevHigh : t.sevMid;
+          return `<li><b style="color:${c}">[${sev}·${esc(i.clue)}]</b> ${esc(i.evidence)} <span class="muted">→ ${esc(i.advice)}</span></li>`;
+        }).join('')}</ul>`
+        : `<div class="tag-report ok" style="margin-top:10px">${t.clueOk}</div>`;
+    }
+    box.innerHTML = head + list + clueBlock;
   }
   function syncTextarea() { const ta = $('brGraph'); if (ta && graph) ta.value = JSON.stringify(graph, null, 2); }
   async function genSkeleton() {
     const cp = parseInt(($('brCp') && $('brCp').value) || '2', 10);
     const j = await getJson('/api/craft/branch-skeleton?choicePoints=' + cp + '&lang=' + (en() ? 'en' : 'zh'));
     posOverride = {}; selected = null; setState(j.graph, j.layout); renderReport(j.report);
+    if (cluePayload()) await validateOnly();  // 已填线索时骨架生成后立刻补一次联合校验
   }
-  async function validateOnly() { if (graph) { const j = await postJson('/api/craft/branch-validate', { graph, lang: en() ? 'en' : 'zh' }); renderReport(j.report); } }
+  async function validateOnly() { if (graph) { const j = await postJson('/api/craft/branch-validate', withClues({ graph, lang: en() ? 'en' : 'zh' })); renderReport(j.report, j.clueIssues); } }
+  /* 生成表单里已填的线索链自动带入编辑器，避免用户在两个面板重复输入 */
+  function prefillClues() {
+    const src = $('brClues'), dst = $('brCluesG');
+    if (src && dst && !dst.value.trim() && src.value.trim()) dst.value = src.value.trim();
+  }
   function init() {
     const card = $('toolBranch'), panel = $('branchPanel');
     if (!card) return;
-    card.addEventListener('click', () => { panel.classList.remove('hidden'); if (!graph) genSkeleton().catch(() => {}); });
+    card.addEventListener('click', () => { panel.classList.remove('hidden'); prefillClues(); if (!graph) genSkeleton().catch(() => {}); });
     $('brClose').addEventListener('click', () => panel.classList.add('hidden'));
     $('brSkelBtn').onclick = () => genSkeleton().catch((e) => window.xnSay && window.xnSay(e.message));
     $('brValidateBtn').onclick = () => validateOnly().catch((e) => window.xnSay && window.xnSay(e.message));
@@ -187,10 +217,12 @@
     $('brImport').onclick = async () => {
       try {
         const g = JSON.parse($('brGraph').value);
-        const v = await postJson('/api/craft/branch-validate', { graph: g, lang: en() ? 'en' : 'zh' });
-        posOverride = {}; selected = null; setState(v.graph, v.layout); renderReport(v.report);
+        const v = await postJson('/api/craft/branch-validate', withClues({ graph: g, lang: en() ? 'en' : 'zh' }));
+        posOverride = {}; selected = null; setState(v.graph, v.layout); renderReport(v.report, v.clueIssues);
       } catch (e) { window.xnSay && window.xnSay(T().jsonFail(e.message)); }
     };
+    const cluesBox = $('brCluesG');
+    if (cluesBox) cluesBox.addEventListener('change', () => { if (graph) validateOnly().catch(() => {}); });
     $('brCopy').onclick = () => { if (graph) { navigator.clipboard?.writeText(JSON.stringify(graph, null, 2)); window.xnSay && window.xnSay(T().jsonCopied); } };
     window.addEventListener('resize', () => graph && render());
     document.addEventListener('zn-lang', () => { if (graph) { render(); renderInspector(); if (lastReport) renderReport(lastReport); } });
