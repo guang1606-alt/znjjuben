@@ -2773,19 +2773,25 @@ ${techLines}
     }
   }
   // v2.79 版式修复轮（LIVE）：字数达标后若缺 △动作行/规范台词行，说明成稿小说化，润色岗按强制版式重排（最多2轮，不改剧情只改行式）
+  // v2.338 同一轮兼修制片硬伤：场次/说话角色超上限时，连同诊断一起下发重排任务（并场、删减过场角色），修不掉就如实报错
   if ((options.scriptFormat ?? 'LIVE') === 'LIVE') {
     let fmtReport = validateScript(draft, 'LIVE');
     let fmtRetry = 0;
-    while ((!fmtReport.hasAction || !fmtReport.hasDialogue) && fmtRetry < 2) {
+    // v2.338 制片硬伤同样触发重排：v2.337 的闸门只会报「不可拍」，不驱动重写等于只报错不救稿
+    const productionHigh = () => (fmtReport.feasibility?.issues ?? []).filter((x) => x.severity === 'high');
+    while ((!fmtReport.hasAction || !fmtReport.hasDialogue || productionHigh().length > 0) && fmtRetry < 2) {
       fmtRetry += 1;
       const missingAction = !fmtReport.hasAction;
       const missingDialogue = !fmtReport.hasDialogue;
+      const prodHigh = productionHigh();
+      const layoutEn = `Layout gate: missing${missingAction ? ' △ action lines' : ''}${missingAction && missingDialogue ? ' and' : ''}${missingDialogue ? ' NAME: dialogue lines' : ''}`;
+      const layoutZh = `剧本版式闸门：缺${missingAction ? '△动作提示行' : ''}${missingAction && missingDialogue ? '、' : ''}${missingDialogue ? '规范角色台词行' : ''}`;
       emit({ role: 'polisher', status: 'retry', note: hookLang === 'en'
-        ? `Layout gate: missing${missingAction ? ' △ action lines' : ''}${missingAction && missingDialogue ? ' and' : ''}${missingDialogue ? ' NAME: dialogue lines' : ''}; re-flow into screenplay layout without changing plot`
-        : `剧本版式闸门：缺${missingAction ? '△动作提示行' : ''}${missingAction && missingDialogue ? '、' : ''}${missingDialogue ? '规范角色台词行' : ''}，按分行版式重排（不改剧情）` });
+        ? `${prodHigh.length ? `Production gate: ${prodHigh.length} blocking issue(s) — ${prodHigh.map((i) => i.message).join('; ')}; ` : ''}${missingAction || missingDialogue ? `${layoutEn}; ` : ''}re-flow into a schedulable screenplay without changing plot (round ${fmtRetry}/2)`
+        : `${prodHigh.length ? `制片闸门：${prodHigh.map((i) => i.message).join('；')}；` : ''}${missingAction || missingDialogue ? `${layoutZh}；` : ''}按可拍摄规模重排（不改主线剧情，第${fmtRetry}/2轮）` });
       const fmtTask = hookLang === 'en'
-        ? `The draft below was written as prose fiction. WITHOUT changing the plot or adding/removing events, re-flow it into the standard short-drama screenplay layout: (1) split every filmable action into its own △ line (one action per line, under 40 chars); (2) turn every spoken line into its own "NAME (emotion): dialogue" line; (3) start each scene with "SCENE: location time INT./EXT."; (4) keep 800-1000 characters total. Characters: ${Object.keys(cast).join(', ')}. Draft:\n${draft.slice(0, 8000)}`
-        : `下面的成稿被写成了小说式叙述，请不改剧情、不增删情节，只重排成标准短剧剧本版式：①把每个可拍摄动作拆成独立的△行（每行一个动作，≤40字）；②把所有对白改写成“角色名（情绪）：台词”的独立行；③场景以“场景：地点 时间 内景/外景”开头；④总字数仍控制在800-1000字。人物：${Object.keys(cast).join('、')}。原稿：\n${draft.slice(0, 8000)}`;
+        ? `${missingAction || missingDialogue ? 'The draft below was written as prose fiction. WITHOUT changing the plot or adding/removing events, re-flow it into the standard short-drama screenplay layout: (1) split every filmable action into its own △ line (one action per line, under 40 chars); (2) turn every spoken line into its own "NAME (emotion): dialogue" line; (3) start each scene with "SCENE: location time INT./EXT."; (4) keep 800-1000 characters total. ' : ''}${prodHigh.length ? `PRODUCTION REPAIR: the draft cannot be scheduled as written (${prodHigh.map((i) => i.message).join('; ')}). Keep the main plot, but merge scenes that share a location, drop or fold minor walk-on speakers into existing characters, and land back at 3-5 scenes and at most 6 speaking roles; every scene must still carry its own △ action line(s) and "NAME (emotion): dialogue" line(s), and the total must stay 800-1000 characters. Characters allowed: ${Object.keys(cast).join(', ')}. ` : ''}Draft:\n${draft.slice(0, 8000)}`
+        : `${missingAction || missingDialogue ? '下面的成稿被写成了小说式叙述，请不改剧情、不增删情节，只重排成标准短剧剧本版式：①把每个可拍摄动作拆成独立的△行（每行一个动作，≤40字）；②把所有对白改写成“角色名（情绪）：台词”的独立行；③场景以“场景：地点 时间 内景/外景”开头；④总字数仍控制在800-1000字。' : ''}${prodHigh.length ? `制片重排：这份稿子按现在的规模排不出通告（${prodHigh.map((i) => i.message).join('；')}）。请保留主线剧情，把同一地点的相邻场合并、把非关键过场角色的台词并入已有角色或删去，压回3-5场、说话角色不超过6人；合并后每场仍要有△动作行与“角色名（情绪）：台词”行，总字数仍控制在800-1000字。可用人物：${Object.keys(cast).join('、')}。` : ''}原稿：\n${draft.slice(0, 8000)}`;
       const reformatted = (await _textRole(tier, 'polisher', `${directive('polisher', hookLang)}\n${fmtTask}\n${formatDirective}`, cost)).text;
       if (reformatted.length > 100) draft = reformatted;
       fmtReport = validateScript(draft, 'LIVE');
