@@ -90,6 +90,7 @@ import { buildCreationContext } from '../engine/creation-context';
 import { normalizeBrandBrief, scanBrandBrief, BrandBriefError, BrandBriefInput } from '../engine/brand-brief';
 import { normalizeTrendBrief, scanTrendRisk, TrendBriefError, TrendBriefInput } from '../engine/trend-brief';
 import { normalizeBranchBrief, validateBranchStructure, validateClueChain, BranchBriefError, BranchBriefInput } from '../engine/branch-brief';
+import { validateBranches, validateClueGraph } from '../engine/interactive-branch';
 import { progressSnapshot, roleEventToStage } from '../engine/generation-progress';
 import { opportunityRadar } from '../engine/opportunity-radar';
 import { aiDisclaimer, classifyFiling } from '../lib/content-safety';
@@ -2532,6 +2533,8 @@ const genSchema = z.object({
     customEnding: z.string().optional(),
     // v2.333 线索链（互动影游）：可选字段，逐条规范化后做确定性可达性校验
     clues: z.array(z.object({}).passthrough()).max(24).optional(),
+    // v2.335 已排好的分支图：可选；有图则结构锁定 + 线索联合可达性校验（扣费前拦截）
+    graph: z.object({}).passthrough().optional(),
   }).passthrough().optional(),
   // v2.96 原作/小说/名场面原文（仅 adapt/novel/hit_lab 生效；用于 n-gram 重合度侵权检测，上限 5 万字）
   sourceText: z.string().min(10).max(50000).optional(),
@@ -2646,6 +2649,29 @@ generateRouter.post('/episodes', authRequired, async (req: AuthRequest, res) => 
     const branchErrs = validateBranchStructure(bb);
     if (branchErrs.length) {
       return res.status(422).json({ error: 'BRANCH_VALIDATION_FAILED', message: branchErrs[0].message, field: branchErrs[0].field, errors: branchErrs });
+    }
+    // v2.335 已排好的分支图：结构语义（悬空边/孤儿/死胡同/假选择）与线索联合可达性，均在扣费前拦截
+    if (bb.graph) {
+      const gLang: 'zh' | 'en' = parsed.data.lang === 'en' ? 'en' : 'zh';
+      const gReport = validateBranches(bb.graph, gLang);
+      const gBlockers = gReport.issues.filter((i) => i.severity === 'high');
+      if (gBlockers.length) {
+        return res.status(422).json({
+          error: 'BRANCH_GRAPH_INVALID',
+          message: `${gBlockers[0].evidence}——${gBlockers[0].advice}`,
+          field: 'graph',
+          errors: gBlockers,
+        });
+      }
+      const joint = validateClueGraph(bb.clues, bb.graph, gLang).filter((i) => i.severity === 'high');
+      if (joint.length) {
+        return res.status(422).json({
+          error: 'CLUE_GRAPH_VALIDATION_FAILED',
+          message: `${joint[0].evidence}——${joint[0].advice}`,
+          field: 'clues',
+          errors: joint,
+        });
+      }
     }
     // v2.333 线索链可达性：high 拦（扣费前 422），mid 仅提示（已写进管线指令）
     const clueIssues = validateClueChain(bb);

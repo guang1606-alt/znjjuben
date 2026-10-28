@@ -729,6 +729,9 @@
       clues: '线索链（互动影游·选填，每行一条）',
       cluesPh: '锈钥匙 | 真 | 老管家在杂物间递出 | 选择点3,支线B | 隐藏结局1 | | | 隐藏结局1',
       cluesTip: '格式：名称 | 真假(真/半/假) | 来源 | 可得处(逗号分隔) | 可解锁的门控或结局 | 前置线索(可空) | 拆穿点(假线索必填) | 必需此线索的结局(可空)。悬空线索、假线索无拆穿、前置线索不存在或成环会被拦截；线索打不开任何门控、半真无揭晓只作提示。',
+      graph: '分支图 JSON（选填 · 留空则自由规划）', graphPh: '{"start":"s","nodes":{"s":{"type":"choice","to":["按兵不动","直接拆穿"],"label":"开场对峙"},"按兵不动":{"type":"scene","to":["主线结局"]},"直接拆穿":{"type":"scene","to":["坏结局"]},"主线结局":{"type":"ending","endingType":"main"},"坏结局":{"type":"ending","endingType":"bad"}}}',
+      graphTip: '把可视化编辑器「JSON 视图」里排好的图粘贴到这里，生成就按这张图落地：结构锁定（不得增删节点或改去向），并做联合校验——悬空连线、孤儿节点、死胡同、假选择，以及线索的可得处/拆穿点是否真在图里且可达，有问题会在扣费前拦下。',
+      graphBad: '分支图 JSON 解析失败：请检查括号与逗号，或从可视化编辑器复制导出。',
       required: '请先填齐主线起点与关键选择点（各至少 4 个字），小南才能规划分支结构。',
       totalMin: '总结局数至少 2 个（好+隐藏+坏），才能形成真正的分支选择。',
     },
@@ -746,6 +749,10 @@
       clues: 'Clue chain (interactive film-game, optional · one per line)',
       cluesPh: 'rusty key | true | the old butler hands it over | Choice 3, Route B | hidden ending | | | hidden ending',
       cluesTip: 'Format: name | trust(true/half/false) | source | obtainable at (comma separated) | unlocks (gates/endings) | prerequisites (optional) | exposure point (required for false clues) | endings requiring it (optional). Unobtainable clues, false clues without an exposure point, and missing or cyclic prerequisites are blocked; clues unlocking nothing and half-true clues without a reveal are warnings only.',
+      graph: 'Branch graph JSON (optional · leave empty to let the system plan)',
+      graphPh: '{"start":"s","nodes":{"s":{"type":"choice","to":["hold","confront"],"label":"Opening standoff"},"hold":{"type":"scene","to":["main ending"]},"confront":{"type":"scene","to":["bad ending"]},"main ending":{"type":"ending","endingType":"main"},"bad ending":{"type":"ending","endingType":"bad"}}}',
+      graphTip: 'Paste the graph arranged in the visual editor (copy it from its JSON view). Generation then follows this graph: the structure is locked (no adding/removing nodes or rewiring), and joint checks run before any charge — dangling links, orphan nodes, dead ends, fake choices, plus whether clue gain/exposure points really exist in the graph and are reachable.',
+      graphBad: 'Could not parse the branch graph JSON — check brackets and commas, or copy it from the visual editor.',
       required: 'Main line and key choice points (≥4 chars each) are required before branches can be planned.',
       totalMin: 'At least 2 endings total (main + hidden + bad) are needed for real branching.',
     },
@@ -766,6 +773,8 @@
     set('brLCustom', cfg.custom); setPh('brCustom', cfg.customPh);
     set('brLClues', cfg.clues); setPh('brClues', cfg.cluesPh);
     set('brCluesTip', cfg.cluesTip);
+    set('brLGraph', cfg.graph); setPh('brGraphJson', cfg.graphPh);
+    set('brGraphTip', cfg.graphTip);
     branchPanelRenderedLang = lang;
   }
   function showBranchError(msg) {
@@ -802,6 +811,13 @@
     hideBranchError();
     const clueLines = String($('brClues')?.value || '').split('\n').map((l) => l.trim()).filter(Boolean);
     const clues = clueLines.map(parseClueLine).filter(Boolean);
+    // v2.335 已排好的分支图：粘贴 JSON；解析失败就地拦下，避免把坏图发给后端
+    const graphRaw = String($('brGraphJson')?.value || '').trim();
+    let graph;
+    if (graphRaw) {
+      try { graph = JSON.parse(graphRaw); }
+      catch { showBranchError(BRANCH_UI_DICT().graphBad); return null; }
+    }
     return { branchBrief: {
       mainLine, choicePoints,
       endingsMain: main, endingsHidden: hidden, endingsBad: bad,
@@ -809,6 +825,7 @@
       stakesLevel: $('brStakes')?.value || 'medium',
       customEnding: v('brCustom'),
       ...(clues.length ? { clues } : {}),
+      ...(graph ? { graph } : {}),
     } };
   }
   /* ---------- v2.96 原作/小说/名场面原文：adapt/novel/hit_lab 专用，用于 n-gram 重合度侵权检测 ---------- */
@@ -6420,7 +6437,7 @@
         try { j = JSON.parse(txt); if (j && j.error) msg = j.error; } catch { /* 非 JSON 原样展示 */ }
         msg = znSanitizeErr(msg, res.status); // v2.239：内部裸码回落本地友好文案（body 已消费，走同口径 helper）
         // v2.95 互动分支：闭环校验/必填错误就地提示（尚未扣费）
-        if (j && (j.error === 'BRANCH_VALIDATION_FAILED' || j.error === 'CLUE_VALIDATION_FAILED' || j.field === 'mainLine' || j.field === 'choicePoints' || j.field === 'endings' || j.field === 'clues')) {
+        if (j && (j.error === 'BRANCH_VALIDATION_FAILED' || j.error === 'CLUE_VALIDATION_FAILED' || j.error === 'BRANCH_GRAPH_INVALID' || j.error === 'CLUE_GRAPH_VALIDATION_FAILED' || j.field === 'mainLine' || j.field === 'choicePoints' || j.field === 'endings' || j.field === 'clues' || j.field === 'graph')) {
           failGenerationSession(session, j.message || msg);
           showBranchError(j.message || BRANCH_UI_DICT().required);
           return;

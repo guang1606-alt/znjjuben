@@ -8,6 +8,8 @@
  * 约束：纯函数 · 双语 · 零 IO · 不改变既有版式与字数闸门。
  */
 
+import { normalizeGraph, GraphFormatError, type BranchGraph, type NodeType } from './interactive-branch';
+
 export type BranchLang = 'zh' | 'en';
 export type BranchStyle = 'consequence' | 'relationship' | 'moral' | 'mystery';
 export type StakesLevel = 'low' | 'medium' | 'high';
@@ -43,6 +45,7 @@ export interface BranchBriefInput {
   stakesLevel: StakesLevel;   // 利害压量
   customEnding: string;      // 用户想要的特定结局（选填）
   clues: ClueSpec[];         // 线索链（选填，≤24 条）
+  graph: BranchGraph | null; // v2.335 用户已排好的分支图（选填；有图则结构锁定并做联合校验）
 }
 
 export type BranchBriefRaw = Partial<{
@@ -55,6 +58,7 @@ export type BranchBriefRaw = Partial<{
   stakesLevel: unknown;
   customEnding: unknown;
   clues: unknown;
+  graph: unknown;
 }>;
 
 const FIELD_MAX: Record<string, number> = {
@@ -102,7 +106,18 @@ export function normalizeBranchBrief(raw: BranchBriefRaw | null | undefined): Br
     stakesLevel: STAKES.includes(r.stakesLevel as StakesLevel) ? (r.stakesLevel as StakesLevel) : 'medium',
     customEnding: str(r.customEnding, 'customEnding', ''),
     clues: normalizeClues(r.clues),
+    graph: normalizeGraphField(r.graph),
   };
+}
+
+/** v2.335 分支图：形状问题（GraphFormatError）统一收敛成 BranchBriefError → 路由 400 带 field=graph */
+function normalizeGraphField(raw: unknown): BranchGraph | null {
+  try {
+    return normalizeGraph(raw);
+  } catch (e) {
+    if (e instanceof GraphFormatError) throw new BranchBriefError(e.field || 'graph', e.message);
+    throw e;
+  }
 }
 
 const TRUST_ALIAS: Record<string, ClueTrust> = {
@@ -299,6 +314,48 @@ const STAKES_EN: Record<StakesLevel, string> = {
   high: 'High stakes: life-and-death / safety / moral hard collisions (a fortune, a life, a bottom line); use countdown / coercion / mutual-exclusivity to build pressure.',
 };
 
+/** v2.335 把用户已排好的分支图写进指令块：结构锁定、节点名可作小节标题、线索必须落在图内节点 */
+function graphDirectiveLines(g: BranchGraph, lang: BranchLang): string[] {
+  const en = lang === 'en';
+  const ids = Object.keys(g.nodes);
+  const by = (t: NodeType) => ids.filter((id) => g.nodes[id].type === t);
+  const lab = (id: string) => {
+    const l = g.nodes[id]?.label;
+    if (!l) return id;
+    return en ? `${id} (${l})` : `${id}（${l}）`;
+  };
+  const out: string[] = [];
+  out.push(en
+    ? '◆ FIXED BRANCH GRAPH (structure locked: this episode follows these nodes and edges; never add/remove nodes or rewire links):'
+    : '◆ 已定分支图（结构锁定：本集按图的节点与去向落地，不得增删节点或改连线）：');
+  out.push(en ? `   · Start: ${lab(g.start)}` : `   · 起点：${lab(g.start)}`);
+  const choices = by('choice');
+  if (choices.length) {
+    const list = choices.slice(0, 12).map((id) => {
+      const to = (g.nodes[id].to || []).map(lab).join(' / ');
+      const kindTxt = g.nodes[id].kind === 'probability' ? (en ? ' [probability]' : '［概率］')
+        : g.nodes[id].kind === 'random' ? (en ? ' [random]' : '［随机］') : '';
+      return `${lab(id)}${kindTxt} → ${to || (en ? '(no outgoing edge)' : '（无出边）')}`;
+    });
+    out.push((en ? '   · Choice points: ' : '   · 选择点：') + list.join(en ? '; ' : '；'));
+    if (choices.length > 12) out.push(en ? `   · …and ${choices.length - 12} more choice point(s)` : `   · …另有 ${choices.length - 12} 个选择点`);
+  }
+  const endings = by('ending');
+  if (endings.length) {
+    const tag = (id: string) => {
+      const t = g.nodes[id].endingType || 'main';
+      return en ? ` [${t}]` : `［${t === 'hidden' ? '隐藏' : t === 'bad' ? '坏' : '主线'}］`;
+    };
+    const list = endings.slice(0, 12).map((id) => `${lab(id)}${tag(id)}`);
+    out.push((en ? '   · Endings: ' : '   · 结局：') + list.join(en ? '; ' : '；'));
+    if (endings.length > 12) out.push(en ? `   · …and ${endings.length - 12} more ending(s)` : `   · …另有 ${endings.length - 12} 个结局`);
+  }
+  out.push(en
+    ? '   · Every clue must be obtained / exposed inside the named nodes above; node labels may serve as scene section titles where natural. Every player choice must map to an edge in this graph — no extra exits.'
+    : '   · 线索的「可得于 / 拆穿于」必须落在上面这些节点名的剧情里，节点标签可自然用作场景小节标题；玩家做出的每个选择都必须对应图里的一条去向，不得新增出口。');
+  return out;
+}
+
 export function buildBranchDirective(b: BranchBriefInput, lang: BranchLang = 'zh'): string {
   const endingsStr = `${b.endings.main}/${b.endings.hidden}/${b.endings.bad}`;
   if (lang === 'en') {
@@ -311,6 +368,7 @@ export function buildBranchDirective(b: BranchBriefInput, lang: BranchLang = 'zh
       `· Stakes level: ${STAKES_EN[b.stakesLevel]}`,
     ];
     if (b.customEnding) lines.push(`· Requested specific ending: ${b.customEnding}`);
+    if (b.graph) lines.push(...graphDirectiveLines(b.graph, 'en'));
     if (b.clues.length) {
       const trustEn: Record<ClueTrust, string> = { true: 'true', half: 'half-true', false: 'false' };
       lines.push('[CLUE CHAIN — source of truth, land every entry]');
@@ -339,6 +397,7 @@ export function buildBranchDirective(b: BranchBriefInput, lang: BranchLang = 'zh
     `◆ 利害压量：${STAKES_ZH[b.stakesLevel]}`,
   ];
   if (b.customEnding) lines.push(`◆ 期望的特定结局：${b.customEnding}`);
+  if (b.graph) lines.push(...graphDirectiveLines(b.graph, 'zh'));
   if (b.clues.length) {
     const trustZh: Record<ClueTrust, string> = { true: '真线索', half: '半真线索', false: '假线索' };
     lines.push('◆ 线索链（事实源，逐条落地）：');

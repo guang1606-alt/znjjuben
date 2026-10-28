@@ -113,6 +113,74 @@ function branchMsg(lang: BranchLang) {
     errUnknown: '未知编辑操作',
   };
 }
+const key = (s: string) => String(s || '').trim().toLowerCase().replace(/\s+/g, ' ');
+const ENDING_ALIAS: Record<string, EndingType> = {
+  main: 'main', 'main ending': 'main', '主线': 'main', '主线结局': 'main',
+  hidden: 'hidden', 'hidden ending': 'hidden', '隐藏': 'hidden', '隐藏结局': 'hidden',
+  bad: 'bad', 'bad ending': 'bad', '坏': 'bad', '坏结局': 'bad',
+};
+
+/* ------------------------------------------------------------------ *
+ * v2.335 分支图规范化：把用户已经排好的图接进生成链路
+ * 背景：v2.333/2.334 的联合校验只在「分支编辑器」里跑；生成请求的 branchBrief
+ *       过去根本没有图字段，用户排好的结构进不了生成，AI 只能按文字自由发挥。
+ * 规则：这里只拦「构不成图」的形状问题（throw GraphFormatError → 400）；
+ *       悬空边/孤儿/死胡同/假选择等语义问题交给 validateBranches 报 422。
+ * 约束：纯函数、零 IO、零模型调用；不猜测语义，只做字段收敛与别名归一。
+ * ------------------------------------------------------------------ */
+export class GraphFormatError extends Error {
+  field: string;
+  constructor(field: string, message: string) { super(message); this.name = 'GraphFormatError'; this.field = field; }
+}
+
+const GRAPH_MAX_NODES = 400;
+const GRAPH_MAX_OUT = 6;
+
+export function normalizeGraph(raw: unknown, lang: BranchLang = 'zh'): BranchGraph | null {
+  if (raw === undefined || raw === null) return null;
+  const en = lang === 'en';
+  const o = (raw && typeof raw === 'object' && !Array.isArray(raw) ? raw : null) as Record<string, unknown> | null;
+  if (!o) throw new GraphFormatError('graph', en ? 'Branch graph must be an object {start, nodes}' : '分支图必须是对象 {start, nodes}');
+  const start = typeof o.start === 'string' ? o.start.trim() : '';
+  if (!start || !o.nodes || typeof o.nodes !== 'object' || Array.isArray(o.nodes)) {
+    throw new GraphFormatError('graph', en ? 'Branch graph needs a start id and a nodes map' : '分支图需要 start 起点 id 与 nodes 节点表');
+  }
+  const rawNodes = o.nodes as Record<string, unknown>;
+  const ids = Object.keys(rawNodes);
+  if (!ids.length) throw new GraphFormatError('graph', en ? 'Branch graph has no nodes' : '分支图没有节点');
+  if (ids.length > GRAPH_MAX_NODES) throw new GraphFormatError('graph', en ? `At most ${GRAPH_MAX_NODES} nodes per graph` : `单图最多 ${GRAPH_MAX_NODES} 个节点`);
+  const nodes: Record<string, BranchNode> = {};
+  for (const id of ids) {
+    const nraw = rawNodes[id];
+    const n = (nraw && typeof nraw === 'object' && !Array.isArray(nraw) ? nraw : {}) as Record<string, unknown>;
+    const type = String(n.type ?? '').trim().toLowerCase();
+    if (type !== 'scene' && type !== 'choice' && type !== 'ending') {
+      throw new GraphFormatError('graph', en ? `Node "${id}" has an invalid type (scene / choice / ending)` : `节点「${id}」的类型必须是 scene / choice / ending`);
+    }
+    const node: BranchNode = { type: type as NodeType };
+    if (Array.isArray(n.to)) {
+      node.to = [...new Set(n.to.filter((t): t is string => typeof t === 'string' && !!t.trim()).map((t) => t.trim()))].slice(0, GRAPH_MAX_OUT);
+    }
+    if (type === 'ending') {
+      node.endingType = ENDING_ALIAS[String(n.endingType ?? 'main').trim().toLowerCase()] || 'main';
+    }
+    if (type === 'choice') {
+      const k = String(n.kind ?? '').trim().toLowerCase();
+      if (k === 'random' || k === 'probability') {
+        node.kind = k;
+        // 权重数量/取值是否合法交给 validateBranches 判（bad_weights），这里只收敛成数字数组
+        if (k === 'probability' && Array.isArray(n.weights)) {
+          node.weights = n.weights.filter((w): w is number => typeof w === 'number' && Number.isFinite(w));
+        }
+      }
+    }
+    if (typeof n.label === 'string' && n.label.trim()) node.label = n.label.trim().slice(0, 40);
+    nodes[id] = node;
+  }
+  if (!nodes[start]) throw new GraphFormatError('graph', en ? `Start node "${start}" does not exist in nodes` : `起点节点「${start}」不在 nodes 里`);
+  return { start, nodes };
+}
+
 export function validateBranches(g: BranchGraph, lang: BranchLang = 'zh'): BranchReport {
   const M = branchMsg(lang);
   const issues: BranchIssue[] = [];
@@ -365,13 +433,6 @@ export interface ClueGraphIssue {
   evidence: string;
   advice: string;
 }
-
-const key = (s: string) => String(s || '').trim().toLowerCase().replace(/\s+/g, ' ');
-const ENDING_ALIAS: Record<string, EndingType> = {
-  main: 'main', 'main ending': 'main', '主线': 'main', '主线结局': 'main',
-  hidden: 'hidden', 'hidden ending': 'hidden', '隐藏': 'hidden', '隐藏结局': 'hidden',
-  bad: 'bad', 'bad ending': 'bad', '坏': 'bad', '坏结局': 'bad',
-};
 
 function resolveNodes(g: BranchGraph, entry: string): string[] {
   const k = key(entry);
