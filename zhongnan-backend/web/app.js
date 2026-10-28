@@ -726,6 +726,9 @@
       stakes: '利害压量',
       stakesOpts: { low: '低利害：日常情境中的小取舍', medium: '中利害：职业/感情中的真实代价·推荐', high: '高利害：人生/安全/道德的硬碰硬' },
       custom: '期望的特定结局（选填）', customPh: '如：隐藏结局是小陈发现前女友其实是在帮他',
+      clues: '线索链（互动影游·选填，每行一条）',
+      cluesPh: '锈钥匙 | 真 | 老管家在杂物间递出 | 选择点3,支线B | 隐藏结局1 | | | 隐藏结局1',
+      cluesTip: '格式：名称 | 真假(真/半/假) | 来源 | 可得处(逗号分隔) | 可解锁的门控或结局 | 前置线索(可空) | 拆穿点(假线索必填) | 必需此线索的结局(可空)。悬空线索、假线索无拆穿、前置线索不存在或成环会被拦截；线索打不开任何门控、半真无揭晓只作提示。',
       required: '请先填齐主线起点与关键选择点（各至少 4 个字），小南才能规划分支结构。',
       totalMin: '总结局数至少 2 个（好+隐藏+坏），才能形成真正的分支选择。',
     },
@@ -740,6 +743,9 @@
       stakes: 'Stakes level',
       stakesOpts: { low: 'Low stakes: small everyday trade-offs', medium: 'Medium stakes: real career/relationship costs · recommended', high: 'High stakes: life-and-death / moral hard collisions' },
       custom: 'Requested specific ending (optional)', customPh: 'e.g. hidden ending: the ex was actually trying to help him',
+      clues: 'Clue chain (interactive film-game, optional · one per line)',
+      cluesPh: 'rusty key | true | the old butler hands it over | Choice 3, Route B | hidden ending | | | hidden ending',
+      cluesTip: 'Format: name | trust(true/half/false) | source | obtainable at (comma separated) | unlocks (gates/endings) | prerequisites (optional) | exposure point (required for false clues) | endings requiring it (optional). Unobtainable clues, false clues without an exposure point, and missing or cyclic prerequisites are blocked; clues unlocking nothing and half-true clues without a reveal are warnings only.',
       required: 'Main line and key choice points (≥4 chars each) are required before branches can be planned.',
       totalMin: 'At least 2 endings total (main + hidden + bad) are needed for real branching.',
     },
@@ -758,6 +764,8 @@
     set('brLStyle', cfg.style); fillSelectOptions('brStyle', cfg.styles, ['consequence', 'relationship', 'moral', 'mystery']);
     set('brLStakes', cfg.stakes); fillSelectOptions('brStakes', cfg.stakesOpts, ['low', 'medium', 'high']);
     set('brLCustom', cfg.custom); setPh('brCustom', cfg.customPh);
+    set('brLClues', cfg.clues); setPh('brClues', cfg.cluesPh);
+    set('brCluesTip', cfg.cluesTip);
     branchPanelRenderedLang = lang;
   }
   function showBranchError(msg) {
@@ -767,6 +775,19 @@
     xnSay(msg);
   }
   function hideBranchError() { const box = $('brError'); if (box) { box.textContent = ''; box.style.display = 'none'; } }
+  /* v2.333 线索链：每行 `名称 | 真假 | 来源 | 可得处 | 可解锁 | 前置 | 拆穿点 | 必需结局`，缺列按空处理 */
+  function parseClueLine(line) {
+    const cols = String(line).split('|').map((s) => s.trim());
+    const id = cols[0] || '';
+    if (!id) return null;
+    const trustMap = { '真': 'true', true: 'true', real: 'true', '真实': 'true', '半': 'half', '半真': 'half', half: 'half', partial: 'half', '假': 'false', false: 'false', fake: 'false' };
+    const list = (s) => String(s || '').split(/[,，、;；]/).map((x) => x.trim()).filter(Boolean);
+    return {
+      id, trust: trustMap[String(cols[1] || '真').trim().toLowerCase()] || 'true',
+      source: cols[2] || '', gainAt: list(cols[3]), opens: list(cols[4]),
+      requires: list(cols[5]), exposeAt: cols[6] || '', requiredFor: list(cols[7]),
+    };
+  }
   function branchBriefPayload() {
     if (!isInteractiveType(selectedScriptType) || !$('brMain')) return {};
     const v = (id) => String($(id)?.value || '').trim();
@@ -777,12 +798,15 @@
     const bad = parseInt($('brBadN')?.value, 10) || 0;
     if (main + hidden + bad < 2) { showBranchError(BRANCH_UI_DICT().totalMin); return null; }
     hideBranchError();
+    const clueLines = String($('brClues')?.value || '').split('\n').map((l) => l.trim()).filter(Boolean);
+    const clues = clueLines.map(parseClueLine).filter(Boolean);
     return { branchBrief: {
       mainLine, choicePoints,
       endingsMain: main, endingsHidden: hidden, endingsBad: bad,
       branchStyle: $('brStyle')?.value || 'consequence',
       stakesLevel: $('brStakes')?.value || 'medium',
       customEnding: v('brCustom'),
+      ...(clues.length ? { clues } : {}),
     } };
   }
   /* ---------- v2.96 原作/小说/名场面原文：adapt/novel/hit_lab 专用，用于 n-gram 重合度侵权检测 ---------- */
@@ -6394,7 +6418,7 @@
         try { j = JSON.parse(txt); if (j && j.error) msg = j.error; } catch { /* 非 JSON 原样展示 */ }
         msg = znSanitizeErr(msg, res.status); // v2.239：内部裸码回落本地友好文案（body 已消费，走同口径 helper）
         // v2.95 互动分支：闭环校验/必填错误就地提示（尚未扣费）
-        if (j && (j.error === 'BRANCH_VALIDATION_FAILED' || j.field === 'mainLine' || j.field === 'choicePoints' || j.field === 'endings')) {
+        if (j && (j.error === 'BRANCH_VALIDATION_FAILED' || j.error === 'CLUE_VALIDATION_FAILED' || j.field === 'mainLine' || j.field === 'choicePoints' || j.field === 'endings' || j.field === 'clues')) {
           failGenerationSession(session, j.message || msg);
           showBranchError(j.message || BRANCH_UI_DICT().required);
           return;

@@ -89,7 +89,7 @@ import { assertMargin, callText } from '../lib/model-proxy';
 import { buildCreationContext } from '../engine/creation-context';
 import { normalizeBrandBrief, scanBrandBrief, BrandBriefError, BrandBriefInput } from '../engine/brand-brief';
 import { normalizeTrendBrief, scanTrendRisk, TrendBriefError, TrendBriefInput } from '../engine/trend-brief';
-import { normalizeBranchBrief, validateBranchStructure, BranchBriefError, BranchBriefInput } from '../engine/branch-brief';
+import { normalizeBranchBrief, validateBranchStructure, validateClueChain, BranchBriefError, BranchBriefInput } from '../engine/branch-brief';
 import { progressSnapshot, roleEventToStage } from '../engine/generation-progress';
 import { opportunityRadar } from '../engine/opportunity-radar';
 import { aiDisclaimer, classifyFiling } from '../lib/content-safety';
@@ -2530,6 +2530,8 @@ const genSchema = z.object({
     branchStyle: z.string().optional(),
     stakesLevel: z.string().optional(),
     customEnding: z.string().optional(),
+    // v2.333 线索链（互动影游）：可选字段，逐条规范化后做确定性可达性校验
+    clues: z.array(z.object({}).passthrough()).max(24).optional(),
   }).passthrough().optional(),
   // v2.96 原作/小说/名场面原文（仅 adapt/novel/hit_lab 生效；用于 n-gram 重合度侵权检测，上限 5 万字）
   sourceText: z.string().min(10).max(50000).optional(),
@@ -2644,6 +2646,17 @@ generateRouter.post('/episodes', authRequired, async (req: AuthRequest, res) => 
     const branchErrs = validateBranchStructure(bb);
     if (branchErrs.length) {
       return res.status(422).json({ error: 'BRANCH_VALIDATION_FAILED', message: branchErrs[0].message, field: branchErrs[0].field, errors: branchErrs });
+    }
+    // v2.333 线索链可达性：high 拦（扣费前 422），mid 仅提示（已写进管线指令）
+    const clueIssues = validateClueChain(bb);
+    const clueBlockers = clueIssues.filter((i) => i.severity === 'high');
+    if (clueBlockers.length) {
+      return res.status(422).json({
+        error: 'CLUE_VALIDATION_FAILED',
+        message: `${clueBlockers[0].evidence}——${clueBlockers[0].advice}`,
+        field: 'clues',
+        errors: clueIssues,
+      });
     }
     branchBrief = bb;
   }

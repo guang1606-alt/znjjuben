@@ -18,6 +18,23 @@ export interface EndingsSpec {
   bad: number;     // 坏结局数量（0-2）
 }
 
+/* ------------------------------------------------------------------ *
+ * v2.333 互动影游·线索链（可选轴，缺省时全链路行为与 v2.332 一致）
+ * 设计：线索是「玩家凭什么做选择」的事实源。只做确定性图检查，零模型调用。
+ * ------------------------------------------------------------------ */
+export type ClueTrust = 'true' | 'half' | 'false';
+
+export interface ClueSpec {
+  id: string;              // 线索名（唯一）
+  trust: ClueTrust;        // 真 / 半真 / 假
+  source: string;          // 来源：谁在什么情境给出
+  gainAt: string[];        // 可获得该线索的选择点/支线（至少 1 个，否则玩家永远拿不到）
+  opens: string[];         // 可解锁的门控或结局
+  requires: string[];      // 前置线索 id（线索链）
+  exposeAt: string;        // 假/半真线索的拆穿或揭晓点
+  requiredFor: string[];   // 声明该线索为哪些结局的必需线索
+}
+
 export interface BranchBriefInput {
   mainLine: string;          // 主线起点（必填 ≥4 字）
   choicePoints: string;      // 关键选择点描述（必填 ≥4 字）
@@ -25,6 +42,7 @@ export interface BranchBriefInput {
   branchStyle: BranchStyle;  // 分支风格
   stakesLevel: StakesLevel;   // 利害压量
   customEnding: string;      // 用户想要的特定结局（选填）
+  clues: ClueSpec[];         // 线索链（选填，≤24 条）
 }
 
 export type BranchBriefRaw = Partial<{
@@ -36,6 +54,7 @@ export type BranchBriefRaw = Partial<{
   branchStyle: unknown;
   stakesLevel: unknown;
   customEnding: unknown;
+  clues: unknown;
 }>;
 
 const FIELD_MAX: Record<string, number> = {
@@ -82,7 +101,47 @@ export function normalizeBranchBrief(raw: BranchBriefRaw | null | undefined): Br
     branchStyle: STYLES.includes(r.branchStyle as BranchStyle) ? (r.branchStyle as BranchStyle) : 'consequence',
     stakesLevel: STAKES.includes(r.stakesLevel as StakesLevel) ? (r.stakesLevel as StakesLevel) : 'medium',
     customEnding: str(r.customEnding, 'customEnding', ''),
+    clues: normalizeClues(r.clues),
   };
+}
+
+const TRUST_ALIAS: Record<string, ClueTrust> = {
+  true: 'true', real: 'true', 真: 'true', 真的: 'true', 真实: 'true',
+  half: 'half', partial: 'half', 半: 'half', 半真: 'half', 不确定: 'half',
+  false: 'false', fake: 'false', 假: 'false', 假的: 'false', 伪: 'false',
+};
+const MAX_CLUES = 24;
+
+function strList(v: unknown, maxItems = 8): string[] {
+  const arr = Array.isArray(v) ? v : (typeof v === 'string' ? v.split(/[,，、;；]/) : []);
+  const out: string[] = [];
+  for (const item of arr) {
+    const s = typeof item === 'string' ? item.trim().slice(0, 60) : '';
+    if (s && !out.includes(s)) out.push(s);
+    if (out.length >= maxItems) break;
+  }
+  return out;
+}
+
+export function normalizeClues(raw: unknown): ClueSpec[] {
+  if (!Array.isArray(raw) || raw.length === 0) return [];
+  if (raw.length > MAX_CLUES) throw new BranchBriefError('clues', `线索最多 ${MAX_CLUES} 条（单集容量有限）`);
+  return raw.map((item, i) => {
+    const o = (item && typeof item === 'object' ? item : {}) as Record<string, unknown>;
+    const id = typeof o.id === 'string' ? o.id.trim().slice(0, 40) : '';
+    if (!id) throw new BranchBriefError('clues', `第 ${i + 1} 条线索缺少名称（id）`);
+    const trustKey = String(o.trust ?? '').trim().toLowerCase();
+    return {
+      id,
+      trust: TRUST_ALIAS[trustKey] ?? 'true',
+      source: typeof o.source === 'string' ? o.source.trim().slice(0, 120) : '',
+      gainAt: strList(o.gainAt),
+      opens: strList(o.opens),
+      requires: strList(o.requires),
+      exposeAt: typeof o.exposeAt === 'string' ? o.exposeAt.trim().slice(0, 60) : '',
+      requiredFor: strList(o.requiredFor),
+    };
+  });
 }
 
 export function hasBranchBrief(b: BranchBriefInput | null | undefined): b is BranchBriefInput {
@@ -116,8 +175,105 @@ export function validateBranchStructure(b: BranchBriefInput): BranchValidationEr
 }
 
 /* ------------------------------------------------------------------ */
-/* 管线指令拼装（架构师 / 撰写师 / 打回重写共用同一份事实源）            */
+/* v2.333 线索链可达性校验（确定性图检查 · 零模型调用）                   */
 /* ------------------------------------------------------------------ */
+
+export type ClueIssueType =
+  | 'clue_duplicate' | 'clue_unobtainable' | 'clue_false_unexposed'
+  | 'clue_chain_broken' | 'clue_chain_cycle'
+  | 'clue_no_gate' | 'clue_half_unexposed' | 'clue_required_unopened';
+
+export interface ClueIssue {
+  severity: 'high' | 'mid';
+  type: ClueIssueType;
+  clue: string;
+  evidence: string;
+  advice: string;
+}
+
+/**
+ * high = 拦截（生成前 422，扣费前）；mid = 提示（写进管线指令，由模型在成稿中处理）。
+ * 规则：悬空线索 / 假线索无拆穿 / 前置线索不存在 / 前置成环 = 玩家永远拿不到或用不了 → 拦；
+ *      线索不打开任何门控 / 半真线索无揭晓 / 声称结局必需却不在 opens = 逻辑可疑 → 提示。
+ */
+export function validateClueChain(b: BranchBriefInput, lang: BranchLang = 'zh'): ClueIssue[] {
+  const clues = b.clues || [];
+  if (!clues.length) return [];
+  const en = lang === 'en';
+  const issues: ClueIssue[] = [];
+  const push = (severity: 'high' | 'mid', type: ClueIssueType, clue: string, evidence: string, advice: string) =>
+    issues.push({ severity, type, clue, evidence, advice });
+
+  const byId = new Map<string, ClueSpec>();
+  for (const c of clues) {
+    if (byId.has(c.id)) {
+      push('high', 'clue_duplicate', c.id,
+        en ? `Clue "${c.id}" is declared more than once` : `线索「${c.id}」重复声明`,
+        en ? 'Merge the duplicate entries into one clue' : '合并为一条线索，或给其中一条改名');
+      continue;
+    }
+    byId.set(c.id, c);
+  }
+
+  for (const c of byId.values()) {
+    if (!c.gainAt.length) {
+      push('high', 'clue_unobtainable', c.id,
+        en ? `Clue "${c.id}" has no place where the player can obtain it` : `线索「${c.id}」没有任何可获得之处`,
+        en ? 'Add at least one choice point / side route where this clue can be found' : '补一个能拿到它的选择点或支线，否则玩家永远得不到');
+    }
+    if (c.trust === 'false' && !c.exposeAt) {
+      push('high', 'clue_false_unexposed', c.id,
+        en ? `False clue "${c.id}" is never disproven` : `假线索「${c.id}」没有拆穿点`,
+        en ? 'Declare the node where the lie is exposed, or change it to a true clue' : '指定拆穿它的节点；否则玩家被骗到底，结局无法解释');
+    }
+    if (c.trust === 'half' && !c.exposeAt) {
+      push('mid', 'clue_half_unexposed', c.id,
+        en ? `Half-true clue "${c.id}" never reveals which part is true` : `半真线索「${c.id}」没有揭晓点`,
+        en ? 'Add the point where the true half is confirmed' : '补一个揭晓点，说明哪部分是真、哪部分是误导');
+    }
+    if (!c.opens.length) {
+      push('mid', 'clue_no_gate', c.id,
+        en ? `Clue "${c.id}" unlocks no gate or ending` : `线索「${c.id}」不打开任何门控或结局`,
+        en ? 'Tie it to a gate/ending, or drop it to avoid a useless prop' : '把它接到某个门控或结局上，否则只是一件无用道具');
+    }
+    for (const pre of c.requires) {
+      if (!byId.has(pre)) {
+        push('high', 'clue_chain_broken', c.id,
+          en ? `Clue "${c.id}" requires a missing clue "${pre}"` : `线索「${c.id}」的前置线索「${pre}」不存在`,
+          en ? 'Declare the prerequisite clue, or remove this dependency' : '补上这条前置线索，或去掉该依赖');
+      }
+    }
+    for (const gate of c.requiredFor) {
+      if (!c.opens.includes(gate)) {
+        push('mid', 'clue_required_unopened', c.id,
+          en ? `Clue "${c.id}" is declared required for "${gate}" but does not unlock it` : `线索「${c.id}」声明为「${gate}」的必需线索，却没打开它`,
+          en ? 'Add the gate to this clue’s unlocks, or drop the requirement' : '把该门控加进这条线索的可解锁列表，或去掉必需声明');
+      }
+    }
+  }
+
+  // 前置成环：A 要 B、B 要 A → 两条都永远拿不到
+  const reaches = (startId: string, targetId: string): boolean => {
+    const seen = new Set<string>();
+    const q = [...(byId.get(startId)?.requires || [])];
+    while (q.length) {
+      const id = q.pop()!;
+      if (id === targetId) return true;
+      if (seen.has(id)) continue;
+      seen.add(id);
+      for (const pre of byId.get(id)?.requires || []) q.push(pre);
+    }
+    return false;
+  };
+  const cyclic = [...byId.values()].filter((c) => reaches(c.id, c.id)).map((c) => c.id);
+  if (cyclic.length) {
+    push('high', 'clue_chain_cycle', cyclic[0],
+      en ? `Prerequisite cycle among clues: ${cyclic.join(' → ')}` : `前置线索成环：${cyclic.join(' → ')}`,
+      en ? 'Break the cycle so at least one clue can be obtained first' : '打断环，至少让一条线索能先被拿到');
+  }
+
+  return issues;
+}
 
 const STYLE_ZH: Record<BranchStyle, string> = {
   consequence: '后果驱动：选择带来不可逆的资源/处境/关系变化，代价与收益看得见',
@@ -155,6 +311,22 @@ export function buildBranchDirective(b: BranchBriefInput, lang: BranchLang = 'zh
       `· Stakes level: ${STAKES_EN[b.stakesLevel]}`,
     ];
     if (b.customEnding) lines.push(`· Requested specific ending: ${b.customEnding}`);
+    if (b.clues.length) {
+      const trustEn: Record<ClueTrust, string> = { true: 'true', half: 'half-true', false: 'false' };
+      lines.push('[CLUE CHAIN — source of truth, land every entry]');
+      for (const c of b.clues) {
+        const parts = [`"${c.id}" (${trustEn[c.trust]})`];
+        if (c.source) parts.push(`source ${c.source}`);
+        parts.push(`found at ${c.gainAt.join(' / ') || '—'}`, `unlocks ${c.opens.join(' / ') || '—'}`);
+        if (c.requires.length) parts.push(`requires ${c.requires.join(' / ')} first`);
+        if (c.exposeAt) parts.push(`exposed at ${c.exposeAt}`);
+        if (c.requiredFor.length) parts.push(`required for ${c.requiredFor.join(' / ')}`);
+        lines.push(`· ${parts.join('; ')}`);
+      }
+      lines.push('[CLUE RULES] every clue must be obtainable somewhere (no spontaneous clues); a false clue must be disproven at its declared exposure point and must not read as definitely false before that; a clue cannot be used before its prerequisite clue is obtained; a clue that is required for an ending must actually be what unlocks it; clues only supply evidence for the player’s inference — they never make the choice for the player.');
+      const mids = validateClueChain(b, 'en').filter((i) => i.severity === 'mid');
+      if (mids.length) lines.push(`[CLUE SELF-CHECK — handle in the draft] ${mids.map((i) => i.evidence).join('; ')}`);
+    }
     lines.push('· Hard rules: every choice point offers at least 2 real options (different costs → different consequences); no fake choices where both paths converge; every branch leads to an ending — no dead ends, no self-loops, no dangling edges; the ending reached is determined by the cumulative lean of key choices and must match the character arc; give immediate feedback after each choice (attitude/resource/danger changes); the episode ends on a new cliffhanger; never spoil option outcomes in dialogue; branch options and their destinations are marked naturally in △ action lines using the same format.');
     return lines.join('\n');
   }
@@ -167,6 +339,22 @@ export function buildBranchDirective(b: BranchBriefInput, lang: BranchLang = 'zh
     `◆ 利害压量：${STAKES_ZH[b.stakesLevel]}`,
   ];
   if (b.customEnding) lines.push(`◆ 期望的特定结局：${b.customEnding}`);
+  if (b.clues.length) {
+    const trustZh: Record<ClueTrust, string> = { true: '真线索', half: '半真线索', false: '假线索' };
+    lines.push('◆ 线索链（事实源，逐条落地）：');
+    for (const c of b.clues) {
+      const parts = [`「${c.id}」（${trustZh[c.trust]}）`];
+      if (c.source) parts.push(`来源 ${c.source}`);
+      parts.push(`可得于 ${c.gainAt.join(' / ') || '—'}`, `可解锁 ${c.opens.join(' / ') || '—'}`);
+      if (c.requires.length) parts.push(`需先拿到 ${c.requires.join(' / ')}`);
+      if (c.exposeAt) parts.push(`拆穿于 ${c.exposeAt}`);
+      if (c.requiredFor.length) parts.push(`该结局必需：${c.requiredFor.join(' / ')}`);
+      lines.push(`   · ${parts.join('；')}`);
+    }
+    lines.push('◆ 线索铁律：每条线索必须有可得之处（不能凭空出现）；假线索必须在声明的拆穿点被证伪，拆穿之前不得让玩家确定它是假的；前置线索未到手不得使用后置线索；声称某结局必需的线索必须真的打开该结局；线索只提供推理依据，不替玩家做选择。');
+    const mids = validateClueChain(b, 'zh').filter((i) => i.severity === 'mid');
+    if (mids.length) lines.push(`◆ 线索自检提示（成稿中需处理）：${mids.map((i) => i.evidence).join('；')}`);
+  }
   lines.push('◆ 闭环铁律：每个选择点至少 2 个真选项（代价不同→后果不同）；禁止假选择（两条路结果相同）；每条支路必须通向一个结局——无死胡同、无自环、无悬空连线；结局由关键选择的累积倾向决定且匹配人物弧光；选择后立刻给反馈（人物态度/资源/危险发生变化）；集尾在新悬念处断开；不剧透选项后果；分支选项与去向在 △ 动作行中用同一版式自然标出。');
   return lines.join('\n');
 }

@@ -110,4 +110,53 @@ describe('互动分支·分支简报 HTTP 闭环（串行）', { concurrency: 1 
       MP.callText = orig;
     }
   });
+
+  it('v2.333 悬空线索（无获得处）：422 CLUE_VALIDATION_FAILED，扣费前拦截', async () => {
+    mem._seedUser({ id: 'u_br_clue_bad', level: 'BASIC', balance: 5000 });
+    mem._projects.set('p_br_clue_bad', { id: 'p_br_clue_bad', userId: 'u_br_clue_bad', bible: null, mode: 'interactive' });
+    const r = await call('u_br_clue_bad', 'BASIC', {
+      projectId: 'p_br_clue_bad', brief,
+      branchBrief: {
+        mainLine: '外卖员小陈送到别墅区发现收件人是前女友',
+        choicePoints: '前女友求助他送文件给现任男友',
+        endingsMain: 1, endingsHidden: 1, endingsBad: 1,
+        clues: [{ id: '锈钥匙', trust: 'true', source: '老管家', gainAt: [], opens: ['隐藏结局1'] }],
+      },
+    });
+    assert.strictEqual(r.status, 422);
+    assert.strictEqual(r.json.error, 'CLUE_VALIDATION_FAILED');
+    assert.strictEqual(r.json.field, 'clues');
+    assert.ok(r.json.errors.some((e) => e.type === 'clue_unobtainable'));
+    assert.strictEqual(mem._accounts.get('u_br_clue_bad').balance, 5000);
+  });
+
+  it('v2.333 合法线索链：指令块注入线索事实源，文字与拆穿点逐字落地', async () => {
+    mem._seedUser({ id: 'u_br_clue_ok', level: 'BASIC', balance: 5000 });
+    mem._projects.set('p_br_clue_ok', { id: 'p_br_clue_ok', userId: 'u_br_clue_ok', bible: null, mode: 'interactive' });
+    const captured = [];
+    const orig = MP.callText;
+    MP.callText = async (tier, role, prompt) => { captured.push({ role, prompt }); return orig(tier, role, prompt); };
+    try {
+      const r = await call('u_br_clue_ok', 'BASIC', {
+        projectId: 'p_br_clue_ok', brief,
+        branchBrief: {
+          mainLine: '外卖员小陈送到别墅区发现收件人是前女友',
+          choicePoints: '前女友求助他送文件给现任男友',
+          endingsMain: 1, endingsHidden: 1, endingsBad: 1,
+          clues: [
+            { id: '锈钥匙', trust: 'true', source: '老管家在杂物间递出', gainAt: ['选择点3'], opens: ['隐藏结局1'], requiredFor: ['隐藏结局1'] },
+            { id: '假账本', trust: 'false', source: '秘书故意留在桌上', gainAt: ['选择点2'], opens: ['坏结局1'], exposeAt: '选择点4' },
+          ],
+        },
+      });
+      assert.strictEqual(r.status, 200);
+      assert.ok(r.events.some((e) => e.stage === 'done'));
+      const writerP = captured.filter((c) => c.role === 'writer').map((c) => c.prompt).join('\n');
+      assert.ok(writerP.includes('线索链') && writerP.includes('锈钥匙') && writerP.includes('假账本'));
+      assert.ok(writerP.includes('拆穿于 选择点4'));
+      assert.strictEqual(mem._accounts.get('u_br_clue_ok').balance, 4990);
+    } finally {
+      MP.callText = orig;
+    }
+  });
 });
