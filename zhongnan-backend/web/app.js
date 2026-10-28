@@ -6583,6 +6583,23 @@
     }).join('');
     const issues = [];
     if (fmt.violations && fmt.violations.length) issues.push(...fmt.violations.slice(0, 4));
+    // v2.341 单镜可生成性：format.shotPlan（只 AIGC 有）——巨镜/纯台词镜是硬伤，5-8秒与多台词只是成本提示
+    const sp = fmt.shotPlan || null;
+    let shotBlock = '';
+    if (sp) {
+      const lvl = { ok: [en ? 'Shots generatable' : '单镜可生成', '#3fbf8f'], watch: [en ? 'Generatable · cost flags' : '可生成 · 有成本提示', '#e08a2e'], over: [en ? 'Shots not generatable' : '单镜不可生成', '#e0564a'] }[sp.level] || ['-', '#8a94a6'];
+      const sev = { high: '#e0564a', mid: '#e08a2e' };
+      const st = sp.stats || {};
+      const items = (sp.issues || []).map((it) =>
+        `<li style="border-left:3px solid ${sev[it.severity] || '#8a94a6'};margin:4px 0;padding-left:8px">${escapeHtml(it.message)}</li>`).join('');
+      shotBlock = `
+        <div class="ad-block" style="grid-column:1/-1">
+          <div class="ad-lbl" style="color:${lvl[1]}">${lvl[0]}　${en ? 'score' : '单镜分'} ${sp.score}</div>
+          <div class="ad-meta">${en ? 'Shots' : '镜头数'} ${st.shotCount ?? '-'}　${en ? 'Per min' : '每分镜数'} ${st.shotsPerMinute ?? '-'}　${en ? 'Avg units' : '均长当量'} ${st.avgUnits ?? '-'}　${en ? 'Longest' : '最长单镜'} ${st.maxSeconds ?? '-'}s　${en ? 'No-visual shots' : '无画面镜'} ${st.visualessShots ?? 0}　${en ? 'Max lines/shot' : '单镜台词峰值'} ${st.maxLinesPerShot ?? 0}</div>
+          ${items ? `<ul class="ad-issues" style="margin:6px 0 0;padding-left:2px;list-style:none">${items}</ul>`
+            : `<div class="ad-ok">${en ? 'Every shot is renderable by image/video/audio models.' : '每个镜头都能被生图/视频/配音模型直接执行。'}</div>`}
+        </div>`;
+    }
     box.innerHTML = `
       <div class="ad-head"><b>${en ? 'Z-AIGC composition dashboard' : 'Z-AIGC 制作本构成仪表盘'}</b>
         <span class="ad-plan">${en ? plan.noteEn : plan.noteZh}</span></div>
@@ -6598,6 +6615,7 @@
           <div class="ad-lbl">${en ? 'Per-scene spoken ratio (blue=in band, orange=off)' : '逐场发声占比（蓝=合理，橙=偏）'}</div>
           <div class="ad-spark">${spark}</div>
         </div>
+        ${shotBlock}
       </div>
       ${issues.length ? `<div class="ad-issues">${en ? 'To fix: ' : '小南建议：'}${issues.map((x) => `· ${escapeHtml(x)}`).join(' ')}</div>` : `<div class="ad-ok">${en ? 'Composition is production-ready for an AI-video pipeline.' : '构成合理，可直接进入 AI 视频自动化工作流拆分镜。'}</div>`}`;
   }

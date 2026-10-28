@@ -15,6 +15,7 @@ import { dialogueScan, buildVoiceDirective, levelFromStyle, ColloquialLevel } fr
 import { lifeDetailDirective, groundedScan } from '../engine/lifelike';
 import { validateScript, ScriptMode, scriptFormatDirective } from '../engine/script-format';
 import { buildShotManifest, planAigcVolume, analyzeAigcSceneCurve, validateAigcScreenplay, boostSpokenRatio, analyzeAigcComposition } from '../engine/aigc-screenplay';
+import { checkAigcShotFeasibility } from '../engine/aigc-shot-feasibility'; // v2.341 单镜可生成性闸门（拆不开的巨镜/纯台词镜进修复轮）
 import { planAigcBeats, type AigcBeatPlan } from '../engine/aigc-beat';
 import { adaptScriptLength, planTrim, hardTrimToRange } from '../engine/script-length';
 import { buildSampleScript } from '../engine/sample-script';
@@ -2802,11 +2803,14 @@ ${techLines}
     // 润色岗只按 Z-AIGC 流畅本重排，不改剧情；issue 由机器诊断给出，英文链路全部英文（零中文）
     const aigcDur = options.aigcDurationMin ?? 1;
     let cov = validateAigcScreenplay(draft, hookLang === 'en' ? 'en' : 'zh');
+    // v2.341 单镜可生成性：巨镜/纯台词镜同样是硬伤，与场级问题一起驱动修复轮
+    let shotPlan = checkAigcShotFeasibility(draft, aigcDur, hookLang === 'en' ? 'en' : 'zh');
     let aigcFmtRetry = 0;
     const maxFmtRetry = 3;
-    while (!cov.pass && aigcFmtRetry < maxFmtRetry) {
+    while ((!cov.pass || shotPlan.level === 'over') && aigcFmtRetry < maxFmtRetry) {
       aigcFmtRetry += 1;
-      const issueList = [...cov.sceneIssues, ...cov.smoothnessIssues, ...cov.compositionIssues].slice(0, 10);
+      const shotIssues = shotPlan.issues.filter((i) => i.severity === 'high').map((i) => i.message);
+      const issueList = [...cov.sceneIssues, ...cov.smoothnessIssues, ...cov.compositionIssues, ...shotIssues].slice(0, 10);
       const comp = cov.composition;
       const spokenGap = comp && comp.spokenRatio < 0.18
         ? Math.max(80, Math.round((0.22 * comp.totalCjk) - comp.spokenCjk))
@@ -2826,6 +2830,7 @@ ${techLines}
           + '3. Inner voice and sound are carried ONLY by natural parentheticals inside prose: (inner: ...), (V.O.: ...), (SFX: ...), (MUSIC: ...), (AMBIENT: ...).\n'
           + '4. Every spoken line is its own line as NAME (emotion): dialogue with short lines; spoken dialogue+V.O.+inner monologue totals 18-28% of text, the other 72-82% is non-spoken visual/action/atmosphere narrative.\n'
           + '5. Every scene renders five dimensions: environment/light/space, character action, micro-emotion, sound atmosphere, dialogue (only a very short transition beat may omit dialogue).\n'
+          + '6. Shot granularity (generation feasibility): no single shot may carry more than about 140 character-equivalents (~8s of footage) or 4 dialogue lines; a monologue pile-up must be spread across shots by interleaving short visual action beats. Never leave a shot with dialogue but no visual description — image/video models need something to render.\n'
           + spokenDirective
           + '\nMachine-detected issues to fix:\n- ' + issueList.join('\n- ')
           + `\nCharacters: ${Object.keys(cast).join(', ')}. Draft:\n${draft.slice(0, 8000)}`
@@ -2834,7 +2839,8 @@ ${techLines}
           + '②每个场标独占一行，格式为“内景/外景 地点·时间”，全集3-5场，不允许有游离在场标之外的文本行；\n'
           + '③内心/OS/画外音/音效/配乐/环境音只能用自然段内的自然括号承载，如（内心：…）（OS：…）（音效：…）（配乐：…）；\n'
           + '④每句台词独占一行，格式为“角色名（情绪）：台词”，用短句；台词+OS+内心独白只占全片18%-28%，其余72%-82%必须是不发声的环境/动作/氛围画面叙述；\n'
-          + '⑤每场都要写足五个维度：环境光影空间、人物动作、微情绪、声音氛围、台词（极短过场短场可豁免台词）。\n'
+          + '⑤每场都要写足五个维度：环境光影空间、人物动作、微情绪、声音氛围、台词（极短过场短场可豁免台词）；\n'
+          + '⑥单镜可生成性：单个镜头承载不超过约140字当量（成片约8秒）或4句台词；台词成堆的段落要用简短画面动作穿插开、拆给相邻镜头；任何镜头都不能只有台词没有画面（生图/视频模型需要可生成内容）。\n'
           + spokenDirective
           + '\n机器诊断出的具体问题：\n- ' + issueList.join('\n- ')
           + `\n人物：${Object.keys(cast).join('、')}。原稿：\n${draft.slice(0, 8000)}`;
@@ -2844,6 +2850,7 @@ ${techLines}
       const lpAfter = adaptScriptLength(draft, 'AIGC', aigcDur);
       if (!lpAfter.ready && lpAfter.status === 'over') draft = hardTrimToRange(draft, 'AIGC', aigcDur).text;
       cov = validateAigcScreenplay(draft, hookLang === 'en' ? 'en' : 'zh');
+      shotPlan = checkAigcShotFeasibility(draft, aigcDur, hookLang === 'en' ? 'en' : 'zh');
       lengthPlan = adaptScriptLength(draft, 'AIGC', aigcDur);
     }
     // v2.80 发声比兜底：3 轮修复后仍 <18%，确定性把叙述中的内心句转为 (inner:…) 独白

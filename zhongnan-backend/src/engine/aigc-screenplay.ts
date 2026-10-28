@@ -462,11 +462,15 @@ function inferLight(scene: AigcScene, t: string): string {
   if (/昼|日|中午|午后|明亮/.test(mix)) return '日间自然光，均匀布光';
   return '随剧情情绪定光，保持同场一致';
 }
-const SENT_SPLIT = /(?<=[。！？!?…])/;
+// 中英文句界：中文按全角标点切；英文句号必须后接空白才切（避免 INT. / U.S. / 3.5 被误切）
+const SENT_SPLIT = /(?<=[。！？!?…])|(?<=\.)(?=\s)/;
 
 /** 由流畅正文确定性生成机器分镜清单（正文本身不写任何镜头术语） */
 export function buildShotManifest(text: string): { title: string; shots: MachineShot[]; shotCount: number } {
   const p = parseAigcEpisode(text);
+  const en = isEnglishText(text || '');
+  // 分块按语言等量：中文 70 汉字；英文 42 词（≈70 汉字当量），避免英文一段一镜
+  const chunkLimit = en ? 42 : 70;
   const shots: MachineShot[] = [];
   for (const sc of p.scenes) {
     let cur: MachineShot | null = null;
@@ -485,13 +489,24 @@ export function buildShotManifest(text: string): { title: string; shots: Machine
     };
     for (const b of sc.blocks) {
       if (b.type === 'narrate') {
-        // 长叙述段按句拆成 ≤2 个镜头，保证单镜头信息密度可被视频模型执行
-        const sents = b.text.split(SENT_SPLIT).map((s) => s.trim()).filter(Boolean);
+        // 长叙述段按句拆成多个镜头，保证单镜头信息密度可被视频模型执行；
+        // 英文单句常超过分块上限，再按逗号切短句（仅英文，中文保持原句界）。
+        const sents = b.text.split(SENT_SPLIT)
+          .flatMap((s) => {
+            const t = s.trim();
+            if (!t) return [];
+            if (!en || blockUnits(t, en) <= chunkLimit) return [t];
+            return t.split(/(?<=,)\s+/).map((x) => x.trim()).filter(Boolean);
+          });
         const chunks: string[] = [];
         let buf = '';
+        // 合块上限：先判「再加一句会不会超太多」，避免两块相加后超限
+        const cap = Math.round(chunkLimit * 1.25);
         for (const s of sents) {
-          buf += s;
-          if (countCjk(buf) >= 70) { chunks.push(buf); buf = ''; }
+          const joined = en && buf ? `${buf} ${s}` : buf + s;
+          if (buf && blockUnits(joined, en) > cap) { chunks.push(buf); buf = s; continue; }
+          buf = joined;
+          if (blockUnits(buf, en) >= chunkLimit) { chunks.push(buf); buf = ''; }
         }
         if (buf) chunks.push(buf);
         for (const ch of chunks) {

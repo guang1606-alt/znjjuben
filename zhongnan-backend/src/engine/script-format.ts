@@ -47,6 +47,7 @@ const ACTION_RE = /(^|\n)\s*[△▲*✦]\s*\S/;
 const DIALOGUE_RE = /(^|\n)\s*(?:[一-龥·]{2,6}|[A-Z][A-Za-z.'-]{1,19}(?:\s[A-Z][A-Za-z.'-]{1,19})?)(?:（[^）]{0,10}）|\([^)]{0,20}\))?\s*[：:]\s*\S/m;
 
 import { checkLiveFeasibility, type LiveFeasibilityReport } from './live-action-feasibility';
+import { checkAigcShotFeasibility, type AigcShotReport } from './aigc-shot-feasibility';
 
 export interface FormatReport {
   mode: ScriptMode;
@@ -64,6 +65,8 @@ export interface FormatReport {
   score: number; // 0-100
   /** v2.337 真人实拍可拍性/制片可行性（AIGC 制式不适用，缺省不填） */
   feasibility?: LiveFeasibilityReport;
+  /** v2.341 AIGC 单镜可生成性（LIVE 制式不适用，缺省不填） */
+  shotPlan?: AigcShotReport;
 }
 
 export function validateScript(text: string, mode: ScriptMode = 'LIVE', durationMin = 1): FormatReport {
@@ -89,16 +92,22 @@ export function validateScript(text: string, mode: ScriptMode = 'LIVE', duration
     if (cov.sceneCount === 0) violations.push('缺标准场景信息（内景/外景 地点·时间）');
     violations.push(...cov.sceneIssues, ...cov.smoothnessIssues, ...cov.compositionIssues);
     if (pollution.length) violations.push(`含提示词式污染 ${pollution.length} 处`);
+    // v2.341 单镜闸门：拆不开的巨镜/纯台词无画面镜与版式违规同级拦截；
+    // 5-8 秒与多台词只作成本提示（shotPlan.issues），不阻断但计入单镜打分。
+    const shotPlan = checkAigcShotFeasibility(text, d, lang);
+    for (const iss of shotPlan.issues) {
+      if (iss.severity === 'high') violations.push(lang === 'en' ? `Shot: ${iss.message}` : `镜头不可生成：${iss.message}`);
+    }
     const wordScore = cjk < lo ? Math.max(0, 40 * cjk / lo)
       : cjk > hi ? Math.max(0, 40 * (1 - (cjk - hi) / hi)) : 40;
-    // 字数40 + AIGC五维/流畅60（validateAigcScreenplay 满分100，折算60%）
+    // 字数40 + AIGC五维/流畅60（validateAigcScreenplay 满分100，折算60%）；单镜结论走 shotPlan，不重复折损总分
     const score = Math.round(wordScore + cov.score * 0.6);
     return {
       mode, cjk, lang, range: [lo, hi], inRange: cjk >= lo && cjk <= hi,
       hasScene: cov.sceneCount > 0,
       hasAction: cov.dimensions.action > 0,
       hasDialogue: DIALOGUE_RE.test(text),
-      pollution, violations, pass: violations.length === 0, score,
+      pollution, violations, pass: violations.length === 0, score, shotPlan,
     };
   }
 
