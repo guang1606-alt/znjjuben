@@ -2536,7 +2536,7 @@
     dpPages = []; dpActive = dpEpisodeCount = 0; matData = null;
     tagChosen = [];
     ['worksGrid', 'worksCount', 'worksDetailTitle', 'epsList', 'scriptText', 'scoreGrid', 'diagBars', 'waveChart',
-      'roleStrip', 'staffLog', 'taskQueue', 'aigcDash', 'liveProdDash', 'dashBody', 'listenSegments', 'listenMeta', 'listenNote',
+      'roleStrip', 'staffLog', 'taskQueue', 'aigcDash', 'liveProdDash', 'dashBody', 'listenSegments', 'listenMeta', 'listenCastSheet', 'listenNote',
       'dpBody', 'dpSummary', 'dpTabs', 'matBody', 'matSummary', 'tagChosen', 'tagReport', 'tagWhy',
       'meAvatar', 'meNickname', 'meLevel', 'mePen', 'meBio', 'mePoints', 'meStorage', 'meInvite',
       'mineBox', 'fullText', 'fullTitle', 'fullNotice'].forEach((id) => {
@@ -6990,7 +6990,7 @@
     const token = listenBumpReqSeq(); // c208：单集入口清上一部剧片单上下文并作废在途连播请求
     const segBox = $('listenSegments');
     segBox.innerHTML = `<div class="diag-loading">${lang === 'en' ? 'Building narration script…' : '正在生成分段朗读稿…'}</div>`;
-    $('listenMeta').textContent = ''; $('listenNote').textContent = ''; $('listenTtsTip').classList.add('hidden');
+    $('listenMeta').textContent = ''; $('listenCastSheet').textContent = ''; $('listenNote').textContent = ''; $('listenTtsTip').classList.add('hidden');
     $('listenSeriesBar').classList.add('hidden'); $('listenResumeBar').classList.add('hidden');
     try {
       const r = await Api.request(`/api/generate/scripts/${scriptId}/listen?lang=${strategyLocale() === 'en' ? 'en' : 'zh'}`);
@@ -7012,7 +7012,7 @@
     const token = listenBumpReqSeq();
     const segBox = $('listenSegments');
     znSkeleton(segBox);
-    $('listenMeta').textContent = ''; $('listenNote').textContent = ''; $('listenTtsTip').classList.add('hidden');
+    $('listenMeta').textContent = ''; $('listenCastSheet').textContent = ''; $('listenNote').textContent = ''; $('listenTtsTip').classList.add('hidden');
     $('listenSeriesBar').classList.add('hidden'); $('listenResumeBar').classList.add('hidden');
     try {
       const pr = await Api.request(`/api/generate/projects/${projectId}/listen/playlist?lang=${strategyLocale() === 'en' ? 'en' : 'zh'}`);
@@ -7397,6 +7397,13 @@
     $('listenMeta').textContent = lang === 'en'
       ? `${d.segments.length} segments · ${d.dialogueCount} lines · roles: ${d.speakerSet.join('/') || '-'} · est. ${fmtDur(d.estSeconds)}`
       : `共${d.segments.length}个朗读段 · 台词${d.dialogueCount}句 · 角色：${d.speakerSet.join('、') || '旁白'} · 估算时长 ${fmtDur(d.estSeconds)}`;
+    // v2.342 逐角色配音/台词清单：真人排通告看台词量与发声时长，AIGC 配音按角色分配 TTS 声线
+    d.speakerSheet = Array.isArray(d.speakerSheet) ? d.speakerSheet : [];
+    $('listenCastSheet').textContent = d.speakerSheet.length
+      ? (lang === 'en'
+        ? 'Voice sheet: ' + d.speakerSheet.map((s) => `${s.name} ${Number(s.lines) || 0} lines · ${Number(s.chars) || 0} chars · ${(Number(s.estSeconds) || 0).toFixed(1)}s (${Number(s.share) || 0}%)`).join(' | ')
+        : '配音/台词清单：' + d.speakerSheet.map((s) => `${s.name} ${Number(s.lines) || 0}句·${Number(s.chars) || 0}字·${(Number(s.estSeconds) || 0).toFixed(1)}s(${Number(s.share) || 0}%)`).join('｜'))
+      : '';
     $('listenNote').textContent = (d.note.title ? d.note.title + '：' : '') + d.note.lines.join(' ');
     const tts = $('listenTtsTip');
     const bar = $('listenPlayer');

@@ -1487,6 +1487,15 @@ describe('c206 听剧本 GET /scripts/:id/listen（多角色声线）', { concur
     assert.deepStrictEqual(Object.keys(j.cast.characters).sort(), ['林晚', '陈默']);
     assert.notDeepStrictEqual(j.cast.characters['林晚'], j.cast.characters['陈默'], '两个角色声线必须不同');
     assert.notDeepStrictEqual(j.cast.characters['林晚'], j.cast.narrator, '角色声线与旁白不同');
+    // v2.342 逐角色配音/台词清单：结论（总时长）之外必须有可按角色执行的清单
+    assert.ok(Array.isArray(j.speakerSheet), '必须返回逐角色配音清单');
+    assert.deepStrictEqual(j.speakerSheet.map((s) => s.name).sort(), ['林晚', '陈默']);
+    const lin = j.speakerSheet.find((s) => s.name === '林晚');
+    assert.strictEqual(lin.lines, 1);
+    assert.ok(lin.chars > 0 && lin.estSeconds > 0 && lin.share > 0);
+    assert.ok(Number.isInteger(lin.firstIdx) && lin.firstIdx >= 0);
+    assert.ok(Math.abs(j.speakerSheet.reduce((n, s) => n + s.estSeconds, 0) - j.dialogueSeconds) <= 0.1, '角色秒数合计必须等于台词发声总秒数');
+    assert.strictEqual(j.speakerSheet.reduce((n, s) => n + s.lines, 0), j.dialogueCount);
     assert.ok(j.note && j.note.title);
     assert.strictEqual(mem._accounts.get(uid).balance, before, '听剧本零扣分');
   });

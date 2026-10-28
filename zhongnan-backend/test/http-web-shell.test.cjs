@@ -58,6 +58,16 @@ describe('前端站点托管 + 项目创建端点', { concurrency: 1 }, () => {
     assert.match(app, /真人实拍制片可行性/);
     assert.match(app, /Not shootable/);
   });
+  it('v2.342 听剧本逐角色配音清单资源已下发（容器/渲染/中英文案/清屏）', async () => {
+    const html = await (await fetch(base + '/')).text();
+    assert.match(html, /id="listenCastSheet"/);
+    const app = await (await fetch(base + '/app.js')).text();
+    assert.match(app, /d\.speakerSheet = Array\.isArray\(d\.speakerSheet\)/);
+    assert.match(app, /配音\/台词清单/);
+    assert.match(app, /Voice sheet:/);
+    assert.match(app, /'listenCastSheet'/); // 切项目清屏列表必须含新容器
+    assert.match(app, /\$\('listenCastSheet'\)\.textContent = ''/, '打开/连播入口必须先清空角色清单');
+  });
   it('前端路由任意非 /api 路径回退 index.html（刷新不 404）', async () => {
     const r = await fetch(base + '/studio/some/deep/route', { headers: { Accept: 'text/html' } });
     assert.strictEqual(r.status, 200);

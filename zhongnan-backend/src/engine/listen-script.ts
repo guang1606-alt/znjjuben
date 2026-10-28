@@ -20,6 +20,22 @@ export interface ListenSegment {
   /** 该片段估算秒数（按朗读语速） */
   estSeconds: number;
 }
+/** v2.342 逐角色配音/台词清单：把台词段按角色聚合，供真人排通告与 AIGC TTS 配音排期 */
+export interface SpeakerWorkload {
+  /** 角色名（与 parseScriptLine 的 speaker 同口径，旁白不计入） */
+  name: string;
+  /** 台词句数 */
+  lines: number;
+  /** 台词字符数（含标点，纯文本口径） */
+  chars: number;
+  /** 该角色发声估算秒数（台词段 estSeconds 合计） */
+  estSeconds: number;
+  /** 占全集台词发声时长的百分比（0-100，整数） */
+  share: number;
+  /** 首次开口所在的朗读段号（前端点击定位） */
+  firstIdx: number;
+}
+
 export interface ListenScript {
   segments: ListenSegment[];
   totalChars: number;
@@ -28,6 +44,10 @@ export interface ListenScript {
   dialogueCount: number;
   sceneCount: number;
   speakerSet: string[];
+  /** v2.342 逐角色台词量与发声时长（按 estSeconds 降序；无台词时为空数组） */
+  speakerSheet: SpeakerWorkload[];
+  /** v2.342 全集台词发声估算秒数（＝speakerSheet 合计，不含旁白） */
+  dialogueSeconds: number;
   /** 拼接好的纯朗读稿（旁白/角色前缀，供直接 TTS 或用户试听） */
   narration: string;
 }
@@ -194,6 +214,27 @@ export function buildListenScript(raw: string, opts: { lang?: 'zh' | 'en' } = {}
   }
 
   const estSeconds = Math.round(segments.reduce((acc, s) => acc + s.estSeconds, 0) * 10) / 10;
+  // v2.342 逐角色清单：直接聚合台词段（单一事实源），旁白/场标不参与
+  const sheetMap = new Map<string, { name: string; lines: number; chars: number; estSeconds: number; firstIdx: number }>();
+  for (const s of segments) {
+    if (s.kind !== 'dialogue') continue;
+    let e = sheetMap.get(s.speaker);
+    if (!e) { e = { name: s.speaker, lines: 0, chars: 0, estSeconds: 0, firstIdx: s.idx }; sheetMap.set(s.speaker, e); }
+    e.lines += 1;
+    e.chars += s.text.length;
+    e.estSeconds += s.estSeconds;
+  }
+  const dialogueSeconds = Math.round([...sheetMap.values()].reduce((acc, e) => acc + e.estSeconds, 0) * 10) / 10;
+  const speakerSheet: SpeakerWorkload[] = [...sheetMap.values()]
+    .map((e) => ({
+      name: e.name,
+      lines: e.lines,
+      chars: e.chars,
+      estSeconds: Math.round(e.estSeconds * 10) / 10,
+      share: dialogueSeconds > 0 ? Math.round((e.estSeconds / dialogueSeconds) * 100) : 0,
+      firstIdx: e.firstIdx,
+    }))
+    .sort((a, b) => b.estSeconds - a.estSeconds || b.lines - a.lines || a.name.localeCompare(b.name));
   const narration = segments
     .map((s) => (s.kind === 'dialogue' ? `${s.speaker}${s.cue ? `（${s.cue}）` : ''}：${s.text}` : s.text))
     .join('\n');
@@ -201,6 +242,7 @@ export function buildListenScript(raw: string, opts: { lang?: 'zh' | 'en' } = {}
     segments, totalChars, estSeconds,
     dialogueCount, sceneCount,
     speakerSet: [...speakers],
+    speakerSheet, dialogueSeconds,
     narration,
   };
 }
