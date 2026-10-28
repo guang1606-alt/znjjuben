@@ -1,0 +1,38 @@
+name: CI
+
+on:
+  push:
+    branches: ['**']
+  pull_request:
+    branches: ['**']
+
+jobs:
+  test:
+    name: typecheck + test (Node 20)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: zhongnan-backend
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: zhongnan-backend/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: TypeScript typecheck
+        run: npm run typecheck
+        # 等价于: npx tsc --noEmit
+        # 失败 → CI 红，必须先修类型错误才能 merge
+
+      - name: Run full test suite
+        run: npm test
+        # 等价于: node scripts/run-tests.cjs
+        # 6073 用例全绿才能 merge
