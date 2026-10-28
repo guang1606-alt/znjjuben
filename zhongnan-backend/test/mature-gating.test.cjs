@@ -53,12 +53,14 @@ test('所有法域露骨色情开关恒为关闭，不可配置放开', () => {
   Object.values(G.JURISDICTIONS).forEach((j) => assert.strictEqual(j.explicitSexual, false));
 });
 
-test('第11模式可用且标记mature，第12电影剧本v2.86上线PRO可用', () => {
-  const x = M.CREATION_MODES.find((m) => m.id === 'mature_x');
-  assert.strictEqual(x.mature, true);
+test('v2.325 后九大模式：成年向不再单列，历史 mature_x/xscript 归一到 film，授权红线由 auth-policy 继续承担', () => {
+  // 注册表里不再有 mature_x 条目，但历史 raw 名仍可识别并归一（旧项目不变成死胡同）
+  assert.strictEqual(M.CREATION_MODES.find((m) => m.id === 'mature_x'), undefined);
+  assert.strictEqual(M.canonicalModeId('mature_x'), 'film');
+  assert.strictEqual(M.canonicalModeId('xscript'), 'film');
   assert.strictEqual(M.modeAvailable('mature_x', 'PRO'), true);
-  // v2.86 电影剧本模式上线，不再是 coming_soon
+  // 电影剧本模式 PRO 可用，不再是 coming_soon
   assert.strictEqual(M.isComingSoon('film'), false);
   assert.strictEqual(M.modeAvailable('film', 'PRO'), true);
-  assert.strictEqual(M.CREATION_MODES.length, 12);
+  assert.strictEqual(M.CREATION_MODES.length, 9);
 });

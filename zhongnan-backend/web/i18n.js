@@ -4,11 +4,11 @@
   else root.I18N = factory();
 })(typeof self !== 'undefined' ? self : this, function () {
   'use strict';
+  // v2.325 整合：删 mature_x（xscript 成年向）；novel 并入 adapt（创意改编内加小说压缩子轨道）；softad 并入 shortvideo（短视频脚本内加品牌简报可选）
   const MODES = [
     { id: 'interview', free: 'basic' }, { id: 'adapt', free: 'basic' }, { id: 'tags', free: 'free' },
-    { id: 'novel', free: 'basic' }, { id: 'interactive', free: 'basic' }, { id: 'hit_lab', free: 'advanced' },
+    { id: 'interactive', free: 'basic' }, { id: 'hit_lab', free: 'advanced' },
     { id: 'hot', free: 'advanced' }, { id: 'shortvideo', free: 'advanced' },
-    { id: 'softad', free: 'advanced' }, { id: 'xscript', free: 'paid', lock: true },
     { id: 'long_ip', free: 'pro' }, { id: 'film', free: 'pro' },
   ];
   const DICT = {
@@ -18,13 +18,13 @@
       home: '首页', homeEyebrow: 'ZHONGNAN · FILM ATELIER',
       homeTitle: '把一个灵感，交给一整支 AI 编剧团队',
       homeSub: '十大岗位智能体协同创作，分级把关、去 AI 化、贴合市场，进度全程可见。',
-      homeQuickTitle: '快捷创作', homeAllModes: '全部 12 种模式 →',
+      homeQuickTitle: '快捷创作', homeAllModes: '全部 9 种模式 →',
       homeToolsTitle: '创作工具箱', homeToolsSub: '像真实编剧团队一样开会、判断、围读改稿',
       homeUpdatesTitle: '最新动态', homeUpdatesEmpty: '暂无新动态',
       zoneCreate: '创作专区', works: '我的作品', market: '剧本交易', square: '交流广场', vip: '会员充值', backToList: '返回列表',
       navRoom: '编剧室', navToolbox: '工具箱', navCraft: '递招', navNovel: '素材库', toolboxSub: '拆解爆款、反同质化、互动分支校验——像真实编剧团队一样判断与改稿。',
       skipToMain: '跳到主内容', navAria: '主导航', breadcrumbAria: '面包屑', adRollAria: '公告与合作位', roomPanelAria: '编剧室', worksSearchPh: '🔍 搜索项目标题…',
-      start: '开始创作', modesTitle: '选择创作模式（12 种）', modeTip: '不同会员等级解锁不同模式，越高阶越强', modesEyebrow: 'MODES',
+      start: '开始创作', modesTitle: '选择创作模式（9 种）', modeTip: '不同会员等级解锁不同模式，越高阶越强', modesEyebrow: 'MODES',
       episodes: '剧集数', platform: '目标平台', outLang: '剧本语言', engine: '创作引擎档',
       investWan: '预估投资额(万·选填,用于备案分类)', specialTopic: '特殊题材(政治/军事/民族宗教等)',
       gen: '生成剧本', generating: '多岗位协作中…', login: '登录 / 注册',
@@ -153,15 +153,15 @@
       tbTdBoom: '为什么好 · 为什么爆', tbTdTech: '可取技法（已同步进创作技能）', tbTdTagsL: '勾选要保留的标签（可增删，决定改编基因）',
       tbTdDirsL: '改编方向（只借底层逻辑，不抄表达）', tbTdOutline: '生成改编大纲（基础20/高级16/专业12积分）',
       mode: {
-        interview: '采访式创作', adapt: '创意改编', tags: '标签创建', novel: '小说改编', interactive: '互动短剧',
+        interview: '采访式创作', adapt: '创意改编', tags: '标签创建', interactive: '互动短剧',
         hit_lab: '爆款拆解·名场面', hot: '热点追更', shortvideo: '爆款短视频脚本',
-        softad: '剧情软广脑洞', xscript: 'X剧本（分级）', long_ip: '长系列IP创作', film: '电影剧本',
+        long_ip: '长系列IP创作', film: '电影剧本',
       },
       modeDesc: {
-        interview: '对话式引导，碎片灵感变完整剧本', adapt: '自有内容续写/衍生/联动/同人', tags: '标签组合，快速定向出本',
-        novel: '长篇小说压缩为短剧节奏', interactive: '分支选择、多结局可视化', hit_lab: '名场面前铺后延｜拆爆款批量出不侵权新本（逆向轨道专业版）',
-        hot: '借势全网热点快速出本', shortvideo: '强钩子前3秒 · 分镜化口播 · 每镜一句',
-        softad: '剧情化软广脑洞脚本', xscript: '合规分级 · 问卷授权后开通', long_ip: '多季/长系列/多IP联动，跨季伏笔与成长谱系', film: '三幕结构长片 · 90-120分钟院线/流媒体级别',
+        interview: '对话式引导，碎片灵感变完整剧本', adapt: '续写/衍生/联动/同人/小说压缩（v2.325 合并小说改编）', tags: '标签组合，快速定向出本',
+        interactive: '分支选择、多结局可视化', hit_lab: '名场面前铺后延｜拆爆款批量出不侵权新本（逆向轨道专业版）',
+        hot: '借势全网热点快速出本', shortvideo: '强钩子前3秒 · 分镜化口播 · 每镜一句（v2.325 合并剧情软广，可加品牌简报）',
+        long_ip: '多季/长系列/多IP联动，跨季伏笔与成长谱系', film: '三幕结构长片 · 90-120分钟院线/流媒体级别',
       },
     },
     en: {
@@ -305,16 +305,16 @@
       tbTdBoom: 'Why it works · why it blew up', tbTdTech: 'Reusable techniques (synced into craft skills)', tbTdTagsL: 'Keep these tags (editable; sets the adaptation DNA)',
       tbTdDirsL: 'Adaptation direction (reuse logic only, not expression)', tbTdOutline: 'Build adaptation outline (Basic 20 / Adv 16 / Pro 12 pts)',
       mode: {
-        interview: 'Interview', adapt: 'Adaptation', tags: 'By Tags', novel: 'Novel-to-drama', interactive: 'Interactive',
+        interview: 'Interview', adapt: 'Adaptation', tags: 'By Tags', interactive: 'Interactive',
         hit_lab: 'Hit Lab & Signature Scene', hot: 'Trend Chasing', shortvideo: 'Viral Short Video',
-        softad: 'Branded Story', xscript: 'X-Script (Rated)', long_ip: 'Long-Running IP', film: 'Feature Film',
+        long_ip: 'Long-Running IP', film: 'Feature Film',
       },
       modeDesc: {
-        interview: 'Conversational guidance, fragments to full script', adapt: 'Continue / spin-off / crossover / fanfic',
-        tags: 'Combine tags for a targeted draft', novel: 'Compress novels into short-drama pacing',
-        interactive: 'Branching choices & multi-ending', hit_lab: 'Expand a signature scene | deconstruct hits into safe new drafts (reverse track: Pro)',
-        hot: 'Ride trends, draft fast', shortvideo: 'Hook-in-3s · storyboarded voiceover · one line per shot',
-        softad: 'Story-driven branded script', xscript: 'Compliant rating · gated by questionnaire', long_ip: 'Multi-season / long series / IP crossover with cross-season continuity', film: 'Three-act feature film · 90-120 min theatrical / streaming',
+        interview: 'Conversational guidance, fragments to full script', adapt: 'Continue / spin-off / crossover / fanfic / novel compression (v2.325 merged Novel)',
+        tags: 'Combine tags for a targeted draft', interactive: 'Branching choices & multi-ending',
+        hit_lab: 'Expand a signature scene | deconstruct hits into safe new drafts (reverse track: Pro)',
+        hot: 'Ride trends, draft fast', shortvideo: 'Hook-in-3s · storyboarded voiceover · one line per shot (v2.325 merged Branded Story, brand brief optional)',
+        long_ip: 'Multi-season / long series / IP crossover with cross-season continuity', film: 'Three-act feature film · 90-120 min theatrical / streaming',
       },
     },
   };

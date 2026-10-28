@@ -4,14 +4,14 @@ const M = require('../dist/config/modes.js');
 const D = require('../dist/engine/export-doc.js');
 const FB = require('../dist/engine/feedback.js');
 
-test('创作模式保持十二大（v2.14 名场面+逆向整合为hit_lab、新增长IP；v2.86电影上线），等级权限逐级开放', () => {
-  assert.strictEqual(M.CREATION_MODES.length, 12);
+test('创作模式九大（v2.325 小说并入改编、软广并入短视频、成年向并入电影），等级权限逐级开放', () => {
+  assert.strictEqual(M.CREATION_MODES.length, 9);
   assert.strictEqual(M.modeAvailable('tag', 'FREE'), true);
   assert.strictEqual(M.modeAvailable('interview', 'FREE'), false);
-  assert.strictEqual(M.modesForLevel('BASIC').length, 5);
-  assert.strictEqual(M.modesForLevel('ADVANCED').length, 9);
-  // v2.86 电影剧本上线，专业版可用12个
-  assert.strictEqual(M.modesForLevel('PRO').length, 12);
+  assert.strictEqual(M.modesForLevel('BASIC').length, 4);
+  assert.strictEqual(M.modesForLevel('ADVANCED').length, 7);
+  // 九大模式全部上线，专业版可用9个
+  assert.strictEqual(M.modesForLevel('PRO').length, 9);
   // 第9种短视频、第10种软广均高级可用（与前端 wire-id 对齐）
   assert.strictEqual(M.modeAvailable('video_short', 'ADVANCED'), true);
   assert.strictEqual(M.modeAvailable('branded_skit', 'ADVANCED'), true);
@@ -22,15 +22,16 @@ test('创作模式保持十二大（v2.14 名场面+逆向整合为hit_lab、新
   assert.strictEqual(M.modeAvailable('long_ip', 'ADVANCED'), false);
   assert.strictEqual(M.modeAvailable('long_ip', 'PRO'), true);
 });
-test('前端线上 wire-id 全部能归一（旧 scene/reverse 归一到整合后的 hit_lab），12 模式不串模', () => {
+test('前端线上 wire-id 全部能归一（scene/reverse→hit_lab、novel→adapt、softad→video_short、xscript→film），9 模式不串模', () => {
   const wire = ['interview', 'adapt', 'tags', 'novel', 'interactive', 'hit_lab', 'hot', 'shortvideo', 'softad', 'xscript', 'longip', 'film'];
   const canon = wire.map((w) => M.canonicalModeId(w));
   assert.ok(canon.every(Boolean), '所有前端模式 id 必须可识别');
-  assert.strictEqual(new Set(canon).size, 12, '12个前端模式归一后仍为12个、不串模');
+  assert.strictEqual(new Set(canon).size, 9, '12个前端 wire-id 归一后收敛为9个 canonical 模式、不串模');
   assert.strictEqual(M.canonicalModeId('tags'), 'tag');
   assert.strictEqual(M.canonicalModeId('shortvideo'), 'video_short');
-  assert.strictEqual(M.canonicalModeId('softad'), 'branded_skit');
-  assert.strictEqual(M.canonicalModeId('xscript'), 'mature_x');
+  assert.strictEqual(M.canonicalModeId('softad'), 'video_short');
+  assert.strictEqual(M.canonicalModeId('novel'), 'adapt');
+  assert.strictEqual(M.canonicalModeId('xscript'), 'film');
   // 旧模式 id 向后兼容，统一进入整合后的工作台
   assert.strictEqual(M.canonicalModeId('scene'), 'hit_lab');
   assert.strictEqual(M.canonicalModeId('reverse'), 'hit_lab');

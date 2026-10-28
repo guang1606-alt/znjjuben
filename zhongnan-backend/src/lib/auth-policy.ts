@@ -58,7 +58,13 @@ export function registerFail(state: { failCount: number; firstFailAt: number | n
 }
 export function resetFail() { return { failCount: 0, firstFailAt: null as number | null, lockedUntil: null as number | null }; }
 
-/** 敏感/特殊模式授权门槛：成年向必须有有效成年授权（兼容前端 wire-id xscript） */
+/**
+ * 敏感/特殊模式授权门槛（合规红线，v2.327 恢复）：
+ * v2.325 把 mature_x / xscript 合并进 film 时不应连授权一起删——历史项目仍以 raw 模式名落库，
+ * 这些项目再次生成时必须继续走成年分级授权（问卷 + 免责），否则等于合并一到手就失守。
+ * 新版 film 属常规院线/流媒体题材，不在此列：成人向门槛只认历史成人向模式名。
+ */
 export function requiresMatureConsent(mode: string): boolean {
-  return mode === 'mature_x' || mode === 'xscript';
+  const m = String(mode ?? '').trim().toLowerCase();
+  return m === 'mature_x' || m === 'xscript' || m === 'x_script';
 }

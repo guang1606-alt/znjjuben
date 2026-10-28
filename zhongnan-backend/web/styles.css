@@ -261,7 +261,8 @@ h1, h2, h3, h4 { font-weight: 700; }
 .home-tool-card h3 { margin: 0; font-size: .98rem; font-family: var(--serif); }
 .home-tool-card p { margin: 0; color: var(--text-2); font-size: .8rem; line-height: 1.55; }
 .home-tool-card .tool-cost {
-  margin-top: auto; padding-top: 8px; font-size: .74rem; color: var(--gold); font-weight: 600;
+  position: static; top: auto; right: auto; margin-top: auto; padding-top: 8px;
+  font-size: .74rem; color: var(--gold); font-weight: 600;
 }
 .home-updates-body {
   background: var(--panel); border: 1px solid color-mix(in srgb, var(--line) 80%, transparent);
@@ -682,7 +683,8 @@ textarea { box-sizing: border-box; max-width: 100%; resize: vertical; background
 .tool-card h2,.tool-card h3{font-family:var(--serif);padding-right:124px;min-height:24px}
 @media (max-width:420px){ .tool-card h2,.tool-card h3{padding-right:96px} }
 .tool-card:hover{transform:translateY(-3px);box-shadow:var(--shadow-lg);border-color:var(--accent)}
-.tool-cost{position:absolute;top:13px;right:13px!important;min-height:0!important;font-size:.72rem;color:var(--gold-deep);background:var(--gold-soft);border:1px solid color-mix(in srgb,var(--gold) 30%,transparent);padding:2px 9px;border-radius:999px;font-weight:600}
+/* v2.324 收窄：只在 .tool-card / .mode-card 上下文绝对定位（避免误伤 .home-tool-card 等其他容器） */
+.tool-card .tool-cost, .mode-card .tool-cost{position:absolute;top:13px;right:13px!important;min-height:0!important;font-size:.72rem;color:var(--gold-deep);background:var(--gold-soft);border:1px solid color-mix(in srgb,var(--gold) 30%,transparent);padding:2px 9px;border-radius:999px;font-weight:600}
 /* A3 工具箱卡片分层：方法论一句话提示行（卡片 → 方法论 → 进工作台） */
 .tb-hint{display:flex;gap:6px;align-items:flex-start;margin-top:10px;padding:7px 10px;border-radius:8px;background:color-mix(in srgb,var(--accent) 7%,transparent);border:1px dashed color-mix(in srgb,var(--accent) 30%,transparent);font-size:.78rem;line-height:1.5;color:var(--text-2)}
 .tb-hint-icon{flex:none}

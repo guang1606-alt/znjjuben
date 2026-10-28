@@ -4,9 +4,10 @@
  *  - buildLongIpDirective：长系列IP创作（多季/长系列/多IP联动）的跨季结构与连续性指令
  * 纯函数、双语、零 IO；非对应模式返回空串。
  */
-import { HitLabTrack } from '../config/modes';
+import { HitLabTrack, canonicalModeId } from '../config/modes';
 
 type MLang = 'zh' | 'en';
+type DepthTier = 'speed' | 'balanced' | 'depth';
 
 /** 名场面工作台：轨道不同，方法论不同 */
 export function buildHitLabDirective(mode: string | undefined, track: HitLabTrack | string | undefined, lang: MLang = 'zh'): string {
@@ -47,11 +48,166 @@ export function buildHitLabDirective(mode: string | undefined, track: HitLabTrac
  * 任何模式的成稿仍须满足 场景行/△动作行/角色（情绪）：台词行 与制式字数区间，
  * 短视频/口播类以“分镜化场景 + △画面动作 + 旁白（情绪）：口播行”落地，而不是表格或提示词。
  */
+/** v2.327：历史成年向模式名（已并入 film）——授权闸门与成年向红线护栏都只对这些 raw 名生效 */
+const ADULT_LEGACY = new Set(['mature_x', 'xscript', 'x_script']);
+
+const ADULT_GUARD_ZH = `【成年向内容护栏】（历史成年向模式，仍受年龄分级授权约束）：
+· 张力靠暗示、留白与后果，不靠直露：情欲写情感与权力关系的拉扯，用关门/晨光/物件等镜头暗示替代性行为描写；暴力写压力与代价，不展示可操作的作案/制毒流程。
+· 道德灰度不等于价值虚无：主角可以复杂，但恶行要有后果、弱势者有尊严；批判性距离必须存在，伤害与犯罪绝不被美化成酷。
+· 零容忍红线：任何未成年人性化、露骨淫秽、血腥猎奇细节一律不写；疑似越界一律向"留白"收敛（成稿还会经过露骨内容硬禁闸，命中即拦截）。
+· 台词可冷峻粗粝但不淫秽；靠处境选择、信息差与道德困境制造高级惊悚，而不是感官堆砌。
+· 成稿仍按标准剧本版式与字数闸门：场景行、△动作行、角色（情绪）：台词行齐全。`;
+
+const ADULT_GUARD_EN = `[ADULT-CONTENT GUARDRAIL - legacy mature mode, still age-gated]:
+· Tension comes from implication, negative space and consequence, never from explicit depiction: erotic beats are written as an emotional and power struggle and conveyed through implication (a closing door, morning light, an object); violence conveys pressure and cost, never an executable crime or drug-making procedure.
+· Moral grey is not moral nihilism: the protagonist may be complex, yet wrongdoing must carry consequences and the vulnerable keep their dignity; critical distance is mandatory and harm or crime is never glamorised.
+· Zero-tolerance hard lines: any sexualisation of minors, explicit obscenity or gore-for-thrills is forbidden; when in doubt resolve toward implication - the draft still passes an explicit-content hard gate that blocks on hit.
+· Dialogue may be cold and gritty, never obscene; build premium thriller through dilemma, information asymmetry and moral pressure rather than sensory overload.
+· Still obey the mandatory screenplay layout and word-count gate: scene heads, action lines, NAME (emotion): dialogue lines all present.`;
+
 export function buildModeCraftDirective(mode: string | undefined, lang: MLang = 'zh'): string {
   if (!mode) return '';
-  const D = MODE_CRAFT_ZH[mode];
-  if (lang === 'en') return MODE_CRAFT_EN[mode] ?? '';
-  return D ?? '';
+  const raw = String(mode).trim().toLowerCase();
+  // v2.327：历史模式名先归一（novel→adapt / branded_skit→video_short / mature_x→film），
+  // 保证旧项目不会因合并而拿不到方法论，也避免出现"中文有、英文空"的单边残留。
+  const canon = canonicalModeId(raw) ?? raw;
+  const base = lang === 'en' ? (MODE_CRAFT_EN[canon] ?? '') : (MODE_CRAFT_ZH[canon] ?? '');
+  if (ADULT_LEGACY.has(raw)) {
+    const guard = lang === 'en' ? ADULT_GUARD_EN : ADULT_GUARD_ZH;
+    return base ? `${base}\n${guard}` : guard;
+  }
+  return base;
+}
+
+/**
+ * v2.326 Method Trace：成稿末尾显式输出"本集创作方法论"清单。
+ * 对应 Claude 技术主管的"深度维度"——AI 不只给结果，还要把用了什么方法显式化，让用户可追溯、可学习、可复用。
+ * 纯函数·双语·零 IO；hit_lab / long_ip / film 已有专属方法论指令，此处不追加（避免重复）。
+ * 输出格式：成稿最后一行（任何 action/台词之后）追加一行方法论清单，如 "【本集创作方法论：钩子前置 · 名场面优先 · 人物按功能合并】"。
+ */
+const METHOD_TRACE_ZH: Record<string, string> = {
+  interview: `· 成稿末尾（最后一个场景之后、任何附录之前）追加一行方法论清单，格式：\n【本集创作方法论：从口述碎片归位 · 人物欲望→核心冲突→代价→转折 · 四维记忆空间落地】\n按实际用到的方法列举，每条用"· "开头、用"、"或"· "分隔；最多列 3-5 条。`,
+  adapt: `· 成稿末尾（最后一个场景之后、任何附录之前）追加一行方法论清单，格式：\n【本集创作方法论：形态定性（续写/衍生/联动/同人）· 守核换境 · 只借底层方法不沿用措辞】\n按实际用到的方法列举；novel 子轨道须额外注明"钩子前置 · 人物按功能合并"，最多列 3-6 条。`,
+  tag: `· 成稿末尾追加一行方法论清单，格式：\n【本集创作方法论：标签焊接 · 情绪/关系先于题材 · 标签落地为具体设定】\n按实际用到的方法列举，最多列 3-5 条。`,
+  interactive: `· 成稿末尾追加一行方法论清单，格式：\n【本集创作方法论：真选择设计 · 分支闭环 · 选择前压情绪后给反馈】\n按实际用到的方法列举，最多列 3-5 条。`,
+  hot: `· 成稿末尾追加一行方法论清单，格式：\n【本集创作方法论：借势档位（强绑定/弱关联/反向）· 热点信号前置 · 故事脱离热点仍成立】\n按实际用到的方法列举，最多列 3-5 条。`,
+  video_short: `· 成稿末尾追加一行方法论清单，格式：\n【本集创作方法论：3秒钩子 · 每镜≤20字口播 · 单一主行动引导】\n按实际用到的方法列举；soft-ad 子轨道须额外注明"品牌是解题者不是主角"，最多列 3-6 条。`,
+};
+const METHOD_TRACE_EN: Record<string, string> = {
+  interview: `· Append one methodology line at the very end of the draft (after the last scene, before any appendix), format:\n【Episode methodology: fragment re-alignment · desire→conflict→stakes→turn · four-dimension memory】\nList methods actually used, each separated by " · "; 3-5 items max.`,
+  adapt: `· Append one methodology line at the very end of the draft, format:\n【Episode methodology: form choice (continue/spin-off/crossover/fanfic) · core preserve, setting swap · borrow method not wording】\nList methods actually used; novel-compression sub-track must additionally mention "front-load hooks · merge characters by function"; 3-6 items max.`,
+  tag: `· Append one methodology line at the very end of the draft, format:\n【Episode methodology: tag welding · emotion/rel before genre · tags land as concrete settings】\nList methods actually used, 3-5 items max.`,
+  interactive: `· Append one methodology line at the very end of the draft, format:\n【Episode methodology: real-choice design · branch closure · build stakes before choice】\nList methods actually used, 3-5 items max.`,
+  hot: `· Append one methodology line at the very end of the draft, format:\n【Episode methodology: borrow tier (strong/weak/inverse) · trend signal front-load · story stands on its own】\nList methods actually used, 3-5 items max.`,
+  video_short: `· Append one methodology line at the very end of the draft, format:\n【Episode methodology: 3s hook · ≤20-char voiceover per shot · single CTA】\nList methods actually used; soft-ad sub-track must additionally mention "brand as problem-solver not protagonist"; 3-6 items max.`,
+};
+export function buildMethodTraceDirective(mode: string | undefined, lang: MLang = 'zh', tier: DepthTier = 'balanced'): string {
+  if (!mode) return '';
+  const canon = canonicalModeId(mode);
+  if (!canon) return '';
+  // hit_lab / long_ip / film 已有专属方法论指令，不追加（避免重复）
+  if (canon === 'hit_lab' || canon === 'long_ip' || canon === 'film') return '';
+  // speed 档：极简占位（只给方法名格式，不强制枚举）
+  if (tier === 'speed') {
+    return lang === 'en'
+      ? `· Append one methodology line at the very end, format: 【Episode methodology: (briefly list methods used, 1-3 items)】`
+      : `· 成稿末尾追加一行方法论清单，格式：【本集创作方法论：（简要列用到的方法，1-3 条即可）】`;
+  }
+  if (lang === 'en') return METHOD_TRACE_EN[canon] ?? '';
+  return METHOD_TRACE_ZH[canon] ?? '';
+}
+
+/**
+ * v2.326 Purpose Gate：架构师动笔前先写"一句话目的陈述"。
+ * 对应 Claude 技术主管的"高度维度"——大多数人只让 AI 执行"怎么做"，高手先追问"为什么做"。
+ * 不破坏 outline JSON schema：目的陈述写入 overview 字段（本就是大纲的"本集核心想表达什么"字段）。
+ * 纯函数·双语·零 IO；仅对"创作意图需要显式追问"的模式生效，跳过 interview/tag/hit_lab/long_ip/film。
+ */
+const PURPOSE_GATE_ZH: Record<string, string> = {
+  adapt: `· 在 outline 的 overview 字段里先写一句话"本集改编的根本目的"（15-30 字），回答：改原作是想兑付什么？——是挖原作没说透的人物弧光？是借原作世界观讲新主题？还是满足原作粉丝的愿望清单？这是后续续写/衍生/联动/同人形态选择的锚点。`,
+  interactive: `· 在 outline 的 overview 字段里先写一句话"本集互动设计的根本目的"（15-30 字），回答：让玩家做这个选择，是想体验什么？——是道德困境？是代价感知？是身份揭露？这是后续分支闭环设计的锚点。`,
+  hot: `· 在 outline 的 overview 字段里先写一句话"借这个热点的根本目的"（15-30 字），回答：观众看完这个故事，带走什么情绪或反思？——是反套路爽感？是群体共鸣？是对热点的另一面思考？这是后续借势档位选择的锚点。`,
+  video_short: `· 在 outline 的 overview 字段里先写一句话"种草/带货这条视频的根本目的"（15-30 字），回答：用户看完后应该做什么？——点赞/评论/关注/点链接（四选一）。这是后续钩子和 CTA 设计的锚点。`,
+};
+const PURPOSE_GATE_EN: Record<string, string> = {
+  adapt: `· In the outline's overview field, write one sentence first: the core PURPOSE of this adaptation (15-30 chars) — answer WHY this adaptation exists: are you mining an unsaid character arc from the original? Using the world to tell a new theme? Or satisfying a fan wishlist? This anchors the continue/spin-off/crossover/fan-fiction form choice.`,
+  interactive: `· In the outline's overview field, write one sentence first: the core PURPOSE of this interactive design (15-30 chars) — answer: the player makes this choice to experience what? moral dilemma? cost perception? identity reveal? This anchors the branch-closure design.`,
+  hot: `· In the outline's overview field, write one sentence first: the core PURPOSE of riding this trend (15-30 chars) — answer: what emotion or reflection does the audience take away after watching? counter-cliché satisfaction? group resonance? a different angle on the trend? This anchors the borrow-tier choice.`,
+  video_short: `· In the outline's overview field, write one sentence first: the core PURPOSE of this short video (15-30 chars) — answer: after watching, the user should DO what? like/comment/follow/click link (pick one primary CTA). This anchors the hook and CTA design.`,
+};
+export function buildPurposeGateDirective(mode: string | undefined, lang: MLang = 'zh', tier: DepthTier = 'balanced'): string {
+  if (!mode) return '';
+  const canon = canonicalModeId(mode);
+  if (!canon) return '';
+  // 仅 depth 档启用；speed/balanced 跳过（加速出本或平衡档）
+  if (tier !== 'depth') return '';
+  // interview（用户口述即目的）、tag（标签组合即目的）、hit_lab（拆解已有目的）、long_ip/film（已有专属指令）跳过
+  const skip = new Set(['interview', 'tag', 'hit_lab', 'long_ip', 'film']);
+  if (skip.has(canon)) return '';
+  if (lang === 'en') return PURPOSE_GATE_EN[canon] ?? '';
+  return PURPOSE_GATE_ZH[canon] ?? '';
+}
+
+/**
+ * v2.326 Range Lens：让 audience 角色从跨界视角审视成稿。
+ * 对应 Claude 技术主管的"范围维度"——借用数据分析师/调查记者/顶尖编辑的眼睛，同一个成稿能产出不同维度的洞见。
+ * 不是新的评分维度（不替换追更欲/转化欲），而是追加 2-3 条跨界视角的可执行改进建议。
+ * 纯函数·双语·零 IO；默认对所有模式生效（hit_lab/long_ip/film 跳过）。
+ */
+const RANGE_LENS_ZH: Record<string, string> = {
+  adapt: `· 除追更欲/转化欲评分外，额外从 2-3 个跨界视角各出一条可执行建议：
+  - 调查记者视角：检查人物动机链条是否有断环、时间线是否自洽
+  - 顶尖编辑视角：台词可否精炼 20% 而不减信息量、节奏可否提速
+  - 法务编辑视角：改编内容是否可能被原作者粉丝圈质疑
+  每条建议用【视角标签·具体改进】格式，如 调查记者·女主发现信件的时机太晚，提前到第 1 集开头可形成更早悬念。`,
+  interactive: `· 除追更欲/转化欲评分外，额外从 2-3 个跨界视角各出一条可执行建议：
+  - 调查记者视角：选择是否有真正的代价/后果，还是只是名义选择
+  - 顶尖编辑视角：分支描述是否清晰，玩家会不会选错（信息不足）
+  - 产品设计师视角：这个互动设计的核心爽点，用户能在 3 秒内识别吗
+  每条建议用【视角标签·具体改进】格式。`,
+  video_short: `· 除转化欲评分外，额外从 2-3 个跨界视角各出一条可执行建议：
+  - 数据分析师视角：3 秒钩子的完播率预估、这条视频的互动率预估（点赞/评论/关注）
+  - 顶尖编辑视角：口播台词可否再减 20% 而不减卖点信息
+  - 行为设计师视角：CTA 是否足够单一明确，用户看完后不会犹豫"到底让我干什么"
+  每条建议用【视角标签·具体改进】格式。`,
+};
+const RANGE_LENS_DEFAULT_ZH = `· 除追更欲/转化欲评分外，额外从 2-3 个跨界视角各出一条可执行建议：
+  - 调查记者视角：检查动机链条是否有断环、时间线是否自洽
+  - 顶尖编辑视角：台词可否精炼 20% 而不减信息量、节奏可否提速
+  - 数据分析师视角：这条内容的目标受众完播率/追更欲预估
+  每条建议用【视角标签·具体改进】格式。`;
+const RANGE_LENS_EN: Record<string, string> = {
+  adapt: `· Beyond retention/conversion scoring, additionally output 2-3 actionable suggestions from cross-domain perspectives:
+  - Investigative reporter: check if character motivation chains have gaps, timeline consistency
+  - Top editor: can dialogue be tightened 20% without losing information? can pacing be faster?
+  - Legal editor: could this adaptation be challenged by the original author's fan community?
+  Each suggestion uses 【Perspective · specific improvement】 format.`,
+  interactive: `· Beyond retention/conversion scoring, additionally output 2-3 actionable suggestions from cross-domain perspectives:
+  - Investigative reporter: does each choice have genuine consequence, or is it just nominal?
+  - Top editor: are branches clearly described, or would players misunderstand from insufficient info?
+  - Product designer: can users identify the core interactive satisfaction within 3 seconds?
+  Each suggestion uses 【Perspective · specific improvement】 format.`,
+  video_short: `· Beyond conversion scoring, additionally output 2-3 actionable suggestions from cross-domain perspectives:
+  - Data analyst: estimated 3s-hook completion rate, engagement rate (like/comment/follow)
+  - Top editor: can voiceover copy be cut 20% without losing selling-point info?
+  - Behavior designer: is the CTA single and clear enough — no ambiguity about what the user should do?
+  Each suggestion uses 【Perspective · specific improvement】 format.`,
+};
+const RANGE_LENS_DEFAULT_EN = `· Beyond retention/conversion scoring, additionally output 2-3 actionable suggestions from cross-domain perspectives:
+  - Investigative reporter: check if motivation chains have gaps, timeline consistency
+  - Top editor: can dialogue be tightened 20% without losing info? can pacing speed up?
+  - Data analyst: estimated completion/retention rate for the target audience
+  Each suggestion uses 【Perspective · specific improvement】 format.`;
+export function buildRangeLensDirective(mode: string | undefined, lang: MLang = 'zh', tier: DepthTier = 'balanced'): string {
+  if (!mode) return '';
+  const canon = canonicalModeId(mode);
+  if (!canon) return '';
+  // 仅 depth 档启用
+  if (tier !== 'depth') return '';
+  const skip = new Set(['hit_lab', 'long_ip', 'film']);
+  if (skip.has(canon)) return '';
+  if (lang === 'en') return RANGE_LENS_EN[canon] ?? RANGE_LENS_DEFAULT_EN;
+  return RANGE_LENS_ZH[canon] ?? RANGE_LENS_DEFAULT_ZH;
 }
 
 const MODE_CRAFT_ZH: Record<string, string> = {
@@ -61,11 +217,12 @@ const MODE_CRAFT_ZH: Record<string, string> = {
 · 像采访不像问卷：一轮只追问最关键的一个缺口（先问决定冲突走向的），用户表达完毕再生成，不打断、不连珠炮提问。
 · 四维记忆空间（人物关系/时间线/场景物件/原话金句）逐条落到大纲，金句保留用户原表达。
 · 成稿仍按标准剧本版式与字数闸门：场景行、△动作行、角色（情绪）：台词行齐全。`,
-  adapt: `【创意改编模式】（续写/衍生/联动/同人四态）：
+  adapt: `【创意改编模式】（续写/衍生/联动/同人 + v2.325 合并小说压缩子轨道）：
 · 动笔前先定性形态：续写忠于原设定向后推进；衍生让配角/支线独立成篇；联动让多部作品世界观相遇并统一规则；同人面向粉丝但守版权边界。
 · 守核换境：保留人物内核、关系张力与说话风格，可以换处境不换灵魂；原著留白处的补写必须符合人物既定逻辑。
 · 版权安全：未授权原作不沿用原文句子、标志性台词与独特情节序列，只借底层方法；公版元素与作者授权元素可直接用，存疑一律改写表达。
 · 联动先立“相遇规则”：为什么世界相遇、冲突期间哪套规则统辖、各方粉丝各有一个兑付时刻。
+· 【小说压缩子轨道 v2.325】源文是整本小说时做减法手术：心理描写/背景铺陈/多线并行一律转成可拍的动作与对话，叙述转冲突场，支线直接砍掉而不是用旁白总结；钩子前置——把核心悬念/身份/危机提到第 1 集前 3 秒；先抽名场面；人物按功能合并（单集不超过 4 人）但守住原作内核；每集一个明确兑付或反转，集尾留钩。
 · 成稿仍按标准剧本版式与字数闸门：场景行、△动作行、角色（情绪）：台词行齐全。`,
   tag: `【标签创建模式】（标签组合即出本宪法）：
 · 每个被选中的标签都必须在大纲里落地为可指认的具体设定：情绪标签定基调、人设标签定主角、关系标签定核心冲突、题材标签定世界规则；标签不许只做标题装饰。
@@ -73,13 +230,7 @@ const MODE_CRAFT_ZH: Record<string, string> = {
 · 标签冲突时先满足情绪与关系标签（决定短剧留存），题材标签为其提供舞台。
 · 随机标签组必须经用户确认才出本；一句话出本方向必须能回指全部已选标签。
 · 成稿仍按标准剧本版式与字数闸门：场景行、△动作行、角色（情绪）：台词行齐全。`,
-  novel: `【小说改编模式】（长篇小说压缩为竖屏短剧节奏）：
-· 先做减法手术：心理独白、背景说明、多线叙事压成可拍摄的动作与对白，说明性内容改写成冲突场景，删支线而非旁白概括。
-· 钩子前置：原著开篇铺垫的核心悬念/身份/危机前置到第 1 集前 3 秒；名场面优先提取，围绕它重排前因后果。
-· 人物按功能合并：单集主要角色控制在 4 人内，合并功能性配角，但保留原著人物内核与标志性关系。
-· 每集一个明确爽点或反转，集尾留钩；尊重度可调——高保真保主线名场面，低保真只借底层设定，版权存疑不沿用表达。
-· 成稿仍按标准剧本版式与字数闸门：场景行、△动作行、角色（情绪）：台词行齐全。`,
-  interactive: `【互动短剧模式】（分支选择与多结局）：
+interactive: `【互动短剧模式】（分支选择与多结局）：
 · 本集必须包含至少一个“真选择”：选项对应不同代价/收益并导向可见的不同后果，禁止两个选项结果相同的假选择。
 · 分支必须闭环：每条支路有路可走、无死胡同、无自环、无悬空连线；好/坏/隐藏结局由关键选择的累积倾向决定，并匹配人物弧光。
 · 选择点前把情绪和利害压足，选择后立刻给反馈（人物态度/资源/危险发生变化），集尾在新悬念处断开。
@@ -96,19 +247,8 @@ const MODE_CRAFT_ZH: Record<string, string> = {
 · 结构遵循 3 秒钩子 → 3-5 个分镜递进 → 一个记忆点 → 一句行动引导：钩子用痛点提问/反常识结论/结果前置/身份反差四选一；每 5-8 秒给一个信息增量或画面变化；行动引导只重复一次、不哀求不堆砌。
 · 口播是对镜说话的人话：每镜一句、≤20 字、能一口气念出口，删书面语与形容词堆叠；卖点必须翻译成观众利益（参数→对我有什么好处），用使用前后对比或真实使用场景证明。
 · 合规红线：不用“最/第一/国家级/根治/无效退款”等绝对化与功效承诺词，不贬低竞品，不虚构疗效与销量；种草带货内容默认按广告标准自我审查。
+· 【剧情软广子轨道 v2.325】带来品牌简报时：品牌是解题者不是主角——先用约三分之二篇幅立人物困境与冲突，产品/品牌在转折点自然成为解法；一条创意只植入一个品牌、一个核心卖点，卖点用剧情证明不用旁白宣称；设计一个品牌专属记忆符号并在结尾回扣一次；合规边界：禁绝对化用语、禁医疗与投资功效承诺、禁贬低竞品、禁虚假体验。
 · 版式兼容：以“分镜化场景行 + △画面/景别/字幕动作行 + 旁白或主播（情绪）：口播台词行”写成可拍分镜脚本，不用表格、不堆关键词，并满足制式字数区间。`,
-  branded_skit: `【剧情软广脑洞模式】（品牌植入剧情化）：
-· 品牌是解题者不是主角：先用约三分之二时长立住人物困境与冲突，产品/品牌在转折点自然成为解法，杜绝开场报品牌名与口播念参数。
-· 一条创意只植入一个品牌、一个核心卖点；卖点用剧情证明（人物因它改变处境），不用旁白宣称。
-· 设计一个品牌专属记忆符号（动作/道具/台词），在结尾自然回扣一次；故事感优先于广告感，广告意图越隐越好但不得伪装成客观测评。
-· 合规边界：禁绝对化用语、禁医疗与投资功效承诺、禁贬低竞品、禁虚假体验，必要的广告提示语按平台规则保留。
-· 成稿仍按标准剧本版式与字数闸门：场景行、△动作行、角色（情绪）：台词行齐全。`,
-  mature_x: `【成年向分级剧本模式】（合法成熟叙事：犯罪惊悚/黑暗人性/情欲张力，对标电影 R 级）：
-· 张力靠暗示、留白与后果，不靠直露：情欲写情感与权力关系的拉扯，用关门/晨光/物件等镜头暗示替代性行为描写；暴力写压力与代价，不展示可操作的作案/制毒流程。
-· 道德灰度不等于价值虚无：主角可以复杂，但恶行要有后果、弱势者有尊严；批判性距离必须存在，伤害与犯罪绝不被美化成酷。
-· 零容忍红线：任何未成年人性化、露骨淫秽、血腥猎奇细节一律不写；疑似越界一律向“留白”收敛（成稿还会经过露骨内容硬禁闸，命中即拦截）。
-· 台词可冷峻粗粝但不淫秽；靠处境选择、信息差与道德困境制造高级惊悚，而不是感官堆砌。
-· 成稿仍按标准剧本版式与字数闸门：场景行、△动作行、角色（情绪）：台词行齐全。`,
   film: `【电影剧本创作模式】（长片三幕结构·90-120分钟·院线/流媒体级别·分段连续生成）：
 · 长片按"片段序列"推进：全片40-60个片段，单次生成=其中1个片段（1-3场戏），严格遵守每集字数闸门；片段之间靠系列圣经衔接（前情提要/人物状态/伏笔账本连续，禁止各写各的）。
 · 三幕结构是骨架：第一幕（建置，约前25%片段）——日常世界→激励事件→主角被迫踏上旅程；第二幕（对抗，25%-75%）——递进障碍→中点反转（约50%）→灵魂黑夜→最终决定；第三幕（解决，后25%）——高潮决战→主题闭环→人物弧光完成。系统会标注本片段所处幕次，按幕次职责写。
@@ -129,23 +269,18 @@ const MODE_CRAFT_EN: Record<string, string> = {
 · Interview, don't interrogate: ask only the single most decisive missing thing per round, wait until the user finishes before generating, no rapid-fire question lists.
 · Land every item of the four-dimension memory space (relationships / timeline / scenes & objects / verbatim golden lines) in the outline; keep golden lines in the user's own words.
 · Still obey the mandatory screenplay layout and word-count gate: scene heads, △ action lines, NAME (emotion): dialogue lines all present.`,
-  adapt: `ADAPTATION-MODE CRAFT (continue / spin-off / crossover / fan-fiction):
+  adapt: `ADAPTATION-MODE CRAFT (continue / spin-off / crossover / fan-fiction + v2.325 merged novel-compression sub-track):
 · Fix the form before writing: continuation stays faithful and moves forward; spin-off gives a supporting character or subplot its own story; crossover merges worlds under one rule-set; fan-fiction serves fans but respects copyright limits.
 · Keep the core, change the situation: preserve character essence, relationship tension and voice; people may face new circumstances but never switch souls; filling source-material blanks must follow established character logic.
 · IP safety: never reuse original sentences, signature lines or distinctive plot sequences from unlicensed works — reuse only underlying method; public-domain and explicitly licensed elements are usable, when in doubt rewrite the expression.
 · For crossovers, establish why worlds meet, which single rule-set governs the conflict, and one payoff moment for each fanbase.
+· 【Novel-compression sub-track v2.325】(when sourceText is a full novel): do subtraction surgery — turn inner monologue, exposition and parallel plotlines into filmable action and dialogue; convert narration into conflict scenes; cut subplots instead of summarizing them in voice-over; front-load hooks — move the core mystery/identity/crisis into the first 3 seconds of episode 1; extract signature scenes first; merge characters by function (≤4 per episode) while keeping source essence; one clear payoff or reversal per episode, end on a hook.
 · Still obey the mandatory screenplay layout and word-count gate: scene heads, △ action lines, NAME (emotion): dialogue lines all present.`,
   tag: `TAG-DRIVEN MODE CRAFT (the tag combo is the project's constitution):
 · Every selected tag must land in the outline as a concrete, pointable element: emotion tags set the tone, persona tags set the protagonist, relationship tags set the core conflict, genre tags set the world rules; tags are never title decoration.
 · Weld tags, don't pile them: bridge seemingly unrelated tags with one identity / one secret / one timeline node so the combo feels fresh yet self-consistent.
 · When tags compete, serve emotion and relationship tags first (they drive short-drama retention); genre tags provide the stage.
 · Random tag sets must be confirmed by the user before drafting; the one-line premise must point back to every selected tag.
-· Still obey the mandatory screenplay layout and word-count gate: scene heads, △ action lines, NAME (emotion): dialogue lines all present.`,
-  novel: `NOVEL-TO-SHORT-DRAMA MODE CRAFT (compress a novel into vertical short-drama pacing):
-· Do subtraction surgery first: turn inner monologue, exposition and parallel plotlines into filmable action and dialogue; convert narration into conflict scenes; cut subplots instead of summarizing them in voice-over.
-· Front-load hooks: move the core mystery/identity/crisis the novel builds slowly into the first 3 seconds of episode 1; extract signature scenes first and re-arrange cause and effect around them.
-· Merge characters by function: at most 4 principal roles per episode, fold functional minor characters together, but keep the source's character essence and signature relationships.
-· One clear payoff or reversal per episode, end every episode on a hook; fidelity is adjustable — high fidelity keeps the spine and signature scenes, low fidelity borrows only the premise, never reuse expression when licensing is unclear.
 · Still obey the mandatory screenplay layout and word-count gate: scene heads, △ action lines, NAME (emotion): dialogue lines all present.`,
   interactive: `INTERACTIVE SHORT-DRAMA MODE CRAFT (branches and multiple endings):
 · Each episode must contain at least one REAL choice: options carry distinct costs/benefits and lead to visibly different consequences; fake choices where both options resolve identically are forbidden.
@@ -159,24 +294,13 @@ const MODE_CRAFT_EN: Record<string, string> = {
 · Viewers must recognize the trend signal (situation or emotion) within the first 3 seconds, yet the story must stand on its own without the trend, so it survives after attention fades.
 · Resolve only one conflict per episode, at most 3 principal characters, premise expressible in one sentence — draftable within two hours.
 · Still obey the mandatory screenplay layout and word-count gate: scene heads, △ action lines, NAME (emotion): dialogue lines all present.`,
-  video_short: `VIRAL SHORT-VIDEO MODE CRAFT (hook-in-3-seconds, storyboarded voiceover, one line per shot):
+  video_short: `VIRAL SHORT-VIDEO MODE CRAFT (hook-in-3-seconds, storyboarded voiceover, one line per shot + v2.325 merged soft-ad sub-track):
 · The form is a single vertical short video (voiceover / product seeding / live-commerce / dramatic slice), not a series: one core selling point or one emotion per video; fix in the outline who watches and the single desired action (like/comment/follow/link — choose one primary CTA).
 · Structure: 3-second hook → 3-5 escalating shots → one memory hook → one call to action. Hook is one of pain-point question / counter-intuitive claim / result-first / identity gap; deliver an information increment or visual change every 5-8 seconds; the CTA appears once, no begging, no stacking.
 · Voiceover is spoken-to-camera human talk: one ≤20-character line per shot, speakable in one breath, cut bookish phrasing and stacked adjectives; translate features into viewer benefit (spec → what is in it for me), prove it with before/after or a real usage scene.
 · Compliance hard line: no absolute or efficacy claims (best / No.1 / national-level / cure / money-back), no competitor disparagement, no fabricated efficacy or sales figures; product/seeding content self-reviews to advertising standards.
+· 【Soft-ad sub-track v2.325】(when brandBrief is provided): the brand is the problem-solver, not the protagonist — spend roughly the first two thirds building a human predicament, let the brand become the solution at the turning point; one brand, one core selling point; prove selling point through plot, never assert in narration; design one brand-owned memory symbol and callback it once; compliance boundary: no absolute claims, no medical/investment efficacy promises, no competitor disparagement.
 · Layout compatibility: write a filmable storyboard as scene heads + △ visual/shot/caption action lines + NARRATOR or HOST (emotion): voiceover dialogue lines — no tables, no keyword dumps — and satisfy the format word-count range.`,
-  branded_skit: `BRANDED SKIT MODE CRAFT (story-driven product placement):
-· The brand is the problem-solver, not the protagonist: spend roughly the first two thirds building a human predicament and conflict, let the product/brand become the solution at the turning point; never open on the brand name or read specs aloud.
-· One brand, one core selling point per idea; prove the selling point through plot (the character's situation changes because of it), never assert it in narration.
-· Design one brand-owned memory symbol (gesture/prop/line) and callback it once at the end; story-first, hide the ad intent as much as possible but never disguise it as an objective review.
-· Compliance boundary: no absolute claims, no medical/investment efficacy promises, no competitor disparagement, no fake experiences; keep ad disclaimers the platform requires.
-· Still obey the mandatory screenplay layout and word-count gate: scene heads, △ action lines, NAME (emotion): dialogue lines all present.`,
-  mature_x: `MATURE-RATED MODE CRAFT (legal mature storytelling: crime thriller / dark human nature / erotic tension, cinematic R-rated register):
-· Tension comes from implication, restraint and consequences, never explicitness: eroticism is written as the pull of emotion and power, suggested through a closing door / morning light / an object rather than sexual description; violence shows pressure and cost, never operational how-to for crimes or drug manufacture.
-· Moral grey is not value nihilism: protagonists may be complex, but wrongdoing has consequences and the vulnerable keep their dignity; a critical distance is mandatory, harm and crime are never glamorized.
-· Zero-tolerance lines: no sexualization of minors in any form, no explicit pornography, no gore or morbid detail; whenever a passage risks crossing the line, pull back toward restraint (a hard explicit-content gate screens the finished draft and blocks delivery).
-· Dialogue may be cold and gritty but never obscene; build high-end suspense through dilemmas, information gaps and moral choice, not sensory overload.
-· Still obey the mandatory screenplay layout and word-count gate: scene heads, △ action lines, NAME (emotion): dialogue lines all present.`,
   film: `FEATURE FILM MODE CRAFT (three-act structure, 90-120 minutes, theatrical / streaming grade, fragment-sequence generation):
 · A feature advances as a FRAGMENT SEQUENCE: 40-60 fragments for the whole film; one generation = one fragment (1-3 scenes), strictly obeying the per-episode word-count gate; fragments are stitched by the series bible (previous events / character state / foreshadow ledger stay continuous — never write fragments in isolation).
 · Three-act structure is the backbone: Act I (Setup, first ~25% of fragments) — ordinary world → inciting incident → protagonist forced into the journey; Act II (Confrontation, 25%-75%) — escalating obstacles → midpoint reversal (~50%) → dark night of the soul → final decision; Act III (Resolution, last 25%) — climax confrontation → thematic closure → character arc completed. The system annotates the current fragment's act; write to that act's duty.

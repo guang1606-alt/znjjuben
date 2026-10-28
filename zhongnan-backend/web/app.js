@@ -25,6 +25,7 @@
   }
   let lang = 'zh';
 
+  // ═══ MODULE: config (152行, 1fn) ═══ 持久化偏好
   /* ---------- 持久化偏好 ---------- */
   const LS = { g: (k, d) => localStorage.getItem(k) || d, s: (k, v) => localStorage.setItem(k, v) };
   const THEMES = ['tech', 'light', 'dark', 'eye', 'auto'];
@@ -104,6 +105,7 @@
   function staffCostLabel() { return lang === 'en' ? 'Staff · Free' : '内部账户 · 免费'; }
   // staff 工具箱文案精细化：保留操作名+数字归零+尾加「（内部免费）」/「 (Staff Free)」
   // 纯函数来自 web/staff-cost.js（浏览器与单测共用），不再笼统覆盖丢失操作名
+    // @module config
   const staffCostNormalize = (typeof ZnStaffCost === 'object' && ZnStaffCost && ZnStaffCost.normalizeStaffCost)
     ? ZnStaffCost.normalizeStaffCost
     : function staffCostNormalizeFallback(rawTxt, en) { // 兜底：若 staff-cost.js 未加载（极少见），退化到原口径
@@ -177,9 +179,11 @@
     });
     znBindGrid(grid, { selector: '.mode-card' }); // v2.271 12 张模式卡四方向键导航（Tab 只需进网格一次）
   }
+  // ═══ MODULE: misc (220行, 5fn) ═══ v2.190 清爽首页渲染
   /* ---------- v2.190 清爽首页渲染 ---------- */
-  const HOME_QUICK_MODES = ['interview', 'adapt', 'tags', 'novel', 'interactive', 'hot'];
-  const HOME_TOOLS = [
+  // v2.325 快捷创作：12 种整合为 9 种，HOME_QUICK_MODES 仍精选 6 个常用；novel 并入 adapt、softad 并入 shortvideo
+  const HOME_QUICK_MODES = ['interview', 'adapt', 'tags', 'interactive', 'hot', 'shortvideo'];
+  const HOME_TOOLS = (typeof window !== 'undefined' && window.ZN_DATA && window.ZN_DATA.HOME_TOOLS) || [
     { id: 'toolPitch', key: 'tbCardPitch', desc: 'tbCardPitchP', cost: 'tbCostPitch' },
     { id: 'toolRead', key: 'tbCardRead', desc: 'tbCardReadP', cost: 'tbCostRead' },
     { id: 'toolTeardown', key: 'tbCardTd', desc: 'tbCardTdP', cost: 'tbCostTd' },
@@ -225,6 +229,7 @@
         const costTxt = isStaffAcct() ? staffCostNormalize(t(tool.cost), lang === 'en') : t(tool.cost);
         card.innerHTML = `<h3>${escapeHtml(t(tool.key))}</h3><p>${escapeHtml(t(tool.desc))}</p><span class="tool-cost">${escapeHtml(costTxt)}</span>`;
         card.onclick = () => {
+    // @module misc
           const panel = ({ toolPitch: 'roomPanel', toolRead: 'roomPanel', toolTeardown: 'teardownPanel', toolDiversity: 'diversityPanel', toolBranch: 'branchPanel' })[tool.id];
           if (panel) openWorkbench(panel);
         };
@@ -272,7 +277,9 @@
       const a = d && d.announcement;
       if (!a) { body.innerHTML = `<div class="muted">${escapeHtml(t('homeUpdatesEmpty'))}</div>`; return; }
       const isEn = lang === 'en';
+    // @module misc
       const title = (isEn && a.titleEn) ? a.titleEn : (a.titleZh || '');
+    // @module misc
       const text = (isEn && a.bodyEn) ? a.bodyEn : (a.bodyZh || '');
       const date = a.createdAt ? new Date(a.createdAt).toLocaleDateString(isEn ? 'en-US' : 'zh-CN') : '';
       body.innerHTML = `<div class="home-update-item">
@@ -285,7 +292,7 @@
     }
   }
   /* ---------- X剧本成年分级问卷（v2.40；服务端 mature-gating 强校验，前端只做引导） ---------- */
-  const X_REGIONS = [
+  const X_REGIONS = (typeof window !== 'undefined' && window.ZN_DATA && window.ZN_DATA.X_REGIONS) || [
     ['CN', '中国大陆', 'Chinese Mainland'], ['HK', '中国香港', 'Hong Kong SAR'], ['TW', '中国台湾', 'Chinese Taiwan'],
     ['US', '美国', 'United States'], ['JP', '日本', 'Japan'], ['KR', '韩国', 'South Korea'],
     ['EU', '欧盟', 'EU'], ['OTHER', '其他地区', 'Other region'],
@@ -358,7 +365,9 @@
       const until = j.expireAt ? new Date(j.expireAt).toLocaleDateString() : '';
       status.textContent = T.pass + (until ? `（${T.signed}${until}）` : '');
     } else {
+    // @module misc
       const needPro = (j.reasons || []).some((x) => x.includes('专业会员') || x.includes('PRO'));
+    // @module misc
       const needPay = (j.reasons || []).some((x) => x.includes('付费') || x.includes('开通'));
       $('xMatureBuy').classList.toggle('hidden', !(needPro || needPay));
       status.textContent = T.reasons + (j.reasons || []).join('；');
@@ -385,8 +394,9 @@
   $('xMatureBuy').onclick = () => { $('xMatureModal').classList.add('hidden'); placeOrder('XSCRIPT_M'); };
   $('xMatureEnter').onclick = () => {
     $('xMatureModal').classList.add('hidden');
-    selectedMode = 'xscript'; renderModes(); syncModeBrief();
-    xnSay(lang === 'en' ? 'X-Script ready. Describe your mature-rated story idea (no explicit porn).' : 'X剧本已就绪，描述你的成熟向创意吧（露骨色情仍会被硬拦截）。');
+    // v2.325 X剧本（mature_x）已整合进电影剧本创作（film），支持犯罪惊悚/黑暗人性等成熟题材，露骨色情仍硬拦截
+    selectedMode = 'film'; renderModes(); syncModeBrief();
+    xnSay(lang === 'en' ? 'X-Script feature merged into Film mode — try it for crime thriller / dark human nature stories (explicit porn still blocked).' : 'X剧本已整合进电影剧本创作，支持犯罪惊悚/黑暗人性等成熟题材（露骨色情仍会被硬拦截）。');
   };
   $('xMatureRevoke').onclick = async () => {
     // v2.285 断网 reject 静默（全局网络 toast 已提示）；HTTP 非 ok 不得乐观提示撤销成功
@@ -397,8 +407,9 @@
     xnSay(lang === 'en' ? 'Authorization revoked.' : '授权已撤销。');
     openXMature().catch(() => {});
   };
+  // ═══ MODULE: config (107行, 0fn) ═══ 各模式内联创意输入（替代 window.prompt，按模式给专属引导，杜绝无输入入口的断点）
   /* ---------- 各模式内联创意输入（替代 window.prompt，按模式给专属引导，杜绝无输入入口的断点） ---------- */
-  const MODE_BRIEF = {
+  const MODE_BRIEF = (typeof window !== 'undefined' && window.ZN_DATA && window.ZN_DATA.MODE_BRIEF) || {
     interview: { zh: ['把你零散的想法先倒在这里', '可以想到哪写到哪：核心创意、世界观、人物、想要的冲突都行；小南会在出本时把它们结构化，也可随时回来补充。'], en: ['Dump your scattered ideas here', 'Write freely: core idea, world, characters, conflicts. Xiaonan structures them at generation; you can come back anytime.'] },
     adapt: { zh: ['粘贴要改编的原作片段，或上传文件（自有/已授权内容）', '支持 txt/md/docx/epub/pdf（≤8MB），上传后自动提取正文；并在末尾写清想要续写/衍生/联动/同人中的哪种、原著尊重度高低。'], en: ['Paste the source you own/license, or upload a file', 'txt/md/docx/epub/pdf up to 8MB are auto-extracted. Add one line: sequel/spin-off/crossover/fanfic and how faithful to stay.'] },
     novel: { zh: ['粘贴小说原文，或上传小说文件（txt/md/docx/epub/pdf）', '上传后自动识别章节；注明必须保留的名场面或人物；系统会压缩冗余、按竖屏短剧节奏重排钩子与冲突。'], en: ['Paste novel chapters or upload a file (txt/md/docx/epub/pdf)', 'Chapters are auto-detected; mark must-keep scenes/characters; redundant narration is compressed into vertical-drama pacing.'] },
@@ -457,11 +468,12 @@
       ivp.classList.toggle('hidden', selectedMode !== 'interview');
       if (selectedMode === 'interview') initInterviewPanel();
     }
-    // v2.93 剧情软广：选中该模式时展示结构化品牌简报面板
+    // v2.93 剧情软广：选中该模式时展示结构化品牌简报面板（v2.325 shortvideo 合并 softad，也支持品牌简报可选）
     const bbp = $('brandPanel');
     if (bbp) {
-      bbp.classList.toggle('hidden', selectedMode !== 'softad');
-      if (selectedMode === 'softad') renderBrandPanel();
+      const showBrand = selectedMode === 'softad' || selectedMode === 'shortvideo';
+      bbp.classList.toggle('hidden', !showBrand);
+      if (showBrand) renderBrandPanel();
     }
     // v2.94 热点追更：选中该模式时展示结构化热点简报面板
     const tbp = $('trendPanel');
@@ -486,7 +498,7 @@
     if (typeof openWorkbench === 'function' && !_initSyncing) {
       const _target = {
         interview: 'interviewPanel',
-        softad: 'brandPanel',
+        softad: 'brandPanel', shortvideo: 'brandPanel',
         hot: 'trendPanel',
         interactive: 'branchBriefPanel',
       }[selectedMode];
@@ -504,8 +516,9 @@
       }
     }
   }
+  // ═══ MODULE: tags (71行, 3fn) ═══ v2.93 剧情软广·结构化品牌简报（标签/占位/软性度双语渲染 + 采集 + 合规错误回显）
   /* ---------- v2.93 剧情软广·结构化品牌简报（标签/占位/软性度双语渲染 + 采集 + 合规错误回显） ---------- */
-  const BRAND_UI = {
+  const BRAND_UI = (typeof window !== 'undefined' && window.ZN_DATA && window.ZN_DATA.BRAND_UI) || {
     zh: {
       heading: '剧情软广 · 品牌简报',
       tip: '品牌要素会作为「事实源」逐字注入创作：品牌名全程不改名、只锚定一个核心卖点、在剧情转折处自然成解法。品牌名与核心卖点必填；提交时自动做广告词合规预检（绝对化用语、医疗功效与收益承诺会被拦截）。',
@@ -539,7 +552,9 @@
   function renderBrandPanel() {
     if (brandPanelRenderedLang === lang) return; // 同语言不重复渲染（只改标签/占位，绝不碰用户输入值）
     const cfg = BRAND_UI_DICT();
+    // @module tags
     const set = (id, val) => { const el = $(id); if (el) el.textContent = val; };
+    // @module tags
     const setPh = (id, val) => { const el = $(id); if (el) el.placeholder = val; };
     set('bbHeading', cfg.heading); set('bbTip', cfg.tip);
     set('bbLBrand', cfg.brand); setPh('bbBrand', cfg.brandPh);
@@ -562,9 +577,10 @@
     xnSay(msg);
   }
   function hideBrandError() { const box = $('bbError'); if (box) { box.textContent = ''; box.style.display = 'none'; } }
-  /** 返回 { brandBrief } 片段；softad 模式下缺必填返回 null（已弹错），其余模式返回 {} */
+  /** 返回 { brandBrief } 片段；softad / shortvideo 模式下缺必填返回 null（已弹错），其余模式返回 {} */
   function brandBriefPayload() {
-    if (selectedMode !== 'softad') return {};
+    if (selectedMode !== 'softad' && selectedMode !== 'shortvideo') return {};
+    // @module tags
     const v = (id) => String($(id)?.value || '').trim();
     const brand = v('bbBrand'); const sellingPoint = v('bbSelling');
     if (!brand || sellingPoint.length < 2) { showBrandError(BRAND_UI_DICT().required); return null; }
@@ -575,8 +591,9 @@
       softness: $('bbSoft')?.value || 'balanced',
     } };
   }
+  // ═══ MODULE: misc (192行, 8fn) ═══ v2.94 热点追更·结构化热点简报（四借法双语渲染 + 采集 + 隐私/侵权风险回显）
   /* ---------- v2.94 热点追更·结构化热点简报（四借法双语渲染 + 采集 + 隐私/侵权风险回显） ---------- */
-  const TREND_UI = {
+  const TREND_UI = (typeof window !== 'undefined' && window.ZN_DATA && window.ZN_DATA.TREND_UI) || {
     zh: {
       heading: '热点追更 · 热点简报',
       tip: '热点要素作为「事实源」注入创作：选准借法，系统只借概念/结构/情绪，不抄原作表达。热点名称与爆点必填；提交时自动做侵权与舆情预检（手机号/身份证号会被拦截，灾难悲剧、未定性案件、直接引用原台词会触发强制虚构化要求）。',
@@ -662,7 +679,7 @@
     } };
   }
   /* ---------- v2.95 互动分支·结构化分支简报（双语渲染 + 采集 + 闭环校验回显） ---------- */
-  const BRANCH_UI = {
+  const BRANCH_UI = (typeof window !== 'undefined' && window.ZN_DATA && window.ZN_DATA.BRANCH_UI) || {
     zh: {
       heading: '互动分支 · 分支简报',
       tip: '分支要素作为「事实源」注入创作：架构师据此规划分支结构，撰写师据此落地选择点与结局。主线与选择点必填；提交时自动做闭环预检（结局数矛盾/坏结局过多会被拦截）。分支选项与去向在成稿△动作行中自然标出。',
@@ -767,6 +784,7 @@
     return { sourceText: v };
   }
   let briefUploadInited = false;
+  // ═══ MODULE: interview (300行, 3fn) ═══ v2.92 采访式创作会话：一轮一问 + 四维记忆空间，就绪后产出结构化简报回填
   /* ---------- v2.92 采访式创作会话：一轮一问 + 四维记忆空间，就绪后产出结构化简报回填 ---------- */
   let ivInited = false, ivSessionId = null, ivTurn = 0, ivReady = false;
   let ivOwner = null, ivEpoch = 0, ivLoaded = false, ivLoading = null, ivBusy = false, ivClosed = false, ivConverted = false;
@@ -831,6 +849,7 @@
   function ivRenderGaps(gaps, ready) {
     const el = $('ivGaps'); if (!el) return;
     const T = ivT();
+    // @module interview
     const chip = (label, ok) => `<span style="display:inline-block;padding:2px 8px;margin:0 6px 4px 0;border-radius:999px;border:1px solid currentColor;opacity:${ok ? 1 : .45}">${ok ? '✓' : '○'} ${label}</span>`;
     el.innerHTML = T.gapHead + Object.keys(T.gaps).map((k) => chip(T.gaps[k], !!(gaps && gaps[k]))).join('')
       + (ready ? ` <b>${T.ready}</b>` : '');
@@ -957,6 +976,7 @@
   }
   // v2.317 创意取数：主创意框优先，空则认采访面板内嵌框（用户视线所在即输入所在）
   function ivCollectIdea() {
+    // @module interview
     const fromMain = ($('modeBrief')?.value || '').trim();
     if (fromMain) return fromMain;
     return ($('ivAnswer')?.value || '').trim();
@@ -1041,6 +1061,7 @@
   }
   function initBriefUpload() {
     if (briefUploadInited) return; const input = $('briefFile'); if (!input) return; briefUploadInited = true;
+    // @module interview
     const setStatus = (s, isErr) => { const el = $('briefUploadStatus'); if (el) { el.textContent = s; el.style.color = isErr ? 'var(--danger,#d4473b)' : ''; } };
     input.addEventListener('change', async () => {
       const file = input.files && input.files[0]; if (!file) return;
@@ -1067,6 +1088,7 @@
       reader.readAsDataURL(file);
     });
   }
+  // ═══ MODULE: tags (238行, 6fn) ═══ 标签工作台（PRD 3.3 标签创建 + 随机标签确认页）
   /* ---------- 标签工作台（PRD 3.3 标签创建 + 随机标签确认页） ---------- */
   const TAG_MAX = 14;
   const DIM_EN = { genre: 'Genre', protagonist: 'Protagonist', hook: 'Hook', conflict: 'Conflict', emotion: 'Emotion', era: 'Era', scene: 'Scene', audience: 'Audience', track: 'Track', structure: 'Structure', format: 'Format', style: 'Style' };
@@ -1074,6 +1096,7 @@
   let tagDirector = null;    // 最近一次智能随机结果（含中英文简报/小南解释）
   let tagDimInited = false, tagBusy = false, tagSearchTimer = null, lastPool = [];
   let tagPoolSeq = 0; // v2.258 起：标签池共享请求序号（v2.259 维度切换/搜索/清池共用，慢响应不得覆盖新池）
+    // @module tags
   const outLocale = () => (($('outLang') && $('outLang').value === 'en') ? 'en' : 'zh');
   function tagEnLabel(zh) {
     const items = tagDirector && tagDirector.english && tagDirector.english.items;
@@ -1230,6 +1253,7 @@
         method: 'POST',
         body: JSON.stringify({ names: tagChosen, n: Math.min(8, room) }),
       })).json();
+    // @module tags
       const names = (j.recommend || []).map((x) => x.name).filter(Boolean);
       $('tagSearch').value = ''; $('tagDim').value = '';
       renderTagPool(names);
@@ -1250,6 +1274,7 @@
   }
   function loadPrefProfile() {
     const profile = {};
+    // @module tags
     const me = (typeof meCache !== 'undefined') ? meCache : null;
     if (me && me.bio) profile.bio = String(me.bio).slice(0, 300); // 后端据此识别地域/性别/年龄段
     const pastTags = LS.g(PREF_KEY, '').split('§').filter(Boolean).slice(0, 12);
@@ -1287,7 +1312,9 @@
     } finally { tagBusy = false; btn.disabled = false; }
   }
   function buildTagBrief() {
+    // @module tags
     const idea = ($('tagIdea') && $('tagIdea').value || '').trim();
+    // @module tags
     const craftLine = (typeof craftBriefLine === 'function') ? craftBriefLine() : '';
     const parts = [];
     if (tagChosen.length) {
@@ -1305,6 +1332,7 @@
     return names.slice(0, 3).join('·').slice(0, 40) || (lang === 'en' ? 'Untitled' : '未命名剧本');
   }
 
+  // ═══ MODULE: xiaonan (112行, 4fn) ═══ 小南递招：方法卡 + 钩子（免费只读，选中注入出本创意）
   /* ---------- 小南递招：方法卡 + 钩子（免费只读，选中注入出本创意） ---------- */
   let craftTaxonomy = null;
   let craftSelHooks = [];   // [{id,name}]
@@ -1326,6 +1354,7 @@
   function addCraftHook(idOrObj) {
     const id = typeof idOrObj === 'string' ? idOrObj : idOrObj.id;
     if (craftSelHooks.some((h) => h.id === id)) return;
+    // @module xiaonan
     const h = (typeof idOrObj === 'object' && idOrObj.name) ? idOrObj : (findHook(id) || { id, name: id });
     craftSelHooks.push({ id, name: h.name }); renderCraftHooks(); renderCraftPicked();
   }
@@ -1346,15 +1375,17 @@
       b.onclick = () => removeCraftHook(h.id); box.appendChild(b);
     });
   }
-  const CRAFT_HOOK_EN = {
+  const CRAFT_HOOK_EN = (typeof window !== 'undefined' && window.ZN_DATA && window.ZN_DATA.CRAFT_HOOK_EN) || {
     episode_hook: 'Episode-end hook', scene_hook: 'Scene hook', action_hook: 'Action hook', atmosphere_hook: 'Atmosphere (bomb)',
     dialogue_hook: 'Dialogue hook', infogap_hook: 'Info-gap bomb', countdown_hook: 'Countdown hook', anticommon_hook: 'Counter-intuitive hook',
     endure_sell_hook: 'Endure-then-revenge', chain_hook: 'Chain hook',
   };
+    // @module xiaonan
   const craftHookEn = (id, zh) => CRAFT_HOOK_EN[id] || zh;
   function renderCraftCards() {
     const box = $('craftCards'); if (!box) return;
     const recIds = new Set(craftRecCards.map((c) => c.id));
+    // @module xiaonan
     const cardHtml = (c, rec) => {
       const on = craftSelCards.some((x) => x.id === c.id);
       const steps = c.steps && c.steps.length ? `<details class="craft-steps"><summary>${lang === 'en' ? 'Formula & steps' : '公式与步骤'}</summary>
@@ -1417,9 +1448,10 @@
   if (craftCopyBtn) craftCopyBtn.onclick = () => { const t = craftBriefLine(); if (t) copy(t, lang === 'en' ? 'Craft copied' : '手法已复制，可粘贴进创意'); else xnSay(lang === 'en' ? 'Nothing selected.' : '还没选用钩子或方法卡'); };
   loadCraftTaxonomy().then(() => { renderCraftHooks(); renderCraftCards(); renderCraftPicked(); }).catch(() => {});
 
+  // ═══ MODULE: misc (88行, 1fn) ═══ 免费合法小说素材库（多语言，只读外链）
   /* ---------- 免费合法小说素材库（多语言，只读外链） ---------- */
   const NOVEL_LANG_LABEL = { zh: '中文', en: 'English', ja: '日本語', ko: '한국어', es: 'Español', de: 'Deutsch', fr: 'Français', it: 'Italiano', ru: 'Русский', pt: 'Português', ar: 'العربية', multi: '多语' };
-  const NOVEL_LIC_LABEL = {
+  const NOVEL_LIC_LABEL = (typeof window !== 'undefined' && window.ZN_DATA && window.ZN_DATA.NOVEL_LIC_LABEL) || {
     public_domain: { zh: '公版', en: 'PD' },
     cc: { zh: 'CC授权·遵协议', en: 'CC · per license' },
     platform_free: { zh: '正版免费·仅阅读', en: 'Free to read' },
@@ -1456,6 +1488,7 @@
   }
   function renderNovelGrid() {
     const grid = $('novelSrcGrid'); if (!grid) return;
+    // @module misc
     const q = ($('novelSrcSearch')?.value || '').trim().toLowerCase();
     const adaptOnly = $('novelAdaptOnly')?.checked;
     let list = novelAll.slice();
@@ -1488,7 +1521,7 @@
   })();
 
   /* ---------- 下拉双语 ---------- */
-  const SELECT_OPTS = {
+  const SELECT_OPTS = (typeof window !== 'undefined' && window.ZN_DATA && window.ZN_DATA.SELECT_OPTS) || {
     platform: { zh: [['红果短剧','红果短剧'],['抖音','抖音'],['快手','快手'],['ReelShort','ReelShort'],['DramaBox','DramaBox']],
       en: [['红果短剧','Hongguo'],['抖音','Douyin'],['快手','Kuaishou'],['ReelShort','ReelShort'],['DramaBox','DramaBox']] },
     engine: { zh: [['STANDARD','标准（性价比）'],['HIGH','高阶（更强组合）'],['PRO','专业（最强组合）']],
@@ -1505,6 +1538,7 @@
     });
   }
 
+  // ═══ MODULE: xiaonan (62行, 0fn) ═══ 小南
   /* ---------- 小南 ---------- */
   function xnSay(line, tip, kind) {
     $('xnLine').textContent = line;
@@ -1567,6 +1601,7 @@
   }
   window.znSkeleton = znSkeleton; window.znEmpty = znEmpty; window.znEmptyHtml = znEmptyHtml; window.znSkeletonHtml = znSkeletonHtml;
   window.znError = znError; window.znErrorHtml = znErrorHtml;
+  // ═══ MODULE: ui (722行, 20fn) ═══ v2.221 加载/空态统一 
   /* ---------- v2.221 加载/空态统一 结束 ---------- */
   // v2.239 内部裸码脱敏（与 api.js v2.226 jsonOrThrow 回落层同口径）：
   // 供 body 已被 text()/json() 消费的错误路径使用（jsonOrThrow 无法再消费 body 的场景）；
@@ -1586,7 +1621,9 @@
         <input class="zn-ask-input" type="text" />
         <div class="zn-ask-btns"><button type="button" class="btn-ghost zn-ask-cancel"></button><button type="button" class="btn-primary zn-ask-ok"></button></div>
       </div>`;
+    // @module ui
       const done = (val) => { backdrop.remove(); document.removeEventListener('keydown', onKey, true); resolve(val); };
+    // @module ui
       const onKey = (e) => {
         if (e.key === 'Escape') { e.stopPropagation(); done(null); }
         else if (e.key === 'Enter' && e.target && e.target.classList && e.target.classList.contains('zn-ask-input')) { e.preventDefault(); done(inp.value.trim()); }
@@ -1624,6 +1661,7 @@
     let left = r.right - mw; if (left < 8) left = Math.max(8, Math.round(r.left + window.scrollX));
     menu.style.left = left + 'px';
     setTimeout(() => {
+    // @module ui
       const close = (e) => { if (!menu.contains(e.target)) { menu.remove(); document.removeEventListener('mousedown', close); } };
       document.addEventListener('mousedown', close);
     }, 0);
@@ -1635,6 +1673,7 @@
   // c198：编剧室 GO 决议 → 带着决议去立项。统一落到唯一免费模式 tags（标签立项），
   // 只预填卖点与集数并自动给一组标签，不自动点击生成、不扣任何积分；HOLD/NO 房在 room-view 侧不发此事件。
   window.addEventListener('zn-pitch-to-project', (ev) => {
+    // @module ui
     const d = (ev && ev.detail) || {};
     switchView('studio');
     selectedMode = 'tags';
@@ -1685,6 +1724,7 @@
     admin: { zh: '管理后台', en: 'Admin' },
   };
   // 全局导航栈实例（来自 web/nav-stack.js，浏览器与单测共用纯函数）
+    // @module ui
   const _navStack = (typeof ZnNavStack === 'object' && ZnNavStack && ZnNavStack.createNavStack)
     ? ZnNavStack.createNavStack()
     : null;
@@ -1746,6 +1786,7 @@
     if (e.key !== 'Escape' && e.key !== 'Esc') return;
     if (!_navStack || !_navStack.canPop()) return;
     // 若当前焦点在 input/textarea/contenteditable，不拦截 ESC（让用户先退出输入）
+    // @module ui
     const tag = (document.activeElement && document.activeElement.tagName) || '';
     if (/INPUT|TEXTAREA|SELECT/.test(tag) || (document.activeElement && document.activeElement.isContentEditable)) return;
     // 若有打开的 modal/overlay/workbench/ui 对话框，先交给它们处理（不拦截）
@@ -1849,6 +1890,7 @@
   }
   // v2.207 模态打开期间锁定背景滚动（计数式：对话框叠层时只归零恢复，避免提前解锁）
   function _uiModalLock() {
+    // @module ui
     const n = (parseInt(document.body.dataset.uiModalLock || '0', 10) || 0) + 1;
     document.body.dataset.uiModalLock = String(n);
     document.body.style.overflow = 'hidden';
@@ -1887,6 +1929,7 @@
         _uiModalUnlock();
         try { if (prevFocus && prevFocus.focus) prevFocus.focus(); } catch {}
         // 退场淡出只作视觉余韵，不阻塞 resolve；onfinish/oncancel + 超时兜底保证 DOM 必被清理
+    // @module ui
         const finish = () => { overlay.remove(); };
         if (!_uiReducedMotion() && overlay.animate) {
           const anim = overlay.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 120, easing: 'ease-in' });
@@ -1894,6 +1937,7 @@
           setTimeout(finish, 300);
         } else finish();
       };
+    // @module ui
       const keyHandler = (e) => {
         if (closed) return;
         if (e.key === 'Escape') close(false);
@@ -1943,6 +1987,7 @@
         else if (e.key === 'Tab') _uiTrapTab(e, modal);
       };
       document.addEventListener('keydown', keyHandler);
+    // @module ui
       const submit = () => { close(input.type === 'password' ? input.value : input.value.trim()); };
       input.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); submit(); } });
       okBtn.onclick = submit;
@@ -1989,6 +2034,7 @@
   document.querySelectorAll('.nav [data-view]').forEach((b) => b.onclick = () => switchView(b.getAttribute('data-view')));
   // v2.272 skip link：激活后把焦点（含读屏光标）真正移到 <main>——裸 hash 跳转在部分浏览器只滚动不聚焦
   document.querySelectorAll('.skip-link').forEach((a) => a.addEventListener('click', (e) => {
+    // @module ui
     const id = (a.getAttribute('href') || '').slice(1);
     const target = id ? document.getElementById(id) : null;
     if (target) { e.preventDefault(); target.focus(); target.scrollIntoView({ block: 'start' }); }
@@ -2023,7 +2069,7 @@
     'interviewPanel', 'brandPanel', 'trendPanel', 'sourceTextPanel',
     'taskQueuePanel', 'progressPanel', 'resultPanel', 'failPanel'
   ];
-  const WORKBENCH_TITLES = {
+  const WORKBENCH_TITLES = (typeof window !== 'undefined' && window.ZN_DATA && window.ZN_DATA.WORKBENCH_TITLES) || {
     tagBench:         { zh: '智能标签工作台',          en: 'Tag Bench' },
     craftBench:       { zh: '小南递招 · 方法卡与钩子',  en: 'Craft Cards & Hooks' },
     novelSrcBench:    { zh: '免费合法小说素材库',       en: 'Novel Sources' },
@@ -2249,7 +2295,9 @@
       <div id="qsList" class="qs-list"></div></div>`;
     document.body.appendChild(mask);
     const input = mask.querySelector('#qsInput'), list = mask.querySelector('#qsList');
+    // @module ui
     const D = () => (window.I18N ? I18N.DICT[lang] || I18N.DICT.zh : null);
+    // @module ui
     const targets = () => {
       const nav = [...document.querySelectorAll('.nav [data-view]')].map((b) => ({ k: b.textContent.trim(), v: b.getAttribute('data-view') }));
       const dict = D();
@@ -2289,6 +2337,7 @@
     });
   })();
 
+  // ═══ MODULE: auth (145行, 0fn) ═══ 登录/注册
   /* ---------- 登录/注册 ---------- */
   let authMode = 'login';
   let privateAccountOwner, privateAccountEpoch = 0;
@@ -2385,7 +2434,24 @@
       renderAuthButton(); refreshAdminNav(); renderModes();
     }
   });
-  function openAuth(mode) { authMode = mode || 'login'; openModal('authModal'); syncAuthTabs(); }
+  function openAuth(mode) { authMode = mode || 'login'; openModal('authModal'); syncAuthTabs();
+    // v2.324 环境横幅：根据端口自动显示当前服务器模式 + 对应测试账号，避免密码/端口混淆
+    // 注意：Node.js 测试环境无 location，需 typeof 防御（web-workflow.test.cjs / web-modal-a11y.test.cjs 调用 openAuth 会爆 ReferenceError）
+    const bar = $('authEnvBar');
+    if (bar && typeof location !== 'undefined') {
+      const port = location.port || (location.protocol === 'https:' ? 443 : 80);
+      if (port === '8099') {
+        bar.style.cssText = 'font-size:12px;padding:8px 12px;border-radius:8px;margin-bottom:12px;line-height:1.6;background:#fff8e1;color:#8a6d00;border:1px solid #f0c800';
+        bar.innerHTML = '🏠 <b>演示模式</b>（内存数据，重启即清空）<br>测试账号：<b>18891995171</b> / <b>demo123456</b>';
+      } else if (port === '8899') {
+        bar.style.cssText = 'font-size:12px;padding:8px 12px;border-radius:8px;margin-bottom:12px;line-height:1.6;background:#e8f5e9;color:#2e7d32;border:1px solid #66bb6a';
+        bar.innerHTML = '🗄️ <b>生产模式</b>（真实 Postgres 数据）<br>账号：<b>18891995171</b> / <b>yxgnono0726</b>';
+      } else {
+        bar.style.cssText = 'font-size:12px;padding:8px 12px;border-radius:8px;margin-bottom:12px;line-height:1.6;background:#e3f2fd;color:#1565c0;border:1px solid #42a5f5';
+        bar.innerHTML = `当前端口 <b>${port || '默认'}</b>，请确认使用正确的账号密码`;
+      }
+    }
+  }
   function closeAuth() {
     closeModalEl($('authModal'));
     $('authErr').classList.add('hidden');
@@ -2434,6 +2500,7 @@
     } catch (e) { showAuthErr(e.message); } finally { $('authSubmit').disabled = false; }
   };
 
+  // ═══ MODULE: works (435行, 11fn) ═══ 作品库
   /* ---------- 作品库 ---------- */
   function syncDraftProject() {
     const note = $('draftProjectNotice');
@@ -2535,6 +2602,7 @@
           e.stopPropagation();
           const act = btn.getAttribute('data-act');
           if (act === 'rename') {
+    // @module works
             const newTitle = ((await uiPrompt({ body: lang === 'en' ? 'New title:' : '输入新标题：', value: p.title })) || '').trim();
             if (!newTitle || newTitle === p.title) return;
             await runWorkAction(btn, lang === 'en' ? 'Renaming…' : '重命名中…', async () => {
@@ -2590,7 +2658,7 @@
     }
   }
   // c202 版本逐行对比（零扣费、确定性）：渲染/请求/文案辅助，供作品详情与 fix 成功后自动展开
-  const DIFF_LEVEL_LABEL = {
+  const DIFF_LEVEL_LABEL = (typeof window !== 'undefined' && window.ZN_DATA && window.ZN_DATA.DIFF_LEVEL_LABEL) || {
     negligible: ['几乎未动', 'Barely touched'],
     light: ['局部微调', 'Light polish'],
     partial: ['局部重写', 'Partial rewrite'],
@@ -2617,6 +2685,7 @@
       action: ['动作', '行', 'action line', 'action lines'],
       other: ['技术标注', '行', 'tech line', 'tech lines'],
     };
+    // @module works
     const bucketTxt = (b) => {
       const parts = [];
       for (const k of keys) {
@@ -2627,12 +2696,16 @@
       return parts.join(en ? ', ' : '、');
     };
     const addTxt = bucketTxt(s.added), rmTxt = bucketTxt(s.removed);
+    // @module works
     const hlLine = (h, type) => {
       const prefix = h.category === 'dialogue' && h.speaker ? `${escapeHtml(h.speaker)}${en ? ': ' : '：'}` : '';
       return `<div class="diff-line diff-${type}"><span class="diff-mark">${type === 'added' ? '+' : '−'}</span><span class="diff-text">${prefix}${escapeHtml(h.text)}</span></div>`;
     };
+    // @module works
     const addHl = (s.highlights && s.highlights.added || []);
+    // @module works
     const rmHl = (s.highlights && s.highlights.removed || []);
+    // @module works
     const hl = (addHl.length + rmHl.length)
       ? `<div class="ds-hl">${addHl.map((h) => hlLine(h, 'added')).join('')}${rmHl.map((h) => hlLine(h, 'removed')).join('')}</div>`
       : '';
@@ -2642,6 +2715,7 @@
   }
   function renderScriptDiff(box, d) {
     const enLang = lang === 'en';
+    // @module works
     const rows = (d.segments || []).map((s) => {
       const mark = s.type === 'added' ? '+' : s.type === 'removed' ? '−' : ' ';
       return `<div class="diff-line diff-${s.type}"><span class="diff-mark">${mark}</span><span class="diff-text">${escapeHtml(s.text)}</span></div>`;
@@ -2692,6 +2766,7 @@
     const account = capturePrivateSession();
     if (!isPrivateSessionCurrent(account)) return;
     currentWorksProject = p; currentWorksDiagnosis = null;
+    // @module works
     const isCurrentProject = () => isPrivateSessionCurrent(account) && currentWorksProject?.id === p.id;
     const stalePanel = document.getElementById('readRewritePanel'); if (stalePanel) stalePanel.remove(); // c200：切作品即清围读面板，防 A 房意见挂到 B 项目
     const detail = $('worksDetail'); detail.classList.remove('hidden');
@@ -2732,6 +2807,7 @@
     const epBlocks = [...groups.entries()].map(([epNo, vs]) => {
       const latest = vs[vs.length - 1];
       const oldVers = vs.slice(0, -1);
+    // @module works
       const cmpBtn = (fv, tv) => `<button class="btn-ghost ep-diff-btn" type="button" data-diff="${epNo}:${fv}:${tv}">${lang === 'en' ? `Compare v${fv} → v${tv}` : `对比 v${fv}→v${tv}`}</button>`;
       const hist = oldVers.length
         ? `<details class="ep-history"><summary>${lang === 'en' ? `Past versions (${oldVers.length})` : `历史版本（${oldVers.length}）`}</summary>${oldVers.map((v) =>
@@ -2869,6 +2945,7 @@
     };
   }
 
+  // ═══ MODULE: profile (223行, 5fn) ═══ 个人资料卡
   /* ---------- 个人资料卡 ---------- */
   let meCache = null;
   async function loadMe() {
@@ -2908,6 +2985,7 @@
   function populateProfileOptions() {
     if (_pfOptsDone) return; _pfOptsDone = true;
     const en = lang === 'en';
+    // @module profile
     const opt = (v, label) => `<option value="${v}">${escapeHtml(label)}</option>`;
     $('inRegion').innerHTML = opt('', en ? 'Not set' : '不限/未填') + PF_REGIONS.map((r) => opt(r, r)).join('');
     $('inAgeBand').innerHTML = opt('', en ? 'Not set' : '不限/未填') + PF_AGES.map(([v, k]) => opt(v, t(k))).join('');
@@ -2966,6 +3044,7 @@
       paymentNotice.classList.toggle('hidden', !paymentUnavailable);
       paymentNotice.textContent = lang === 'en' ? 'Online payment is not available yet. Contact the administrator for credits or membership.' : '在线支付暂未开通，请联系管理员处理充值或会员开通。';
     }
+    // @module profile
     const lvName = (lv) => (lang === 'en' ? LEVEL_EN : LEVEL_ZH)[lv] || lv;
     const cur = Api.getUser()?.level;
     $('plansGrid').innerHTML = cat.plans.map((p) => {
@@ -2978,6 +3057,7 @@
       if (p.quotaMonthly) perks.push((lang==='en'?'Monthly gift ':'每月赠 ')+p.quotaMonthly+(lang==='en'?' eps (economy)':' 集（经济档）'));
       if (p.overagePerEp) perks.push(`${t('perEp')} ${(p.overagePerEp / 10).toFixed(1)}`);
       // 引擎档/模式/项目数等显性权益，拉开档位差距、诱导升级
+    // @module profile
       const engN = (p.engines || []).length;
       if (engN) perks.push(lang==='en'?`${engN} engine tiers`:`可用引擎档 ${engN} 档`);
       if (p.maxActiveProjects) perks.push((lang==='en'?'Up to ':'同时进行项目≤')+p.maxActiveProjects+(lang==='en'?' projects':' 个'));
@@ -2993,6 +3073,7 @@
       // 年卡折算月价与节省比例
       let yearLine = '';
       if (yearItem) {
+    // @module profile
         const yearMonthly = (yearItem.amountFen / 12 / 100);
         const savePct = Math.round((1 - yearItem.amountFen / (p.monthlyFen * 12)) * 100);
         yearLine = `<button class="btn-ghost plan-year" data-sku="${yearSku}"${disabled}>${lang==='en'?'Yearly':'年卡'} ¥${yearItem.amountYuan} · ${lang==='en'?'≈':'折'}¥${yearMonthly.toFixed(1)}/${lang==='en'?'mo':'月'} · ${lang==='en'?'save':'省'}${savePct}%</button>`;
@@ -3078,6 +3159,7 @@
     if (!openMasks.length) return;
     closeModalEl(openMasks[openMasks.length - 1]);
   });
+    // @module profile
   const openModal = (id) => {
     const el = $(id);
     if (!el) return;
@@ -3092,6 +3174,7 @@
     const first = _modalFocusables(el)[0];
     if (first) { try { first.focus(); } catch { /* 焦点入失败忽略 */ } }
   };
+  // ═══ MODULE: ui (277行, 6fn) ═══ v2.220 模态统一收口 
   /* ---------- v2.220 模态统一收口 结束 ---------- */
   /* ---------- v2.185.14 c194 用户反馈中心（提交建议/Bug + 我的工单进度 + 小南回复） ----------
      后端 /api/feedback（POST / 提交、GET /mine 查询、admin 三态处置）此前只有管理员处置端接线，
@@ -3104,6 +3187,7 @@
     let fbImages = [];
     const FB_IMG_MAX = 3, FB_IMG_MAX_BYTES = 2 * 1024 * 1024;
 
+    // @module ui
     const esc = (s) => (typeof escapeHtml === 'function' ? escapeHtml(String(s == null ? '' : s)) : String(s == null ? '' : s));
 
     // 把图片压到 ≤2MB 并输出 data URL；超限自动降质量/尺寸，不合法 MIME 直接 reject
@@ -3126,6 +3210,7 @@
             const ctx = canvas.getContext('2d');
             ctx.drawImage(img, 0, 0, width, height);
             // 优先 webp/jpeg 压缩，质量从 0.85 逐级降到 0.4 直到 ≤2MB；png 不压（保留透明）
+    // @module ui
             const tryEncode = (mime, q) => new Promise((res) => {
               canvas.toBlob((b) => res(b), mime, q);
             });
@@ -3168,6 +3253,7 @@
       if (addBtn) addBtn.style.display = fbImages.length >= FB_IMG_MAX ? 'none' : '';
     }
 
+    // @module ui
     const showPane = (which) => {
       const submit = which === 'submit';
       $('fbSubmitPane').classList.toggle('hidden', !submit);
@@ -3315,7 +3401,9 @@
     const cache = {};
     let fmt = 'LIVE';
     let reqSeq = 0; // 快速切 Tab 时丢弃过期响应，防止慢请求把旧制式内容写回当前 Tab
+    // @module ui
     const curLang = () => (lang === 'en' ? 'en' : 'zh');
+    // @module ui
     const key = () => `${fmt}_${curLang()}`;
 
     async function ensure() {
@@ -3335,6 +3423,7 @@
         pre.textContent = `${t('smpFail')}（${e.message || ''}）`;
       }
     }
+    // @module ui
     const switchTab = (f) => {
       fmt = f;
       $('smpTabLive').classList.toggle('active', f === 'LIVE');
@@ -3369,6 +3458,7 @@
     inp.addEventListener('input', () => { clearTimeout(timer); timer = setTimeout(() => reopen(), 300); });
   }
 
+  // ═══ MODULE: market (483行, 4fn) ═══ 交流广场
   /* ---------- 交流广场 ---------- */
   const SQ_SECTIONS = ['', 'experience', 'team', 'review', 'news'];
   let curSection = '';
@@ -3534,6 +3624,7 @@
       if (!res.ok) {
         // v2.216 契约：INTERNAL_ERROR 是脱敏码，对用户回落本地友好文案而非甩错误码
         const e = await res.json().catch(() => ({}));
+    // @module market
         const errText = (!e.error || e.error === 'INTERNAL_ERROR')
           ? (lang === 'en' ? 'Failed to load, please retry later' : '加载失败，请稍后重试') : e.error;
         body.innerHTML = znErrorHtml(errText); return;
@@ -3544,6 +3635,7 @@
       dlg.setAttribute('aria-label', (lang === 'en' ? 'Listing detail: ' : '作品详情：') + d.title);
       const v = d.value; const snap = d.valueSnapshot;
       const gradeColor = { S: '#d4a017', A: '#c0392b', B: '#2e7d32', C: '#5d6d7e', NA: '#888' }[(v && v.grade) || (snap && snap.grade) || 'NA'] || '#888';
+    // @module market
       const grade = (v && v.grade) || (snap && snap.grade) || 'NA';
       const idx = v ? v.valueIndex : (snap ? snap.index : null);
       const dims = v && v.dimensions ? v.dimensions : [];
@@ -3782,12 +3874,14 @@
       dash = resDash.ok ? await Api.jsonOrThrow(resDash) : null;
     } catch (e) { if (e.code !== 'SESSION_CHANGED' && isPrivateSessionCurrent(account)) xnSay(e.message); return; }
     if (!isPrivateSessionCurrent(account)) return;
+    // @module market
     const row = (x, isBuy) => `<div class="deal-row"><span>#${x.id.slice(-5)} · ${x.pricePoints} ${t('points')} · ${t(x.status === 'ESCROW' ? 'escrow' : x.status === 'REFUNDED' ? 'refunded' : 'settled')}</span>
       ${isBuy && (x.status === 'ESCROW' || x.status === 'SETTLED') ? `<span><button class="btn-ghost" data-view-purchase="${x.id}">${lang === 'en' ? 'View script' : '查看剧本'}</button> ${x.status === 'ESCROW' ? `<button class="btn-ghost" data-confirm="${x.id}">${t('confirmReceive')}</button> <button class="btn-ghost" data-refund="${x.id}">${t('refund24')}</button>` : ''}</span>` : ''}</div>`;
     // v2.75 卖家工作台：统计卡 + 我的上架列表
     let dashHtml = '';
     if (dash && dash.stats) {
       const s = dash.stats;
+    // @module market
       const statCard = (label, val, cls) => `<div class="seller-stat ${cls || ''}"><b>${val}</b><span>${label}</span></div>`;
       const listingRows = dash.items.length ? dash.items.map((l) => {
         const grade = l.valueGrade && l.valueGrade !== 'NA' ? `<span class="lv-grade lv-grade-sm">${l.valueGrade}${l.valueIndex != null ? '·' + Math.round(l.valueIndex) : ''}</span>` : '';
@@ -3852,6 +3946,7 @@
     openModal('mineModal');
   };
 
+  // ═══ MODULE: generate (1058行, 26fn) ═══ 生成（带鉴权 SSE）
   /* ---------- 生成（带鉴权 SSE） ---------- */
   let progress = null, lastDone = null, abortCtrl = null, currentProjectId = null, pendingWarnings = null, lastFiling = null;
   // v2.132 多任务并行队列：每单生成=独立会话（独立 progress/abortCtrl 状态），主视口+任务卡片双视图，生成期间可再开新单
@@ -3921,12 +4016,14 @@
       };
     });
   }
+    // @module generate
   const PV = () => window.ProgressView;
   function resetPanels() { ['progressPanel', 'resultPanel', 'failPanel', 'diagPanel', 'investorPanel'].forEach((id) => $(id).classList.add('hidden')); lastDiagnosis = null; }
   let waitTipTimer = null; let waitTipIdx = 0;
   /* B2 v2.200：等待期小南课堂——tips 轮播时同步渲染对应工具的方法论卡片（费曼式：SVG 图 + 白话讲解） */
   function renderWaitLesson(idx) {
     const box = $('waitLesson'); if (!box) return;
+    // @module generate
     const lessons = (PV().getXiaonanLessons && PV().getXiaonanLessons(lang === 'en')) || [];
     if (!lessons.length) { box.innerHTML = ''; box.classList.add('hidden'); return; }
     const c = lessons[((idx % lessons.length) + lessons.length) % lessons.length];
@@ -3972,6 +4069,7 @@
   // v2.132 AI 员工工位：岗位独白流水（progress.log 归集→渲染最近12条，最新在上；打回/拦截行橙色高亮）
   function renderStaffLog() {
     const box = $('staffLog'); if (!box) return;
+    // @module generate
     const logs = (progress.log || []).slice(-12).reverse();
     if (!logs.length) { box.innerHTML = ''; return; }
     box.innerHTML = logs.map((l) => {
@@ -3982,6 +4080,7 @@
   }
   // v2.262 i18n：progress-view 状态机存语义键（state 不落文案），上屏前统一按 lang 翻译；非键原文直通
   function translateProgressState(text) {
+    // @module generate
     const K = (window.ProgressView && window.ProgressView.PV_KEYS) || { done: '__pv_done__', failed: '__pv_failed__', cancelled: '__pv_cancelled__' };
     const en = lang === 'en';
     if (text === K.done) return en ? 'Fresh script ready' : '新鲜剧本出炉';
@@ -4061,6 +4160,7 @@
     if (ph) ph.textContent = lang === 'en' ? 'Pick preferred hooks and reversal/payoff/emotion beats (multi; none = auto). Click again to remove:' : '点选你偏好的钩子与反转/爽点/情绪节拍（可多选，不选则系统智能排布；再点取消）：';
   }
   // v2.44 策略卡语言：跟随"输出语言"六语（zh/en/ja/ko/es/ar），未选时跟随界面语言
+    // @module generate
   const strategyLocale = () => {
     const ol = $('outLang')?.value;
     return ['zh', 'en', 'ja', 'ko', 'es', 'ar'].includes(ol) ? ol : (lang === 'en' ? 'en' : 'zh');
@@ -4094,7 +4194,9 @@
     recBtn.onclick = async () => {
       try {
         recBtn.disabled = true;
+    // @module generate
         const tagBrief = (typeof buildTagBrief === 'function') ? buildTagBrief() : '';
+    // @module generate
         const brief = (tagBrief && tagBrief.trim()) ? tagBrief : ($('modeBrief')?.value || '');
         const res = await Api.request('/api/generate/flavor-recommend', { method: 'POST', body: JSON.stringify({ brief, lang: lang === 'en' ? 'en' : 'zh' }) });
         const d = await res.json();
@@ -4150,6 +4252,7 @@
         // 播报：仅自动推荐项（auto），逐条给名字+理由
         const isEn = lang === 'en';
         const lines = [];
+    // @module generate
         const pushLine = (label, card, reason) => {
           if (!card) return;
           lines.push(`${label}：${card.name}${reason ? `（${reason}）` : ''}`);
@@ -4195,6 +4298,7 @@
       } catch { window.__csCache = null; }
     }
     const cs = window.__csCache;
+    // @module generate
     const buildCsGroup = (titleText, list, getter, setter) => {
       if (!Array.isArray(list) || !list.length) return null;
       const g = document.createElement('div'); g.className = 'hook-group strategy-group';
@@ -4405,6 +4509,7 @@
       c.dataset.pos = String(pos); c.dataset.id = opt.id; if (isDefault) c.dataset.default = opt.id;
       return c;
     };
+    // @module generate
     const renderBody = () => {
       body.innerHTML = '';
       if (!hookPaletteData) return;
@@ -4567,6 +4672,7 @@
     const stats = document.createElement('div'); stats.className = 'muted wave-dir-stats'; grp.appendChild(stats);
 
     const rangeRow = document.createElement('div'); rangeRow.className = 'wave-dir-range hidden';
+    // @module generate
     const mkTxt = (t) => document.createTextNode(t);
     rangeRow.appendChild(mkTxt(lang === 'en' ? 'Ep ' : '第 '));
     const fromInput = document.createElement('input'); fromInput.type = 'number'; fromInput.min = '1'; fromInput.className = 'wave-dir-input wave-dir-from'; fromInput.value = '1';
@@ -4589,7 +4695,9 @@
     box.appendChild(grp);
 
     let selectedIntent = '';
+    // @module generate
     const epCount = () => Math.max(1, Math.min(120, parseInt(($('episodes') || {}).value || '20', 10) || 20));
+    // @module generate
     const basePayload = (extra) => ({
       episodeCount: epCount(), strength: hookPref.strength, lang: lang === 'en' ? 'en' : 'zh',
       tags: Array.isArray(tagChosen) ? tagChosen.slice(0, 40) : [],
@@ -4600,11 +4708,15 @@
       pins: { ...beatManual }, ...(extra || {}),
     });
 
+    // @module generate
     const drawCurve = (before, after, patch) => {
       const n = before.points.length;
       const Wpx = 640, Hpx = 150, padL = 30, padR = 10, padT = 10, padB = 20;
+    // @module generate
       const x = (i) => padL + i * (Wpx - padL - padR) / Math.max(1, n - 1);
+    // @module generate
       const y = (v) => padT + (100 - v) * (Hpx - padT - padB) / 100;
+    // @module generate
       const pathOf = (pts) => pts.map((p, i) => `${i ? 'L' : 'M'}${x(i).toFixed(1)},${y(p.intensity).toFixed(1)}`).join(' ');
       const grid = [25, 50, 75].map((v) => `<line x1="${padL}" y1="${y(v)}" x2="${Wpx - padR}" y2="${y(v)}" class="wave-grid"/><text x="3" y="${y(v) + 3}" class="wave-axis">${v}</text>`).join('');
       let rangeRect = '';
@@ -4621,6 +4733,7 @@
         : `平均张力 ${w.avgIntensity} · 峰值第${w.peakEp}集 · 极差 ${w.range}${w.flatWarn ? ' · 预警：存在连续3集过平' : ''}${after ? ' · 灰虚线=连改前，实线=连改后，阴影=连改区间' : ''}`);
     };
 
+    // @module generate
     const renderIntents = (intents) => {
       intentRow.innerHTML = '';
       intents.forEach((it) => {
@@ -4634,6 +4747,7 @@
       });
     };
 
+    // @module generate
     const syncBeatChips = () => {
       document.querySelectorAll('.beat-palette-group .palette-chip').forEach((chip) => {
         const pos = chip.dataset.pos;
@@ -4910,15 +5024,20 @@
   // v2.185 c180 批量补全 modal dialog（三族共用）：dry-run 后弹字段选择 dialog，编导可取消某些字段，
   // 确认后按选中字段过滤 patches，实际补全请求带 patches + fields 跳过 autoFill 重算
   // 返回 Promise<{patches, fields}> 或 null（取消）；patches 已按 fields 过滤，只含选中字段
+  // ═══ MODULE: misc (95行, 8fn) ═══ v2.205 批量补全对话框
   /* ---------- v2.205 批量补全对话框 ---------- */
   // 薄弱资产「一键补全」确认弹窗：v2.205 迁移 v2.202 规范——DOM 构建（防注入）、
   // 焦点圈定/恢复（_uiTrapTab/prevFocus）、入场出场动画（_uiReducedMotion 守卫）、
   // 字段行 hover 效果移交 CSS（.dash-batch-field:hover）。
   function showBatchCompleteDialog(dryRes) {
     return new Promise((resolve) => {
+    // @module misc
       const u = (dryRes.willUpdate || []).length;
+    // @module misc
       const s = (dryRes.willSkip || []).length;
+    // @module misc
       const fields = (dryRes.fieldsUnion || []);
+    // @module misc
       const patches = (dryRes.willUpdate || []).map((x) => ({ id: x.id, name: x.name, patch: x.patch || {} }));
       const prevFocus = document.activeElement;
       const { overlay, modal, bodyEl, okBtn, cancelBtn } = _uiModalShell({
@@ -4951,6 +5070,7 @@
       }
       const toggles = document.createElement('div');
       toggles.style.cssText = 'display:flex;gap:8px;margin-bottom:12px';
+    // @module misc
       const mkToggle = (cls, text) => {
         const b = document.createElement('button');
         b.type = 'button'; b.className = cls; b.textContent = text;
@@ -7112,6 +7232,7 @@
     }
   }
 
+  // ═══ MODULE: qc (843行, 21fn) ═══ 全本质量诊断
   /* ---------- 全本质量诊断 ---------- */
   let lastDiagnosis = null;
   async function loadDiagnosis(projectId) {
@@ -7152,6 +7273,7 @@
     const warnTxt = w.flatWarn ? (lang === 'en' ? ' · some 3-episode stretches are too flat, add suppression/release alternation' : ' · 存在连续3集过平，建议补压放交替') : '';
     // v2.60 压放结构体检（与导出导演页同口径：≥60 为推进/高能）
     const _drive = pts0 => pts0.filter(p => p.intensity >= 60).length;
+    // @module qc
     const _n = (w.points || []).length || 1;
     const _drivePct = Math.round((_drive(w.points || []) / _n) * 100);
     const rhythmTxt = lang === 'en' ? ` · drive ${_drivePct}% / breathing ${100 - _drivePct}%` : ` · 推进${_drivePct}%/留白${100 - _drivePct}%`;
@@ -7190,6 +7312,7 @@
   function showWaveAdvice(ep) {
     const box = $('waveAdvice'); if (!box || !lastWave) return;
     const p = lastWave.points.find((q) => q.ep === ep); if (!p) return;
+    // @module qc
     const adv = (lastWave.advices || []).find((a) => a.ep === ep);
     box.classList.remove('hidden');
     if (!adv) {
@@ -7222,6 +7345,7 @@
     const sub = isStaffAcct()
       ? (enLang ? 'Each note is prefetched only. Confirm an item to run the rewrite — free for staff.' : '每条意见仅预填展示，逐条确认后定点改写；内部账户免费。')
       : (enLang ? 'Each note is prefetched only. Confirm an item to run the paid targeted rewrite.' : '每条意见仅预填展示，逐条确认后才付费定点改写。');
+    // @module qc
     const lvTxt = (p) => enLang ? ({ P0: 'block', P1: 'high' }[p.priority] || p.priority) : (p.priority === 'P0' ? '必改' : '优先改');
     const btnTxt = isStaffAcct()
       ? (enLang ? 'Let Xiaonan fix this · Free' : '让小南优化这处 · 内部免费')
@@ -7249,6 +7373,7 @@
           <div>${escapeHtml(p.point || '')}</div></div>`).join('')}</div>`
       : '';
     // null 版本号=409 幂等命中（处理中/已处理但拿不到新版号），同样锁定，重绘不复活按钮
+    // @module qc
     const fixedBtn = (ver) => ver
       ? (enLang ? `Rewritten · new v${ver}` : `已改写 · 新版 v${ver}`)
       : (enLang ? 'In progress / already handled' : '处理中/已处理');
@@ -7460,6 +7585,7 @@
   }
   const dimEn = { 人物: 'Character', 剧情: 'Plot', 台词: 'Dialogue', 市场: 'Market', 格式: 'Format', 去AI化: 'De-AI' };
   function buildDiagnosisHtml(d) {
+    // @module qc
     const bars = (d.groups || []).map((g) => {
       const lab = lang === 'en' ? (dimEn[g.label] || g.label) : g.label;
       return `<div class="diag-row"><span class="diag-k">${lab}</span>
@@ -7480,7 +7606,7 @@
     return { bars, fixHtml };
   }
   // v2.129 创作质检聚合卡：通用遍历每集 qcReport——凡带 hits[] 结构且 score<100 的创作引擎自动上卡，新引擎无需改前端
-  const QC_ENGINE_LABELS = {
+  const QC_ENGINE_LABELS = (typeof window !== 'undefined' && window.ZN_DATA && window.ZN_DATA.QC_ENGINE_LABELS) || {
     faintOnCue: ['晕倒阀门', 'Faint-on-cue'], wakeOnCue: ['呼唤即醒', 'Wake-on-cue'], woundOnCue: ['带伤开挂', 'Wound-on-cue'],
     instantHack: ['黑客秒破', 'Instant hack'], instantLanguage: ['语言秒精通', 'Instant fluency'], instantEscape: ['束缚秒脱', 'Instant escape'],
     weaponJam: ['武器哑火', 'Weapon jam'], evidenceBlank: ['证据恰好失灵', 'Evidence on cue'], childBlurt: ['萌宝泄密', 'Child blabber'],
@@ -7513,12 +7639,15 @@
     drunkTruth: ['灌醉真心话', 'Drunken truth'], tearBait: ['泪点开关', 'Tear bait'], instantDeduction: ['秒推理', 'Instant deduction'], recordsOnDemand: ['一查必中', 'Records on demand'],
     walkInTiming: ['推门掐点', 'Walk-in timing'], helpOnDemand: ['随叫随到', 'Help on demand'], wakeUpCall: ['一句话点醒', 'Wake-up line'], blindnessOnCue: ['失明复明阀门', 'Blindness on cue'],
     character: ['人物行为逻辑', 'Character logic'], rhythm: ['节奏曲线', 'Rhythm'],
+    openingWeld: ['跨集焊点承接', 'Episode weld'], // v2.323 /fix 重算 176 键唯一缺口，issues 形态靠 extras 兜底行渲染，补词条后有中文标签+click-to-fix attr
     // c218 闸门引擎四键（无 score，由下方闸门卡渲染；词条供兜底与检索）
     cliche: ['反套路闸门', 'Anti-cliché gate'], tongue: ['台词口语化', 'Colloquial gate'],
     grounded: ['落地感', 'Groundedness'], lengthPlan: ['字数闸门', 'Length gate'], styleCheck: ['风格一致性', 'Style consistency']
   };
+    // @module qc
   const humanizeEngineKey = (k) => k.replace(/([a-z0-9])([A-Z])/g, '$1 $2').replace(/^./, (c) => c.toUpperCase());
   // c220：质检 chip 点击即修——携带规则键/维度/首条建议到委托点击处理器（台账 30 键跨集，不挂此入口）
+    // @module qc
   const qcFixAttrs = (ep, rule, dim, advice) =>
     ` data-qcfix="1" data-ep="${Number(ep) || 0}" data-rule="${escapeHtml(rule)}"`
     + ` data-dim="${escapeHtml(String(dim || '').slice(0, 20))}" data-advice="${escapeHtml(String(advice || '').slice(0, 400))}"`;
@@ -7562,7 +7691,9 @@
       const unplant = qc.unplantedAsset && Array.isArray(qc.unplantedAsset.hits) ? qc.unplantedAsset.hits.length : 0;
       const pm = qc.propMotifRhythm && Array.isArray(qc.propMotifRhythm.hits) ? qc.propMotifRhythm.hits.length : 0;
       if (!dangling && !unplant && !pm) return;
+    // @module qc
       const fmt = (n) => (n === null ? '—' : String(n));
+    // @module qc
       const cell = (label, val) => `<div class="diag-row"><span class="diag-k">${label}</span>${val}</div>`;
       assetRows.push(`<div class="qc-ep"><em>EP${s.epNo} · ${escapeHtml(s.title || '')}</em>`
         + cell(lang === 'en' ? 'Dangling foreshadow' : '悬空伏笔', fmt(dangling))
@@ -7572,6 +7703,7 @@
     });
     // v2.132 修复闭环对比卡：闸门前 → 终稿六维总分对比（qcReport.fixLoop），AI味为润色师定向指标（越低越好）
     const FIXLOOP_DIMS = { character: ['人物', 'Character'], plot: ['剧情', 'Plot'], dialogue: ['台词', 'Dialogue'], market: ['市场', 'Market'], format: ['格式', 'Format'], deai: ['去AI化', 'De-AI'] };
+    // @module qc
     const deltaTag = (before, after, lowerBetter) => {
       if (typeof before !== 'number' || typeof after !== 'number') return `<span class="muted">—</span>`;
       const d = after - before;
@@ -7582,6 +7714,7 @@
     };
     const fixRows = [];
     (eps || []).forEach((s) => {
+    // @module qc
       const fl = (s.qcReport || {}).fixLoop;
       if (!fl || !fl.before || !fl.after) return;
       const dims = Object.keys(FIXLOOP_DIMS).map((k) => {
@@ -7604,6 +7737,7 @@
     const hookRows = [];
     let hookStrong = 0;
     (eps || []).forEach((s) => {
+    // @module qc
       const hk = (s.qcReport || {}).cliffhanger;
       if (!hk || typeof hk.score !== 'number') return;
       const issues = Array.isArray(hk.issues) ? hk.issues : [];
@@ -7638,12 +7772,14 @@
     const arcRows = [];
     let arcHealthy = 0;
     (eps || []).forEach((s) => {
+    // @module qc
       const at = (s.qcReport || {}).arcTrack;
       if (!at || typeof at.score !== 'number' || !Array.isArray(at.characters)) return;
       const stalled = Array.isArray(at.stalled) ? at.stalled : [];
       const jumps = Array.isArray(at.jumpCut) ? at.jumpCut : [];
       const issues = Array.isArray(at.issues) ? at.issues : [];
       if (!stalled.length && !jumps.length && !issues.length && at.score >= 70) { arcHealthy += 1; return; }
+    // @module qc
       const emoL = (e) => { const p = ARC_EMO_LABEL[e]; return p ? (lang === 'en' ? p[1] : p[0]) : String(e || ''); };
       const chips = [];
       stalled.slice(0, 8).forEach((x) => {
@@ -7673,6 +7809,7 @@
     const softRows = [];
     let softHealthy = 0;
     (eps || []).forEach((s) => {
+    // @module qc
       const sf = (s.qcReport || {}).sceneSoftEnding;
       if (!sf || typeof sf.score !== 'number') return;
       const hits = Array.isArray(sf.hits) ? sf.hits : [];
@@ -7702,6 +7839,7 @@
     const sdtRows = [];
     let sdtHealthy = 0;
     (eps || []).forEach((s) => {
+    // @module qc
       const sd = (s.qcReport || {}).showDontTell;
       if (!sd || typeof sd.score !== 'number') return;
       const issues = Array.isArray(sd.issues) ? sd.issues : [];
@@ -7718,6 +7856,7 @@
         const tip = [i.evidence ? `${lang === 'en' ? 'Evidence: ' : '原文：'}${String(i.evidence).replace(/\s+/g, ' ')}` : '', i.advice || ''].filter(Boolean).join(' / ');
         return `<span class="qc-chip ${cls}" title="${escapeHtml(tip.slice(0, 400))}">${escapeHtml(name)}</span>`;
       });
+    // @module qc
       const c = (n, z, e) => (n ? `${z}${n}${e}` : '');
       const tally = lang === 'en'
         ? [c(counts.tellEmotion, 'tell ', ''), c(counts.summary, 'summary ', ''), c(counts.abstractAdj, 'adj ', ''), c(counts.innerMonologue, 'inner ', '')].filter(Boolean).join(' · ')
@@ -7782,6 +7921,7 @@
       grounded: QC_ENGINE_LABELS.grounded, lengthPlan: QC_ENGINE_LABELS.lengthPlan,
     };
     const GATE_KEYS = Object.keys(GATE_DIM_LABELS);
+    // @module qc
     const dimChip = (k, v, issues, pair, ep) => {
       const name = pair ? (lang === 'en' ? pair[1] : pair[0]) : humanizeEngineKey(k);
       const hasHigh = issues.some((i) => i && i.severity === 'high');
@@ -7954,6 +8094,7 @@
       note.textContent = lang === 'en' ? '* Market score is estimated from text; it becomes precise after a market-agent run.' : '* 市场维度为文本估算，跑过市场分析岗后会替换为精准分。';
     } else note.classList.add('hidden');
   }
+  // ═══ MODULE: misc (49行, 1fn) ═══ 资方视角投稿前体检（免费·本地确定性评估）
   /* ---------- 资方视角投稿前体检（免费·本地确定性评估） ---------- */
   const INV_DIM_EN = { track: 'Track certainty', recoup: 'Cost & recoup', marketability: 'Ad-marketability', content: 'Content baseline' };
   const INV_VERDICT_EN = { STRONG: 'Strong: pitch it', TALK: 'Worth talking after fixes', CAUTION: 'Caution: build certainty first', PASS: 'Hold: hard veto to clear' };
@@ -7971,6 +8112,7 @@
       text = eps.map((s) => `第${s.epNo}集 ${s.title || ''}\n${s.content || ''}`).join('\n\n');
     } catch { if (!isPrivateSessionCurrent(account)) return; text = resultText(); }
     if (!isPrivateSessionCurrent(account)) return;
+    // @module misc
     const tags = (typeof tagChosen !== 'undefined' && Array.isArray(tagChosen)) ? tagChosen : [];
     try {
       const res = await Api.request('/api/market/investor-lens', { method: 'POST', body: JSON.stringify({ text: text.slice(0, 6000), tags }) });
@@ -8003,6 +8145,7 @@
   const invRefreshBtn = $('invRefreshBtn');
   if (invRefreshBtn) invRefreshBtn.onclick = () => { if (currentProjectId) loadInvestorLens(currentProjectId); };
 
+  // ═══ MODULE: tags (79行, 2fn) ═══ 投稿渠道推荐（按标签匹配适配平台，商业闭环）
   /* ---------- 投稿渠道推荐（按标签匹配适配平台，商业闭环） ---------- */
   async function loadSubmissionMatch(tags) {
     const panel = $('submissionPanel'); if (!panel) return;
@@ -8022,7 +8165,9 @@
       const verifiedBadge = c.verified
         ? `<span class="chip" style="background:#e8f5e9;color:#2e7d32">${lang === 'en' ? 'Verified' : '联系方式已核验'}</span>`
         : `<span class="chip" style="background:#fff3e0;color:#e65100">${lang === 'en' ? 'Contact pending' : '联系方式待核验'}</span>`;
+    // @module tags
       const kinds = (c.kinds || []).join('·');
+    // @module tags
       const matched = (c.matched || []).map((t) => `<span class="chip" style="font-size:11px">${escapeHtml(t)}</span>`).join('');
       return `<div class="sub-card">
         <div class="sub-head"><b>${escapeHtml(c.name)}</b><span class="muted">${escapeHtml(c.region === 'overseas' ? (lang === 'en' ? 'Overseas' : '海外') : (lang === 'en' ? 'Domestic' : '国内'))}</span>${verifiedBadge}</div>
@@ -8082,7 +8227,9 @@
     $('failText').textContent = (refunded ? (lang === 'en' ? 'Failed and refunded: ' : '已失败并退回积分：') : '') + translateProgressState(msg);
   }
 
+  // ═══ MODULE: misc (17行, 2fn) ═══ 结果操作
   /* ---------- 结果操作 ---------- */
+    // @module misc
   const resultText = () => $('scriptText').textContent || '';
   $('copyBtn').onclick = () => copy(resultText());
   $('listenBtn').onclick = () => {
@@ -8093,12 +8240,14 @@
     openListen(latest.id);
   };
   $('shareBtn').onclick = async () => {
+    // @module misc
     const syn = (lastDone && lastDone.market && lastDone.market.synopsis) || resultText().slice(0, 120);
     const payload = lang === 'en' ? `My new vertical drama on Zhongnan Screenwriter:\n${syn}\n→ Create yours`
       : `我在「终南集·AGI编剧大师」写了部新短剧：\n${syn}\n→ 一起来创作`;
     if (navigator.share) { try { await navigator.share({ text: payload }); return; } catch {} }
     copy(payload, lang === 'en' ? 'Synopsis copied' : '梗概与邀请文案已复制');
   };
+  // ═══ MODULE: qc (717行, 18fn) ═══ v2.67 剧本PK
   /* ---------- v2.67 剧本PK ---------- */
   let pkOpponentId = null; // null = 平台标杆本
   async function openPk() {
@@ -8202,6 +8351,7 @@
     }
     const tier = lang === 'en' ? mine.tierEn : mine.tierZh;
     const pct = nextTier ? Math.round(nextTier.progress * 100) : 100;
+    // @module qc
     const nextTxt = (nextTier && nextTier.nextTierZh)
       ? (lang === 'en'
         ? `${nextTier.gap} power to ${nextTier.nextTierEn}`
@@ -8282,8 +8432,10 @@
       const name = en ? d.labelEn : d.labelZh;
       return `<div class="vc-dim"><span>${escapeHtml(name)}</span><div class="vc-dim-track"><i style="width:${Number(d.score) || 0}%"></i></div><b>${Number(d.score).toFixed(0)}</b></div>`;
     }).join('');
+    // @module qc
     const strengths = (en ? c.strengthsEn : c.strengthsZh);
     const risks = en ? c.risksEn : c.risksZh;
+    // @module qc
     const li = (arr, cls) => (arr && arr.length ? `<ul class="${cls}">${arr.map((x) => `<li>${escapeHtml(x)}</li>`).join('')}</ul>` : '');
     $('valueBody').innerHTML = `
       <div class="vc-cert">
@@ -8317,6 +8469,7 @@
     btn.textContent = hdStaff ? (lang === 'en' ? 'Generating (free)…' : '高清生成中（内部免费）…') : (lang === 'en' ? 'Generating (39 pts)…' : '高清生成中（扣39积分）…');
     try {
       const r = await Api.jsonOrThrow(await Api.request('/api/va/poster', { method: 'POST', body: JSON.stringify({ projectId: currentProjectId, tier: 'STANDARD', clientToken: idemToken() }) }));
+    // @module qc
       const urls = (r.images || []).filter((u) => /^https?:\/\//.test(u) || u.startsWith('data:image/'));
       if (urls.length) {
         const wrap = document.createElement('div'); wrap.className = 'vc-poster-out';
@@ -8348,6 +8501,7 @@
       const lines = en ? d.linesEn : d.linesZh;
       const hs = d.hookStrategy;
       const srcBadge = { trending: en ? 'Trend' : '热趋势', seasonal: en ? 'Season' : '时令', profile: en ? 'You' : '偏好' };
+    // @module qc
       const dirs = (d.directions || []).map((x) =>
         `<span class="sd-chip sd-${x.source}">${escapeHtml(x.tag)}<i>${escapeHtml(en ? x.sourceEn : x.sourceZh)}</i></span>`).join('');
       const boardNote = d.boardActive
@@ -8367,6 +8521,7 @@
     }
   };
 
+    // @module qc
   const downloadTxtLocal = () => {
     const blob = new Blob(['﻿' + resultText()], { type: 'text/plain;charset=utf-8' });
     const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'script.txt'; a.click(); URL.revokeObjectURL(a.href);
@@ -8380,6 +8535,7 @@
     $('dlMenu').classList.toggle('hidden');
   };
   // 从后端导出带封面/大纲/人物小传/分集目录/页码的成稿文件；门控由服务端裁决
+    // @module qc
   const downloadFromServer = async (fmt, epNo) => {
     if (!currentProjectId) { xnSay(lang === 'en' ? 'Generate a script first.' : '请先生成剧本再导出哦～'); return; }
     if (!Api.getUser()) { openAuth('login'); return; }
@@ -8420,6 +8576,7 @@
   };
   // v2.64 导演交付包预览：导出前先看情绪/钩子/兑现链/人物成长四页
   let dpPages = []; let dpActive = 0; let dpEpisodeCount = 0;
+    // @module qc
   const renderDpPage = () => {
     const body = $('dpBody'); if (!body) return;
     const p = dpPages[dpActive];
@@ -8430,6 +8587,7 @@
     }
     p.lines.forEach((ln) => { const d = document.createElement('div'); d.className = 'dp-line'; d.textContent = ln; body.appendChild(d); });
   };
+    // @module qc
   const renderDpSummary = () => {
     const s = $('dpSummary'); if (!s) return;
     if (!dpPages.length) { s.textContent = ''; return; }
@@ -8437,6 +8595,7 @@
     const names = dpPages.map((p) => labels[p.type] || p.type).join(' / ');
     s.textContent = (lang === 'en' ? `Episodes: ${dpEpisodeCount} · Director pages (${dpPages.length}): ` : `共 ${dpEpisodeCount} 集 · 导演交付页（${dpPages.length} 页）：`) + names + (lang === 'en' ? ' — preview only; download below for the formatted file.' : ' — 此为预览，下方按钮下载正式排版文件。');
   };
+    // @module qc
   const openDirectorPack = async () => {
     $('dlMenu').classList.add('hidden');
     if (!currentProjectId) { xnSay(lang === 'en' ? 'Generate a script first.' : '请先生成剧本再预览哦～'); return; }
@@ -8471,6 +8630,7 @@
   });
   // v2.154 制作物料清单预览：场景总表/角色出场表/道具总表（跨集聚合，制片交付层，登录即可）
   let matData = null;
+    // @module qc
   const openMaterials = async () => {
     $('dlMenu').classList.add('hidden');
     if (!currentProjectId) { xnSay(lang === 'en' ? 'Generate a script first.' : '请先生成剧本再预览哦～'); return; }
@@ -8492,8 +8652,10 @@
         ? `${data.title} · ${data.episodeCount} eps · ${st.sceneCount} scenes / ${st.castCount} cast / ${st.propCount} props · header pass ${st.headerRate ?? 0}%`
         : `${data.title} · 共${data.episodeCount}集 · 场景${st.sceneCount}场 / 角色${st.castCount}人 / 道具${st.propCount}类 · 场头合规率${st.headerRate ?? 0}%`;
       const body = $('matBody'); body.innerHTML = '';
+    // @module qc
       const sec = (title) => { const d = document.createElement('div'); d.className = 'dp-line'; d.textContent = title; body.appendChild(d); };
       const row = (txt) => { const d = document.createElement('div'); d.className = 'dp-line'; d.textContent = txt; body.appendChild(d); };
+    // @module qc
       const epsStr = (eps) => eps.map((e) => (en ? `ep${e}` : `第${e}集`)).join('/');
       sec(en ? '▸ Scene Sheet (by scene count)' : '▸ 场景总表（按场次降序）');
       (data.scenes || []).forEach((s) => {
@@ -8512,6 +8674,7 @@
       if (!(data.props || []).length) row(en ? '(No key props)' : '（无关键信物记录）');
       // v2.155 场景×角色通告矩阵（跨集按场景聚合：场次/角色台词量/信物）
       sec(en ? '▸ Scene×Cast Matrix (by scene count)' : '▸ 场景×角色通告矩阵（按场次降序）');
+    // @module qc
       const mx = (data.sceneBreakdown && data.sceneBreakdown.matrix) || [];
       // v2.156 复盘增强：场景生图提示词进预览层（details 首现场景 → prompt，AIGC 空镜参考图即拿即用）
       const promptMap = new Map(
@@ -8771,6 +8934,7 @@
     if (_xnAsking) return;
     if (!Api.isAuthed()) { closeModalEl($('xnChatModal')); openAuth('login'); return; }
     const input = $('xnAskInput'), btn = $('xnAskBtn'), answerBox = $('xnAskAnswer');
+    // @module qc
     const question = (input.value || '').trim();
     const enLang = lang === 'en';
     if (!question) { xnSay(enLang ? 'Type your question first — the more specific, the sharper the answer.' : '先把问题写上哦，越具体小南答得越准～'); input.focus(); return; }
@@ -8816,8 +8980,10 @@
   };
   $('xnAskBtn').onclick = () => { askXiaonan(); };
   $('xnAskInput').addEventListener('keydown', (e) => { if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') { e.preventDefault(); askXiaonan(); } });
+  // ═══ MODULE: xiaonan (2行, 0fn) ═══ v2.261 小南深度共创入口end
   /* ---------- v2.261 小南深度共创入口end ---------- */
 
+  // ═══ MODULE: misc (108行, 0fn) ═══ 顶栏控件
   /* ---------- 顶栏控件 ---------- */
   $('themeBtn').onclick = () => { theme = THEMES[(THEMES.indexOf(theme) + 1) % THEMES.length]; LS.s('zn_theme', theme); applyTheme(); };
   $('langBtn').onclick = () => { const nx = lang === 'zh' ? 'en' : 'zh'; LS.s('zn_lang', nx); applyLang(); };
@@ -8926,6 +9092,7 @@
   // 付费动作客户端幂等令牌：每次点击生成新令牌（刻意重复操作可再扣费），网络重试/双击重发复用同一请求体
   function idemToken() { return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`; }
 
+  // ═══ MODULE: admin (1096行, 22fn) ═══ 超级管理员后台
   /* ---------- 超级管理员后台 ---------- */
   const ADM_TABS = ['users', 'stats', 'finance', 'posts', 'models', 'knowledge', 'feedback', 'safety', 'handoff', 'updates', 'balances', 'ads'];
   let admTab = 'users', admPage = 1, admInited = false;
@@ -9148,6 +9315,7 @@
       if (items.length === 0) { if (listEl) znEmpty(listEl, lang === 'en' ? 'No announcements yet.' : '暂无公告。'); return; }
       if (listEl) listEl.innerHTML = items.map((a) => {
         const title = a.titleZh || a.titleEn || `v${a.version}`;
+    // @module admin
         const body = (a.bodyZh || a.bodyEn || '').slice(0, 200);
         const pinned = a.pinned ? `<span class="badge">${lang === 'en' ? 'Pinned' : '置顶'}</span> ` : '';
         const ver = escapeHtml(a.version);
@@ -9183,6 +9351,7 @@
   }
   // ── v2.43 迭代接续档案：系统快照只读、脉络可编辑、口令一键带走 ──
   let hdCache = null;
+    // @module admin
   const linesOf = (id) => $(id).value.split('\n').map((s) => s.trim()).filter(Boolean);
   async function loadAdmHandoff() {
     // v2.286 tab loader 断网/非 ok 就地错误态，绝不冒泡 unhandledrejection
@@ -9261,6 +9430,7 @@
     $('sfCounts').textContent = (lang === 'en'
       ? `Total ${c.total} · active ${c.active} · BLOCK ${c.block} · WARN ${c.warn} · custom ${c.custom} · disabled ${c.disabled}`
       : `共 ${c.total} 条 · 生效 ${c.active} · 硬拦截 ${c.block} · 预警 ${c.warn} · 自定义 ${c.custom} · 停用 ${c.disabled}`);
+    // @module admin
     const sevTag = (sv) => sv === 'BLOCK'
       ? '<span style="color:var(--danger,#e5484d);font-weight:600">BLOCK</span>'
       : '<span style="color:#d9a23b;font-weight:600">WARN</span>';
@@ -9463,7 +9633,7 @@
   }
   /* ---------- 管理后台：模型配置 ---------- */
   // 文本三档 + 图片两档；图片旗舰默认 gpt-image-1（PRD 必含 ChatGPT image 生成）
-  const MODEL_GROUPS = [
+  const MODEL_GROUPS = (typeof window !== 'undefined' && window.ZN_DATA && window.ZN_DATA.MODEL_GROUPS) || [
     { kind: 'text', label: { zh: '文本引擎（剧本创作）', en: 'Text engines (script)' }, tiers: [
       { key: 'economy', zh: '经济档', en: 'Economy' }, { key: 'standard', zh: '标准档', en: 'Standard' }, { key: 'flagship', zh: '旗舰档', en: 'Flagship' }] },
     { kind: 'image', label: { zh: '图片引擎（剧本海报）', en: 'Image engines (poster)' }, tiers: [
@@ -9495,6 +9665,7 @@
     const body = { text: {}, image: {} };
     $('admModelWrap').querySelectorAll('.model-row').forEach((row) => {
       const kind = row.getAttribute('data-kind'), tier = row.getAttribute('data-tier');
+    // @module admin
       const get = (f) => row.querySelector(`[data-f="${f}"]`).value.trim();
       const entry = { baseUrl: get('baseUrl'), model: get('model') };
       const key = get('apiKey'); if (key) entry.apiKey = key; // 空则不传，后端保留原密钥
@@ -9534,6 +9705,7 @@
       : '<div class="notice">国产最强替补自检 ✅ 三档八岗每岗第一替补均为该岗中国国内最强 API（v2.52 策展排序），海外首选断供时不降配兜底。</div>';
     const bkUp = sc.upgradeHints && sc.upgradeHints.length
       ? `<div class="notice">自动迭代候选（需联网横评+真实账单确认后换型）：<br>${sc.upgradeHints.map((h) => `· ${escapeHtml(h.role)}：${escapeHtml(h.note)}`).join('<br>')}</div>` : '';
+    // @module admin
     const bkManual = (sc.manualNeeded || []).length ? `<details><summary>系统无法自动迭代、需你拍板的情形</summary><div class="notice">${sc.manualNeeded.map((m) => '· ' + escapeHtml(m)).join('<br>')}</div></details>` : '';
     $('admPortfolio').innerHTML = `
       <div class="notice">流水线顺序：${orderTxt}</div>
@@ -9557,6 +9729,7 @@
       <td>${(e.usedBy || []).map(escapeHtml).join('<br>')}</td>
       <td>${e.region === 'domestic' ? '国产' : e.region === 'overseas' ? '海外' : '均可'}${e.necessity === 'core' ? '·必需' : e.necessity === 'alternative' ? '·备选' : '·可选'}</td>
       <td>${e.consoleUrl ? `<a href="${encodeURI(e.consoleUrl)}" target="_blank" rel="noopener">${escapeHtml(e.consoleUrl)}</a> <button class="btn-ghost" data-copy="${escapeHtml(e.consoleUrl)}">复制</button>` : '<span class="muted">无官方开放API</span>'}<br><small class="muted">${escapeHtml(e.note || '')}</small></td></tr>`;
+    // @module admin
     const tbl = (title, list) => `<h4 style="margin:10px 0 4px">${title}（${list.length}）</h4>
       <table class="adm-table"><thead><tr><th>厂商/产品</th><th>用于哪些功能/岗位</th><th>属性</th><th>官方申请入口与说明</th></tr></thead><tbody>${list.map(row).join('')}</tbody></table>`;
     const cov = j.coverage && (j.coverage.missing.length || j.coverage.extra.length)
@@ -9637,6 +9810,7 @@
   const KN_CATS = ['character', 'plot', 'payoff', 'reversal', 'scene', 'dialogue', 'av', 'compliance'];
   const KN_CAT_ZH = { character: '人设', plot: '剧情结构', payoff: '爽点', reversal: '反转', scene: '场景', dialogue: '台词风格', av: '视听语言', compliance: '合规政策' };
   const KN_CAT_EN = { character: 'Character', plot: 'Plot', payoff: 'Payoff', reversal: 'Reversal', scene: 'Scene', dialogue: 'Dialogue', av: 'A/V', compliance: 'Compliance' };
+    // @module admin
   const knCatName = (c) => (lang === 'en' ? KN_CAT_EN[c] || c : KN_CAT_ZH[c] || c);
   function renderKnCategory() {
     $('knCategory').innerHTML = KN_CATS.map((c) => `<option value="${c}">${knCatName(c)}</option>`).join('');
@@ -9751,7 +9925,9 @@
     const btn = $('knRunAuto'); btn.disabled = true; const old = btn.textContent; btn.textContent = '学习中…';
     try {
       const j = await admApi('/knowledge/self-learn/run-auto', { method: 'POST', body: '{}' });
+    // @module admin
       const created = (j.created || []).map((c) => `· [${c.decision}] ${escapeHtml(c.title)}（置信${c.confidence}）`).join('\n') || '（本轮无新增，已学过的自动跳过）';
+    // @module admin
       const pruned = (j.pruned || []).map((p) => `· ${escapeHtml(p.title)}｜${escapeHtml(p.reason)}`).join('\n') || '（无淘汰）';
       showAutoReport('自主学习一轮报告',
         `采集信号 ${j.collected}｜新增 ${j.created.length}｜跳过(已学) ${j.skipped}｜自主淘汰 ${j.pruned.length}\n\n【新增/决策】\n${created}\n\n【自主淘汰】\n${pruned}\n\n${escapeHtml(j.reportText || '')}`);
@@ -9781,8 +9957,10 @@
 
   /* ---------- 管理后台：反馈/Bug 处置 ---------- */
   // 反馈工单路由挂载在 /api/feedback（其 admin/* 子路径由 requireAdmin 守护）
+    // @module admin
   const fbAdm = async (path, opts) => { const r = await Api.request('/api/feedback' + path, opts); return Api.jsonOrThrow(r); };
   const FB_STATUS_ZH = { PENDING: '待处理', EXECUTING: '已安排执行', TODO: '待办', REJECTED: '未采纳' };
+    // @module admin
   const fbStatusName = (s) => (lang === 'en' ? s : (FB_STATUS_ZH[s] || s));
   async function loadAdmFeedback() {
     const status = $('fbStatus').value, type = $('fbType').value;
@@ -9860,7 +10038,9 @@
    * 此前后端完整 CRUD（list/create/update/delete）仅 API 可操作，运营无法自助管理广告。
    * 表单新建/编辑复用；删除直接执行（与 providers 删除同一风格）；slot 下拉由接口 slots 动态填充。 */
   let adSlots = [], adRows = [], adEditingId = null;
+    // @module admin
   const adAdm = async (path, opts) => { const r = await Api.request('/api/ads' + path, opts); return Api.jsonOrThrow(r); };
+    // @module admin
   const toLocalInput = (v) => { if (!v) return ''; const d = new Date(v); if (isNaN(d.getTime())) return ''; const p = (n) => String(n).padStart(2, '0'); return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}`; };
   function adSlotName(s) { const hit = (adSlots || []).find((x) => x.id === s); return hit ? hit.name : s; }
   function fillAdSlotSel(sel) {
@@ -9868,6 +10048,7 @@
     if (sel) $('adSlot').value = sel;
   }
   function fmtAdRange(a) {
+    // @module admin
     const has = (v) => v && new Date(v).toString() !== 'Invalid Date';
     if (!has(a.startAt) && !has(a.endAt)) return t('admAds_long');
     const fmt = (v) => has(v) ? new Date(v).toLocaleDateString() : '—';
@@ -9907,6 +10088,7 @@
   function openAdForm(id) {
     adEditingId = id || null;
     if (id) {
+    // @module admin
       const a = (adRows || []).find((x) => x.id === id);
       if (!a) return;
       fillAdSlotSel(a.slot);
@@ -10022,6 +10204,7 @@
   // 延迟 1.5s 启动，避免与首屏渲染/鉴权抢资源
   setTimeout(initUpdateBanner, 1500);
 
+  // ═══ MODULE: bootstrap (5行, 0fn) ═══ 启动
   /* ---------- 启动 ---------- */
   applyTheme(); applyLang(); renderAuthButton(); initHookConsole(); wireFormatSelector();
   if (Api.isAuthed()) loadMe();

@@ -375,7 +375,8 @@ generateRouter.post('/projects', authRequired, async (req: AuthRequest, res) => 
     }
   }
   // v2.319 原文仅三模式持久化（其余模式即使夹带也不入库，防越权注入提示词）；trim 后不足 10 字忽略
-  const projectSourceText = (canonMode === 'adapt' || canonMode === 'novel' || canonMode === 'hit_lab')
+  // v2.325 novel 已并入 adapt（canonicalModeId 归一为 adapt），这里不再单独判断
+  const projectSourceText = (canonMode === 'adapt' || canonMode === 'hit_lab')
     && typeof d.sourceText === 'string' ? d.sourceText.trim().slice(0, SOURCE_TEXT_LIMIT) : '';
   const bibleCue = {
     ...(projectSourceText.length >= 10 ? { sourceText: projectSourceText } : {}),
@@ -2475,7 +2476,8 @@ generateRouter.post('/episodes', authRequired, async (req: AuthRequest, res) => 
   const complianceWarnings = briefScan.warnings;
   // v2.93 剧情软广：结构化品牌简报规范化 + 广告词合规预检（必须在冻结积分之前拦截，命中不扣费）
   let brandBrief: BrandBriefInput | null = null;
-  if (projCanonMode === 'branded_skit' && parsed.data.brandBrief) {
+  // v2.325 branded_skit 已并入 video_short（canonicalModeId 归一），此处用 video_short
+  if (projCanonMode === 'video_short' && parsed.data.brandBrief) {
     try {
       brandBrief = normalizeBrandBrief(parsed.data.brandBrief);
     } catch (e) {
@@ -3244,11 +3246,8 @@ generateRouter.post('/episodes', authRequired, async (req: AuthRequest, res) => 
     const postBlocked = postScan.blocked.map((h) => ({ label: h.label, matched: h.matched, advice: h.advice }));
     const postWarns = postScan.warnings.map((h) => ({ label: h.label, advice: h.advice }));
     if (postScan.level === 'block') throw new Error('COMPLIANCE_REJECTED:终稿未通过内容审核，请调整创意后重试');
-    // v2.18 X剧本露骨内容硬线：命中即不入库、不交付，走 catch 原路退还冻结积分（只回类别不回显词面）
-    if (result.matureScreen && !result.matureScreen.allowed) {
-      throw new Error(`MATURE_HARD_BLOCK:${result.matureScreen.blockedCategories.join('|')}`);
-    }
-    // v2.92 模式级硬闸门：video_short/branded_skit/hot 命中 blocked 即不入库、不交付（走 catch 原路退还冻结积分）
+    // v2.325 mature_x 已移除，原 X 剧本露骨内容硬线不再需要
+    // v2.92 模式级硬闸门：video_short/hot 命中 blocked 即不入库、不交付（走 catch 原路退还冻结积分）
     if (result.modeGate && !result.modeGate.allowed) {
       throw new Error(`MODE_HARD_BLOCK:${result.modeGate.mode}:${result.modeGate.blocked.map((b) => b.rule).join('|')}`);
     }

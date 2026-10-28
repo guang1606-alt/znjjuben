@@ -275,6 +275,21 @@ function brandedSkitGate(text: string, lang: GateLang): ModeGateReport {
   return { mode: 'branded_skit', blocked, warnings, allowed: blocked.length === 0, score };
 }
 
+/* ---------- v2.327 短视频合并闸门（修复 v2.325 合并软广后的能力丢失） ---------- */
+/** v2.325 把 softad 并入 video_short 时直接改跑了 brandedSkitGate，导致短视频独有的
+ *  3 秒钩子/口播长度/CTA 过载软警整体丢失，且报告 mode 被误标成 branded_skit。
+ *  此处两条闸门并行取并集：硬禁互不遗漏，软警互不覆盖。 */
+function mergeVideoShortGates(text: string, lang: GateLang): ModeGateReport {
+  const vs = videoShortGate(text, lang);
+  const bs = brandedSkitGate(text, lang);
+  const blocked = [...vs.blocked];
+  for (const h of bs.blocked) if (!blocked.some((b) => b.rule === h.rule)) blocked.push(h);
+  const warnings = [...vs.warnings];
+  for (const h of bs.warnings) if (!warnings.some((w) => w.rule === h.rule)) warnings.push(h);
+  const score = Math.max(0, 100 - blocked.length * 40 - warnings.length * 12);
+  return { mode: 'video_short', blocked, warnings, allowed: blocked.length === 0, score };
+}
+
 /* ---------- hot 硬闸门 ---------- */
 function hotGate(text: string, lang: GateLang): ModeGateReport {
   const en = lang === 'en';
@@ -585,19 +600,44 @@ export function screenModeGate(modeRaw: string | undefined | null, text: string,
   if (!text || !text.trim()) return { ...EMPTY, mode: modeRaw || '' };
   const canon = canonicalModeId(modeRaw);
   if (!canon) return { ...EMPTY, mode: modeRaw || '' };
-  switch (canon) {
-    case 'video_short': return videoShortGate(text, lang);
-    case 'branded_skit': return brandedSkitGate(text, lang);
-    case 'hot': return hotGate(text, lang);
-    // v2.96 扩展：剩余 7 种模式（全软警告，不硬拦截，避免误伤）
-    case 'adapt': return adaptGate(text, lang, sourceText);
-    case 'novel': return novelGate(text, lang, sourceText);
-    case 'hit_lab': return hitLabGate(text, lang, sourceText);
-    case 'interview': return interviewGate(text, lang);
-    case 'tag': return tagGate(text, lang);
-    case 'film': return filmGate(text, lang);
-    case 'long_ip': return longIpGate(text, lang);
-    default: return { ...EMPTY, mode: canon };
+  // v2.325：switch 用原始 modeRaw 判断（避开 ModeId union 类型约束，保留 branded_skit/novel 的硬闸门函数）
+  // 下游仍看返回对象里的 canon
+  switch (String(modeRaw).trim().toLowerCase()) {
+    case 'video_short':
+    case 'shortvideo':
+    case 'short_video':
+    case 'branded_skit':
+    case 'softad':
+    case 'soft_ad':
+      // v2.327：短视频 + 剧情软广两条闸门并行（硬禁并集、软警并集），不再让合并吃掉任一侧能力
+      return mergeVideoShortGates(text, lang);
+    case 'hot':
+    case 'hotspot':
+      return hotGate(text, lang);
+    case 'adapt':
+      return adaptGate(text, lang, sourceText);
+    case 'novel':
+      return novelGate(text, lang, sourceText);
+    case 'hit_lab':
+    case 'hitlab':
+    case 'scene':
+    case 'reverse':
+    case 'viral_reverse':
+      return hitLabGate(text, lang, sourceText);
+    case 'interview':
+      return interviewGate(text, lang);
+    case 'tag':
+    case 'tags':
+      return tagGate(text, lang);
+    case 'film':
+      return filmGate(text, lang);
+    case 'long_ip':
+    case 'longip':
+    case 'longseries':
+    case 'long_series':
+      return longIpGate(text, lang);
+    default:
+      return { ...EMPTY, mode: canon };
   }
 }
 

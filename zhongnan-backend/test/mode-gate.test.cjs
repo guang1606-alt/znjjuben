@@ -295,17 +295,20 @@ test('v2.96 模式归一：adapt/hit_lab/long_ip 历史命名归一到规范 ID'
   assert.strictEqual(MG.screenModeGate('long_series', '一个普通故事。', 'zh').mode, 'long_ip');
 });
 
-test('v2.96 全 12 模式覆盖：screenModeGate 路由表完整', () => {
-  // 12 种模式任一非空文本都应路由到对应 gate，不返回 EMPTY
-  const modes = ['video_short', 'branded_skit', 'hot', 'adapt', 'novel', 'hit_lab', 'interview', 'tag', 'film', 'long_ip', 'mature_x', 'interactive'];
-  modes.forEach((m) => {
+test('v2.327 全 canonical 模式 + 历史别名覆盖：screenModeGate 路由表完整', () => {
+  // canonical 9 种模式 + 线上/历史 wire-id 别名，任一非空文本都应路由到对应 gate
+  const expect = {
+    video_short: 'video_short', branded_skit: 'video_short', softad: 'video_short', shortvideo: 'video_short',
+    // novel 虽已在 registry 归一为 adapt，但 raw novel 仍走专属压缩闸门（钩子前置等），报告 mode 保留 novel
+    hot: 'hot', adapt: 'adapt', novel: 'novel', hit_lab: 'hit_lab', scene: 'hit_lab',
+    interview: 'interview', tag: 'tag', film: 'film', mature_x: 'film', long_ip: 'long_ip',
+  };
+  Object.entries(expect).forEach(([m, want]) => {
     const r = MG.screenModeGate(m, '一段普通文本用于路由检查', 'zh');
-    assert.ok(r.mode === m || r.mode === '' || r.mode === 'mature_x' || r.mode === 'interactive', `${m} 路由后 mode 字段：${r.mode}`);
-    // mature_x 与 interactive 不在 mode-gate 覆盖，返回空报告是预期
-    if (m === 'mature_x' || m === 'interactive') {
-      assert.strictEqual(r.allowed, true, `${m} 不在 mode-gate 覆盖`);
-    }
+    assert.strictEqual(r.mode, want, `${m} 路由后 mode 字段应为 ${want}，实际 ${r.mode}`);
   });
+  // interactive 不在 mode-gate 覆盖，返回空报告（allowed=true）是预期
+  assert.strictEqual(MG.screenModeGate('interactive', '一段普通文本用于路由检查', 'zh').allowed, true);
 });
 
 /* ---------- v2.96 n-gram 重合度检测（真实侵权检测） ---------- */

@@ -671,11 +671,11 @@ describe('十二模式闭环闸门（P0：无未知模式、等级强校验、�
     const r = await postProj(mk('m_film', 'PRO'), { title: '电影', mode: 'film' });
     assert.strictEqual(r.status, 200);
   });
-  it('GET /modes 返回12模式且每个都带前端 wire-id 与解锁态；工作台带两轨道', async () => {
+  it('GET /modes 返回9模式且每个都带前端 wire-id 与解锁态；工作台带两轨道', async () => {
     const r = await fetch(base + '/api/generate/modes', { headers: mk('m_list', 'ADVANCED') });
     assert.strictEqual(r.status, 200);
     const j = await r.json();
-    assert.strictEqual(j.modes.length, 12);
+    assert.strictEqual(j.modes.length, 9);
     assert.ok(j.modes.every((m) => Array.isArray(m.wireIds) && m.wireIds.length >= 1));
     const film = j.modes.find((m) => m.id === 'film');
     assert.strictEqual(film.status, 'available'); assert.strictEqual(film.unlocked, false, 'ADVANCED 用户未解锁 PRO 级 film 模式');
@@ -690,8 +690,12 @@ describe('十二模式闭环闸门（P0：无未知模式、等级强校验、�
     assert.ok(hitLab.wireIds.includes('scene') && hitLab.wireIds.includes('reverse'));
     const longIp = j.modes.find((m) => m.id === 'long_ip');
     assert.strictEqual(longIp.unlocked, false, '长系列IP为专业模式');
-    const branded = j.modes.find((m) => m.id === 'branded_skit');
-    assert.strictEqual(branded.unlocked, true, '软广高级可用');
+    // v2.325 软广并入短视频：branded_skit/softad 作为 wire-id 挂在 video_short 下
+    const video = j.modes.find((m) => m.id === 'video_short');
+    assert.strictEqual(video.unlocked, true, '短视频（含软广子轨道）高级可用');
+    assert.ok(video.wireIds.includes('branded_skit') && video.wireIds.includes('softad'), '软广历史 wire-id 必须保留在短视频模式上');
+    // v2.325 成年向并入电影：mature_x/xscript 作为 wire-id 挂在 film 下
+    assert.ok(film.wireIds.includes('mature_x') && film.wireIds.includes('xscript'), '成年向历史 wire-id 必须保留在电影模式上');
   });
 
   // ===== 内部账户（超管/杨光指定的管理员）建项目：模式/轨道/项目数墙全放行，成年授权红线不豁免 =====

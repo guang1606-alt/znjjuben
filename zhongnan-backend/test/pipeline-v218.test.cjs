@@ -43,12 +43,13 @@ describe('v2.18 管线双制式字数闭环与风格扫描接线', () => {
       assert.ok(p.includes('人物与关系策略：关系拉扯'), `${role} 应收到人物策略指令`);
     });
   });
-  it('mature_x 模式成稿携带 matureScreen；普通模式为 null', async () => {
+  it('v2.327 历史 mature_x 归一为 film 后仍可生成；成年内容红线由授权层 + mode-craft 护栏承担（不再产出 matureScreen）', async () => {
     stub();
     const mature = await runEpisode(EngineTier.STANDARD, bible(), '黑暗犯罪悬疑', () => {}, { mode: 'mature_x', episodeCount: 1, episodeIndex: 0, lang: 'zh' });
-    assert.ok(mature.matureScreen);
+    assert.ok(mature && mature.draft, '历史成年向 raw 模式归一后应能正常出稿');
+    assert.strictEqual(mature.matureScreen, undefined, 'matureScreen 已随 v2.325 移除，改由授权层拦截');
     const normal = await runEpisode(EngineTier.STANDARD, bible(), '都市甜宠', () => {}, { mode: 'tag', episodeCount: 1, episodeIndex: 0, lang: 'zh' });
-    assert.strictEqual(normal.matureScreen, null);
+    assert.strictEqual(normal.matureScreen, undefined);
   });
   it('v2.88 film 三幕定位随 episodeIndex/episodeCount 注入架构师/撰写岗（totalEps 字段错配回归）', async () => {
     // 48 片段第 24 段（0 基 23）= 第二幕中点反转：指令必须真正到达 architect 与 writer
