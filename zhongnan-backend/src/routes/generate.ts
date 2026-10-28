@@ -104,7 +104,7 @@ import {
   trackAvailable, trackUnlockLevel, canonicalSparkTrack, SPARK_TRACKS,
   resolveScriptType, scriptTypeAvailable, scriptTypeUnlockLevel, SCRIPT_TYPES,
   languageAvailable, languageUnlockLevel, canonicalLanguageCode, OUTPUT_LANGUAGES,
-  isSourceTextMode, isLegacyMode, craftKeyOf,
+  isSourceTextMode, isLegacyMode, craftKeyOf, resolveProjectFormat, resolveProjectFormatOf,
 } from '../config/modes';
 import { requiresMatureConsent } from '../lib/auth-policy';
 import { isAutoMode, routeIntent, type IntentRouteResult } from '../engine/intent-router'; // v2.328 自动模式路由（零 LLM）
@@ -370,7 +370,12 @@ generateRouter.post('/projects', authRequired, async (req: AuthRequest, res) => 
       message: `当前会员最多同时进行 ${projLimit} 个剧本项目，升级会员可解锁更多，或先删除/归档旧项目`,
     });
   }
-  const fmt = d.format ?? 'LIVE_ACTION';
+  // v2.336 制式由剧本类型归一：真人实拍/AIGC 短剧类型不再靠制式下拉决定（选类型即锁定制式，
+  // 否则 AIGC 的微节拍/字数带宽/五维校验/镜头清单会静默失效）；其余类型仍按用户选择。
+  // 仅当用户「显式选了类型」才强制——未传 scriptType 时该值只是模式推导的缺省（如 tag→live_action_drama），
+  // 此时必须尊重调用方显式传入的 format，避免老客户端「format=AIGC」被缺省类型反向改写成 LIVE_ACTION
+  const scriptTypeExplicit = typeof d.scriptType === 'string' && d.scriptType.length > 0;
+  const fmt = resolveProjectFormatOf(scriptType, d.format, scriptTypeExplicit);
   // 9·1《办法》三类分级备案：题材优先于投资额，随项目落库并回传前端提示
   const filing = classifyFiling({ specialTopic: d.specialTopic ?? false, isAI: fmt === 'AIGC', investWan: d.investWan });
   // 偏好入库前清洗通用器：只保留白名单内id，未知值丢弃；preferred/avoid 冲突时 preferred 优先
@@ -456,6 +461,8 @@ generateRouter.post('/projects', authRequired, async (req: AuthRequest, res) => 
   const bibleCue = {
     // v2.329 后两维随项目落库（Project 无独立列，与原文同存 bible，续写/重生成沿用同一成品形态与语种）
     scriptType,
+    // v2.336 标记该类型是否为用户显式所选：false 表示模式推导的缺省值，生成/续写时不得反向改写用户选的制式
+    scriptTypeExplicit,
     ...(outputLang ? { outputLang } : {}),
     ...(canonTrack ? { track: canonTrack } : {}),
     ...(projectSourceText.length >= 10 ? { sourceText: projectSourceText } : {}),
@@ -2363,8 +2370,10 @@ generateRouter.post('/projects/:id/fix', authRequired, async (req: AuthRequest, 
     // 一律按默认 1 分钟算 target/range，ready/status 误判。脏数据（非正数）不传，回退默认 1。
     const prevAigcGate = (targetScript.qcReport as Record<string, unknown> | undefined)?._aigc as Record<string, unknown> | undefined;
     const prevAigcDur = typeof prevAigcGate?.durationMin === 'number' && prevAigcGate.durationMin > 0 ? prevAigcGate.durationMin : undefined;
+    // v2.336 重扫制式与生成同口径（显式类型强制优先，历史脏组合自动纠正）
+    const fixFmt = resolveProjectFormatOf(((project as any)?.bible?.scriptType as string | undefined), (project as Record<string, unknown>).format as string, (project as any)?.bible?.scriptTypeExplicit as boolean | undefined);
     freshGate = rescanGateEngines(rewritten, {
-      scriptFormat: (project as Record<string, unknown>).format === 'AIGC' ? 'AIGC' : 'LIVE',
+      scriptFormat: fixFmt === 'AIGC' ? 'AIGC' : 'LIVE',
       aigcDurationMin: prevAigcDur,
       antiStrength: prevProfile?.antiStrength,
       colloquialLevel: prevProfile?.colloquialLevel,
@@ -2686,7 +2695,9 @@ generateRouter.post('/episodes', authRequired, async (req: AuthRequest, res) => 
     }
     branchBrief = bb;
   }
-  const isAIGC = (project as Record<string, unknown>).format === 'AIGC';
+  // v2.336 同一口径：显式所选类型的制式优先于项目落库的旧值（历史 aigc_drama + LIVE_ACTION 脏组合自动纠正）；
+  // bible.scriptTypeExplicit === false 表示类型只是模式缺省值，此时尊重用户选的 format
+  const isAIGC = resolveProjectFormatOf(projScriptType, (project as Record<string, unknown>).format as string, (project as any)?.bible?.scriptTypeExplicit as boolean | undefined) === 'AIGC';
 
   // 免费档：每日2集免费补贴（跨项目计数），超过引导付费；不扣积分
   const isFree = level === MemberLevel.FREE;

@@ -102,6 +102,8 @@
   const isInteractiveType = (t) => t === 'interactive_drama' || t === 'interactive_game';
   // v2.329 契约数据（data/constants.js 已加载；与后端 modes.ts 同源）
   const SCRIPT_TYPES = (typeof window !== 'undefined' && window.ZN_DATA && window.ZN_DATA.SCRIPT_TYPES) || [];
+  // v2.336 剧本类型 → 强制制式（data/constants.js 与后端 modes.ts SCRIPT_TYPE_FORMAT 同源）
+  const SCRIPT_TYPE_FORMAT = (typeof window !== 'undefined' && window.ZN_DATA && window.ZN_DATA.SCRIPT_TYPE_FORMAT) || {};
   const OUT_LANGS = (typeof window !== 'undefined' && window.ZN_DATA && window.ZN_DATA.OUT_LANGS) || [];
   const TIER_NAME = { basic: '基础', advanced: '高级', pro: '专业' };
   // v2.330 多方评议（Council）理由缓存：登录后拉取一次（v2.332 起 48 项），锁定项以 title 展示「为什么是这个档」
@@ -1649,7 +1651,40 @@
     el.value = want;
     if (!el._znBound) {
       el._znBound = true;
-      el.addEventListener('change', () => { selectedScriptType = el.value || 'live_action_drama'; syncModeBrief(); });
+      el.addEventListener('change', () => {
+        selectedScriptType = el.value || 'live_action_drama';
+        applyScriptTypeFormat(); // v2.336 选类型即锁定制式
+        syncModeBrief();
+      });
+    }
+    applyScriptTypeFormat();
+  }
+  // v2.336 剧本类型 → 制式联动：真人实拍只能是可拍本、AIGC 短剧只能是 Z-AIGC 制作本。
+  // 此前两者完全独立，选 aigc_drama 仍默认走 LIVE_ACTION，AIGC 的微节拍/字数带宽/五维校验/镜头清单静默失效。
+  function applyScriptTypeFormat() {
+    const sel = $('scriptFormatSel');
+    if (!sel) return;
+    const forced = SCRIPT_TYPE_FORMAT[selectedScriptType] || null;
+    const before = sel.value;
+    if (forced && sel.value !== forced) sel.value = forced;
+    // 类型强制制式时不可手改；续写草稿沿用项目制式，同样锁下拉
+    sel.disabled = !!draftProject || !!forced;
+    const tip = $('scriptFormatTip');
+    if (tip) {
+      if (forced) {
+        tip.textContent = forced === 'AIGC'
+          ? (lang === 'en' ? 'Locked by script type — AIGC / animated drama uses the Z-AIGC production script (length band scales with runtime, 30s micro-beats, shot list).' : '已按剧本类型锁定：AIGC 短剧/漫剧走 Z-AIGC 流畅制作本（字数带随时长缩放、30 秒微节拍、镜头清单）。')
+          : (lang === 'en' ? 'Locked by script type — live-action short drama uses the shootable script (△action / dialogue / 3–4 scenes, 800–1000 chars per episode).' : '已按剧本类型锁定：真人实拍短剧走可拍本（△动作/角色台词/3-4 场，800-1000 字/集）。');
+        tip.classList.remove('hidden');
+      } else {
+        tip.textContent = '';
+        tip.classList.add('hidden');
+      }
+    }
+    // 值变化或首次联动都要触发一次 change，让 AIGC 时长/画风/镜头字段按新制式显隐
+    if (before !== sel.value || !sel._znFmtSynced) {
+      sel._znFmtSynced = '1';
+      sel.dispatchEvent?.(new Event('change'));
     }
   }
 
@@ -2630,6 +2665,8 @@
       if (draftProject) $('leaveDraftBtn').onclick = clearDraftProject;
     }
     ['episodes', 'engine', 'scriptFormatSel'].forEach((id) => { if ($(id)) $(id).disabled = !!draftProject; });
+    // v2.336 恢复草稿后按剧本类型纠正制式（历史 aigc_drama + LIVE_ACTION 脏组合自愈）
+    if (typeof applyScriptTypeFormat === 'function') applyScriptTypeFormat();
   }
   function clearDraftProject() { draftProject = null; syncDraftProject(); }
   function resumeAdaptationProject(project) {

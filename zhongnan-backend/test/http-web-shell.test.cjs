@@ -33,6 +33,17 @@ describe('前端站点托管 + 项目创建端点', { concurrency: 1 }, () => {
     const js = await fetch(base + '/progress-view.js');
     assert.strictEqual(js.status, 200);
   });
+  it('v2.336 前端剧本类型→制式联动资源已下发（常量/联动函数/提示位）', async () => {
+    const consts = await (await fetch(base + '/data/constants.js')).text();
+    assert.match(consts, /C\.SCRIPT_TYPE_FORMAT\s*=\s*\{/);
+    assert.match(consts, /aigc_drama:\s*'AIGC'/);
+    assert.match(consts, /live_action_drama:\s*'LIVE_ACTION'/);
+    const app = await (await fetch(base + '/app.js')).text();
+    assert.match(app, /function applyScriptTypeFormat\(\)/);
+    assert.match(app, /SCRIPT_TYPE_FORMAT\[selectedScriptType\]/);
+    const html = await (await fetch(base + '/')).text();
+    assert.match(html, /id="scriptFormatTip"/);
+  });
   it('前端路由任意非 /api 路径回退 index.html（刷新不 404）', async () => {
     const r = await fetch(base + '/studio/some/deep/route', { headers: { Accept: 'text/html' } });
     assert.strictEqual(r.status, 200);
@@ -118,6 +129,8 @@ describe('前端站点托管 + 项目创建端点', { concurrency: 1 }, () => {
     const bible = p.bible || {};
     assert.strictEqual(bible.sourceText, undefined);
   });
+
+  // v2.336 剧本类型 → 制式（用例见文件末尾独立 describe，避免占用本 describe 的项目额度）
 });
 
 mem._seedUser({ id: 'u2', level: 'FREE' });
@@ -195,5 +208,38 @@ describe('自动模式立项（mode=auto）', { concurrency: 1 }, () => {
     const p = await r.json();
     assert.strictEqual(p.mode, 'tag'); // v2.329 起落库为 canonical 模式（wire-id tags 归一为 tag）
     assert.strictEqual(p.autoRouted, undefined);
+  });
+});
+
+// v2.336 剧本类型 → 制式：选类型即锁定制式，不再依赖制式下拉（否则 AIGC 全套能力静默失效）
+mem._seedUser({ id: 'u_fmt_pro', level: 'PRO' });
+const tokFmtPro = signAccess({ sub: 'u_fmt_pro', level: 'PRO' });
+describe('剧本类型 → 制式归一（立项落库）', { concurrency: 1 }, () => {
+  const post = (body) => fetch(base + '/api/generate/projects', {
+    method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${tokFmtPro}` },
+    body: JSON.stringify({ mode: 'tag', ...body }),
+  });
+
+  it('aigc_drama 不传制式 → 落库 AIGC，而非默认 LIVE_ACTION', async () => {
+    const r = await post({ title: 'AIGC短剧', scriptType: 'aigc_drama' });
+    assert.strictEqual(r.status, 200);
+    const p = await r.json();
+    assert.strictEqual(p.format, 'AIGC');
+    assert.strictEqual(p.bible.scriptType, 'aigc_drama');
+    const persisted = await mem.project.findFirst({ where: { id: p.id } });
+    assert.strictEqual(persisted.format, 'AIGC');
+  });
+
+  it('live_action_drama 传 AIGC 制式 → 仍落库 LIVE_ACTION（真人实拍只能是可拍本）', async () => {
+    const r = await post({ title: '真人短剧', scriptType: 'live_action_drama', format: 'AIGC' });
+    assert.strictEqual(r.status, 200);
+    assert.strictEqual((await r.json()).format, 'LIVE_ACTION');
+  });
+
+  it('非强制类型尊重用户制式选择：广告脚本传 AIGC 落 AIGC、缺省落 LIVE_ACTION', async () => {
+    const aigc = await (await post({ title: 'AIGC广告', scriptType: 'ad_script', format: 'AIGC' })).json();
+    assert.strictEqual(aigc.format, 'AIGC');
+    const live = await (await post({ title: '默认真人广告', scriptType: 'ad_script' })).json();
+    assert.strictEqual(live.format, 'LIVE_ACTION');
   });
 });

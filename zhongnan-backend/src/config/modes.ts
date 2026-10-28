@@ -390,6 +390,40 @@ export function scriptTypeCraftKeyOf(scriptType: string | null | undefined): str
 }
 
 /* ------------------------------------------------------------------ *
+ * 剧本类型 → 制式（v2.336）：类型本身决定「写哪种本」
+ * AIGC 短剧只能是 Z-AIGC 制作本；真人实拍只能是可拍本。
+ * 这两类若只靠「剧本制式」下拉，用户选了类型却保持默认 LIVE_ACTION 时，
+ * AIGC 的微节拍/字数带宽/五维校验/镜头清单整套能力全部静默失效（反之写出的也不是可拍本）。
+ * 其余类型不限定，尊重用户在制式下拉里的选择。
+ * ------------------------------------------------------------------ */
+export type ProjectFormat = 'LIVE_ACTION' | 'AIGC';
+const SCRIPT_TYPE_FORMAT: Partial<Record<ScriptTypeId, ProjectFormat>> = {
+  live_action_drama: 'LIVE_ACTION',
+  aigc_drama: 'AIGC',
+};
+export function scriptTypeFormatOf(scriptType: string | null | undefined): ProjectFormat | null {
+  const canon = canonicalScriptTypeId(scriptType);
+  return canon ? SCRIPT_TYPE_FORMAT[canon] ?? null : null;
+}
+/** 制式归一：剧本类型强制优先 → 项目已存 format → 缺省真人实拍（立项/生成/fix 三处共用同一口径） */
+export function resolveProjectFormat(scriptType: string | null | undefined, projectFormat?: string | null): ProjectFormat {
+  return scriptTypeFormatOf(scriptType) ?? (projectFormat === 'AIGC' ? 'AIGC' : 'LIVE_ACTION');
+}
+/**
+ * 项目语境下的制式归一：`scriptTypeExplicit === false` 表示该类型是「模式推导出的缺省值」而非用户所选
+ * （如 tag 模式默认 live_action_drama），此时必须尊重用户显式选择的制式；否则类型强制优先。
+ * 历史项目无此标记（undefined）仍按类型强制处理，借此纠正 aigc_drama + LIVE_ACTION 的脏组合。
+ */
+export function resolveProjectFormatOf(
+  scriptType: string | null | undefined,
+  projectFormat: string | null | undefined,
+  scriptTypeExplicit?: boolean,
+): ProjectFormat {
+  if (scriptTypeExplicit === false) return projectFormat === 'AIGC' ? 'AIGC' : 'LIVE_ACTION';
+  return resolveProjectFormat(scriptType, projectFormat);
+}
+
+/* ------------------------------------------------------------------ *
  * 六、会员闸门
  * ------------------------------------------------------------------ */
 function findMode(modeId: string): CreationMode | undefined {

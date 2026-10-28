@@ -170,6 +170,13 @@ C.SCRIPT_TYPES = [
     { id: 'long_series', zh: '长系列 IP 连载', en: 'Long-running IP series', min: 'pro' },
   ];
 
+// v2.336 剧本类型 → 强制制式（与后端 modes.ts SCRIPT_TYPE_FORMAT 一一对应）
+// 真人实拍只能是可拍本、AIGC 短剧只能是 Z-AIGC 制作本；其余类型不限定，由用户自选制式
+C.SCRIPT_TYPE_FORMAT = {
+  live_action_drama: 'LIVE_ACTION',
+  aigc_drama: 'AIGC',
+};
+
 // v2.329 输出语言（与后端 OUTPUT_LANGUAGES 一一对应；min 为最低会员档）
 C.OUT_LANGS = [
     { code: 'zh', zh: '中文', native: '中文', min: 'free' },

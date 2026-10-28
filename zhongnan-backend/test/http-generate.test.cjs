@@ -2160,3 +2160,29 @@ describe('c212 /fix 后 32 结构维度按新正文重算覆盖，台账不毁',
     }
   });
 });
+
+// v2.336 生成侧制式同口径：类型强制优先于项目落库旧值（历史脏组合自动纠正）
+describe('v2.336 生成侧剧本类型 → 制式归一', { concurrency: 1 }, () => {
+  const run = async (uid, projectPatch) => {
+    mem._seedUser({ id: uid, level: 'BASIC', balance: 1000 });
+    const pid = `proj_${uid}`;
+    mem._projects.set(pid, { id: pid, userId: uid, bible: null, ...projectPatch });
+    return call(uid, 'BASIC', { projectId: pid, brief });
+  };
+
+  it('脏组合 aigc_drama + LIVE_ACTION → 生成按 AIGC 走（done.aiLabel 非空）', async () => {
+    const r = await run('u_fmt_dirty_aigc', { bible: { scriptType: 'aigc_drama' }, format: 'LIVE_ACTION' });
+    assert.strictEqual(r.status, 200);
+    const done = r.events.find((e) => e.stage === 'done');
+    assert.ok(done, '生成应完成');
+    assert.ok(done.aiLabel, 'aigc_drama 必须按 AIGC 制式出本（AI 显著标注生效）');
+  });
+
+  it('脏组合 live_action_drama + AIGC → 生成按真人实拍走（无 AI 制作标注）', async () => {
+    const r = await run('u_fmt_dirty_live', { bible: { scriptType: 'live_action_drama' }, format: 'AIGC' });
+    assert.strictEqual(r.status, 200);
+    const done = r.events.find((e) => e.stage === 'done');
+    assert.ok(done, '生成应完成');
+    assert.strictEqual(done.aiLabel, null, 'live_action_drama 只能是可拍本，不走 AIGC 制作本');
+  });
+});

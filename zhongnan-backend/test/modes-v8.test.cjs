@@ -56,6 +56,48 @@ test('10 种剧本类型分级：FREE 1 / BASIC 5 / ADVANCED 8 / PRO 10', () => 
   assert.strictEqual(M.canonicalScriptTypeId('unknown'), undefined);
 });
 
+test('v2.336 剧本类型 → 强制制式：真人实拍只能可拍本、AIGC 短剧只能 AIGC 制作本', () => {
+  assert.strictEqual(M.scriptTypeFormatOf('live_action_drama'), 'LIVE_ACTION');
+  assert.strictEqual(M.scriptTypeFormatOf('aigc_drama'), 'AIGC');
+  assert.strictEqual(M.scriptTypeFormatOf('manju'), 'AIGC', '历史别名 manju 也要归一后生效');
+  // 其余 8 种类型不限定制式，由用户自选
+  for (const id of ['short_video', 'ad_script', 'tv_series', 'interactive_drama', 'interactive_game', 'feature_film', 'long_series', 'promo_script']) {
+    assert.strictEqual(M.scriptTypeFormatOf(id), null, `${id} 不应强制制式`);
+  }
+  // 空值/未知类型不炸
+  assert.strictEqual(M.scriptTypeFormatOf(null), null);
+  assert.strictEqual(M.scriptTypeFormatOf(undefined), null);
+  assert.strictEqual(M.scriptTypeFormatOf('not_a_type'), null);
+});
+
+test('v2.336 resolveProjectFormat：类型强制优先 > 项目已存制式 > 缺省真人实拍', () => {
+  // 类型强制压过用户的/历史的错误选择（aigc_drama + LIVE_ACTION 脏组合自动纠正）
+  assert.strictEqual(M.resolveProjectFormat('aigc_drama', 'LIVE_ACTION'), 'AIGC');
+  assert.strictEqual(M.resolveProjectFormat('live_action_drama', 'AIGC'), 'LIVE_ACTION');
+  // 非强制类型尊重项目已存制式
+  assert.strictEqual(M.resolveProjectFormat('tv_series', 'AIGC'), 'AIGC');
+  assert.strictEqual(M.resolveProjectFormat('feature_film', 'LIVE_ACTION'), 'LIVE_ACTION');
+  // 缺省：无类型/无制式一律真人实拍（旧项目行为不变）
+  assert.strictEqual(M.resolveProjectFormat('feature_film', undefined), 'LIVE_ACTION');
+  assert.strictEqual(M.resolveProjectFormat(null, 'AIGC'), 'AIGC');
+  assert.strictEqual(M.resolveProjectFormat(undefined, 'LIVE_ACTION'), 'LIVE_ACTION');
+  assert.strictEqual(M.resolveProjectFormat(undefined, undefined), 'LIVE_ACTION');
+  // 非法制式值一律回落 LIVE_ACTION
+  assert.strictEqual(M.resolveProjectFormat('tv_series', 'bogus'), 'LIVE_ACTION');
+});
+
+test('v2.336 resolveProjectFormatOf：模式缺省类型不得反向改写用户显式选的制式', () => {
+  // 用户显式选了类型 → 类型强制
+  assert.strictEqual(M.resolveProjectFormatOf('aigc_drama', 'LIVE_ACTION', true), 'AIGC');
+  assert.strictEqual(M.resolveProjectFormatOf('live_action_drama', 'AIGC', true), 'LIVE_ACTION');
+  // 类型只是模式推导的缺省值（false）→ 必须尊重用户显式选的制式
+  assert.strictEqual(M.resolveProjectFormatOf('live_action_drama', 'AIGC', false), 'AIGC');
+  assert.strictEqual(M.resolveProjectFormatOf('aigc_drama', 'LIVE_ACTION', false), 'LIVE_ACTION');
+  assert.strictEqual(M.resolveProjectFormatOf('live_action_drama', undefined, false), 'LIVE_ACTION');
+  // 历史项目无此标记（undefined）→ 按类型强制，借此纠正脏组合
+  assert.strictEqual(M.resolveProjectFormatOf('aigc_drama', 'LIVE_ACTION', undefined), 'AIGC');
+});
+
 test('10 种输出语言分级：FREE 2 / BASIC 6 / ADVANCED 10，别名可归一', () => {
   assert.strictEqual(M.OUTPUT_LANGUAGES.length, 10);
   assert.strictEqual(M.languagesForLevel('FREE').length, 2);
