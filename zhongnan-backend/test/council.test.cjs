@@ -27,12 +27,12 @@ describe('v2.330 多方评议 · 契约完整性', { concurrency: 1 }, () => {
     }
   });
 
-  it('评议目录 47 项、id 唯一、板块计数 30/4/13', () => {
-    assert.strictEqual(CFG.COUNCIL_ITEMS.length, 47);
+  it('评议目录 48 项、id 唯一、板块计数 31/4/13', () => {
+    assert.strictEqual(CFG.COUNCIL_ITEMS.length, 48);
     const ids = new Set(CFG.COUNCIL_ITEMS.map((x) => x.id));
-    assert.strictEqual(ids.size, 47, '评议 id 不得重复');
+    assert.strictEqual(ids.size, 48, '评议 id 不得重复');
     const count = (m) => CFG.COUNCIL_ITEMS.filter((x) => x.module === m).length;
-    assert.strictEqual(count('membership'), 30);
+    assert.strictEqual(count('membership'), 31);
     assert.strictEqual(count('pricing'), 4);
     assert.strictEqual(count('assistant'), 13);
   });
@@ -191,7 +191,7 @@ describe('v2.330 多方评议 · 结论与主席裁定', { concurrency: 1 }, () 
     });
     const board = ENG.councilBoard();
     assert.strictEqual(board.seats.length, 8);
-    assert.strictEqual(Object.keys(board.digest).length, 47);
+    assert.strictEqual(Object.keys(board.digest).length, 48);
   });
 });
 

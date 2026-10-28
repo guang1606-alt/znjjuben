@@ -592,7 +592,7 @@ export interface EpisodeOptions {
   beatPref?: Partial<CuePref> | null; // 反转/爽点/情绪节拍偏好（auto/manual/hybrid、强度、偏好/禁用），缺省系统智能
   mode?: string;        // v2.14 归一后的创作模式 id（hit_lab/long_ip 等），用于模式级方法论注入
   modeTrack?: string;   // v2.14 名场面工作台内部轨道：signature_scene | hit_reverse（v2.329 起归 spark 轨道）
-  scriptType?: ScriptTypeId; // v2.329 剧本类型（真人实拍/AIGC/电影/电视剧/短视频/广告/宣传片/互动剧/长系列）
+  scriptType?: ScriptTypeId; // v2.329 剧本类型（真人实拍/AIGC/电影/电视剧/短视频/广告/宣传片/互动剧/长系列）；v2.332 新增互动影游
   outputLang?: LanguageCode; // v2.329 输出语言（10 种），缺省中文
   depthTier?: 'speed' | 'balanced' | 'depth'; // v2.326 思考深度档位：speed=极速（极简 Method Trace + 跳过 Purpose Gate/Range Lens）/ balanced=标准（Method Trace 全量，跳过另外两者）/ depth=深度（三者全开）；缺省 balanced
   knowledgeHints?: KnowledgeHint[] | null; // v2.84 自主学习引擎沉淀的已生效知识（高分剧本技法/市场趋势/政策规则），按 brief 相关性注入各岗位

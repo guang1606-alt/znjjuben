@@ -698,8 +698,8 @@ describe('十二模式闭环闸门（P0：无未知模式、等级强校验、�
     const tag = j.modes.find((m) => m.id === 'tag');
     assert.strictEqual(tag.unlocked, true);
     assert.ok(tag.wireIds.includes('interactive'), '互动剧历史 wire-id 必须保留在标签式上');
-    // 顶层两维契约：9 剧本类型 + 10 输出语言 + 3 轨道
-    assert.strictEqual(j.scriptTypes.length, 9);
+    // 顶层两维契约：10 剧本类型（v2.332 新增互动影游）+ 10 输出语言 + 3 轨道
+    assert.strictEqual(j.scriptTypes.length, 10);
     assert.strictEqual(j.languages.length, 10);
     assert.strictEqual(j.sparkTracks.length, 3);
     assert.strictEqual(j.scriptTypes.find((t) => t.id === 'feature_film').unlocked, false, '电影类型为专业级');
@@ -1083,15 +1083,15 @@ describe('v2.330 多方评议 Council 接口', { concurrency: 1 }, () => {
     const r = await fetch(base + '/api/generate/council');
     assert.strictEqual(r.status, 401);
   });
-  it('缺省 all：47 项、计数合计自洽、无空理由的主席保留', async () => {
+  it('缺省 all：48 项、计数合计自洽、无空理由的主席保留', async () => {
     const r = await fetch(base + '/api/generate/council', { headers: h('u_council_all') });
     assert.strictEqual(r.status, 200);
     const j = await r.json();
     assert.strictEqual(j.module, 'all');
-    assert.strictEqual(j.items.length, 47);
+    assert.strictEqual(j.items.length, 48);
     const sum = Object.values(j.summary.byStatus).reduce((a, b) => a + b, 0);
-    assert.strictEqual(sum, 47, '状态计数必须覆盖全部评议项');
-    assert.strictEqual(Object.values(j.summary.byModule).reduce((a, b) => a + b, 0), 47);
+    assert.strictEqual(sum, 48, '状态计数必须覆盖全部评议项');
+    assert.strictEqual(Object.values(j.summary.byModule).reduce((a, b) => a + b, 0), 48);
     for (const it of j.items) {
       if (it.status === 'upheld') assert.ok(it.chairNote?.zh, `主席保留项必须写明理由：${it.id}`);
       if (it.status === 'anchor') assert.strictEqual(it.target, it.current, `锚点不得改档：${it.id}`);
@@ -1099,11 +1099,11 @@ describe('v2.330 多方评议 Council 接口', { concurrency: 1 }, () => {
       assert.ok(it.consensus >= 0 && it.consensus <= 1);
     }
   });
-  it('module=membership：30 项且不混入定价/助理板块', async () => {
+  it('module=membership：31 项且不混入定价/助理板块', async () => {
     const r = await fetch(base + '/api/generate/council?module=membership', { headers: h('u_council_mem') });
     assert.strictEqual(r.status, 200);
     const j = await r.json();
-    assert.strictEqual(j.items.length, 30);
+    assert.strictEqual(j.items.length, 31);
     assert.ok(j.items.every((it) => it.module === 'membership'));
   });
   it('未知板块 400 并列出可选值', async () => {

@@ -12,6 +12,8 @@ test('scriptTypeCraftKeyOf：下沉为类型的形态仍指回各自方法论', 
   assert.equal(M.scriptTypeCraftKeyOf('ad_script'), 'video_short');
   assert.equal(M.scriptTypeCraftKeyOf('promo_script'), 'video_short');
   assert.equal(M.scriptTypeCraftKeyOf('interactive_drama'), 'interactive');
+  // v2.332 互动影游：独立方法论（多选项/支线/线索链/路线门控），不复用互动剧
+  assert.equal(M.scriptTypeCraftKeyOf('interactive_game'), 'interactive_game');
   assert.equal(M.scriptTypeCraftKeyOf('feature_film'), 'film');
   assert.equal(M.scriptTypeCraftKeyOf('long_series'), 'long_ip');
   // 与模式方法论同源的形态不重复登记（真人短剧/AIGC/电视剧共用模式方法论）
@@ -41,6 +43,19 @@ test('tag + 互动剧类型：补回真选择·分支闭环方法论', () => {
   assert.match(zh, /分支必须闭环/);
   const en = P.buildTypeCraftDirective('interactive_drama', 'tag', 1, 10, 'en');
   assert.match(en, /INTERACTIVE SHORT-DRAMA/);
+});
+
+test('v2.332 tag + 互动影游类型：补回多选项·线索链·路线门控方法论', () => {
+  const zh = P.buildTypeCraftDirective('interactive_game', 'tag', 1, 10, 'zh');
+  assert.match(zh, /互动影游模式/);
+  assert.match(zh, /线索/);
+  assert.match(zh, /路线门控/);
+  assert.match(zh, /支线/);
+  assert.match(zh, /选择即状态/);
+  const en = P.buildTypeCraftDirective('interactive_game', 'tag', 1, 10, 'en');
+  assert.match(en, /INTERACTIVE FILM-GAME/);
+  assert.match(en, /clue/i);
+  assert.equal(/[\u4e00-\u9fa5]/.test(en), false, '英文指令不混中文');
 });
 
 test('persona + 电影类型：补回三幕片段定位（按集序推导幕次）', () => {

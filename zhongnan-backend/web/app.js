@@ -98,11 +98,13 @@
   let selectedTrack = 'material_rewrite';
   // 剧本类型：与后端 SCRIPT_TYPES 对齐；免费档默认真人实拍短剧
   let selectedScriptType = 'live_action_drama';
+  // v2.332 互动类成品形态（互动剧 / 互动影游）共用分支简报与分支图工作台
+  const isInteractiveType = (t) => t === 'interactive_drama' || t === 'interactive_game';
   // v2.329 契约数据（data/constants.js 已加载；与后端 modes.ts 同源）
   const SCRIPT_TYPES = (typeof window !== 'undefined' && window.ZN_DATA && window.ZN_DATA.SCRIPT_TYPES) || [];
   const OUT_LANGS = (typeof window !== 'undefined' && window.ZN_DATA && window.ZN_DATA.OUT_LANGS) || [];
   const TIER_NAME = { basic: '基础', advanced: '高级', pro: '专业' };
-  // v2.330 多方评议（Council）理由缓存：登录后拉取一次（47 项），锁定项以 title 展示「为什么是这个档」
+  // v2.330 多方评议（Council）理由缓存：登录后拉取一次（v2.332 起 48 项），锁定项以 title 展示「为什么是这个档」
   let councilHints = {};
   function councilText(id) {
     const hints = typeof councilHints === 'undefined' ? null : councilHints;
@@ -516,11 +518,11 @@
       tbp.classList.toggle('hidden', selectedMode !== 'hot');
       if (selectedMode === 'hot') renderTrendPanel();
     }
-    // v2.329 互动分支简报按剧本类型显示（互动剧）
+    // v2.329 互动分支简报按剧本类型显示（互动剧）；v2.332 互动影游共用同一面板
     const brp = $('branchBriefPanel');
     if (brp) {
-      brp.classList.toggle('hidden', selectedScriptType !== 'interactive_drama');
-      if (selectedScriptType === 'interactive_drama') renderBranchPanel();
+      brp.classList.toggle('hidden', !isInteractiveType(selectedScriptType));
+      if (isInteractiveType(selectedScriptType)) renderBranchPanel();
     }
     // v2.329 原作/原文参考：灵感式展示原文输入框（用于 n-gram 重合度侵权检测）
     const stp = $('sourceTextPanel');
@@ -534,14 +536,14 @@
       const _target = selectedMode === 'interview' ? 'interviewPanel'
         : selectedMode === 'hot' ? 'trendPanel'
         : selectedScriptType === 'ad_script' ? 'brandPanel'
-        : selectedScriptType === 'interactive_drama' ? 'branchBriefPanel'
+        : isInteractiveType(selectedScriptType) ? 'branchBriefPanel'
         : selectedMode === 'spark' ? 'sourceTextPanel' : '';
       if (_target) openWorkbench(_target);
     }
     // v2.267 [P1-1] 纯内联简报模式（shortvideo：有 modeBrief 但无专属工作台面板）：
     // 点击卡片后把内联简报区平滑滚入视口并聚焦输入框，避免"点了没反应"
     // （#workbenchLayer 不展开、简报区在卡片网格下方不可见）。初始化/语言同步期间不滚。
-    if (!_initSyncing && !['interview', 'hot', 'spark', 'tag'].includes(selectedMode) && selectedScriptType !== 'ad_script' && selectedScriptType !== 'interactive_drama') {
+    if (!_initSyncing && !['interview', 'hot', 'spark', 'tag'].includes(selectedMode) && selectedScriptType !== 'ad_script' && !isInteractiveType(selectedScriptType)) {
       const _bp = $('modeBriefPanel');
       if (_bp && !_bp.hidden) {
         _bp.scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -766,7 +768,7 @@
   }
   function hideBranchError() { const box = $('brError'); if (box) { box.textContent = ''; box.style.display = 'none'; } }
   function branchBriefPayload() {
-    if (selectedScriptType !== 'interactive_drama' || !$('brMain')) return {};
+    if (!isInteractiveType(selectedScriptType) || !$('brMain')) return {};
     const v = (id) => String($(id)?.value || '').trim();
     const mainLine = v('brMain'); const choicePoints = v('brChoice');
     if (mainLine.length < 4 || choicePoints.length < 4) { showBranchError(BRANCH_UI_DICT().required); return null; }

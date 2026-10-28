@@ -76,6 +76,7 @@ export const SCRIPT_TYPE_SIGNALS: Record<ScriptTypeId, string[]> = {
   promo_script: ['宣传片', '形象片', '企业片', 'promo'],
   tv_series: ['电视剧', '网剧', '多集', '集数', 'tv series', 'web series'],
   interactive_drama: ['互动剧', '互动短剧', 'interactive drama'],
+  interactive_game: ['互动影游', '影游', '互动游戏', '互动电影', 'fmv', 'interactive game', 'film game'],
   feature_film: ['电影', '院线', '长片', 'feature film', 'screenplay'],
   long_series: ['长系列', '多季', '季终', 'ip宇宙', 'franchise', 'multi-season'],
 };

@@ -1,10 +1,11 @@
 /**
- * v2.329 三维创作结构：创作模式（8）× 剧本类型（9）× 输出语言（10）
+ * v2.329 三维创作结构：创作模式（8）× 剧本类型（10）× 输出语言（10）
+ * v2.332 剧本类型新增「互动影游」：多选项 · 支线 · 线索链 · 剧情走向门控
  *
  * 设计根因：旧版把「创作入口」（怎么聊出来）与「成品形态」（写成长片还是短视频）
  * 混在同一层枚举里，导致模式数量膨胀且互相重叠。v2.329 拆成三个正交维度：
  *  · mode：用户怎么把想法交出来（采访/日记/标签/灵感/热点/自述/对撞/世界线）
- *  · scriptType：最终成品是什么（真人短剧/漫剧/电影/剧集/短视频/广告/宣传片/互动剧/长系列）
+ *  · scriptType：最终成品是什么（真人短剧/漫剧/电影/剧集/短视频/广告/宣传片/互动剧/互动影游/长系列）
  *  · language：成稿主语言（10 个有短剧市场的语言，本地化而非直译）
  *
  * 会员分层按「算力与产能成本」而非「看起来高级」：
@@ -23,10 +24,11 @@ export type ModeId =
   | 'interview' | 'diary' | 'tag' | 'spark'
   | 'hot' | 'persona' | 'duel' | 'multiverse';
 
-/** 9 种剧本类型（成品形态） */
+/** 10 种剧本类型（成品形态） */
 export type ScriptTypeId =
   | 'live_action_drama' | 'aigc_drama' | 'feature_film' | 'tv_series'
-  | 'short_video' | 'ad_script' | 'promo_script' | 'interactive_drama' | 'long_series';
+  | 'short_video' | 'ad_script' | 'promo_script' | 'interactive_drama'
+  | 'interactive_game' | 'long_series';
 
 /** 10 种输出主语言（覆盖主要短剧消费市场；小语种走本地化而非直译） */
 export type LanguageCode =
@@ -159,6 +161,7 @@ export const SCRIPT_TYPES: ScriptType[] = [
   { id: 'promo_script', name: '宣传片脚本', nameEn: 'Promo film script', desc: '企业/城市/产品形象片，画面优先', descEn: 'Corporate / city / product promo, image-first', minLevel: L.BASIC },
   { id: 'tv_series', name: '电视剧 / 多集网剧', nameEn: 'TV / multi-episode series', desc: '常规剧集，单集 40-45 分钟或短剧多集', descEn: 'Standard episodes, 40-45 min or multi-episode short form', minLevel: L.ADVANCED },
   { id: 'interactive_drama', name: '互动剧', nameEn: 'Interactive drama', desc: '分支选择、多结局，需做分支闭环校验', descEn: 'Branching choices and multiple endings with closure validation', minLevel: L.ADVANCED },
+  { id: 'interactive_game', name: '互动影游', nameEn: 'Interactive film-game (FMV)', desc: '多选项 · 支线 · 线索链 · 剧情走向门控，选择即状态', descEn: 'Multi-option choices, side routes, clue chains and route gates; every choice changes state', minLevel: L.ADVANCED },
   { id: 'feature_film', name: '电影剧本', nameEn: 'Feature film', desc: '三幕结构长片，90-120 分钟', descEn: 'Three-act feature, 90-120 minutes', minLevel: L.PRO },
   { id: 'long_series', name: '长系列 IP 连载', nameEn: 'Long-running IP series', desc: '多季/长系列，跨季伏笔账本与季终大钩', descEn: 'Multi-season IP with cross-season foreshadow ledger and finale hooks', minLevel: L.PRO },
 ];
@@ -174,6 +177,8 @@ export function canonicalScriptTypeId(id: string | null | undefined): ScriptType
     promo: 'promo_script', brand_film: 'promo_script',
     tv: 'tv_series', series: 'tv_series', web_series: 'tv_series',
     interactive: 'interactive_drama', branch: 'interactive_drama',
+    interactive_game: 'interactive_game', fmv: 'interactive_game', film_game: 'interactive_game',
+    movie_game: 'interactive_game', interactive_film: 'interactive_game', yingyou: 'interactive_game',
     film: 'feature_film', movie: 'feature_film',
     long_ip: 'long_series', longip: 'long_series',
   };
@@ -374,6 +379,7 @@ const SCRIPT_TYPE_CRAFT_KEY: Partial<Record<ScriptTypeId, string>> = {
   ad_script: 'video_short', // 广告/软广共用短视频条目里的「剧情软广子轨道」
   promo_script: 'video_short',
   interactive_drama: 'interactive',
+  interactive_game: 'interactive_game',
   feature_film: 'film',
   long_series: 'long_ip',
 };

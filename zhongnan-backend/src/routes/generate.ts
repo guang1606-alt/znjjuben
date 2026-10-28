@@ -97,7 +97,7 @@ import { scanWithStore } from '../lib/safety-store';
 import { diagnoseFull } from '../engine/full-diagnosis';
 import { pickEpisodeForFix, buildFixPrompt, isUsableRewrite } from '../engine/polish-fix';
 import { diffScripts, assessRewrite, summarizeChanges } from '../engine/script-diff'; // c202 版本对比纯引擎（零 token、确定性）；c204 变更摘要
-// v2.329 三维创作结构：8 模式 × 9 剧本类型 × 10 输出语言（旧 wire-id 由 LEGACY_MODE_MAP 兜底）
+// v2.329 三维创作结构：8 模式 × 10 剧本类型（v2.332 新增互动影游）× 10 输出语言（旧 wire-id 由 LEGACY_MODE_MAP 兜底）
 import {
   modeAvailable, unlockLevel, canonicalModeId, CREATION_MODES as CREATION_MODE_LIST, MODE_ALIASES,
   trackAvailable, trackUnlockLevel, canonicalSparkTrack, SPARK_TRACKS,
@@ -2631,8 +2631,9 @@ generateRouter.post('/episodes', authRequired, async (req: AuthRequest, res) => 
   }
   // v2.95 互动分支：结构化分支简报规范化 + 闭环预检（扣费前拦截，命中不扣费）
   // v2.329 入口改由成品形态决定（interactive_drama），历史 interactive 经 LEGACY_MODE_MAP 归一）
+  // v2.332 互动影游（interactive_game）复用同一张分支图与同一套闭环预检
   let branchBrief: BranchBriefInput | null = null;
-  if (projScriptType === 'interactive_drama' && parsed.data.branchBrief) {
+  if ((projScriptType === 'interactive_drama' || projScriptType === 'interactive_game') && parsed.data.branchBrief) {
     let bb: BranchBriefInput;
     try {
       bb = normalizeBranchBrief(parsed.data.branchBrief);

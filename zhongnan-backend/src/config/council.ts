@@ -235,6 +235,8 @@ const SCRIPT_TYPE_SCORES: Record<ScriptTypeId, ScoreTuple> = {
   promo_script: [1, 2, 1, 1, 1],
   tv_series: [2, 2, 2, 1, 2],
   interactive_drama: [2, 3, 3, 1, 2],
+  // 互动影游：分支之上再叠线索链与路线门控，工艺与差异化更强；算力与互动剧同档（不增加模型调用）
+  interactive_game: [2, 3, 3, 2, 2],
   feature_film: [2, 3, 3, 2, 3],
   long_series: [2, 3, 3, 2, 3],
 };

@@ -159,6 +159,7 @@ C.SCRIPT_TYPES = [
     { id: 'promo_script', zh: '宣传片脚本', en: 'Promo film script', min: 'basic' },
     { id: 'tv_series', zh: '电视剧 / 多集网剧', en: 'TV / multi-episode series', min: 'advanced' },
     { id: 'interactive_drama', zh: '互动剧', en: 'Interactive drama', min: 'advanced' },
+    { id: 'interactive_game', zh: '互动影游', en: 'Interactive film-game (FMV)', min: 'advanced' },
     { id: 'feature_film', zh: '电影剧本', en: 'Feature film', min: 'pro' },
     { id: 'long_series', zh: '长系列 IP 连载', en: 'Long-running IP series', min: 'pro' },
   ];

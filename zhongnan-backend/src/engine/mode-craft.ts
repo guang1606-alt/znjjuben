@@ -92,6 +92,7 @@ const METHOD_TRACE_ZH: Record<string, string> = {
   adapt: `· 成稿末尾（最后一个场景之后、任何附录之前）追加一行方法论清单，格式：\n【本集创作方法论：形态定性（续写/衍生/联动/同人）· 守核换境 · 只借底层方法不沿用措辞】\n按实际用到的方法列举；novel 子轨道须额外注明"钩子前置 · 人物按功能合并"，最多列 3-6 条。`,
   tag: `· 成稿末尾追加一行方法论清单，格式：\n【本集创作方法论：标签焊接 · 情绪/关系先于题材 · 标签落地为具体设定】\n按实际用到的方法列举，最多列 3-5 条。`,
   interactive: `· 成稿末尾追加一行方法论清单，格式：\n【本集创作方法论：真选择设计 · 分支闭环 · 选择前压情绪后给反馈】\n按实际用到的方法列举，最多列 3-5 条。`,
+  interactive_game: `· 成稿末尾追加一行方法论清单，格式：\n【本集创作方法论：选择即状态 · 线索链合成 · 路线门控可见 · 支线回并主线】\n按实际用到的方法列举，最多列 3-5 条。`,
   hot: `· 成稿末尾追加一行方法论清单，格式：\n【本集创作方法论：借势档位（强绑定/弱关联/反向）· 热点信号前置 · 故事脱离热点仍成立】\n按实际用到的方法列举，最多列 3-5 条。`,
   video_short: `· 成稿末尾追加一行方法论清单，格式：\n【本集创作方法论：3秒钩子 · 每镜≤20字口播 · 单一主行动引导】\n按实际用到的方法列举；soft-ad 子轨道须额外注明"品牌是解题者不是主角"，最多列 3-6 条。`,
   diary: `· 成稿末尾追加一行方法论清单，格式：\n【本集创作方法论：事实抽取先行 · 第一人称声口保留 · 时间序重排为戏剧序 · 脱敏化名】\n按实际用到的方法列举，最多列 3-5 条。`,
@@ -105,6 +106,7 @@ const METHOD_TRACE_EN: Record<string, string> = {
   adapt: `· Append one methodology line at the very end of the draft, format:\n【Episode methodology: form choice (continue/spin-off/crossover/fanfic) · core preserve, setting swap · borrow method not wording】\nList methods actually used; novel-compression sub-track must additionally mention "front-load hooks · merge characters by function"; 3-6 items max.`,
   tag: `· Append one methodology line at the very end of the draft, format:\n【Episode methodology: tag welding · emotion/rel before genre · tags land as concrete settings】\nList methods actually used, 3-5 items max.`,
   interactive: `· Append one methodology line at the very end of the draft, format:\n【Episode methodology: real-choice design · branch closure · build stakes before choice】\nList methods actually used, 3-5 items max.`,
+  interactive_game: `· Append one methodology line at the very end of the draft, format:\n【Episode methodology: choice changes state · clue chain synthesis · visible route gates · side routes rejoin mainline】\nList methods actually used, 3-5 items max.`,
   hot: `· Append one methodology line at the very end of the draft, format:\n【Episode methodology: borrow tier (strong/weak/inverse) · trend signal front-load · story stands on its own】\nList methods actually used, 3-5 items max.`,
   video_short: `· Append one methodology line at the very end of the draft, format:\n【Episode methodology: 3s hook · ≤20-char voiceover per shot · single CTA】\nList methods actually used; soft-ad sub-track must additionally mention "brand as problem-solver not protagonist"; 3-6 items max.`,
   diary: `· Append one methodology line at the very end of the draft, format:\n【Episode methodology: facts first · first-person voice kept · chronology re-ordered into drama · anonymised】\nList methods actually used, 3-5 items max.`,
@@ -139,12 +141,14 @@ export function buildMethodTraceDirective(mode: string | undefined, lang: MLang 
 const PURPOSE_GATE_ZH: Record<string, string> = {
   adapt: `· 在 outline 的 overview 字段里先写一句话"本集改编的根本目的"（15-30 字），回答：改原作是想兑付什么？——是挖原作没说透的人物弧光？是借原作世界观讲新主题？还是满足原作粉丝的愿望清单？这是后续续写/衍生/联动/同人形态选择的锚点。`,
   interactive: `· 在 outline 的 overview 字段里先写一句话"本集互动设计的根本目的"（15-30 字），回答：让玩家做这个选择，是想体验什么？——是道德困境？是代价感知？是身份揭露？这是后续分支闭环设计的锚点。`,
+  interactive_game: `· 在 outline 的 overview 字段里先写一句话"本集影游设计的根本目的"（15-30 字），回答：玩家在这一集里要亲手完成什么判断？——是拼出真相？是在两条都不能两全的路里做取舍？是发现自己的选择改变了谁？这是线索投放与路线门控的锚点。`,
   hot: `· 在 outline 的 overview 字段里先写一句话"借这个热点的根本目的"（15-30 字），回答：观众看完这个故事，带走什么情绪或反思？——是反套路爽感？是群体共鸣？是对热点的另一面思考？这是后续借势档位选择的锚点。`,
   video_short: `· 在 outline 的 overview 字段里先写一句话"种草/带货这条视频的根本目的"（15-30 字），回答：用户看完后应该做什么？——点赞/评论/关注/点链接（四选一）。这是后续钩子和 CTA 设计的锚点。`,
 };
 const PURPOSE_GATE_EN: Record<string, string> = {
   adapt: `· In the outline's overview field, write one sentence first: the core PURPOSE of this adaptation (15-30 chars) — answer WHY this adaptation exists: are you mining an unsaid character arc from the original? Using the world to tell a new theme? Or satisfying a fan wishlist? This anchors the continue/spin-off/crossover/fan-fiction form choice.`,
   interactive: `· In the outline's overview field, write one sentence first: the core PURPOSE of this interactive design (15-30 chars) — answer: the player makes this choice to experience what? moral dilemma? cost perception? identity reveal? This anchors the branch-closure design.`,
+  interactive_game: `· In the outline's overview field, write one sentence first: the core PURPOSE of this film-game episode (15-30 chars) — answer: what judgement must the player personally complete here? piecing together the truth? choosing between two options that cannot both be kept? discovering that their choice changed someone? This anchors clue placement and route gating.`,
   hot: `· In the outline's overview field, write one sentence first: the core PURPOSE of riding this trend (15-30 chars) — answer: what emotion or reflection does the audience take away after watching? counter-cliché satisfaction? group resonance? a different angle on the trend? This anchors the borrow-tier choice.`,
   video_short: `· In the outline's overview field, write one sentence first: the core PURPOSE of this short video (15-30 chars) — answer: after watching, the user should DO what? like/comment/follow/click link (pick one primary CTA). This anchors the hook and CTA design.`,
 };
@@ -178,6 +182,11 @@ const RANGE_LENS_ZH: Record<string, string> = {
   - 顶尖编辑视角：分支描述是否清晰，玩家会不会选错（信息不足）
   - 产品设计师视角：这个互动设计的核心爽点，用户能在 3 秒内识别吗
   每条建议用【视角标签·具体改进】格式。`,
+  interactive_game: `· 除追更欲/转化欲评分外，额外从 2-3 个跨界视角各出一条可执行建议：
+  - 侦探推理视角：线索是否足以支撑推论，有没有存在"玩家根本不可能想到"的跳跃
+  - 游戏关卡设计师视角：路线门控是否可见、失败是否可归因，玩家会不会觉得被系统耍了
+  - 产品设计师视角：这一集的"我想再看一个结局"的动机是否成立
+  每条建议用【视角标签·具体改进】格式。`,
   video_short: `· 除转化欲评分外，额外从 2-3 个跨界视角各出一条可执行建议：
   - 数据分析师视角：3 秒钩子的完播率预估、这条视频的互动率预估（点赞/评论/关注）
   - 顶尖编辑视角：口播台词可否再减 20% 而不减卖点信息
@@ -199,6 +208,11 @@ const RANGE_LENS_EN: Record<string, string> = {
   - Investigative reporter: does each choice have genuine consequence, or is it just nominal?
   - Top editor: are branches clearly described, or would players misunderstand from insufficient info?
   - Product designer: can users identify the core interactive satisfaction within 3 seconds?
+  Each suggestion uses 【Perspective · specific improvement】 format.`,
+  interactive_game: `· Beyond retention/conversion scoring, additionally output 2-3 actionable suggestions from cross-domain perspectives:
+  - Detective/reasoning: do the clues actually support the deduction, or is there a leap players could never make?
+  - Game level designer: are route gates visible and failures attributable, or does it feel like the system cheated?
+  - Product designer: is the "I want to see one more ending" motive actually earned in this episode?
   Each suggestion uses 【Perspective · specific improvement】 format.`,
   video_short: `· Beyond conversion scoring, additionally output 2-3 actionable suggestions from cross-domain perspectives:
   - Data analyst: estimated 3s-hook completion rate, engagement rate (like/comment/follow)
@@ -249,6 +263,15 @@ interactive: `【互动短剧模式】（分支选择与多结局）：
 · 选择点前把情绪和利害压足，选择后立刻给反馈（人物态度/资源/危险发生变化），集尾在新悬念处断开。
 · 用台词与动作引导选择，但不剧透选项后果；单集仍守 钩子-冲突-转折-留白 节奏。
 · 成稿仍按标准剧本版式与字数闸门：场景行、△动作行、角色（情绪）：台词行齐全；分支选项与去向在动作行中用同一版式自然标出。`,
+  interactive_game: `【互动影游模式】（多选项 · 支线 · 线索链 · 剧情走向门控）：
+· 结构三件套齐备：本集必须有（1）至少 2 个真选择点；（2）至少 3 条可被玩家实际发现的线索（物件 / 证词 / 时间差 / 环境细节）；（3）至少 1 个由"线索 + 关系值"共同开启的剧情走向门控。
+· 选择即状态：每个选项都落成可追踪的状态变化（信任 / 怀疑 / 危险 / 资源），并在后续 1-2 场戏里被兑现；不允许选了没反应的伪选择，也不允许两个选项结果相同。
+· 线索要有来源与可信度：每条线索标注"从哪来、谁给的、真 / 假 / 半真"；假线索必须在后续被拆穿且拆穿过程可解释；关键推论至少由 2 条线索合成，禁止"玩家不可能想到"的跳跃。
+· 路线门控可见、失败可归因：走向条件未满足时给替代选项或明确提示缺口（还缺哪条线索 / 还差谁的信任），不开死胡同，绝不让玩家觉得被系统耍了。
+· 支线有独立小目标并回并主线：每条支线让玩家亲手完成一个小判断（拿到什么 / 失去什么），且至少一次把情报或人物带回主线，不写可有可无的岔路。
+· 结局条件可解释：好 / 坏 / 隐藏结局分别由哪几个选择与哪几条线索决定，必须能在成稿里指认出来；隐藏结局的入口线索要能被合理发现，不靠运气。
+· 集尾停在新选择或新线索上：给玩家"我想再看一个结局"的动机，而不是把本集讲完就断。
+· 成稿仍按标准剧本版式与字数闸门：场景行、△动作行、角色（情绪）：台词行齐全；选项、线索、门控在动作行中用同一版式自然标出，不用表格或交互注释。`,
   hot: `【热点追更模式】（借势全网热点快速出本）：
 · 先定借势档位：强绑定（同款公共事件改编，必须换人物姓名/细节并声明虚构）、弱关联（只借情绪母题、故事全原创）、反向借势（对热点唱反调提供新视角）；时效紧时优先单一冲突、3 个场景内可拍的方案。
 · 风险前置：只借已证实的公共事实，不碰未定性案件/灾难悲剧/可识别的私人当事人；不影射真实个人、不用原热点标志性台词，大纲阶段先自标侵权与舆情风险。
@@ -339,6 +362,15 @@ const MODE_CRAFT_EN: Record<string, string> = {
 · Build emotion and stakes before the choice, give immediate feedback after it (a visible shift in attitude/resources/danger), and cut the episode on a fresh question.
 · Guide choices through action and dialogue without spoiling outcomes; each episode still follows hook–conflict–turn–breathing room.
 · Still obey the mandatory screenplay layout and word-count gate: scene heads, △ action lines, NAME (emotion): dialogue lines all present; mark branch options and destinations naturally inside action lines using the same layout.`,
+  interactive_game: `INTERACTIVE FILM-GAME MODE CRAFT (multi-option choices, side routes, clue chains, route gates):
+· All three structural pillars must be present: (1) at least 2 real choice points; (2) at least 3 clues the player can actually find (objects / testimony / time gaps / environmental detail); (3) at least 1 route gate opened by clues PLUS relationship state together.
+· Choice equals state: every option resolves into a trackable state change (trust / suspicion / danger / resources) that pays off within the next 1-2 scenes; no fake choices that change nothing, and no two options with identical outcomes.
+· Clues carry a source and a credibility: label each clue with where it came from, who supplied it, and true / false / half-true; false clues must be debunked later in an explainable way; any key deduction needs at least 2 clues combined — no leap a player could never make.
+· Route gates must be visible and failures attributable: when a route's condition is unmet, offer an alternative option or state the exact gap (which clue is still missing / whose trust is still short); never open a dead end, never make the player feel the system cheated.
+· Side routes carry their own micro-goal and rejoin the mainline: each side route has the player personally settle a small judgement (what was gained / what was lost), and at least once brings information or a character back to the mainline; no dispensable detours.
+· Endings must be explainable: state which choices and which clues decide the good / bad / hidden ending, and make that identifiable in the draft; the hidden ending's entry clue must be reasonably discoverable, not luck-based.
+· Cut the episode on a new choice or a new clue: earn the "I want to see one more ending" motive instead of closing everything off.
+· Still obey the mandatory screenplay layout and word-count gate: scene heads, △ action lines, NAME (emotion): dialogue lines all present; mark options, clues and gates naturally inside action lines with the same layout — no tables, no interactive annotations.`,
   hot: `TREND-CHASING MODE CRAFT (ride live trends and draft fast):
 · Pick the borrowing level first: strong tie (adapt a confirmed public event, must rename people/change details and label as fiction), weak tie (borrow only the emotional motif, story fully original), or inversion (take the opposite angle for a fresh take); under time pressure prefer one conflict filmable in ≤3 scenes.
 · Risk up front: borrow only verified public facts; stay away from unresolved cases, disasters/tragedies and identifiable private individuals; never allude to a real identifiable person or reuse the trend's signature lines; flag infringement and PR risk yourself at outline stage.
