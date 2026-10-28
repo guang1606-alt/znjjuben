@@ -186,3 +186,51 @@ test('c223 aigcDurationMin 真实改变 lengthPlan：同稿 AIGC 1 分钟与 5 �
   assert.strictEqual(d1.lengthPlan.status, 'under', '同稿在 1 分钟档与 5 分钟档的 ready 判定由区间决定');
   assert.strictEqual(d5.lengthPlan.status, 'under');
 });
+
+// —— v2.339 /fix 顶层 format 重算：生成期 pipeline 无条件下写 qcReport.format（LIVE 含 v2.337
+// 制片可行性与 score 折损），而 /fix 此前只重算 _aigc.format，LIVE 改写后闸门结论停在旧稿。
+// 夹具自证：9 场 9 角色稿版式齐备（有 △ 与两字名台词行），只违反制片维度，确保断言咬的是
+// feasibility 而不是版式闸门。
+const FEAS_PAD = '她把纸页一张张码齐，指尖压平折角，目光落在窗外的车流上，呼吸放得很慢，肩线一直没有松下来。';
+function liveNineSceneBody() {
+  const names = ['甲一', '乙二', '丙三', '丁四', '戊五', '己六', '庚七', '辛八', '壬九'];
+  const rows = ['第1集 测试'];
+  for (let i = 0; i < 9; i++) {
+    rows.push(`场景${i + 1}：会议室${i + 1}·日`);
+    rows.push('△她把文件夹推到桌面中央，指节在桌面上敲了两下。');
+    rows.push(`${names[i]}（冷冷）：这句话我只说一次。`);
+    rows.push(FEAS_PAD);
+  }
+  return rows.join('\n');
+}
+
+test('v2.339 rescanScriptFormat: 空稿/纯空白不产键，调用方保留旧值', () => {
+  assert.deepStrictEqual(MOD.rescanScriptFormat(''), {});
+  assert.deepStrictEqual(MOD.rescanScriptFormat('  \n '), {});
+});
+
+test('v2.339 rescanScriptFormat: LIVE 9 场重扫出 feasibility over，闸门结论跟随新正文', () => {
+  const body = liveNineSceneBody();
+  const out = MOD.rescanScriptFormat(body, { scriptFormat: 'LIVE' });
+  assert.ok(out.format, '必须产出 format 键');
+  assert.strictEqual(out.format.mode, 'LIVE');
+  assert.ok(out.format.hasAction && out.format.hasDialogue, '夹具版式齐备，只违反制片维度');
+  assert.strictEqual(out.format.feasibility.level, 'over');
+  assert.ok(out.format.violations.some((v) => v.startsWith('制片不可行')), '制片硬伤必须进 violations');
+  assert.notStrictEqual(out.format.pass, true);
+});
+
+test('v2.339 rescanScriptFormat: 同正文按 AIGC 制式重扫不产 feasibility（制片维度只对真人实拍）', () => {
+  const out = MOD.rescanScriptFormat(liveNineSceneBody(), { scriptFormat: 'AIGC' });
+  assert.strictEqual(out.format.mode, 'AIGC');
+  assert.strictEqual(out.format.feasibility, undefined);
+  assert.ok(!out.format.violations.some((v) => v.includes('制片不可行')));
+});
+
+test('v2.339 rescanScriptFormat: AIGC 时长按旧 _aigc.durationMin 回放，字数带随之缩放', () => {
+  const text = '△ 林晚走进教室坐下。\n林晚：「开始了。」';
+  const d1 = MOD.rescanScriptFormat(text, { scriptFormat: 'AIGC', aigcDurationMin: 1 }).format;
+  const d3 = MOD.rescanScriptFormat(text, { scriptFormat: 'AIGC', aigcDurationMin: 3 }).format;
+  assert.deepStrictEqual(d1.range, [1200, 1500]);
+  assert.deepStrictEqual(d3.range, [3600, 4500]);
+});

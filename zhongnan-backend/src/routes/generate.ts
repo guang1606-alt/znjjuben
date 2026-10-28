@@ -37,7 +37,7 @@ import { villainStall } from '../engine/villain-stall'; // c214 /fix 重算：hi
 import { batchCreativeDigest } from '../engine/creative-batch-rescan'; // c215 /fix 重算：102 个纯函数创作引擎（对白/叙事/阀门家族）批量重扫，覆盖语义健康壳清 v1 旧账
 import { shapeLedgerDiagnoses, rescanLedgerDiagnosisBundle } from '../engine/ledger-diagnosis-rescan'; // c216 跨集诊断台账六键（掉钩/欠账/干旱/疲劳/反派空转）：无 score 旧版三处全丢，落库+SSE+/fix 补齐
 import { shapeContinuityLedgers, rescanContinuityBundle } from '../engine/continuity-ledger-rescan'; // c217 跨集连续性台账 24 键（信物/时间线/代价/死亡/下场/伤势/境界/归属/关系/阵营/地点/泄密/伪装/人情债/联盟/记忆/冒充/背叛/牺牲/诅咒/附身/穿越/变身/中毒）：无 score 四点全盲，落库+SSE+/fix 补齐；villainFate 与短名 rows 行合流
-import { shapeGateEngines, rescanGateEngines } from '../engine/gate-engine-rescan'; // c218 闸门引擎四键（反套路/口语化/落地感/字数闸门）：无 score 被通用 digest 硬过滤四点全盲，落库+SSE+/fix 补齐；rhythm/character/styleCheck/propMotifRhythm 半盲键复用 buildQcEngineDigest 形态零分叉
+import { shapeGateEngines, rescanGateEngines, rescanScriptFormat } from '../engine/gate-engine-rescan'; // c218 闸门引擎四键（反套路/口语化/落地感/字数闸门）：无 score 被通用 digest 硬过滤四点全盲，落库+SSE+/fix 补齐；rhythm/character/styleCheck/propMotifRhythm 半盲键复用 buildQcEngineDigest 形态零分叉；v2.339 顶层 format 重算（LIVE 含制片可行性）
 import { rhythmScan } from '../engine/rhythm'; // c218 /fix 重算：节奏曲线有 score，走 buildQcEngineDigest 路径 B 同形态覆盖
 import { characterLogicScan } from '../engine/character-logic'; // c218 /fix 重算：人物行为逻辑同上
 import { teamBriefing } from '../engine/team-briefing'; // c214 同上
@@ -2409,6 +2409,17 @@ generateRouter.post('/projects/:id/fix', authRequired, async (req: AuthRequest, 
       };
     }
   } catch { freshAigc = null; }
+  // v2.339 顶层 format 按新正文重算：生成期 pipeline 无条件写 qcReport.format（LIVE 含 v2.337
+  // 制片可行性与 score 折损），此前 /fix 只重算 _aigc.format，LIVE 改写后 QC 面板永远挂旧稿结论
+  // （旧稿 9 场红字挂在新稿上，或新稿已 9 场却仍显示 ok）。异常/空稿时返回 {} 保留旧值。
+  const freshFormat = (() => {
+    try {
+      const fFmt = resolveProjectFormatOf(((project as any)?.bible?.scriptType as string | undefined), (project as Record<string, unknown>).format as string, (project as any)?.bible?.scriptTypeExplicit as boolean | undefined) === 'AIGC' ? 'AIGC' : 'LIVE';
+      const prevAigcFmt = (targetScript.qcReport as Record<string, unknown> | undefined)?._aigc as Record<string, unknown> | undefined;
+      const fDur = typeof prevAigcFmt?.durationMin === 'number' && prevAigcFmt.durationMin > 0 ? prevAigcFmt.durationMin : 1;
+      return rescanScriptFormat(rewritten, { scriptFormat: fFmt, aigcDurationMin: fDur });
+    } catch { return {}; }
+  })();
   // c217 villainFate 同名碰撞：诊断（felled/issueCount/issues）必须与短名摘要行 rows 合流，
   // 不能整体展开覆盖。其余 23 键独立长名键直接展开。
   const freshContinuityVf = (freshContinuity.villainFate as Record<string, unknown> | undefined);
@@ -2445,6 +2456,7 @@ generateRouter.post('/projects/:id/fix', authRequired, async (req: AuthRequest, 
           ...(Object.keys(freshContCurRest).length ? freshContCurRest : {}), // c197 c217 其余 23 短名摘要行随改写稿回写，后续集 prev 读新稿账面（死亡/信物/时间线/境界…）
           ...(Object.keys(freshGate).length ? freshGate : {}), // c218 闸门四键（cliche/tongue/grounded/lengthPlan）+ rhythm/character 按新正文重放；styleCheck 缺 styleProfile 保留旧值
           ...(((freshContinuityVf || freshVfCurRows) ? { villainFate: { ...(freshVfCurRows ?? {}), ...(freshContinuityVf ?? {}) } } : {})), // c197 rows 整集替换为新正文短名行 + 诊断覆盖（felled/issueCount/issues）；bundle 异常时两者皆空，base 展开保留 v1 旧值
+          ...freshFormat, // v2.339 顶层 format（含 LIVE feasibility 制片闸门）按新正文覆盖；空稿/异常沿用旧值
           _aigc: freshAigc, // c219 AIGC 构成仪表盘按新正文重算（AIGC 格式项目）；LIVE 格式为 null
         },
       },

@@ -30,7 +30,7 @@ import type { AntiStrength } from './creativity';
 import type { ColloquialLevel } from './dialogue';
 import { groundedScan } from './lifelike';
 import { adaptScriptLength } from './script-length';
-import type { ScriptMode } from './script-format';
+import { validateScript, type FormatReport, type ScriptMode } from './script-format';
 
 /** 无 score 四闸门键：qcReport/SSE/fix 三处共用这一份键名事实源 */
 export const GATE_ENGINE_KEYS = ['cliche', 'tongue', 'grounded', 'lengthPlan'] as const;
@@ -213,4 +213,21 @@ export function rescanGateEngines(
     if (v) out.lengthPlan = v;
   } catch { /* 保留旧值 */ }
   return out;
+}
+
+/**
+ * 供 /fix 对改写后正文重算顶层 format（v2.339）。
+ * 病象：生成期 pipeline 无条件下写 qcReport.format（LIVE 含 v2.337 制片可行性与 score 折损），
+ * 但 /fix 只重算 _aigc.format，LIVE 改写后闸门结论停在旧稿——旧稿的「不可拍」红字挂在新稿上，
+ * 或新稿其实已 9 场却仍显示 ok，QC 面板与真实稿子名实不符。
+ * 空文本/异常返回 {}：调用方展开后保留旧值，不写空壳、不阻断付费交付。
+ */
+export function rescanScriptFormat(
+  text: string,
+  opts: { scriptFormat?: ScriptMode; aigcDurationMin?: number } = {},
+): { format?: FormatReport } {
+  if (!text || !text.trim()) return {};
+  try {
+    return { format: validateScript(text, opts.scriptFormat ?? 'LIVE', opts.aigcDurationMin ?? 1) };
+  } catch { return {}; }
 }
