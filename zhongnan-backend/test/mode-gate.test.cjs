@@ -295,13 +295,13 @@ test('v2.96 模式归一：adapt/hit_lab/long_ip 历史命名归一到规范 ID'
   assert.strictEqual(MG.screenModeGate('long_series', '一个普通故事。', 'zh').mode, 'long_ip');
 });
 
-test('v2.327 全 canonical 模式 + 历史别名覆盖：screenModeGate 路由表完整', () => {
-  // canonical 9 种模式 + 线上/历史 wire-id 别名，任一非空文本都应路由到对应 gate
+test('v2.329 全 8 模式 + 历史别名覆盖：screenModeGate 路由表完整', () => {
+  // canonical 8 种模式 + 线上/历史 wire-id 别名，任一非空文本都应路由到对应 gate
   const expect = {
     video_short: 'video_short', branded_skit: 'video_short', softad: 'video_short', shortvideo: 'video_short',
-    // novel 虽已在 registry 归一为 adapt，但 raw novel 仍走专属压缩闸门（钩子前置等），报告 mode 保留 novel
+    // novel 虽已在 registry 归一为 spark，但 raw novel 仍走专属压缩闸门（钩子前置等），报告 mode 保留 novel
     hot: 'hot', adapt: 'adapt', novel: 'novel', hit_lab: 'hit_lab', scene: 'hit_lab',
-    interview: 'interview', tag: 'tag', film: 'film', mature_x: 'film', long_ip: 'long_ip',
+    interview: 'interview', tag: 'tag', film: 'film', mature_x: 'persona', long_ip: 'long_ip',
   };
   Object.entries(expect).forEach(([m, want]) => {
     const r = MG.screenModeGate(m, '一段普通文本用于路由检查', 'zh');

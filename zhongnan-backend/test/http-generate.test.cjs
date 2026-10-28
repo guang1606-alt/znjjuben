@@ -643,11 +643,12 @@ describe('十二模式闭环闸门（P0：无未知模式、等级强校验、�
     const r = await postProj(mk('m_free', 'FREE'), { title: '免费标签本', mode: 'tags' });
     assert.strictEqual(r.status, 200);
   });
-  it('免费用户碰整合后的工作台 hit_lab 被 403 并给升级方向（高级）', async () => {
+  it('免费用户碰 v2.329 归一后的灵感式（reverse→spark）被 403，needLevel 为模式级基础档', async () => {
     const r = await postProj(mk('m_lock', 'FREE'), { title: '名场面', mode: 'reverse' });
     assert.strictEqual(r.status, 403);
     const j = await r.json();
-    assert.strictEqual(j.error, 'MODE_LOCKED'); assert.strictEqual(j.needLevel, 'ADVANCED');
+    // reverse 归一为 spark（模式级 BASIC），轨道级 hit_reverse 才要 PRO；模式闸门先于轨道闸门
+    assert.strictEqual(j.error, 'MODE_LOCKED'); assert.strictEqual(j.needLevel, 'BASIC');
   });
   it('v2.14 高级用户走名场面拓展轨道放行，走爆款逆向轨道被 TRACK_LOCKED(专业)', async () => {
     const ok = await postProj(mk('m_track_ok', 'ADVANCED'), { title: '名场面拓展', mode: 'hit_lab', track: 'signature_scene' });
@@ -671,31 +672,40 @@ describe('十二模式闭环闸门（P0：无未知模式、等级强校验、�
     const r = await postProj(mk('m_film', 'PRO'), { title: '电影', mode: 'film' });
     assert.strictEqual(r.status, 200);
   });
-  it('GET /modes 返回9模式且每个都带前端 wire-id 与解锁态；工作台带两轨道', async () => {
+  it('GET /modes 返回 v2.329 八模式，每模式带 wire-id 与解锁态；灵感式带三轨道；顶层含类型/语言两维', async () => {
     const r = await fetch(base + '/api/generate/modes', { headers: mk('m_list', 'ADVANCED') });
     assert.strictEqual(r.status, 200);
     const j = await r.json();
-    assert.strictEqual(j.modes.length, 9);
+    assert.strictEqual(j.modes.length, 8);
     assert.ok(j.modes.every((m) => Array.isArray(m.wireIds) && m.wireIds.length >= 1));
-    const film = j.modes.find((m) => m.id === 'film');
-    assert.strictEqual(film.status, 'available'); assert.strictEqual(film.unlocked, false, 'ADVANCED 用户未解锁 PRO 级 film 模式');
-    const hitLab = j.modes.find((m) => m.id === 'hit_lab');
-    assert.strictEqual(hitLab.unlocked, true, '高级用户可进工作台');
-    assert.strictEqual(hitLab.tracks.length, 2);
-    const revTrack = hitLab.tracks.find((t) => t.id === 'hit_reverse');
-    assert.strictEqual(revTrack.unlocked, false, '高级用户未解锁专业逆向轨道');
-    const sceneTrack = hitLab.tracks.find((t) => t.id === 'signature_scene');
-    assert.strictEqual(sceneTrack.unlocked, true);
-    // 旧 wire-id scene/reverse 仍挂在整合后的工作台下（向后兼容）
-    assert.ok(hitLab.wireIds.includes('scene') && hitLab.wireIds.includes('reverse'));
-    const longIp = j.modes.find((m) => m.id === 'long_ip');
-    assert.strictEqual(longIp.unlocked, false, '长系列IP为专业模式');
-    // v2.325 软广并入短视频：branded_skit/softad 作为 wire-id 挂在 video_short 下
-    const video = j.modes.find((m) => m.id === 'video_short');
-    assert.strictEqual(video.unlocked, true, '短视频（含软广子轨道）高级可用');
-    assert.ok(video.wireIds.includes('branded_skit') && video.wireIds.includes('softad'), '软广历史 wire-id 必须保留在短视频模式上');
-    // v2.325 成年向并入电影：mature_x/xscript 作为 wire-id 挂在 film 下
-    assert.ok(film.wireIds.includes('mature_x') && film.wireIds.includes('xscript'), '成年向历史 wire-id 必须保留在电影模式上');
+    // 角色自述式（ADVANCED 级模式）：ADVANCED 已解锁；成年向历史 wire-id 挂在其下
+    const persona = j.modes.find((m) => m.id === 'persona');
+    assert.strictEqual(persona.unlocked, true, 'ADVANCED 用户可进角色自述式');
+    assert.ok(persona.wireIds.includes('mature_x') && persona.wireIds.includes('xscript') && persona.wireIds.includes('film'), '成年向/电影历史 wire-id 必须保留在角色自述式上');
+    // 灵感式（BASIC 级模式）承接名场面工作台与短视频/软广历史 id，轨道级仍按等级分别解锁
+    const spark = j.modes.find((m) => m.id === 'spark');
+    assert.strictEqual(spark.unlocked, true, '高级用户可进灵感式');
+    assert.strictEqual(spark.tracks.length, 3, '灵感式带素材改编/名场面拓展/爆款逆向三条轨道');
+    assert.strictEqual(spark.tracks.find((t) => t.id === 'hit_reverse').unlocked, false, '高级用户未解锁专业逆向轨道');
+    assert.strictEqual(spark.tracks.find((t) => t.id === 'signature_scene').unlocked, true);
+    assert.strictEqual(spark.tracks.find((t) => t.id === 'material_rewrite').unlocked, true);
+    assert.ok(spark.wireIds.includes('scene') && spark.wireIds.includes('reverse'), '旧 wire-id scene/reverse 仍挂在灵感式下（向后兼容）');
+    assert.ok(spark.wireIds.includes('branded_skit') && spark.wireIds.includes('softad'), '软广历史 wire-id 必须保留在灵感式上');
+    // 世界线推演式为专业级模式
+    const multiverse = j.modes.find((m) => m.id === 'multiverse');
+    assert.strictEqual(multiverse.unlocked, false, '世界线推演为专业模式');
+    // 标签式承接互动剧历史 wire-id
+    const tag = j.modes.find((m) => m.id === 'tag');
+    assert.strictEqual(tag.unlocked, true);
+    assert.ok(tag.wireIds.includes('interactive'), '互动剧历史 wire-id 必须保留在标签式上');
+    // 顶层两维契约：9 剧本类型 + 10 输出语言 + 3 轨道
+    assert.strictEqual(j.scriptTypes.length, 9);
+    assert.strictEqual(j.languages.length, 10);
+    assert.strictEqual(j.sparkTracks.length, 3);
+    assert.strictEqual(j.scriptTypes.find((t) => t.id === 'feature_film').unlocked, false, '电影类型为专业级');
+    assert.strictEqual(j.scriptTypes.find((t) => t.id === 'live_action_drama').unlocked, true);
+    assert.strictEqual(j.languages.find((l) => l.code === 'en').unlocked, true);
+    assert.strictEqual(j.languages.find((l) => l.code === 'ar').unlocked, true, '最高语言档为高级，高级用户全解锁');
   });
 
   // ===== 内部账户（超管/杨光指定的管理员）建项目：模式/轨道/项目数墙全放行，成年授权红线不豁免 =====

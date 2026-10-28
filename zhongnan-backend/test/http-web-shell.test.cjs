@@ -53,7 +53,7 @@ describe('前端站点托管 + 项目创建端点', { concurrency: 1 }, () => {
     assert.strictEqual(r.status, 200);
     const p = await r.json();
     assert.ok(p.id);
-    assert.strictEqual(p.mode, 'tags');
+    assert.strictEqual(p.mode, 'tag'); // v2.329 起落库为 canonical 模式（wire-id tags 归一为 tag）
     assert.strictEqual(p.totalEps, 20);
     assert.deepStrictEqual(p.tags, ['逆袭', '都市']);
     assert.ok(!Number.isNaN(new Date(p.createdAt).getTime()), '演示项目应模拟 Prisma 的 createdAt 默认值');
@@ -159,23 +159,25 @@ describe('自动模式立项（mode=auto）', { concurrency: 1 }, () => {
     body: JSON.stringify({ title, ...body }),
   });
 
-  it('短视频描述 → 落 canonical video_short 并回传匹配结果', async () => {
+  it('短视频描述 → 落 canonical 灵感式 + 短视频类型并回传匹配结果', async () => {
     const r = await post('自动短视频', tokAutoAdv, { mode: 'auto', brief: '做个30秒抖音带货口播，前三秒要抓人' });
     assert.strictEqual(r.status, 200);
     const p = await r.json();
-    assert.strictEqual(p.mode, 'video_short');           // 落库不得是字符串 auto
-    assert.strictEqual(p.autoRouted.mode, 'video_short');
+    assert.strictEqual(p.mode, 'spark');                 // 落库不得是字符串 auto
+    assert.strictEqual(p.autoRouted.mode, 'spark');
+    assert.strictEqual(p.autoRouted.scriptType, 'short_video');
+    assert.strictEqual(p.autoRouted.gate, 'spark_confirm', '灵感式自动路由必须带确认闸门');
     assert.ok(p.autoRouted.confidence >= 0.6);
     assert.ok(Array.isArray(p.autoRouted.alternatives));
     assert.ok(p.autoRouted.name.length > 0);
   });
 
-  it('小说改编描述 → 落 adapt（基础会员即可）', async () => {
+  it('小说改编描述 → 落灵感式素材改编（基础会员即可）', async () => {
     const r = await post('自动改编', tok, { mode: 'auto', brief: '把这本小说改成竖屏短剧，走同人续写线' });
     assert.strictEqual(r.status, 200);
     const p = await r.json();
-    assert.strictEqual(p.mode, 'adapt');
-    assert.strictEqual(p.autoRouted.mode, 'adapt');
+    assert.strictEqual(p.mode, 'spark');
+    assert.strictEqual(p.autoRouted.mode, 'spark');
   });
 
   it('无有效描述 → 不硬猜高等级模式，落轻量模式并标记需澄清', async () => {
@@ -191,7 +193,7 @@ describe('自动模式立项（mode=auto）', { concurrency: 1 }, () => {
     const r = await post('手选标签', tok, { mode: 'tags' });
     assert.strictEqual(r.status, 200);
     const p = await r.json();
-    assert.strictEqual(p.mode, 'tags');
+    assert.strictEqual(p.mode, 'tag'); // v2.329 起落库为 canonical 模式（wire-id tags 归一为 tag）
     assert.strictEqual(p.autoRouted, undefined);
   });
 });

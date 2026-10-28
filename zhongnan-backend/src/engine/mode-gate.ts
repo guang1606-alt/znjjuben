@@ -15,7 +15,7 @@
  *
  * 纯函数·双语·零 IO·确定性；非对应模式返回 allowed=true 空报告。
  */
-import { canonicalModeId } from '../config/modes';
+import { canonicalModeId, isSourceTextMode } from '../config/modes';
 
 export type GateLang = 'zh' | 'en';
 export interface GateHit {
@@ -651,10 +651,15 @@ export const SOURCE_TEXT_LIMIT = 50000;
 export function resolveEpisodeSourceText(input: {
   bodySourceText?: unknown;
   project?: { bible?: unknown } | null;
+  /** 项目 raw mode（v2.329 起优先用 mode+track 走 craftKeyOf，canonMode 仅历史兼容） */
+  mode?: string | null;
+  track?: string | null;
   canonMode?: string | null;
 }): string | undefined {
-  const mode = input.canonMode;
-  if (mode !== 'adapt' && mode !== 'novel' && mode !== 'hit_lab') return undefined;
+  // v2.329：canonical 化后 hit_lab/adapt 已并入 spark，直接比对新模式名会让版权闸门静默失效；
+  // 统一走 isSourceTextMode（内部 craftKeyOf：spark 按 material_rewrite/signature_scene/hit_reverse 细分）
+  const rawMode = input.mode ?? input.canonMode ?? null;
+  if (!isSourceTextMode(rawMode, input.track)) return undefined;
   const pick = (v: unknown): string | undefined => {
     if (typeof v !== 'string') return undefined;
     const s = v.trim();

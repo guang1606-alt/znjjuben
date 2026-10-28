@@ -38,7 +38,7 @@ import {
 import { auditNarrativeCoherence, episodeCoherenceNote, alignBeatsToHooks } from '../engine/narrative-orchestrator';
 import { buildCraftStackDirective } from '../engine/craft-registry';
 import { buildHitLabDirective, buildLongIpDirective, buildModeCraftDirective, buildMethodTraceDirective, buildFilmActDirective, buildPurposeGateDirective, buildRangeLensDirective } from '../engine/mode-craft';
-import { canonicalModeId } from '../config/modes'; // v2.327 历史 raw 模式（novel/branded_skit/xscript）归一，防止合并后旧项目丢能力
+import { canonicalModeId, craftKeyOf, canonicalSparkTrack, isSourceTextMode, OUTPUT_LANGUAGES, type ScriptTypeId, type LanguageCode } from '../config/modes'; // v2.327 历史 raw 模式归一；v2.329 8 模式×剧本类型×输出语言三维
 import { buildBrandDirective, type BrandBriefInput } from '../engine/brand-brief';
 import { buildTrendDirective, type TrendBriefInput, type TrendRiskReport } from '../engine/trend-brief';
 import { buildBranchDirective, type BranchBriefInput } from '../engine/branch-brief';
@@ -571,7 +571,9 @@ export interface EpisodeOptions {
   scenesPerEp?: number;   // 每集场景数，缺省3（决定场钩/微钩密度）
   beatPref?: Partial<CuePref> | null; // 反转/爽点/情绪节拍偏好（auto/manual/hybrid、强度、偏好/禁用），缺省系统智能
   mode?: string;        // v2.14 归一后的创作模式 id（hit_lab/long_ip 等），用于模式级方法论注入
-  modeTrack?: string;   // v2.14 名场面工作台内部轨道：signature_scene | hit_reverse
+  modeTrack?: string;   // v2.14 名场面工作台内部轨道：signature_scene | hit_reverse（v2.329 起归 spark 轨道）
+  scriptType?: ScriptTypeId; // v2.329 剧本类型（真人实拍/AIGC/电影/电视剧/短视频/广告/宣传片/互动剧/长系列）
+  outputLang?: LanguageCode; // v2.329 输出语言（10 种），缺省中文
   depthTier?: 'speed' | 'balanced' | 'depth'; // v2.326 思考深度档位：speed=极速（极简 Method Trace + 跳过 Purpose Gate/Range Lens）/ balanced=标准（Method Trace 全量，跳过另外两者）/ depth=深度（三者全开）；缺省 balanced
   knowledgeHints?: KnowledgeHint[] | null; // v2.84 自主学习引擎沉淀的已生效知识（高分剧本技法/市场趋势/政策规则），按 brief 相关性注入各岗位
   creationContextInput?: CreationContextInput; // v2.85 创作上下文（时令/爆款/画像/地域文化/历史脑洞/AIGC制作规范）
@@ -716,19 +718,21 @@ export async function runEpisode(
   const craftStack = buildCraftStackDirective(`${brief} ${options.style ?? ''}`, hookLang);
   const craftDirective = craftStack.directive ? craftStack.directive + '\n' : '';
   // v2.14 模式级方法论：名场面工作台两轨道 + 长系列IP（仅对应模式注入，其余空串）
-  const hitLabDirective = buildHitLabDirective(canonMode, options.modeTrack, hookLang);
-  const longIpDirective = buildLongIpDirective(canonMode, hookLang);
-  // v2.83 其余九大模式方法论（采访/改编/标签/小说/互动/热点/短视频/软广/成年向），与上面两个专属指令互斥
+  // v2.329：内部一律以 craftKeyOf(旧 raw → 旧方法论 key) 归一，8 模式合并后旧项目一字不改
+  const craftModeKey = craftKeyOf(options.mode ?? canonMode, options.modeTrack);
+  const hitLabDirective = buildHitLabDirective(options.mode ?? canonMode, options.modeTrack, hookLang);
+  const longIpDirective = buildLongIpDirective(craftModeKey, hookLang);
+  // v2.83 其余模式方法论（采访/日记/灵感/标签/热点/角色自述/双人对撞/世界线推演），与上面两个专属指令互斥
   // v2.87 电影模式三幕片段定位：按 episodeIndex/episodeCount 推导幕次与幕内段落，兑现 film 指令的标注承诺
-  const filmActDirective = buildFilmActDirective(canonMode, episodeIndex, episodeCount, hookLang);
-  const modeCraftDirective = (((!hitLabDirective && !longIpDirective) ? buildModeCraftDirective(options.mode, hookLang) : '') + filmActDirective).trim();
+  const filmActDirective = buildFilmActDirective(craftModeKey, episodeIndex, episodeCount, hookLang);
+  const modeCraftDirective = (((!hitLabDirective && !longIpDirective) ? buildModeCraftDirective(options.mode ?? canonMode, hookLang, options.modeTrack) : '') + filmActDirective).trim();
   // v2.326 Method Trace：成稿末尾显式输出"本集创作方法论"清单（对应视频"深度维度"——AI 不只给结果，还要把用了什么方法显式化）
   const depthTier = options.depthTier ?? 'balanced';
-  const methodTraceDirective = buildMethodTraceDirective(options.mode, hookLang, depthTier);
+  const methodTraceDirective = buildMethodTraceDirective(options.mode ?? canonMode, hookLang, depthTier, options.modeTrack);
   // v2.326 Purpose Gate：架构师动笔前先写"一句话核心目的"（对应视频"高度维度"——先追问"为什么做"再问"怎么做"）
-  const purposeGateDirective = buildPurposeGateDirective(options.mode, hookLang, depthTier);
+  const purposeGateDirective = buildPurposeGateDirective(options.mode ?? canonMode, hookLang, depthTier, options.modeTrack);
   // v2.326 Range Lens：audience 角色追加跨界视角改进建议（对应视频"范围维度"——同一个成稿借多双眼睛看）
-  const rangeLensDirective = buildRangeLensDirective(options.mode, hookLang, depthTier);
+  const rangeLensDirective = buildRangeLensDirective(options.mode ?? canonMode, hookLang, depthTier, options.modeTrack);
   // v2.93 剧情软广·结构化品牌简报：品牌事实源（逐字品牌名/单一卖点/记忆符号/软性度/合规红线），三岗位共用
   const brandDirective = options.brandBrief ? buildBrandDirective(options.brandBrief, hookLang) : '';
   // v2.94 热点追更·结构化热点简报：四借法指令+强制虚构化要求（风险预检驱动），架构师/撰写师/打回重写共用
@@ -737,7 +741,7 @@ export async function runEpisode(
   const branchDirective = options.branchBrief ? buildBranchDirective(options.branchBrief, hookLang) : '';
   // v2.96 原作/原文：adapt/hit_lab 模式把原文作为事实源注入（novel 已于 v2.325 别名至 adapt，此处已不存在 raw 'novel'），
   // 明确要求改编/压缩/逆向而非照抄（mode-gate 的 n-gram 重合检测会复核）
-  const sourceTextDirective = options.sourceText && (canonMode === 'adapt' || canonMode === 'hit_lab')
+  const sourceTextDirective = options.sourceText && isSourceTextMode(options.mode ?? canonMode, options.modeTrack)
     ? (hookLang === 'en'
         ? `SOURCE TEXT (for reference only, DO NOT copy wording — the n-gram overlap gate will flag copied passages):\n${options.sourceText}\nAdapt/compress/reverse-engineer the underlying method only; rewrite every sentence in your own expression.\n`
         : `【原作/原文（仅供参考，严禁照抄措辞——n-gram 重合闸门会标记抄袭片段）】\n${options.sourceText}\n只借底层方法（人设关系/节奏/兑付逻辑），每一句都须用自己的表达重写。\n`)
@@ -747,7 +751,7 @@ export async function runEpisode(
   // 而非只让模型凭感觉"抽骨架"。仅 hit_lab + hit_reverse + sourceText 同时满足时生效。
   let hitTeardown: TeardownReport | null = null;
   let hitTeardownDirective = '';
-  if (canonMode === 'hit_lab' && options.modeTrack === 'hit_reverse' && options.sourceText) {
+  if (craftModeKey === 'hit_lab' && canonicalSparkTrack(options.modeTrack) === 'hit_reverse' && options.sourceText) {
     hitTeardown = teardown(options.sourceText, { type: 'text' }, hookLang);
     const t = hitTeardown;
     const techLines = t.techniques.map((tc) => `· ${tc.point}（为什么有效：${tc.why}；怎么复用：${tc.reuse}`).join('\n');
@@ -961,8 +965,20 @@ ${techLines}
       }).filter(Boolean).join('\n') + '\n' + `[Familiar-twist rule] 80% familiar classic setup + 20% radical twist: lure viewers with a well-known premise, then deliver a surprising reversal; complex worldbuilding is a barrier, not sophistication.\n`
     : genreMatches.map((g) => `【流派：${g.name}】痛点：${g.realityPain} → 代偿：${g.compensation}\n  核心技法：${g.coreTechnique}\n  短剧迁移：${g.shortDramaFit}\n  禁忌：${g.avoid}`).join('\n') + '\n' + `【旧瓶新酒】${FAMILIAR_TWIST.ratio}：${FAMILIAR_TWIST.principle}\n`)
     : '';
+  // v2.329 输出语言锁定：非中文时要求台词/旁白/场景描述使用该语言，结构标记与字数闸门不变
+  const outputLangDirective = (() => {
+    const code = options.outputLang;
+    if (!code || code === 'zh') return '';
+    const l = OUTPUT_LANGUAGES.find((x) => x.code === code);
+    if (!l) return '';
+    if (code === 'en') {
+      return '[OUTPUT LANGUAGE: English] Every scene heading, action line, parenthetical and spoken line must be natural English; keep the screenplay layout markers (scene heads, △ action lines, NAME (emotion): dialogue) unchanged. Do not mix Chinese into the body except proper nouns without an English equivalent.\n';
+    }
+    return `【输出语言锁定：${l.name}（${l.native}）】本集所有台词、旁白、场景描述、动作行必须使用${l.name}书写，符合该语言母语者的自然表达与口语习惯；剧本结构标记（场景行、△动作行、角色名（情绪）：台词行）与字数区间要求保持不变；除无对应译名的专有名词外，正文不得混排其他语言。\n`;
+  })();
   const formatDirective = scriptFormatDirective(options.scriptFormat ?? 'LIVE', hookLang)
-    + '\n' + buildSceneHeaderDirective(options.scriptFormat ?? 'LIVE', hookLang); // v2.157 场头前置教学：一次写对，省 QC retry 轮次
+    + '\n' + buildSceneHeaderDirective(options.scriptFormat ?? 'LIVE', hookLang) // v2.157 场头前置教学：一次写对，省 QC retry 轮次
+    + '\n' + outputLangDirective;
   // v2.80 润色各环节共用的“版式保持语”：LIVE 保 △分行，AIGC 保流畅自然段（两种版式哲学相反，严禁混用指令）
   const fmtMode = options.scriptFormat ?? 'LIVE';
   const layoutKeepRule = fmtMode === 'AIGC'
@@ -1096,8 +1112,10 @@ ${techLines}
   emit({ role: 'writer', status: 'done', note: hookLang === 'en' ? 'First draft of this episode complete' : '本集初稿完成' });
 
   // ④ 观众代言官：预判划走点，追更欲/转化欲不足则打回撰写师强化（1次），并对终稿复评
-  // v2.90 模式适配：单条带货/种草（video_short/branded_skit）评“转化欲”而非“追更欲”；done 事件必须汇报终稿复评分
-  const convIntent = canonMode === 'video_short'; // v2.327：历史 branded_skit/softad 归一后同样走转化欲评分
+  // v2.90 模式适配：单条带货/种草评“转化欲”而非“追更欲”；v2.329 改按成品形态（剧本类型）判断，短视频/广告/宣传片一律转化导向
+  const convIntent = options.scriptType
+    ? (options.scriptType === 'short_video' || options.scriptType === 'ad_script' || options.scriptType === 'promo_script')
+    : craftModeKey === 'video_short'; // 历史项目无 scriptType 时按旧方法论 key 兜底
   emit({ role: 'audience', status: 'running', note: hookLang === 'en'
     ? (convIntent ? 'Stress-testing swipe-away points and conversion intent from the target viewer’s lens' : 'Stress-testing retention and binge-craving from the target viewer’s lens')
     : (convIntent ? '以目标观众视角压测划走点与转化欲' : '以目标观众视角压测留存与追更欲') });

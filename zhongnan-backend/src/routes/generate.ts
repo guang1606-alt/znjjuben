@@ -97,7 +97,14 @@ import { scanWithStore } from '../lib/safety-store';
 import { diagnoseFull } from '../engine/full-diagnosis';
 import { pickEpisodeForFix, buildFixPrompt, isUsableRewrite } from '../engine/polish-fix';
 import { diffScripts, assessRewrite, summarizeChanges } from '../engine/script-diff'; // c202 版本对比纯引擎（零 token、确定性）；c204 变更摘要
-import { modeAvailable, unlockLevel, canonicalModeId, CREATION_MODES as CREATION_MODE_LIST, MODE_ALIASES, trackAvailable, trackUnlockLevel, canonicalHitLabTrack, HIT_LAB_TRACKS } from '../config/modes';
+// v2.329 三维创作结构：8 模式 × 9 剧本类型 × 10 输出语言（旧 wire-id 由 LEGACY_MODE_MAP 兜底）
+import {
+  modeAvailable, unlockLevel, canonicalModeId, CREATION_MODES as CREATION_MODE_LIST, MODE_ALIASES,
+  trackAvailable, trackUnlockLevel, canonicalSparkTrack, SPARK_TRACKS,
+  resolveScriptType, scriptTypeAvailable, scriptTypeUnlockLevel, SCRIPT_TYPES,
+  languageAvailable, languageUnlockLevel, canonicalLanguageCode, OUTPUT_LANGUAGES,
+  isSourceTextMode, isLegacyMode, craftKeyOf,
+} from '../config/modes';
 import { requiresMatureConsent } from '../lib/auth-policy';
 import { isAutoMode, routeIntent, type IntentRouteResult } from '../engine/intent-router'; // v2.328 自动模式路由（零 LLM）
 import { evaluateConsent, GATING_VALID_DAYS, type Region } from '../engine/mature-gating';
@@ -218,6 +225,9 @@ const projectSchema = z.object({
   mode: z.string().min(1).max(40),
   brief: z.string().max(8000).optional(), // 自动路由用创意文本（仅 mode=auto 时消费）
   track: z.string().min(1).max(40).optional(), // v2.14 名场面工作台内部轨道 signature_scene/hit_reverse
+  // v2.329 三维结构后两维：成品形态与成稿主语言（历史项目缺省时按 LEGACY_MODE_MAP 兜底）
+  scriptType: z.string().min(1).max(40).optional(),
+  outputLang: z.string().min(1).max(12).optional(),
   totalEps: z.number().int().min(1).max(500).optional(),
   engineTier: z.nativeEnum(EngineTier).optional(),
   // v2.319 入参上限放宽到 100 防恶意大包，静默清洗到 60（不阻断建项目）；落库恒为 string[]
@@ -275,6 +285,24 @@ generateRouter.post('/projects', authRequired, async (req: AuthRequest, res) => 
   }
   const canonMode = autoRouted ? autoRouted.mode : canonicalModeId(d.mode);
   if (!canonMode) return res.status(400).json({ error: `未知创作模式：${d.mode}` });
+  // v2.329 三维结构：成品形态与成稿语言同为付费维度；历史 wire-id 只做映射不二次收费（legacy）
+  const legacyProject = !autoRouted && isLegacyMode(d.mode);
+  const scriptType = resolveScriptType(d.mode, d.scriptType) ?? resolveScriptType(canonMode, undefined);
+  if (!scriptType) return res.status(400).json({ error: `未知剧本类型：${d.scriptType ?? ''}` });
+  if (!legacyProject && !isStaff && !scriptTypeAvailable(scriptType, ownerLevel)) {
+    return res.status(403).json({
+      error: 'SCRIPT_TYPE_LOCKED', needLevel: scriptTypeUnlockLevel(scriptType), scriptType,
+      message: `当前会员等级不可用该剧本类型，升级到${scriptTypeUnlockLevel(scriptType) ?? '更高等级'}后解锁`,
+    });
+  }
+  const outputLang = d.outputLang ? canonicalLanguageCode(d.outputLang) : undefined;
+  if (d.outputLang && !outputLang) return res.status(400).json({ error: `未知输出语言：${d.outputLang}` });
+  if (outputLang && !isStaff && !languageAvailable(outputLang, ownerLevel)) {
+    return res.status(403).json({
+      error: 'LANGUAGE_LOCKED', needLevel: languageUnlockLevel(outputLang), language: outputLang,
+      message: `当前会员等级不可用该输出语言，升级到${languageUnlockLevel(outputLang) ?? '更高等级'}后解锁`,
+    });
+  }
   // 合规红线：X剧本成年分级授权对任何身份都不豁免（内部账户也必须完成问卷与免责授权）
   if (requiresMatureConsent(d.mode)) {
     const admission = await verifyMatureAdmission(req.userId!);
@@ -291,8 +319,8 @@ generateRouter.post('/projects', authRequired, async (req: AuthRequest, res) => 
   }
   // v2.14 轨道级闸门：名场面工作台的“爆款逆向批量”轨道需专业版（名场面拓展高级即可）
   // v2.328 自动路由可直接给定轨道（hit_reverse 在等级不足时已由 routeIntent 降级为 signature_scene）
-  const canonTrack = autoRouted?.track ?? (d.track ? canonicalHitLabTrack(d.track) : undefined);
-  if (!isStaff && canonMode === 'hit_lab' && !trackAvailable(canonMode, canonTrack, ownerLevel)) {
+  const canonTrack = autoRouted?.track ?? (d.track ? canonicalSparkTrack(d.track) : undefined);
+  if (!isStaff && !trackAvailable(canonMode, canonTrack, ownerLevel)) {
     const needTrack = trackUnlockLevel(canonMode, canonTrack);
     return res.status(403).json({
       error: 'TRACK_LOCKED', needLevel: needTrack, track: 'hit_reverse',
@@ -387,11 +415,15 @@ generateRouter.post('/projects', authRequired, async (req: AuthRequest, res) => 
       });
     }
   }
-  // v2.319 原文仅三模式持久化（其余模式即使夹带也不入库，防越权注入提示词）；trim 后不足 10 字忽略
-  // v2.325 novel 已并入 adapt（canonicalModeId 归一为 adapt），这里不再单独判断
-  const projectSourceText = (canonMode === 'adapt' || canonMode === 'hit_lab')
+  // v2.319 原文仅三原文模式持久化（其余模式即使夹带也不入库，防越权注入提示词）；trim 后不足 10 字忽略
+  // v2.329 判定改为 craftKeyOf（spark + 素材改编/名场面/爆款逆向均需原文，历史 adapt/novel/hit_lab 同口径）
+  const projectSourceText = isSourceTextMode(d.mode, canonTrack)
     && typeof d.sourceText === 'string' ? d.sourceText.trim().slice(0, SOURCE_TEXT_LIMIT) : '';
   const bibleCue = {
+    // v2.329 后两维随项目落库（Project 无独立列，与原文同存 bible，续写/重生成沿用同一成品形态与语种）
+    scriptType,
+    ...(outputLang ? { outputLang } : {}),
+    ...(canonTrack ? { track: canonTrack } : {}),
     ...(projectSourceText.length >= 10 ? { sourceText: projectSourceText } : {}),
     ...(hookPrefs ? { hookPrefs } : {}),
     ...(beatPrefs ? { beatPrefs } : {}),
@@ -408,7 +440,7 @@ generateRouter.post('/projects', authRequired, async (req: AuthRequest, res) => 
   };
   const project = await prisma.project.create({
     data: {
-      userId: req.userId!, title: d.title, mode: autoRouted ? autoRouted.mode : d.mode, totalEps: d.totalEps ?? 0,
+      userId: req.userId!, title: d.title, mode: canonMode, totalEps: d.totalEps ?? 0,
       engineTier: d.engineTier ?? EngineTier.STANDARD, tags: d.tags ?? [],
       format: fmt, status: 'draft',
       investWan: d.investWan ?? null, specialTopic: d.specialTopic ?? false, filing: filing as object,
@@ -440,22 +472,39 @@ generateRouter.post('/projects', authRequired, async (req: AuthRequest, res) => 
   res.json(autoRouted ? { ...(project as Record<string, unknown>), autoRouted } : project);
 });
 // 四层钩子选项契约：前端据此渲染“系统智能/我来指定/混合”三模式 + 强度档 + 各层钩子偏好/禁用
-// 十二模式权威清单（前端据此做等级软拦截，与后端强校验同一来源；含前端 wire-id 别名）
+// v2.329 三维创作结构权威清单（前端据此渲染 8 张模式卡 + 类型选择 + 语言选择；后端强校验同一来源）
 generateRouter.get('/modes', authRequired, async (req: AuthRequest, res) => {
   const me = await prisma.user.findUnique({ where: { id: req.userId! }, select: { level: true } });
   const level = (me?.level ?? MemberLevel.FREE) as MemberLevel;
   res.json({
     modes: CREATION_MODE_LIST.map((m) => ({
       id: m.id, wireIds: Object.keys(MODE_ALIASES).filter((w) => MODE_ALIASES[w] === m.id),
-      name: m.name, desc: m.desc, minLevel: m.minLevel, status: m.status ?? 'available',
-      mature: !!m.mature, unlocked: modeAvailable(m.id, level),
-      // v2.14 名场面工作台两轨道及其解锁态（前端据此渲染轨道切换与专业版引导）
-      ...(m.id === 'hit_lab' ? {
-        tracks: HIT_LAB_TRACKS.map((tk) => ({
+      name: m.name, nameEn: m.nameEn, desc: m.desc, descEn: m.descEn, minLevel: m.minLevel,
+      status: m.status ?? 'available',
+      // 成年分级只看历史 wire-id（mature_x/xscript），8 模式本身无成人向入口
+      mature: requiresMatureConsent(m.id),
+      unlocked: modeAvailable(m.id, level),
+      ...(m.costNote ? { costNote: m.costNote, costNoteEn: m.costNoteEn ?? m.costNote } : {}),
+      // v2.329 灵感式三条子轨道及其解锁态（前端据此渲染轨道切换与专业版引导）
+      ...(m.id === 'spark' ? {
+        tracks: SPARK_TRACKS.map((tk) => ({
           id: tk.id, name: tk.name, nameEn: tk.nameEn, desc: tk.desc, descEn: tk.descEn,
-          minLevel: tk.minLevel, unlocked: trackAvailable('hit_lab', tk.id, level),
+          minLevel: tk.minLevel, unlocked: trackAvailable('spark', tk.id, level),
         })),
       } : {}),
+    })),
+    // 成品形态与成稿语言两维（与模式正交，权限各自独立）
+    scriptTypes: SCRIPT_TYPES.map((t) => ({
+      id: t.id, name: t.name, nameEn: t.nameEn, desc: t.desc, descEn: t.descEn,
+      minLevel: t.minLevel, unlocked: scriptTypeAvailable(t.id, level),
+    })),
+    languages: OUTPUT_LANGUAGES.map((l) => ({
+      code: l.code, name: l.name, nameEn: l.nameEn, native: l.native,
+      minLevel: l.minLevel, unlocked: languageAvailable(l.code, level),
+    })),
+    sparkTracks: SPARK_TRACKS.map((tk) => ({
+      id: tk.id, name: tk.name, nameEn: tk.nameEn, minLevel: tk.minLevel,
+      unlocked: trackAvailable('spark', tk.id, level),
     })),
   });
 });
@@ -2472,16 +2521,23 @@ generateRouter.post('/episodes', authRequired, async (req: AuthRequest, res) => 
   const project = await prisma.project.findFirst({ where: { id: projectId, userId: user.id, status: { not: 'deleted' } } });
   if (!project) return res.status(404).json({ error: '项目不存在' });
   // v2.14 归一模式 + 轨道二次校验（防止建项目后越权调用专业轨道）
-  const projCanonMode = canonicalModeId((project as Record<string, unknown>).mode as string);
-  // v2.319 原文统一取数：body 优先，缺失时从立项/拆爆款承接持久化的 bible 兜底（仅三原文模式）
+  // v2.329 三维结构：raw mode 保留给 craftKeyOf（旧方法论/旧硬闸门按旧 key 继续生效），canonical 只做权限与路由
+  const projRawMode = (project as Record<string, unknown>).mode as string;
+  const projCanonMode = canonicalModeId(projRawMode);
+  const projBible: Record<string, any> = ((project.bible && typeof project.bible === 'object' && !Array.isArray(project.bible))
+    ? project.bible as Record<string, unknown> : {});
+  const projScriptType = resolveScriptType(projRawMode, projBible.scriptType as string | undefined);
+  const projOutputLang = canonicalLanguageCode(projBible.outputLang as string | undefined);
+  // v2.319 原文统一取数：body 优先，缺失时从立项/拆爆款承接持久化的 bible 兜底（仅原文模式）
+  const epTrack = parsed.data.track ? canonicalSparkTrack(parsed.data.track) : (projBible.track as string | undefined);
   const effectiveSourceText = resolveEpisodeSourceText({
     bodySourceText: parsed.data.sourceText,
     project: project as { bible?: unknown },
-    canonMode: projCanonMode,
+    mode: projRawMode,
+    track: epTrack,
   });
-  const epTrack = parsed.data.track ? canonicalHitLabTrack(parsed.data.track) : undefined;
-  if (!isStaff && projCanonMode === 'hit_lab' && !trackAvailable(projCanonMode, epTrack, level)) {
-    return res.status(403).json({ error: 'TRACK_LOCKED', needLevel: trackUnlockLevel(projCanonMode, epTrack), track: 'hit_reverse', message: '「爆款逆向批量」为专业版轨道' });
+  if (!isStaff && !trackAvailable(projRawMode, epTrack, level)) {
+    return res.status(403).json({ error: 'TRACK_LOCKED', needLevel: trackUnlockLevel(projRawMode, epTrack), track: 'hit_reverse', message: '「爆款逆向批量」为专业版轨道' });
   }
   // 三级审核第一级：创意 brief 生成前机器拦截，必须在免费额度判定与冻结积分之前，避免误扣/误耗
   const briefScan = await scanWithStore(brief, prisma);
@@ -2491,7 +2547,8 @@ generateRouter.post('/episodes', authRequired, async (req: AuthRequest, res) => 
   // v2.93 剧情软广：结构化品牌简报规范化 + 广告词合规预检（必须在冻结积分之前拦截，命中不扣费）
   let brandBrief: BrandBriefInput | null = null;
   // v2.325 branded_skit 已并入 video_short（canonicalModeId 归一），此处用 video_short
-  if (projCanonMode === 'video_short' && parsed.data.brandBrief) {
+  // v2.329 品牌简报入口改由成品形态决定（ad_script），历史上 softad/branded_skit 经 LEGACY_MODE_MAP 同为 ad_script
+  if (projScriptType === 'ad_script' && parsed.data.brandBrief) {
     try {
       brandBrief = normalizeBrandBrief(parsed.data.brandBrief);
     } catch (e) {
@@ -2534,8 +2591,9 @@ generateRouter.post('/episodes', authRequired, async (req: AuthRequest, res) => 
     }));
   }
   // v2.95 互动分支：结构化分支简报规范化 + 闭环预检（扣费前拦截，命中不扣费）
+  // v2.329 入口改由成品形态决定（interactive_drama），历史 interactive 经 LEGACY_MODE_MAP 归一）
   let branchBrief: BranchBriefInput | null = null;
-  if (projCanonMode === 'interactive' && parsed.data.branchBrief) {
+  if (projScriptType === 'interactive_drama' && parsed.data.branchBrief) {
     let bb: BranchBriefInput;
     try {
       bb = normalizeBranchBrief(parsed.data.branchBrief);
@@ -3146,8 +3204,10 @@ generateRouter.post('/episodes', authRequired, async (req: AuthRequest, res) => 
       ...(parsed.data.antiStrength ? { antiStrength: parsed.data.antiStrength } : {}),
       // v2.35 补漏：项目制式（真人实拍/AIGC制作）必须真正传入创作管线，此前 AIGC 只落库未生效
       ...(isAIGC ? { scriptFormat: 'AIGC' as const } : { scriptFormat: 'LIVE' as const }),
-      ...(projCanonMode ? { mode: projCanonMode } : {}),
+      ...(projCanonMode ? { mode: projRawMode } : {}),
       ...(epTrack ? { modeTrack: epTrack } : {}),
+      ...(projScriptType ? { scriptType: projScriptType } : {}),
+      ...(projOutputLang ? { outputLang: projOutputLang } : {}),
       ...(parsed.data.lang ? { lang: parsed.data.lang } : {}),
       ...(knowledgeHints ? { knowledgeHints } : {}),
       // v2.93 剧情软广·结构化品牌简报（已过广告词预检），作为事实源注入架构师/撰写师/观众岗位

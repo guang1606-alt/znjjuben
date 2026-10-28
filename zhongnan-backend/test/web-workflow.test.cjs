@@ -47,6 +47,8 @@ function setup(names, extra = {}) {
     lastFiling: null, pendingWarnings: null, activeSessionId: null, genSessions: [],
     // v2.276/v2.277 模块级 let（逐函数 vm 求值需在 context 预置，否则 startGenerate 入口 ReferenceError）
     _genStarting: false, _retryProject: null, _retryBrief: null,
+    // v2.329 三维契约：剧本类型 + 输出语种为模块级 let/const，逐函数求值需预置
+    selectedScriptType: 'live_action_drama', outputLangValue: () => 'zh', renderScriptTypes() {},
     renderAigcDash() {}, loadDiagnosis: async () => {}, loadEmotionWave: async () => {}, loadInvestorLens: async () => {},
     _uiLangEn: () => ((typeof extra.lang === 'string' ? extra.lang : 'zh') === 'en'),
     ...extra };
@@ -171,8 +173,8 @@ test('expired authentication opens the real login modal', () => {
   assert.equal(c.authMode, 'login');
 });
 
-test('opening an adaptation draft offers a resume action with the saved brief and restores sourceText (v2.319)', async () => {
-  const project = { id: 'draft1', title: '改编草稿', mode: 'adapt', totalEps: 20, engineTier: 'STANDARD', format: 'LIVE_ACTION',
+test('opening an adaptation draft offers a resume action with the saved brief and restores sourceText (v2.319 / v2.329 spark)', async () => {
+  const project = { id: 'draft1', title: '改编草稿', mode: 'spark', totalEps: 20, engineTier: 'STANDARD', format: 'LIVE_ACTION',
     bible: { sourceText: '承接时持久化的爆款原文内容，足够十个字', adaptationDraft: { brief: '保存的改编人物和主线', recordId: 'td1' } } };
   const { context: c, $ } = setup(['openProject', 'resumeAdaptationProject', 'syncDraftProject', 'clearDraftProject'], {
     draftProject: null, Api: { request: async () => ({}), jsonOrThrow: async () => [] },
@@ -181,6 +183,7 @@ test('opening an adaptation draft offers a resume action with the saved brief an
   await c.openProject(project);
   assert.match($('epsList').innerHTML, /worksResumeDraft/);
   $('worksResumeDraft').onclick();
+  assert.equal(c.selectedMode, 'spark', 'v2.329 改编/小说/名场面统一并入灵感式（素材改编轨道）');
   assert.equal($('modeBrief').value, '保存的改编人物和主线');
   assert.equal($('sourceText').value, '承接时持久化的爆款原文内容，足够十个字', '恢复改编草稿必须回填原文，续写版权闸门不中断');
   assert.equal(c.draftProject.id, 'draft1');
@@ -188,7 +191,7 @@ test('opening an adaptation draft offers a resume action with the saved brief an
   assert.equal($('episodes').disabled, true);
 });
 
-test('v2.322 opening a novel project offers a resume action with the saved sourceText', async () => {
+test('v2.322 opening a novel project offers a resume action with the saved sourceText (v2.329 并入 spark)', async () => {
   const project = { id: 'novel1', title: '小说改短剧', mode: 'novel', totalEps: 20, engineTier: 'STANDARD', format: 'LIVE_ACTION',
     bible: { sourceText: '小说原文：第一章他离开了故乡，踏入陌生的城市，开始了新的生活。' } };
   const { context: c, $ } = setup(['openProject', 'resumeAdaptationProject', 'syncDraftProject', 'clearDraftProject'], {
@@ -196,9 +199,9 @@ test('v2.322 opening a novel project offers a resume action with the saved sourc
     closeWorkbench() {}, switchView() {}, renderModes() {}, syncTagBench() {}, syncModeBrief() {},
   });
   await c.openProject(project);
-  assert.match($('epsList').innerHTML, /worksResumeDraft/, '小说项目立项后必须有「继续创作」入口（与 adapt 对称）');
+  assert.match($('epsList').innerHTML, /worksResumeDraft/, '小说项目立项后必须有「继续创作」入口（与改编对称）');
   $('worksResumeDraft').onclick();
-  assert.equal(c.selectedMode, 'novel', '点继续创作后 selectedMode 必须切到 novel');
+  assert.equal(c.selectedMode, 'spark', '点继续创作后 selectedMode 必须切到灵感式（小说=素材改编轨道）');
   assert.equal(c.draftProject.id, 'novel1', 'draftProject 必须复用已立项项目，不再造孤儿');
   assert.equal($('sourceText').value, project.bible.sourceText, '持久化的小说原文必须回填，续写版权闸门不中断');
   assert.equal($('modeBrief').value, '', '小说模式无改编大纲，modeBrief 留空让用户写本集方向');
@@ -208,9 +211,9 @@ test('v2.322 opening a novel project offers a resume action with the saved sourc
 
 test('submitting a resumed adaptation uses its project without creating a duplicate', async () => {
   const requests = [];
-  const project = { id: 'draft1', title: '改编草稿', mode: 'adapt', totalEps: 20, engineTier: 'STANDARD', format: 'LIVE_ACTION' };
+  const project = { id: 'draft1', title: '改编草稿', mode: 'spark', totalEps: 20, engineTier: 'STANDARD', format: 'LIVE_ACTION' };
   const { context: c, $ } = setup(['startGenerate', 'failGenerationSession'], {
-    selectedMode: 'adapt', selectedTrack: 'signature_scene', draftProject: project,
+    selectedMode: 'spark', selectedTrack: 'signature_scene', draftProject: project,
     loadCastAssets: async () => {}, loadPropAssets: async () => {}, loadSceneAssets: async () => {},
     brandBriefPayload: () => ({}), trendBriefPayload: () => ({}), branchBriefPayload: () => ({}),
     hookPayload: () => ({}), beatPayload: () => ({}), castAssetPayload: () => ({}), propAssetPayload: () => ({}), sceneAssetPayload: () => ({}), aigcPayload: () => ({}), sourceTextPayload: () => ({}), outLocale: () => 'zh',
@@ -232,7 +235,7 @@ test('submitting a resumed adaptation uses its project without creating a duplic
 test('v2.319 tags mode creates the project with structured Chinese tags (not just a text brief)', async () => {
   const requests = [];
   const { context: c, $ } = setup(['startGenerate', 'failGenerationSession'], {
-    selectedMode: 'tags', selectedTrack: '', draftProject: null,
+    selectedMode: 'tag', selectedTrack: '', draftProject: null,
     tagChosen: ['逆袭', '都市'], TAG_MAX: 14,
     loadCastAssets: async () => {}, loadPropAssets: async () => {}, loadSceneAssets: async () => {},
     buildTagBrief: () => '标签组合：逆袭、都市……的自然语言简报', tagProjectTitle: () => '标签剧标题', rememberPrefTags() {},
@@ -254,10 +257,10 @@ test('v2.319 tags mode creates the project with structured Chinese tags (not jus
   assert.equal(create.data.sourceText, undefined, '标签模式不得携带原文');
 });
 
-test('v2.319 adapt mode persists sourceText at project creation so resume/regeneration keeps the copyright gate', async () => {
+test('v2.319 spark mode persists sourceText at project creation so resume/regeneration keeps the copyright gate', async () => {
   const requests = [];
   const { context: c, $ } = setup(['startGenerate', 'failGenerationSession', 'sourceTextPayload'], {
-    selectedMode: 'adapt', selectedTrack: 'signature_scene', draftProject: null,
+    selectedMode: 'spark', selectedTrack: 'signature_scene', draftProject: null,
     loadCastAssets: async () => {}, loadPropAssets: async () => {}, loadSceneAssets: async () => {},
     brandBriefPayload: () => ({}), trendBriefPayload: () => ({}), branchBriefPayload: () => ({}),
     hookPayload: () => ({}), beatPayload: () => ({}), castAssetPayload: () => ({}), propAssetPayload: () => ({}), sceneAssetPayload: () => ({}), aigcPayload: () => ({}), outLocale: () => 'zh',
@@ -280,7 +283,7 @@ test('v2.319 adapt mode persists sourceText at project creation so resume/regene
 
 test('switching from a saved draft to another mode unlocks the project settings', () => {
   const { context: c, $ } = setup(['syncModeBrief', 'clearDraftProject', 'syncDraftProject'], {
-    selectedMode: 'tags', draftProject: { id: 'draft1', title: '草稿', totalEps: 20 },
+    selectedMode: 'tag', draftProject: { id: 'draft1', title: '草稿', totalEps: 20 },
   });
   $('episodes').disabled = true;
   c.syncModeBrief();
@@ -341,7 +344,7 @@ test('teardown hands the persisted project to the editor with the selected gener
   assert.equal(requests[0].body.sourceText, undefined);
 });
 
-test('v2.319 brief/document extraction routes adapt/novel/hit_lab text into the source box, others into the brief box', async () => {
+test('v2.319/v2.329 brief/document extraction routes spark text into the source box, tag into the brief box', async () => {
   class FakeFileReader {
     readAsDataURL(file) { this.result = file.dataUrl; this.onload(); }
   }
@@ -360,15 +363,15 @@ test('v2.319 brief/document extraction routes adapt/novel/hit_lab text into the 
     await tick();
     return { $, requests };
   };
-  const adapt = await run('adapt');
-  assert.equal(adapt.$('sourceText').value, '提取出的正文内容', '改编模式：提取正文进原文框，版权闸门可生效');
-  assert.equal(adapt.$('modeBrief').value, '');
-  assert.equal(adapt.requests[0].url, '/api/generate/extract-source');
+  const spark = await run('spark');
+  assert.equal(spark.$('sourceText').value, '提取出的正文内容', '灵感式（素材改编）：提取正文进原文框，版权闸门可生效');
+  assert.equal(spark.$('modeBrief').value, '');
+  assert.equal(spark.requests[0].url, '/api/generate/extract-source');
 
-  const withExisting = await run('novel', { existingSource: ' 已有原文内容 ' });
+  const withExisting = await run('spark', { existingSource: ' 已有原文内容 ' });
   assert.equal(withExisting.$('sourceText').value, '提取出的正文内容\n\n已有原文内容', '新提取内容置顶，旧原文保留');
 
-  const tags = await run('tags');
-  assert.equal(tags.$('modeBrief').value, '提取出的正文内容', '非原文模式仍进创意简报框');
-  assert.equal(tags.$('sourceText').value, '');
+  const tag = await run('tag');
+  assert.equal(tag.$('modeBrief').value, '提取出的正文内容', '标签模式仍进创意简报框');
+  assert.equal(tag.$('sourceText').value, '');
 });

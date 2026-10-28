@@ -103,6 +103,8 @@ function setup(handler = async () => response([])) {
   for (const name of [
     'syncDraftProject', 'stopWaitTips', 'listenFinish', 'listenBumpReqSeq', 'closeWorkbench',
     'renderTaskQueue', 'refreshListenBtn', 'refreshAdminNav', 'renderModes', 'initInterviewPanel',
+    // v2.329 退出登录后按新等级刷新下拉/剧本类型锁定态（测试内以记录桩替代）
+    'renderSelects', 'renderScriptTypes',
     'openAuth', 'xnSay', 'renderProgress', 'renderResult', 'showFail', 'renderAigcDash',
     'populateProfileOptions', 'loadCaps', 'openListen', 'openListenSeries', 'resetPanels',
     'failGenerationSession', 'alert', 'openModal', 'renderDpPage', 'renderDpSummary',
@@ -116,6 +118,9 @@ function setup(handler = async () => response([])) {
     'castAssetPayload', 'propAssetPayload', 'sceneAssetPayload', 'aigcPayload', 'sourceTextPayload',
   ]) c[name] = () => ({});
   c.outLocale = () => 'zh';
+  // v2.329 三维契约：立项 payload 读取剧本类型与输出语种（测试内固定默认值）
+  c.selectedScriptType = 'live_action_drama';
+  c.outputLangValue = () => 'zh';
   c.strategyLocale = () => 'zh';
   c.buildDiagnosisHtml = () => ({ bars: 'diagnosis bars', fixHtml: 'diagnosis fixes' });
   c.buildQcReportHtml = () => 'quality report';

@@ -18,6 +18,12 @@ C.X_REGIONS = [
 
 C.MODE_BRIEF = {
     interview: { zh: ['把你零散的想法先倒在这里', '可以想到哪写到哪：核心创意、世界观、人物、想要的冲突都行；小南会在出本时把它们结构化，也可随时回来补充。'], en: ['Dump your scattered ideas here', 'Write freely: core idea, world, characters, conflicts. Xiaonan structures them at generation; you can come back anytime.'] },
+    tag: { zh: ['标签就是你的创作基因', '在下方标签工作台选题材、人设、冲突等维度，系统按组合定向出本；想更准可在这里补一句故事方向。'], en: ['Tags are your creative DNA', 'Pick genre / persona / conflict dimensions in the tag bench below; the system drafts by combination. Add one line of direction here to sharpen it.'] },
+    diary: { zh: ['把今天想写的日记写在这里（仅你可见）', '写真实感受即可。落稿前必须由你授权：摘要 / 指定段落 / 全部 三档任选，随时可撤回；未经授权不会进入剧本。'], en: ['Write today’s diary here (visible only to you)', 'Just write what you really feel. Nothing becomes a script until you authorize it: summary / selected passages / full, revocable anytime.'] },
+    spark: { zh: ['写一句话灵感，或粘贴已有素材', '点「AI 提案」让小南先给方向，多轮对话聊到满意；只有你点确认后才落稿。素材改编可在下方切换轨道（素材改编/名场面/爆款逆向）。'], en: ['One-line spark, or paste existing material', 'Tap “AI pitch” for directions, talk it out over turns, and nothing is written until you confirm. Switch tracks below (material rewrite / signature scene / hit reverse).'] },
+    persona: { zh: ['先定这个「我」是谁', '写清第一人称叙述者的身份、想要什么、最怕什么，以及他/她可能对自己撒的谎；系统用不可靠叙述在前半埋线、后半反转。'], en: ['Define who “I” is first', 'Give the first-person narrator’s identity, want, deepest fear and the lie they may tell themselves; the unreliable narration plants seeds early and pays off as a twist.'] },
+    duel: { zh: ['写清对撞的两个人与各自不可退让的立场', 'A 要什么、B 要什么、为什么谁都不能退；系统让两人轮流出招逐轮加码，直到一方无法再退或被迫掀底牌。'], en: ['Describe the two opponents and their non-negotiable stances', 'What A wants, what B wants, why neither can retreat; they trade moves round by round, escalating until one cannot retreat or must show their card.'] },
+    multiverse: { zh: ['写清那个「关键选择」', '同一个选择分出 2-4 条世界线：每条线写清路线与代价，最后合并回主线（或明确留白）；系统保证各线自洽、代价可回溯。'], en: ['Describe the pivotal choice', 'One choice forks 2–4 worldlines; state each route and its cost, then merge back to the main line (or leave it open). Every branch stays coherent and its cost traceable.'] },
     adapt: { zh: ['粘贴要改编的原作片段，或上传文件（自有/已授权内容）', '支持 txt/md/docx/epub/pdf（≤8MB），上传后自动提取正文；并在末尾写清想要续写/衍生/联动/同人中的哪种、原著尊重度高低。'], en: ['Paste the source you own/license, or upload a file', 'txt/md/docx/epub/pdf up to 8MB are auto-extracted. Add one line: sequel/spin-off/crossover/fanfic and how faithful to stay.'] },
     novel: { zh: ['粘贴小说原文，或上传小说文件（txt/md/docx/epub/pdf）', '上传后自动识别章节；注明必须保留的名场面或人物；系统会压缩冗余、按竖屏短剧节奏重排钩子与冲突。'], en: ['Paste novel chapters or upload a file (txt/md/docx/epub/pdf)', 'Chapters are auto-detected; mark must-keep scenes/characters; redundant narration is compressed into vertical-drama pacing.'] },
     interactive: { zh: ['描述主线起点与关键选择点', '分支要素填下方分支简报：选准分支风格（后果/关系/道德/悬疑）与利害压量；系统自动做闭环校验，确保每条支路有路可走。'], en: ['Describe the main line start and key choice points', 'Fill the branch brief below and pick the branch style (consequence/relationship/moral/mystery) and stakes; the system validates branch closure — every path leads somewhere.'] },
@@ -144,13 +150,39 @@ C.NOVEL_LIC_LABEL = {
     platform_free: { zh: '正版免费·仅阅读', en: 'Free to read' },
   };
 
+// v2.329 剧本类型（与后端 src/config/modes.ts SCRIPT_TYPES 一一对应；min 为最低会员档）
+C.SCRIPT_TYPES = [
+    { id: 'live_action_drama', zh: '真人实拍短剧', en: 'Live-action short drama', min: 'free' },
+    { id: 'aigc_drama', zh: 'AIGC 短剧 / 漫剧', en: 'AIGC / animated drama', min: 'basic' },
+    { id: 'short_video', zh: '爆款短视频脚本', en: 'Viral short-video script', min: 'basic' },
+    { id: 'ad_script', zh: '广告 / 软广脚本', en: 'Ad / branded script', min: 'basic' },
+    { id: 'promo_script', zh: '宣传片脚本', en: 'Promo film script', min: 'basic' },
+    { id: 'tv_series', zh: '电视剧 / 多集网剧', en: 'TV / multi-episode series', min: 'advanced' },
+    { id: 'interactive_drama', zh: '互动剧', en: 'Interactive drama', min: 'advanced' },
+    { id: 'feature_film', zh: '电影剧本', en: 'Feature film', min: 'pro' },
+    { id: 'long_series', zh: '长系列 IP 连载', en: 'Long-running IP series', min: 'pro' },
+  ];
+
+// v2.329 输出语言（与后端 OUTPUT_LANGUAGES 一一对应；min 为最低会员档）
+C.OUT_LANGS = [
+    { code: 'zh', zh: '中文', native: '中文', min: 'free' },
+    { code: 'en', zh: '英语', native: 'English', min: 'free' },
+    { code: 'ja', zh: '日语', native: '日本語', min: 'basic' },
+    { code: 'ko', zh: '韩语', native: '한국어', min: 'basic' },
+    { code: 'es', zh: '西班牙语', native: 'Español', min: 'basic' },
+    { code: 'pt', zh: '葡萄牙语', native: 'Português', min: 'basic' },
+    { code: 'th', zh: '泰语', native: 'ไทย', min: 'advanced' },
+    { code: 'id', zh: '印尼语', native: 'Bahasa Indonesia', min: 'advanced' },
+    { code: 'vi', zh: '越南语', native: 'Tiếng Việt', min: 'advanced' },
+    { code: 'ar', zh: '阿拉伯语', native: 'العربية', min: 'advanced' },
+  ];
+
 C.SELECT_OPTS = {
     platform: { zh: [['红果短剧','红果短剧'],['抖音','抖音'],['快手','快手'],['ReelShort','ReelShort'],['DramaBox','DramaBox']],
       en: [['红果短剧','Hongguo'],['抖音','Douyin'],['快手','Kuaishou'],['ReelShort','ReelShort'],['DramaBox','DramaBox']] },
     engine: { zh: [['STANDARD','标准（性价比）'],['HIGH','高阶（更强组合）'],['PRO','专业（最强组合）']],
       en: [['STANDARD','Standard (balanced)'],['HIGH','High (stronger mix)'],['PRO','Pro (strongest mix)']] },
-    outLang: { zh: [['zh','中文'],['en','English'],['ja','日本語'],['ko','한국어'],['es','Español'],['ar','العربية']],
-      en: [['zh','Chinese'],['en','English'],['ja','Japanese'],['ko','Korean'],['es','Spanish'],['ar','Arabic']] },
+    outLang: { zh: C.OUT_LANGS.map((l) => [l.code, l.native]), en: C.OUT_LANGS.map((l) => [l.code, l.native]) },
   };
 
 C.WORKBENCH_TITLES = {

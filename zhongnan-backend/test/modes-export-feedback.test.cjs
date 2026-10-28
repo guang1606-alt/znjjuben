@@ -4,53 +4,53 @@ const M = require('../dist/config/modes.js');
 const D = require('../dist/engine/export-doc.js');
 const FB = require('../dist/engine/feedback.js');
 
-test('创作模式九大（v2.325 小说并入改编、软广并入短视频、成年向并入电影），等级权限逐级开放', () => {
-  assert.strictEqual(M.CREATION_MODES.length, 9);
+test('创作模式 8 种（v2.329 三维重构），等级权限逐级开放', () => {
+  assert.strictEqual(M.CREATION_MODES.length, 8);
   assert.strictEqual(M.modeAvailable('tag', 'FREE'), true);
   assert.strictEqual(M.modeAvailable('interview', 'FREE'), false);
+  assert.strictEqual(M.modesForLevel('FREE').length, 1);
   assert.strictEqual(M.modesForLevel('BASIC').length, 4);
   assert.strictEqual(M.modesForLevel('ADVANCED').length, 7);
-  // 九大模式全部上线，专业版可用9个
-  assert.strictEqual(M.modesForLevel('PRO').length, 9);
-  // 第9种短视频、第10种软广均高级可用（与前端 wire-id 对齐）
-  assert.strictEqual(M.modeAvailable('video_short', 'ADVANCED'), true);
-  assert.strictEqual(M.modeAvailable('branded_skit', 'ADVANCED'), true);
-  assert.strictEqual(M.modeAvailable('branded_skit', 'PRO'), true);
-  assert.strictEqual(M.unlockLevel('branded_skit'), 'ADVANCED');
-  // v2.14 整合：工作台高级可用、长系列IP专业可用
-  assert.strictEqual(M.modeAvailable('hit_lab', 'ADVANCED'), true);
-  assert.strictEqual(M.modeAvailable('long_ip', 'ADVANCED'), false);
-  assert.strictEqual(M.modeAvailable('long_ip', 'PRO'), true);
+  assert.strictEqual(M.modesForLevel('PRO').length, 8);
+  // 话力成本分层：灵感式门槛下调为 BASIC，轨道级（爆款逆向）仍 PRO 把关
+  assert.strictEqual(M.modeAvailable('spark', 'BASIC'), true);
+  assert.strictEqual(M.modeAvailable('duel', 'ADVANCED'), true);
+  assert.strictEqual(M.modeAvailable('duel', 'BASIC'), false);
+  assert.strictEqual(M.modeAvailable('multiverse', 'ADVANCED'), false);
+  assert.strictEqual(M.modeAvailable('multiverse', 'PRO'), true);
+  assert.strictEqual(M.unlockLevel('multiverse'), 'PRO');
 });
-test('前端线上 wire-id 全部能归一（scene/reverse→hit_lab、novel→adapt、softad→video_short、xscript→film），9 模式不串模', () => {
+test('历史 wire-id 全部能归一（12 个旧 id 收敛为 8 模式，不丢项目）', () => {
   const wire = ['interview', 'adapt', 'tags', 'novel', 'interactive', 'hit_lab', 'hot', 'shortvideo', 'softad', 'xscript', 'longip', 'film'];
   const canon = wire.map((w) => M.canonicalModeId(w));
   assert.ok(canon.every(Boolean), '所有前端模式 id 必须可识别');
-  assert.strictEqual(new Set(canon).size, 9, '12个前端 wire-id 归一后收敛为9个 canonical 模式、不串模');
+  assert.strictEqual(new Set(canon).size, 6, '12 个前端 wire-id 全部有去处（收敛为 6 个 canonical 模式，其余 2 个新模式由前端直接发送）');
   assert.strictEqual(M.canonicalModeId('tags'), 'tag');
-  assert.strictEqual(M.canonicalModeId('shortvideo'), 'video_short');
-  assert.strictEqual(M.canonicalModeId('softad'), 'video_short');
-  assert.strictEqual(M.canonicalModeId('novel'), 'adapt');
-  assert.strictEqual(M.canonicalModeId('xscript'), 'film');
-  // 旧模式 id 向后兼容，统一进入整合后的工作台
-  assert.strictEqual(M.canonicalModeId('scene'), 'hit_lab');
-  assert.strictEqual(M.canonicalModeId('reverse'), 'hit_lab');
-  assert.strictEqual(M.canonicalModeId('longip'), 'long_ip');
-  assert.strictEqual(M.modeAvailable('reverse', 'FREE'), false);
-  assert.strictEqual(M.modeAvailable('tags', 'FREE'), true);
-  // v2.86 电影剧本模式已上线，不再是 coming_soon
+  assert.strictEqual(M.canonicalModeId('shortvideo'), 'spark');
+  assert.strictEqual(M.canonicalModeId('softad'), 'spark');
+  assert.strictEqual(M.canonicalModeId('novel'), 'spark');
+  assert.strictEqual(M.canonicalModeId('xscript'), 'persona');
+  assert.strictEqual(M.canonicalModeId('scene'), 'spark');
+  assert.strictEqual(M.canonicalModeId('reverse'), 'spark');
+  assert.strictEqual(M.canonicalModeId('longip'), 'multiverse');
+  assert.strictEqual(M.canonicalModeId('interactive'), 'tag');
   assert.strictEqual(M.isComingSoon('film'), false);
-  assert.strictEqual(M.modeAvailable('film', 'PRO'), true);
+  assert.strictEqual(M.modeAvailable('film', 'ADVANCED'), true);
+  assert.strictEqual(M.modeAvailable('tags', 'FREE'), true);
 });
-test('v2.14 名场面工作台两轨道分级：名场面拓展高级、爆款逆向批量专业', () => {
-  assert.strictEqual(M.trackAvailable('hit_lab', 'signature_scene', 'ADVANCED'), true);
-  assert.strictEqual(M.trackAvailable('hit_lab', 'hit_reverse', 'ADVANCED'), false);
-  assert.strictEqual(M.trackAvailable('hit_lab', 'hit_reverse', 'PRO'), true);
-  assert.strictEqual(M.trackUnlockLevel('hit_lab', 'hit_reverse'), 'PRO');
-  assert.strictEqual(M.canonicalHitLabTrack(undefined), 'signature_scene');
-  assert.strictEqual(M.canonicalHitLabTrack('reverse'), 'hit_reverse');
-  // 非工作台模式轨道闸门恒放行
+test('灵感式三条轨道分级：素材改编 BASIC、名场面 ADVANCED、爆款逆向 PRO', () => {
+  assert.strictEqual(M.trackAvailable('spark', 'material_rewrite', 'BASIC'), true);
+  assert.strictEqual(M.trackAvailable('hit_lab', 'material_rewrite', 'BASIC'), true);
+  assert.strictEqual(M.trackAvailable('spark', 'signature_scene', 'BASIC'), false);
+  assert.strictEqual(M.trackAvailable('spark', 'signature_scene', 'ADVANCED'), true);
+  assert.strictEqual(M.trackAvailable('spark', 'hit_reverse', 'ADVANCED'), false);
+  assert.strictEqual(M.trackAvailable('spark', 'hit_reverse', 'PRO'), true);
+  assert.strictEqual(M.trackUnlockLevel('spark', 'hit_reverse'), 'PRO');
+  assert.strictEqual(M.canonicalSparkTrack(undefined), 'material_rewrite');
+  assert.strictEqual(M.canonicalSparkTrack('reverse'), 'hit_reverse');
+  // 非灵感式模式轨道闸门恒放行
   assert.strictEqual(M.trackAvailable('tag', undefined, 'FREE'), true);
+  assert.strictEqual(M.trackUnlockLevel('tag', undefined), null);
 });
 
 function meta() {

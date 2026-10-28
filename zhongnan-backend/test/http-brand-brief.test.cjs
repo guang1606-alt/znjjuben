@@ -41,9 +41,10 @@ async function call(uid, level, body) {
 
 describe('剧情软广·品牌简报 HTTP 闭环（串行）', { concurrency: 1 }, () => {
   it('广告词命中：422 AD_CLAIM_BLOCKED 回传命中词，且不进入扣费流程', async () => {
-    mem._seedUser({ id: 'u_bb_bad', level: 'FREE', balance: 0 });
+    // v2.329：软广（branded_skit → 灵感式·广告脚本）为基础档能力，免费档在模式闸门即被拦
+    mem._seedUser({ id: 'u_bb_bad', level: 'BASIC', balance: 0 });
     mem._projects.set('p_bb_bad', { id: 'p_bb_bad', userId: 'u_bb_bad', bible: null, mode: 'branded_skit' });
-    const r = await call('u_bb_bad', 'FREE', {
+    const r = await call('u_bb_bad', 'BASIC', {
       projectId: 'p_bb_bad', brief,
       brandBrief: { brand: '橘隐', sellingPoint: '全网第一好喝，100%不胖，稳赚不赔' },
     });
@@ -54,9 +55,9 @@ describe('剧情软广·品牌简报 HTTP 闭环（串行）', { concurrency: 1 
   });
 
   it('品牌名缺失：400 且带 field，不进入扣费流程', async () => {
-    mem._seedUser({ id: 'u_bb_miss', level: 'FREE', balance: 0 });
+    mem._seedUser({ id: 'u_bb_miss', level: 'BASIC', balance: 0 });
     mem._projects.set('p_bb_miss', { id: 'p_bb_miss', userId: 'u_bb_miss', bible: null, mode: 'branded_skit' });
-    const r = await call('u_bb_miss', 'FREE', {
+    const r = await call('u_bb_miss', 'BASIC', {
       projectId: 'p_bb_miss', brief,
       brandBrief: { brand: '   ', sellingPoint: '0糖也有烘焙香' },
     });

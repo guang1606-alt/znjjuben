@@ -47,7 +47,7 @@
     document.documentElement.setAttribute('data-lang', lang);
     document.documentElement.setAttribute('lang', lang === 'en' ? 'en' : 'zh-CN');
     document.title = lang === 'en' ? 'ZhongnanJi · AGI Screenwriting Master' : '终南集 · 人工通用智能（AGI）编剧大师';
-    renderStaticText(); renderModes(); renderHome(); renderSelects(); renderAuthButton();
+    renderStaticText(); renderModes(); renderHome(); renderSelects(); renderScriptTypes(); renderAuthButton();
     _applyToolboxHints(); // A3 工具箱卡片分层：静态卡注入方法论一句话提示行（随语言刷新）
     // v2.188 初始化同步守卫：applyLang 期间 syncTagBench/syncModeBrief 不主动调 openWorkbench（避免 layer 自动展开覆盖 12 模式主页）
     _initSyncing = true;
@@ -91,11 +91,17 @@
     syncSubAllLabel();
   }
 
-  /* ---------- 12 模式 ---------- */
-  let selectedMode = 'tags';
+  /* ---------- v2.329 八模式（模式 × 剧本类型 × 输出语言 三维） ---------- */
+  let selectedMode = 'tag';
   let draftProject = null;
-  // v2.14 名场面工作台内部轨道：名场面拓展(默认,高级) / 爆款逆向批量(专业)
-  let selectedTrack = 'signature_scene';
+  // 灵感式内部轨道：素材改编(默认,基础) / 名场面拓展(高级) / 爆款逆向批量(专业)
+  let selectedTrack = 'material_rewrite';
+  // 剧本类型：与后端 SCRIPT_TYPES 对齐；免费档默认真人实拍短剧
+  let selectedScriptType = 'live_action_drama';
+  // v2.329 契约数据（data/constants.js 已加载；与后端 modes.ts 同源）
+  const SCRIPT_TYPES = (typeof window !== 'undefined' && window.ZN_DATA && window.ZN_DATA.SCRIPT_TYPES) || [];
+  const OUT_LANGS = (typeof window !== 'undefined' && window.ZN_DATA && window.ZN_DATA.OUT_LANGS) || [];
+  const TIER_NAME = { basic: '基础', advanced: '高级', pro: '专业' };
   // 内部账户（超管杨光本人手机号 + 杨光指定的副管理员）：创作全免费，前端等级墙一律按专业级开放
   const _RANK = { free: 0, basic: 1, advanced: 2, pro: 3, paid: 3 };
   function isStaffAcct(me) { const m = me || meCache; return !!(m && (m.staff || m.isAdmin)); }
@@ -173,7 +179,7 @@
           return;
         }
         clearDraftProject();
-        selectedMode = m.id; if (m.id !== 'hit_lab') selectedTrack = 'signature_scene'; renderModes(); syncTagBench(); syncModeBrief();
+        selectedMode = m.id; if (m.id !== 'spark') selectedTrack = 'material_rewrite'; renderModes(); syncTagBench(); syncModeBrief();
       };
       grid.appendChild(card);
     });
@@ -181,8 +187,8 @@
   }
   // ═══ MODULE: misc (220行, 5fn) ═══ v2.190 清爽首页渲染
   /* ---------- v2.190 清爽首页渲染 ---------- */
-  // v2.325 快捷创作：12 种整合为 9 种，HOME_QUICK_MODES 仍精选 6 个常用；novel 并入 adapt、softad 并入 shortvideo
-  const HOME_QUICK_MODES = ['interview', 'adapt', 'tags', 'interactive', 'hot', 'shortvideo'];
+  // v2.329 八模式：快捷创作精选 6 个常用（标签免费 + 采访/日记/灵感基础 + 热点/双人对撞高级）
+  const HOME_QUICK_MODES = ['tag', 'interview', 'diary', 'spark', 'hot', 'duel'];
   const HOME_TOOLS = (typeof window !== 'undefined' && window.ZN_DATA && window.ZN_DATA.HOME_TOOLS) || [
     { id: 'toolPitch', key: 'tbCardPitch', desc: 'tbCardPitchP', cost: 'tbCostPitch' },
     { id: 'toolRead', key: 'tbCardRead', desc: 'tbCardReadP', cost: 'tbCostRead' },
@@ -211,7 +217,7 @@
             switchView('vip'); return;
           }
           switchView('studio');
-          selectedMode = m.id; if (m.id !== 'hit_lab') selectedTrack = 'signature_scene';
+          selectedMode = m.id; if (m.id !== 'spark') selectedTrack = 'material_rewrite';
           renderModes(); syncTagBench(); syncModeBrief();
         };
         qg.appendChild(card);
@@ -394,8 +400,8 @@
   $('xMatureBuy').onclick = () => { $('xMatureModal').classList.add('hidden'); placeOrder('XSCRIPT_M'); };
   $('xMatureEnter').onclick = () => {
     $('xMatureModal').classList.add('hidden');
-    // v2.325 X剧本（mature_x）已整合进电影剧本创作（film），支持犯罪惊悚/黑暗人性等成熟题材，露骨色情仍硬拦截
-    selectedMode = 'film'; renderModes(); syncModeBrief();
+    // v2.329 X剧本（mature_x）归角色自述式 + 电影剧本类型，支持犯罪惊悚/黑暗人性等成熟题材，露骨色情仍硬拦截
+    selectedMode = 'persona'; selectedScriptType = 'feature_film'; renderModes(); renderScriptTypes(); syncModeBrief();
     xnSay(lang === 'en' ? 'X-Script feature merged into Film mode — try it for crime thriller / dark human nature stories (explicit porn still blocked).' : 'X剧本已整合进电影剧本创作，支持犯罪惊悚/黑暗人性等成熟题材（露骨色情仍会被硬拦截）。');
   };
   $('xMatureRevoke').onclick = async () => {
@@ -413,6 +419,12 @@
     // v2.328 自动匹配：用户只写想做什么，模式/轨道/策略由后端意图路由决定
     auto: { zh: ['直接写你想做什么，系统自动匹配模式', '例如「做个30秒抖音带货口播，前三秒要抓人」「把这部小说改成竖屏短剧」「拆解这部剧的爆款结构，批量出新本」——不用自己选模式，生成前会告诉你匹配到了什么，可随时改。'], en: ['Just describe what you want — mode is auto-picked', 'e.g. "a 30s TikTok voiceover with a 3-second hook", "adapt this novel into a vertical drama", "deconstruct this hit and batch out safe new drafts". No mode picking needed; we tell you what we matched before generating, and you can change it.'] },
     interview: { zh: ['把你零散的想法先倒在这里', '可以想到哪写到哪：核心创意、世界观、人物、想要的冲突都行；小南会在出本时把它们结构化，也可随时回来补充。'], en: ['Dump your scattered ideas here', 'Write freely: core idea, world, characters, conflicts. Xiaonan structures them at generation; you can come back anytime.'] },
+    tag: { zh: ['标签就是你的创作基因', '在下方标签工作台选题材、人设、冲突等维度，系统按组合定向出本；想更准可在这里补一句故事方向。'], en: ['Tags are your creative DNA', 'Pick genre / persona / conflict dimensions in the tag bench below; the system drafts by combination. Add one line of direction here to sharpen it.'] },
+    diary: { zh: ['把今天想写的日记写在这里（仅你可见）', '写真实感受即可。落稿前必须由你授权：摘要 / 指定段落 / 全部 三档任选，随时可撤回；未经授权不会进入剧本。'], en: ['Write today’s diary here (visible only to you)', 'Just write what you really feel. Nothing becomes a script until you authorize it: summary / selected passages / full, revocable anytime.'] },
+    spark: { zh: ['写一句话灵感，或粘贴已有素材', '点「AI 提案」让小南先给方向，多轮对话聊到满意；只有你点确认后才落稿。素材改编可在下方切换轨道（素材改编/名场面/爆款逆向）。'], en: ['One-line spark, or paste existing material', 'Tap “AI pitch” for directions, talk it out over turns, and nothing is written until you confirm. Switch tracks below (material rewrite / signature scene / hit reverse).'] },
+    persona: { zh: ['先定这个「我」是谁', '写清第一人称叙述者的身份、想要什么、最怕什么，以及他/她可能对自己撒的谎；系统用不可靠叙述在前半埋线、后半反转。'], en: ['Define who “I” is first', 'Give the first-person narrator’s identity, want, deepest fear and the lie they may tell themselves; the unreliable narration plants seeds early and pays off as a twist.'] },
+    duel: { zh: ['写清对撞的两个人与各自不可退让的立场', 'A 要什么、B 要什么、为什么谁都不能退；系统让两人轮流出招逐轮加码，直到一方无法再退或被迫掀底牌。'], en: ['Describe the two opponents and their non-negotiable stances', 'What A wants, what B wants, why neither can retreat; they trade moves round by round, escalating until one cannot retreat or must show their card.'] },
+    multiverse: { zh: ['写清那个「关键选择」', '同一个选择分出 2-4 条世界线：每条线写清路线与代价，最后合并回主线（或明确留白）；系统保证各线自洽、代价可回溯。'], en: ['Describe the pivotal choice', 'One choice forks 2–4 worldlines; state each route and its cost, then merge back to the main line (or leave it open). Every branch stays coherent and its cost traceable.'] },
     adapt: { zh: ['粘贴要改编的原作片段，或上传文件（自有/已授权内容）', '支持 txt/md/docx/epub/pdf（≤8MB），上传后自动提取正文；并在末尾写清想要续写/衍生/联动/同人中的哪种、原著尊重度高低。'], en: ['Paste the source you own/license, or upload a file', 'txt/md/docx/epub/pdf up to 8MB are auto-extracted. Add one line: sequel/spin-off/crossover/fanfic and how faithful to stay.'] },
     novel: { zh: ['粘贴小说原文，或上传小说文件（txt/md/docx/epub/pdf）', '上传后自动识别章节；注明必须保留的名场面或人物；系统会压缩冗余、按竖屏短剧节奏重排钩子与冲突。'], en: ['Paste novel chapters or upload a file (txt/md/docx/epub/pdf)', 'Chapters are auto-detected; mark must-keep scenes/characters; redundant narration is compressed into vertical-drama pacing.'] },
     interactive: { zh: ['描述主线起点与关键选择点', '分支要素填下方分支简报：选准分支风格（后果/关系/道德/悬疑）与利害压量；系统自动做闭环校验，确保每条支路有路可走。'], en: ['Describe the main line start and key choice points', 'Fill the branch brief below and pick the branch style (consequence/relationship/moral/mystery) and stakes; the system validates branch closure — every path leads somewhere.'] },
@@ -424,9 +436,9 @@
     default: { zh: ['用一句话描述你的故事创意', '谁、遇到什么麻烦、准备怎么反击；越具体出本越准。'], en: ['One-line story idea', 'Who, what trouble, how they fight back — the more specific, the better.'] },
   };
   function syncModeBrief() {
-    if (draftProject && selectedMode !== 'adapt') clearDraftProject();
+    if (draftProject && selectedMode !== 'spark') clearDraftProject();
     const panel = $('modeBriefPanel'); if (!panel) return;
-    const show = selectedMode !== 'tags';
+    const show = selectedMode !== 'tag';
     panel.classList.toggle('hidden', !show);
     if (!show) return;
     const cfg = MODE_BRIEF[selectedMode] || MODE_BRIEF.default;
@@ -434,17 +446,18 @@
     $('modeBriefLabel').textContent = label;
     $('modeBriefTip').textContent = tip;
     const ta = $('modeBrief'); if (ta) ta.placeholder = label;
-    // v2.14 名场面工作台：轨道切换（名场面拓展=高级；爆款逆向批量=专业，等级不足引导升级）
+    // v2.329 灵感式轨道：素材改编=基础（默认）/ 名场面拓展=高级 / 爆款逆向批量=专业
     const trackBox = $('hitLabTracks');
     if (trackBox) {
-      const showTracks = selectedMode === 'hit_lab';
+      const showTracks = selectedMode === 'spark';
       trackBox.classList.toggle('hidden', !showTracks);
       if (showTracks) {
         const RANK = _RANK;
         const myRank = acctRank();
         const TRACKS = [
-          { id: 'signature_scene', rank: 2, zh: '① 名场面拓展（高级）', en: '① Signature scene (Advanced)' },
-          { id: 'hit_reverse', rank: 3, zh: '② 爆款逆向·批量（专业）', en: '② Hit reverse batch (Pro)' },
+          { id: 'material_rewrite', rank: 1, zh: '① 素材改编（基础）', en: '① Material rewrite (Basic)' },
+          { id: 'signature_scene', rank: 2, zh: '② 名场面拓展（高级）', en: '② Signature scene (Advanced)' },
+          { id: 'hit_reverse', rank: 3, zh: '③ 爆款逆向·批量（专业）', en: '③ Hit reverse batch (Pro)' },
         ];
         trackBox.innerHTML = '';
         TRACKS.forEach((tk) => {
@@ -453,16 +466,16 @@
           b.textContent = (lang === 'en' ? tk.en : tk.zh) + (tk.rank > myRank ? (lang === 'en' ? ' 🔒' : ' 🔒升级') : '');
           b.className = 'track-btn' + (selectedTrack === tk.id ? ' on' : '');
           b.onclick = () => {
-            if (tk.rank > myRank) { xnSay(lang === 'en' ? 'The reverse-engineering batch track needs Pro membership.' : '爆款逆向批量是专业版轨道，已为你打开会员专区～'); if (typeof switchView === 'function') switchView('vip'); return; }
+            if (tk.rank > myRank) { xnSay(tk.rank === 3 ? (lang === 'en' ? 'The reverse-engineering batch track needs Pro membership.' : '爆款逆向批量是专业版轨道，已为你打开会员专区～') : (lang === 'en' ? 'The signature-scene track needs Advanced membership.' : '名场面拓展是高级版轨道，已为你打开会员专区～')); if (typeof switchView === 'function') switchView('vip'); return; }
             selectedTrack = tk.id; syncModeBrief();
           };
           trackBox.appendChild(b);
         });
       }
     }
-    // 仅改编/小说模式显示文件上传
+    // 仅灵感式·素材改编轨道显示文件上传（原作/小说并入此轨道）
     const up = $('briefUpload');
-    if (up) up.classList.toggle('hidden', !(selectedMode === 'adapt' || selectedMode === 'novel'));
+    if (up) up.classList.toggle('hidden', !(selectedMode === 'spark' && selectedTrack === 'material_rewrite'));
     initBriefUpload();
     // v2.92 采访式创作：选中该模式时展示采访会话面板
     const ivp = $('interviewPanel');
@@ -470,10 +483,10 @@
       ivp.classList.toggle('hidden', selectedMode !== 'interview');
       if (selectedMode === 'interview') initInterviewPanel();
     }
-    // v2.93 剧情软广：选中该模式时展示结构化品牌简报面板（v2.325 shortvideo 合并 softad，也支持品牌简报可选）
+    // v2.329 品牌简报按剧本类型显示（广告/软广脚本），不再绑定模式
     const bbp = $('brandPanel');
     if (bbp) {
-      const showBrand = selectedMode === 'softad' || selectedMode === 'shortvideo';
+      const showBrand = selectedScriptType === 'ad_script';
       bbp.classList.toggle('hidden', !showBrand);
       if (showBrand) renderBrandPanel();
     }
@@ -483,34 +496,32 @@
       tbp.classList.toggle('hidden', selectedMode !== 'hot');
       if (selectedMode === 'hot') renderTrendPanel();
     }
-    // v2.95 互动分支：选中该模式时展示结构化分支简报面板（v2.188 修复重复 ID，引用 branchBriefPanel）
+    // v2.329 互动分支简报按剧本类型显示（互动剧）
     const brp = $('branchBriefPanel');
     if (brp) {
-      brp.classList.toggle('hidden', selectedMode !== 'interactive');
-      if (selectedMode === 'interactive') renderBranchPanel();
+      brp.classList.toggle('hidden', selectedScriptType !== 'interactive_drama');
+      if (selectedScriptType === 'interactive_drama') renderBranchPanel();
     }
-    // v2.96 原作/原文参考：adapt/novel/hit_lab 模式展示原文输入框（用于 n-gram 重合度侵权检测）
+    // v2.329 原作/原文参考：灵感式展示原文输入框（用于 n-gram 重合度侵权检测）
     const stp = $('sourceTextPanel');
     if (stp) {
-      const showSource = selectedMode === 'adapt' || selectedMode === 'novel' || selectedMode === 'hit_lab';
+      const showSource = selectedMode === 'spark';
       stp.classList.toggle('hidden', !showSource);
       if (showSource) renderSourceTextPanel();
     }
     // v2.188 主动调 openWorkbench：避免"panel 已是非 hidden 但 layer 未展开"边界（用户重复选当前 mode 时 Observer 不触发）
     if (typeof openWorkbench === 'function' && !_initSyncing) {
-      const _target = {
-        interview: 'interviewPanel',
-        softad: 'brandPanel', shortvideo: 'brandPanel',
-        hot: 'trendPanel',
-        interactive: 'branchBriefPanel',
-      }[selectedMode];
+      const _target = selectedMode === 'interview' ? 'interviewPanel'
+        : selectedMode === 'hot' ? 'trendPanel'
+        : selectedScriptType === 'ad_script' ? 'brandPanel'
+        : selectedScriptType === 'interactive_drama' ? 'branchBriefPanel'
+        : selectedMode === 'spark' ? 'sourceTextPanel' : '';
       if (_target) openWorkbench(_target);
-      else if (selectedMode === 'adapt' || selectedMode === 'novel' || selectedMode === 'hit_lab') openWorkbench('sourceTextPanel');
     }
     // v2.267 [P1-1] 纯内联简报模式（shortvideo：有 modeBrief 但无专属工作台面板）：
     // 点击卡片后把内联简报区平滑滚入视口并聚焦输入框，避免"点了没反应"
     // （#workbenchLayer 不展开、简报区在卡片网格下方不可见）。初始化/语言同步期间不滚。
-    if (!_initSyncing && !['interview', 'softad', 'hot', 'interactive', 'adapt', 'novel', 'hit_lab', 'tags'].includes(selectedMode)) {
+    if (!_initSyncing && !['interview', 'hot', 'spark', 'tag'].includes(selectedMode) && selectedScriptType !== 'ad_script' && selectedScriptType !== 'interactive_drama') {
       const _bp = $('modeBriefPanel');
       if (_bp && !_bp.hidden) {
         _bp.scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -579,9 +590,9 @@
     xnSay(msg);
   }
   function hideBrandError() { const box = $('bbError'); if (box) { box.textContent = ''; box.style.display = 'none'; } }
-  /** 返回 { brandBrief } 片段；softad / shortvideo 模式下缺必填返回 null（已弹错），其余模式返回 {} */
+  /** 返回 { brandBrief } 片段；剧本类型为广告/软广脚本时缺必填返回 null（已弹错），其余返回 {} */
   function brandBriefPayload() {
-    if (selectedMode !== 'softad' && selectedMode !== 'shortvideo') return {};
+    if (selectedScriptType !== 'ad_script' || !$('bbBrand')) return {};
     // @module tags
     const v = (id) => String($(id)?.value || '').trim();
     const brand = v('bbBrand'); const sellingPoint = v('bbSelling');
@@ -735,7 +746,7 @@
   }
   function hideBranchError() { const box = $('brError'); if (box) { box.textContent = ''; box.style.display = 'none'; } }
   function branchBriefPayload() {
-    if (selectedMode !== 'interactive') return {};
+    if (selectedScriptType !== 'interactive_drama' || !$('brMain')) return {};
     const v = (id) => String($(id)?.value || '').trim();
     const mainLine = v('brMain'); const choicePoints = v('brChoice');
     if (mainLine.length < 4 || choicePoints.length < 4) { showBranchError(BRANCH_UI_DICT().required); return null; }
@@ -780,7 +791,7 @@
     sourceTextRenderedLang = lang;
   }
   function sourceTextPayload() {
-    if (selectedMode !== 'adapt' && selectedMode !== 'novel' && selectedMode !== 'hit_lab') return {};
+    if (selectedMode !== 'spark') return {};
     const v = String($('sourceText')?.value || '').trim();
     if (v.length < 10) return {};
     return { sourceText: v };
@@ -1078,7 +1089,7 @@
           if (!j.text) { setStatus(j.note || (lang === 'en' ? 'No text extracted' : '未提取到文本'), true); return; }
           // v2.319 原文三模式（改编/小说/名场面）提取的正文是「被改编原作」，必须进原文框供 n-gram 版权闸门使用，
           // 绝不能混进创意 brief（那会把原作原文当成用户自己的创意喂给架构师）；其余模式仍进创意简报框。
-          const isSourceMode = selectedMode === 'adapt' || selectedMode === 'novel' || selectedMode === 'hit_lab';
+          const isSourceMode = selectedMode === 'spark';
           const ta = isSourceMode ? $('sourceText') : $('modeBrief');
           if (ta) ta.value = j.text + (ta.value.trim() ? '\n\n' + ta.value.trim() : '');
           const ch = j.chapters && j.chapters.length ? (lang === 'en' ? `, ${j.chapters.length} chapters` : `，识别 ${j.chapters.length} 章`) : '';
@@ -1099,7 +1110,14 @@
   let tagDimInited = false, tagBusy = false, tagSearchTimer = null, lastPool = [];
   let tagPoolSeq = 0; // v2.258 起：标签池共享请求序号（v2.259 维度切换/搜索/清池共用，慢响应不得覆盖新池）
     // @module tags
-  const outLocale = () => (($('outLang') && $('outLang').value === 'en') ? 'en' : 'zh');
+  // v2.329 /episodes 的 lang 只接受 zh/en（引擎提示词语言）；剧本输出语种由 bible.outputLang 另行注入
+  const outLocale = () => {
+    const v = $('outLang') ? $('outLang').value : '';
+    if (v === 'zh' || v === 'en') return v;
+    return lang === 'en' ? 'en' : 'zh';
+  };
+  // 剧本输出语言（10 语种），与后端 OUTPUT_LANGUAGES 对齐
+  const outputLangValue = () => ($('outLang') ? $('outLang').value : '') || 'zh';
   function tagEnLabel(zh) {
     const items = tagDirector && tagDirector.english && tagDirector.english.items;
     const hit = Array.isArray(items) && items.find((x) => x.zh === zh);
@@ -1107,7 +1125,7 @@
   }
   function syncTagBench() {
     const bench = $('tagBench'); if (!bench) return;
-    const show = selectedMode === 'tags';
+    const show = selectedMode === 'tag';
     bench.classList.toggle('hidden', !show);
     if (!show) return;
     if (!tagDimInited) { initTagBench(); tagDimInited = true; }
@@ -1154,7 +1172,7 @@
     $('tagRecommendBtn').onclick = () => recommendTags();
     $('tagClearBtn').onclick = () => { tagChosen = []; tagDirector = null; ++tagPoolSeq; renderTagChosen(); renderTagPool([]); $('tagWhy').classList.add('hidden'); $('tagReport').textContent = ''; xnSay(lang === 'en' ? 'Cleared.' : '已清空，可重新随机或搜索标签。'); };
     const ol = $('outLang'); if (ol) ol.addEventListener('change', () => {
-      if (selectedMode === 'tags') smartRandomTags(true);
+      if (selectedMode === 'tag') smartRandomTags(true);
       // v2.44 输出语言变化时，策略卡（钩子/节奏/台词/情绪/人物）按新语言重载
       hookOptsLoaded = false; creationStrategiesLoaded = false;
       if ($('hookPickers')?.children.length) loadHookOptions().catch(() => {});
@@ -1528,16 +1546,46 @@
       en: [['红果短剧','Hongguo'],['抖音','Douyin'],['快手','Kuaishou'],['ReelShort','ReelShort'],['DramaBox','DramaBox']] },
     engine: { zh: [['STANDARD','标准（性价比）'],['HIGH','高阶（更强组合）'],['PRO','专业（最强组合）']],
       en: [['STANDARD','Standard (balanced)'],['HIGH','High (stronger mix)'],['PRO','Pro (strongest mix)']] },
-    outLang: { zh: [['zh','中文'],['en','English'],['ja','日本語'],['ko','한국어'],['es','Español'],['ar','العربية']],
-      en: [['zh','Chinese'],['en','English'],['ja','Japanese'],['ko','Korean'],['es','Spanish'],['ar','Arabic']] },
+    outLang: { zh: [['zh','中文'],['en','English'],['ja','日本語'],['ko','한국어'],['es','Español'],['pt','Português'],['th','ไทย'],['id','Bahasa Indonesia'],['vi','Tiếng Việt'],['ar','العربية']],
+      en: [['zh','Chinese'],['en','English'],['ja','Japanese'],['ko','Korean'],['es','Spanish'],['pt','Portuguese'],['th','Thai'],['id','Indonesian'],['vi','Vietnamese'],['ar','Arabic']] },
   };
   function renderSelects() {
     [['platform', 'platform'], ['engine', 'engine'], ['outLang', 'outLang']].forEach(([id, key]) => {
       const el = $(id); if (!el) return;
       const cur = el.value || SELECT_OPTS[key][lang][0][0];
-      el.innerHTML = SELECT_OPTS[key][lang].map(([v, lab]) => `<option value="${v}">${lab}</option>`).join('');
+      const my = acctRank();
+      el.innerHTML = SELECT_OPTS[key][lang].map(([v, lab]) => {
+        // v2.329 输出语言按会员档解锁（与后端 LANGUAGE_LOCKED 同源）
+        if (id !== 'outLang' || !OUT_LANGS.length) return `<option value="${v}">${lab}</option>`;
+        const meta = OUT_LANGS.find((l) => l.code === v);
+        const locked = meta ? (_RANK[meta.min] ?? 0) > my : false;
+        return `<option value="${v}"${locked ? ' disabled' : ''}>${lab}${locked ? (lang === 'en' ? ` · 🔒 ${meta.min}` : ` · 🔒 需${TIER_NAME[meta.min] || ''}会员`) : ''}</option>`;
+      }).join('');
       el.value = cur;
+      // 当前值被降级锁定时回落到第一个可用项（如换账号/退出后）
+      if (!el.value) { const i = [...el.options].findIndex((o) => !o.disabled); if (i >= 0) el.selectedIndex = i; }
     });
+  }
+  // v2.329 剧本类型（9 种，按会员档解锁）；选类型会影响品牌简报/分支简报的显隐
+  function renderScriptTypes() {
+    const el = $('scriptTypeSel');
+    if (!el) return;
+    if (!SCRIPT_TYPES.length) { $('scriptTypeBar')?.classList.add('hidden'); return; }
+    const my = acctRank();
+    let want = SCRIPT_TYPES.some((x) => x.id === selectedScriptType) ? selectedScriptType : 'live_action_drama';
+    const wantMeta = SCRIPT_TYPES.find((x) => x.id === want);
+    if (wantMeta && (_RANK[wantMeta.min] ?? 0) > my) want = 'live_action_drama';
+    selectedScriptType = want;
+    el.innerHTML = SCRIPT_TYPES.map((x) => {
+      const locked = (_RANK[x.min] ?? 0) > my;
+      const name = lang === 'en' ? x.en : x.zh;
+      return `<option value="${x.id}"${locked ? ' disabled' : ''}>${name}${locked ? (lang === 'en' ? ` · 🔒 ${x.min}` : ` · 🔒 需${TIER_NAME[x.min] || ''}会员`) : ''}</option>`;
+    }).join('');
+    el.value = want;
+    if (!el._znBound) {
+      el._znBound = true;
+      el.addEventListener('change', () => { selectedScriptType = el.value || 'live_action_drama'; syncModeBrief(); });
+    }
   }
 
   // ═══ MODULE: xiaonan (62行, 0fn) ═══ 小南
@@ -1678,7 +1726,7 @@
     // @module ui
     const d = (ev && ev.detail) || {};
     switchView('studio');
-    selectedMode = 'tags';
+    selectedMode = 'tag';
     renderModes(); syncTagBench(); syncModeBrief();
     const ideaEl = $('tagIdea');
     if (ideaEl && d.logline) ideaEl.value = String(d.logline).slice(0, 80);
@@ -2425,7 +2473,7 @@
     if (u) {
       const lv = userRoleLabel(u);
       btn.textContent = lv + ' · ' + t('logout');
-      btn.onclick = () => { Api.auth.logout(); meCache = null; capsCache = null; refreshAdminNav(); renderAuthButton(); renderModes(); refreshListenBtn(); xnSay(lang === 'en' ? 'Signed out.' : '已退出登录'); };
+      btn.onclick = () => { Api.auth.logout(); meCache = null; capsCache = null; refreshAdminNav(); renderAuthButton(); renderModes(); renderSelects(); renderScriptTypes(); refreshListenBtn(); xnSay(lang === 'en' ? 'Signed out.' : '已退出登录'); };
     } else {
       btn.textContent = t('login');
       btn.onclick = () => openAuth('login');
@@ -2520,16 +2568,16 @@
   function clearDraftProject() { draftProject = null; syncDraftProject(); }
   function resumeAdaptationProject(project) {
     if (!project?.id) return;
-    const isNovel = project.mode === 'novel';
     const draft = project?.bible?.adaptationDraft;
     const hasAdaptBrief = !!draft?.brief;
-    const hasNovelSource = isNovel && typeof project.bible?.sourceText === 'string' && project.bible.sourceText.trim().length >= 10;
-    if (!hasAdaptBrief && !hasNovelSource) return; // 两种模式都不满足门槛就放弃（与作品库 canResume 对称）
+    const hasSource = typeof project.bible?.sourceText === 'string' && project.bible.sourceText.trim().length >= 10;
+    if (!hasAdaptBrief && !hasSource) return; // 不满足门槛就放弃（与作品库 canResume 对称）
     draftProject = project;
-    selectedMode = isNovel ? 'novel' : 'adapt'; // v2.322 novel 模式切回 novel，而非硬编码 adapt
-    switchView('studio'); renderModes(); syncTagBench(); syncModeBrief();
-    // v2.322 novel 没有改编大纲，modeBrief 留空让用户写本集方向；adapt 才回填 brief
-    $('modeBrief').value = isNovel ? '' : (draft.brief || '');
+    // v2.329 改编/小说统一归灵感式·素材改编轨道
+    selectedMode = 'spark'; selectedTrack = 'material_rewrite';
+    selectedScriptType = project.bible?.scriptType || 'live_action_drama';
+    switchView('studio'); renderModes(); renderScriptTypes(); syncTagBench(); syncModeBrief();
+    $('modeBrief').value = draft?.brief || '';
     $('episodes').value = project.totalEps || 20;
     $('engine').value = project.engineTier || 'STANDARD';
     if ($('scriptFormatSel')) {
@@ -2541,9 +2589,9 @@
     if ($('sourceText')) $('sourceText').value = project.bible?.sourceText || draft?.sourceText || '';
     syncDraftProject(); closeWorkbench();
     $('modeBrief').focus();
-    xnSay(isNovel
-      ? (lang === 'en' ? 'Novel source restored. Describe this episode direction, then generate.' : '小说原文已回填，填写本集方向后点击「生成剧本」即可继续。')
-      : (lang === 'en' ? 'Your adaptation brief is ready. Review it, then generate this project.' : '已恢复改编大纲，确认简报后点击「生成剧本」即可继续这个项目。'));
+    xnSay(hasAdaptBrief
+      ? (lang === 'en' ? 'Your adaptation brief is ready. Review it, then generate this project.' : '已恢复改编大纲，确认简报后点击「生成剧本」即可继续这个项目。')
+      : (lang === 'en' ? 'Source restored. Describe this episode direction, then generate.' : '原文已回填，填写本集方向后点击「生成剧本」即可继续。'));
   }
   window.addEventListener('zn-adaptation-project', (event) => resumeAdaptationProject(event.detail?.project));
   let worksReqSeq = 0; // v2.274：作品搜索同会话请求序号，弱网乱序时旧查询响应一律作废（同 mkReqSeq/feedReqSeq 范式）
@@ -2794,8 +2842,8 @@
       // v2.322 novel 模式与 adapt 对称：sourceText 已立项持久化进 bible，
       // 作品库必须给"继续创作"入口，否则用户刷新页面后想生成第 2 集只能重新立项（造孤儿项目+原文重贴）
       const hasAdaptDraft = !!p.bible?.adaptationDraft?.brief;
-      const hasNovelSource = p.mode === 'novel' && typeof p.bible?.sourceText === 'string' && p.bible.sourceText.trim().length >= 10;
-      const canResume = hasAdaptDraft || hasNovelSource;
+      const hasSource = typeof p.bible?.sourceText === 'string' && p.bible.sourceText.trim().length >= 10;
+      const canResume = hasAdaptDraft || hasSource;
       const resumeBtn = canResume ? `<button type="button" class="btn-primary" id="worksResumeDraft">${lang === 'en' ? 'Continue creation' : '继续创作'}</button>` : '';
       $('epsList').innerHTML = znEmptyHtml(lang === 'en' ? 'No finished episodes yet.' : '暂无成稿分集。') + resumeBtn;
       if (canResume) $('worksResumeDraft').onclick = () => resumeAdaptationProject(p);
@@ -2978,7 +3026,7 @@
     populateProfileOptions();
     $('inRegion').value = me.region || ''; $('inAgeBand').value = me.ageBand || '';
     $('inGender').value = me.gender || ''; $('inPersonalized').checked = me.personalized !== false;
-    refreshAdminNav(); renderModes(); renderHome(); staffCostPatch(); loadCaps(); loadCastAssets(); loadPropAssets(); loadSceneAssets(); // v2.151/v2.159/v2.161 登录后预取角色/道具/场景资产清单
+    refreshAdminNav(); renderModes(); renderHome(); renderSelects(); renderScriptTypes(); staffCostPatch(); loadCaps(); loadCastAssets(); loadPropAssets(); loadSceneAssets(); // v2.151/v2.159/v2.161 登录后预取角色/道具/场景资产清单
   }
   // v2.71 显式画像下拉（与后端 profile-mapping 白名单一致；幂等，只填充一次）
   const PF_REGIONS = ['黑龙江','吉林','辽宁','北京','天津','陕西','甘肃','宁夏','青海','新疆','河南','河北','山西','内蒙古','山东','四川','重庆','湖南','湖北','上海','江苏','浙江','安徽','广东','广西','海南','福建','台湾','云南','贵州','江西','海外','其他'];
@@ -6213,13 +6261,13 @@
     _retryProject = null;
     _retryBrief = null;
     const account = capturePrivateSession();
-    const generationDraft = selectedMode === 'adapt' ? draftProject : null;
+    const generationDraft = selectedMode === 'spark' ? draftProject : null;
     for (const loadAssets of [loadCastAssets, loadPropAssets, loadSceneAssets]) {
       await loadAssets();
       if (!isPrivateSessionCurrent(account)) return;
     }
     let brief, projTitle;
-    const useTagBench = selectedMode === 'tags' && $('tagBench') && !$('tagBench').classList.contains('hidden');
+    const useTagBench = selectedMode === 'tag' && $('tagBench') && !$('tagBench').classList.contains('hidden');
     if (reuseBrief != null) {
       // v2.277 失败重试：沿用上一次已建项目的简报与标题，跳过输入框/tagBench 校验（失败时面板可能已不在原视图）
       brief = reuseBrief;
@@ -6272,7 +6320,7 @@
       let project = generationDraft || reuseProject; // v2.277 episodes 阶段失败重试：项目已建行，复用之，不再 POST /projects 造孤儿
       if (!project) {
         const pr = await Api.request('/api/generate/projects', { method: 'POST', body: JSON.stringify({
-          title: projTitle, mode: selectedMode, ...(selectedMode === 'hit_lab' ? { track: selectedTrack } : {}), totalEps, engineTier: $('engine').value,
+          title: projTitle, mode: selectedMode, scriptType: selectedScriptType, outputLang: outputLangValue(), ...(selectedMode === 'spark' ? { track: selectedTrack } : {}), totalEps, engineTier: $('engine').value,
           // v2.328 自动匹配：创意随立项一起提交，后端据此路由模式/轨道（不手选）
           ...(selectedMode === 'auto' ? { brief: brief.trim() } : {}),
           // v2.319 tags 模式：选中标签结构化上传（中文原名，服务端消费端按中文精确匹配；不再只依赖纯文本 brief）
@@ -6312,7 +6360,7 @@
       renderTaskQueue();
       session.briefText = brief.trim(); // v2.277 仅 episodes 阶段留存原简报：失败后 #failRetry 凭此 + session.project 安装复用句柄
       const res = await Api.request('/api/generate/episodes', { method: 'POST', signal: abortCtrl.signal,
-        body: JSON.stringify({ projectId: project.id, brief: brief.trim(), engineTier: $('engine').value, lang: outLocale(), ...hookPayload(), ...beatPayload(), ...(aigcPayload()), ...(selectedMode === 'hit_lab' ? { track: selectedTrack } : {}), ...bbPayload, ...tbPayload, ...brPayload, ...sourceTextPayload() }) });
+        body: JSON.stringify({ projectId: project.id, brief: brief.trim(), engineTier: $('engine').value, lang: outLocale(), ...hookPayload(), ...beatPayload(), ...(aigcPayload()), ...(selectedMode === 'spark' ? { track: selectedTrack } : {}), ...bbPayload, ...tbPayload, ...brPayload, ...sourceTextPayload() }) });
       if (!isPrivateSessionCurrent(account)) { res.body?.cancel().catch(() => {}); return; }
       if (!res.ok || !res.body) {
         const txt = await res.text().catch(() => '');
@@ -8507,6 +8555,8 @@
         tags: (typeof tagChosen !== 'undefined' ? tagChosen : []).slice(0, 24),
         mode: (typeof selectedMode !== 'undefined') ? selectedMode : undefined,
         scriptMode: (fmtSel && fmtSel.value === 'AIGC') ? 'AIGC' : 'LIVE',
+        scriptType: selectedScriptType,
+        outputLang: outputLangValue(),
         lang: en ? 'en' : 'zh',
       };
       const r = await Api.jsonOrThrow(await Api.request('/api/generate/smart-defaults', { method: 'POST', body: JSON.stringify(payload) }));

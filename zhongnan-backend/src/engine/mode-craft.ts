@@ -4,15 +4,16 @@
  *  - buildLongIpDirective：长系列IP创作（多季/长系列/多IP联动）的跨季结构与连续性指令
  * 纯函数、双语、零 IO；非对应模式返回空串。
  */
-import { HitLabTrack, canonicalModeId } from '../config/modes';
+import { craftKeyOf, canonicalSparkTrack } from '../config/modes';
 
 type MLang = 'zh' | 'en';
 type DepthTier = 'speed' | 'balanced' | 'depth';
 
 /** 名场面工作台：轨道不同，方法论不同 */
-export function buildHitLabDirective(mode: string | undefined, track: HitLabTrack | string | undefined, lang: MLang = 'zh'): string {
-  if (!mode || mode !== 'hit_lab') return '';
-  const isReverse = track === 'hit_reverse';
+export function buildHitLabDirective(mode: string | undefined, track: string | undefined, lang: MLang = 'zh'): string {
+  // v2.329：spark 模式的名场面/爆款逆向轨道经 craftKeyOf 仍归一为 hit_lab，旧项目 wire-id 一字不改
+  if (!mode || craftKeyOf(mode, track) !== 'hit_lab') return '';
+  const isReverse = canonicalSparkTrack(track) === 'hit_reverse';
   if (lang === 'en') {
     if (isReverse) {
       return `HIT REVERSE-ENGINEERING TRACK (deconstruct a whole hit drama, never copy it):
@@ -65,13 +66,14 @@ const ADULT_GUARD_EN = `[ADULT-CONTENT GUARDRAIL - legacy mature mode, still age
 · Dialogue may be cold and gritty, never obscene; build premium thriller through dilemma, information asymmetry and moral pressure rather than sensory overload.
 · Still obey the mandatory screenplay layout and word-count gate: scene heads, action lines, NAME (emotion): dialogue lines all present.`;
 
-export function buildModeCraftDirective(mode: string | undefined, lang: MLang = 'zh'): string {
+export function buildModeCraftDirective(mode: string | undefined, lang: MLang = 'zh', track?: string | null): string {
   if (!mode) return '';
   const raw = String(mode).trim().toLowerCase();
-  // v2.327：历史模式名先归一（novel→adapt / branded_skit→video_short / mature_x→film），
-  // 保证旧项目不会因合并而拿不到方法论，也避免出现"中文有、英文空"的单边残留。
-  const canon = canonicalModeId(raw) ?? raw;
-  const base = lang === 'en' ? (MODE_CRAFT_EN[canon] ?? '') : (MODE_CRAFT_ZH[canon] ?? '');
+  // v2.327 历史模式名先归一（novel→adapt / branded_skit→video_short / mature_x→film），
+  // 保证旧项目不会因合并而拿不到方法论；v2.329 改走 craftKeyOf：spark 按轨道回落 adapt/hit_lab，
+  // 新 8 模式（diary/spark/persona/duel/multiverse）走各自新条目。
+  const key = craftKeyOf(raw, track);
+  const base = lang === 'en' ? (MODE_CRAFT_EN[key] ?? '') : (MODE_CRAFT_ZH[key] ?? '');
   if (ADULT_LEGACY.has(raw)) {
     const guard = lang === 'en' ? ADULT_GUARD_EN : ADULT_GUARD_ZH;
     return base ? `${base}\n${guard}` : guard;
@@ -92,6 +94,11 @@ const METHOD_TRACE_ZH: Record<string, string> = {
   interactive: `· 成稿末尾追加一行方法论清单，格式：\n【本集创作方法论：真选择设计 · 分支闭环 · 选择前压情绪后给反馈】\n按实际用到的方法列举，最多列 3-5 条。`,
   hot: `· 成稿末尾追加一行方法论清单，格式：\n【本集创作方法论：借势档位（强绑定/弱关联/反向）· 热点信号前置 · 故事脱离热点仍成立】\n按实际用到的方法列举，最多列 3-5 条。`,
   video_short: `· 成稿末尾追加一行方法论清单，格式：\n【本集创作方法论：3秒钩子 · 每镜≤20字口播 · 单一主行动引导】\n按实际用到的方法列举；soft-ad 子轨道须额外注明"品牌是解题者不是主角"，最多列 3-6 条。`,
+  diary: `· 成稿末尾追加一行方法论清单，格式：\n【本集创作方法论：事实抽取先行 · 第一人称声口保留 · 时间序重排为戏剧序 · 脱敏化名】\n按实际用到的方法列举，最多列 3-5 条。`,
+  spark: `· 成稿末尾追加一行方法论清单，格式：\n【本集创作方法论：确认闸门 · 先提案后落稿 · 四要素锁定（钩子/冲突/代价/反转）】\n按实际用到的方法列举，最多列 3-5 条。`,
+  persona: `· 成稿末尾追加一行方法论清单，格式：\n【本集创作方法论：不可靠叙述 · 边说边漏 · 崩点重估 · 视角限制】\n按实际用到的方法列举，最多列 3-5 条。`,
+  duel: `· 成稿末尾追加一行方法论清单，格式：\n【本集创作方法论：双向立场成立 · 轮次加码 · 信息不对称投出 · 不可退让收束】\n按实际用到的方法列举，最多列 3-5 条。`,
+  multiverse: `· 成稿末尾追加一行方法论清单，格式：\n【本集创作方法论：锁定分叉点 · 逐线推演代价 · 同意象不同结局 · 回并主线留残响】\n按实际用到的方法列举，最多列 3-5 条。`,
 };
 const METHOD_TRACE_EN: Record<string, string> = {
   interview: `· Append one methodology line at the very end of the draft (after the last scene, before any appendix), format:\n【Episode methodology: fragment re-alignment · desire→conflict→stakes→turn · four-dimension memory】\nList methods actually used, each separated by " · "; 3-5 items max.`,
@@ -100,21 +107,27 @@ const METHOD_TRACE_EN: Record<string, string> = {
   interactive: `· Append one methodology line at the very end of the draft, format:\n【Episode methodology: real-choice design · branch closure · build stakes before choice】\nList methods actually used, 3-5 items max.`,
   hot: `· Append one methodology line at the very end of the draft, format:\n【Episode methodology: borrow tier (strong/weak/inverse) · trend signal front-load · story stands on its own】\nList methods actually used, 3-5 items max.`,
   video_short: `· Append one methodology line at the very end of the draft, format:\n【Episode methodology: 3s hook · ≤20-char voiceover per shot · single CTA】\nList methods actually used; soft-ad sub-track must additionally mention "brand as problem-solver not protagonist"; 3-6 items max.`,
+  diary: `· Append one methodology line at the very end of the draft, format:\n【Episode methodology: facts first · first-person voice kept · chronology re-ordered into drama · anonymised】\nList methods actually used, 3-5 items max.`,
+  spark: `· Append one methodology line at the very end of the draft, format:\n【Episode methodology: confirmation gate · proposals before draft · four elements locked (hook/conflict/cost/twist)】\nList methods actually used, 3-5 items max.`,
+  persona: `· Append one methodology line at the very end of the draft, format:\n【Episode methodology: unreliable narration · leak while telling · breaking point re-read · POV restriction】\nList methods actually used, 3-5 items max.`,
+  duel: `· Append one methodology line at the very end of the draft, format:\n【Episode methodology: both positions valid · round escalation · asymmetric information reveal · unretreatable close】\nList methods actually used, 3-5 items max.`,
+  multiverse: `· Append one methodology line at the very end of the draft, format:\n【Episode methodology: fork locked · per-line cost deduction · same image different ending · merge with echoes】\nList methods actually used, 3-5 items max.`,
 };
-export function buildMethodTraceDirective(mode: string | undefined, lang: MLang = 'zh', tier: DepthTier = 'balanced'): string {
+export function buildMethodTraceDirective(mode: string | undefined, lang: MLang = 'zh', tier: DepthTier = 'balanced', track?: string | null): string {
   if (!mode) return '';
-  const canon = canonicalModeId(mode);
-  if (!canon) return '';
+  // v2.329：查表 key 走 craftKeyOf（spark 按轨道回落 adapt/hit_lab；新 8 模式走自身）
+  const key = craftKeyOf(mode, track);
+  if (!key) return '';
   // hit_lab / long_ip / film 已有专属方法论指令，不追加（避免重复）
-  if (canon === 'hit_lab' || canon === 'long_ip' || canon === 'film') return '';
+  if (key === 'hit_lab' || key === 'long_ip' || key === 'film') return '';
   // speed 档：极简占位（只给方法名格式，不强制枚举）
   if (tier === 'speed') {
     return lang === 'en'
       ? `· Append one methodology line at the very end, format: 【Episode methodology: (briefly list methods used, 1-3 items)】`
       : `· 成稿末尾追加一行方法论清单，格式：【本集创作方法论：（简要列用到的方法，1-3 条即可）】`;
   }
-  if (lang === 'en') return METHOD_TRACE_EN[canon] ?? '';
-  return METHOD_TRACE_ZH[canon] ?? '';
+  if (lang === 'en') return METHOD_TRACE_EN[key] ?? '';
+  return METHOD_TRACE_ZH[key] ?? '';
 }
 
 /**
@@ -135,9 +148,9 @@ const PURPOSE_GATE_EN: Record<string, string> = {
   hot: `· In the outline's overview field, write one sentence first: the core PURPOSE of riding this trend (15-30 chars) — answer: what emotion or reflection does the audience take away after watching? counter-cliché satisfaction? group resonance? a different angle on the trend? This anchors the borrow-tier choice.`,
   video_short: `· In the outline's overview field, write one sentence first: the core PURPOSE of this short video (15-30 chars) — answer: after watching, the user should DO what? like/comment/follow/click link (pick one primary CTA). This anchors the hook and CTA design.`,
 };
-export function buildPurposeGateDirective(mode: string | undefined, lang: MLang = 'zh', tier: DepthTier = 'balanced'): string {
+export function buildPurposeGateDirective(mode: string | undefined, lang: MLang = 'zh', tier: DepthTier = 'balanced', track?: string | null): string {
   if (!mode) return '';
-  const canon = canonicalModeId(mode);
+  const canon = craftKeyOf(mode, track);
   if (!canon) return '';
   // 仅 depth 档启用；speed/balanced 跳过（加速出本或平衡档）
   if (tier !== 'depth') return '';
@@ -198,9 +211,9 @@ const RANGE_LENS_DEFAULT_EN = `· Beyond retention/conversion scoring, additiona
   - Top editor: can dialogue be tightened 20% without losing info? can pacing speed up?
   - Data analyst: estimated completion/retention rate for the target audience
   Each suggestion uses 【Perspective · specific improvement】 format.`;
-export function buildRangeLensDirective(mode: string | undefined, lang: MLang = 'zh', tier: DepthTier = 'balanced'): string {
+export function buildRangeLensDirective(mode: string | undefined, lang: MLang = 'zh', tier: DepthTier = 'balanced', track?: string | null): string {
   if (!mode) return '';
-  const canon = canonicalModeId(mode);
+  const canon = craftKeyOf(mode, track);
   if (!canon) return '';
   // 仅 depth 档启用
   if (tier !== 'depth') return '';
@@ -260,6 +273,44 @@ interactive: `【互动短剧模式】（分支选择与多结局）：
 · 节奏：每3-4个片段必须有一个转折点（大小反转/信息揭露/关系变化）；幕点片段（激励事件/中点/高潮）承担最大转折，高潮前压到最紧，高潮后留呼吸。
 · 主题不说破：让故事本身传递"人在面对X时的选择"，结尾片段不留说教台词；可留一个开放性意象（道具/画面/一句未说完的话）让观众自己补完。
 · 成稿仍按标准剧本版式与字数闸门：场景行、△动作行、角色（情绪）：台词行齐全。`,
+  diary: `【日记式创作模式】（用户写真实日记 → 显式授权 → 梳理成剧本）：
+· 授权边界先于创作：只使用用户明确授权的范围（摘要 / 指定段落 / 全部），未授权段落一律不读、不引、不推断。
+· 两段式：先做"事实抽取"（谁/何时/何地/发生了什么/情绪原话），再做"戏剧化"；日记里的事实不可编造，可压缩、可重排、可合并同功能人物。
+· 保留作者的第一人称声口与情绪原话：把它转成场景行 / △动作行 / 台词行，不改成第三人称概述，不替作者升华。
+· 脱敏是硬要求：真实姓名、单位、住址、联系方式一律替换为化名或泛称；涉及第三人隐私的段落改写成"某人/某地"。
+· 结构：把日记的时间序重排成戏剧序（冲突 → 代价 → 转折），只选一个核心事件做主线，其余作为背景与情绪底色。
+· 可撤回：用户可随时撤回授权并删除由日记衍生的内容；成稿中不得留下可反查到真人的细节。
+· 成稿仍按标准剧本版式与字数闸门：场景行、△动作行、角色（情绪）：台词行齐全。`,
+  spark: `【灵感式创作模式】（一句话灵感或已有素材 → AI 提供灵感 → 多轮对话 → 用户确认才落稿）：
+· 确认闸门：用户未明确确认前，只产出候选方案 / 梗概 / 分场，绝不产出成稿正文；一次只推进一个决策点。
+· 三档输入：一句话灵感（给 3 个不同方向，各一句话）；半成品（补关键冲突与代价）；完整素材（转入素材改编 / 名场面拓展 / 爆款逆向轨道）。
+· 每次提案给"钩子句 + 核心冲突 + 代价 + 反转"四要素，让用户在选项里挑，而不是让用户自己想。
+· 提案之间必须有实质差异（人设/背景/冲突至少一项不同），不做换词重发。
+· 用户确认后锁定大纲再落稿：落稿不得偏离已确认的四要素；确需改动必须回到对话确认。
+· 成稿仍按标准剧本版式与字数闸门：场景行、△动作行、角色（情绪）：台词行齐全。`,
+  persona: `【角色自述式创作模式】（第一人称自述推进，用不可靠叙述制造反转）：
+· 先定三件事：谁在讲（立场与欲望）、为什么现在讲（讲述动机：临终/审讯/直播/遗书/告白）、讲给谁听（听者决定语气与隐瞒）。
+· 自述要"边说边漏"：每段自述留一处与事实不符或刻意跳过的地方，让观众比听者更早察觉。
+· 设一个崩点：说漏嘴 / 情绪失控 / 被打断；崩点之后叙述可靠性崩塌，前文必须可被重新解释。
+· 视角铁律：只写叙述者能看到、能知道的内容，禁止上帝视角；他人反应通过转述、打断、沉默呈现。
+· 反转落地后回收：前文至少留 3 处可被重解释的细节（物件、时间、称呼、重复出现的口头禅）。
+· 成稿仍按标准剧本版式与字数闸门：场景行、△动作行、角色（情绪）：台词行齐全。`,
+  duel: `【双人对撞式创作模式】（两个立场对立的角色轮流出招，逐轮加码直到一方无法再退）：
+· 先定"不可退让的立场"：双方各要什么、各自会失去什么、底线在哪；两边立场都必须成立，不写纯坏人当靶子。
+· 轮流制：A 出招 → B 接招并加码 → A 再升级；每一轮都要让一方付出可见代价或更换筹码，禁止双方各说各话不接招。
+· 每轮只解决一个问题，同时抛出下一个问题；观众每轮都要重新判断"谁会赢"。
+· 升级阶梯：讲道理 → 揭短 → 动手 → 掀底牌，至少四轮；最后一轮必须有一方无法再退。
+· 信息不对称是燃料：一方掌握另一方不知道的事，在最关键的一轮投出。
+· 场景可极简：一桌两椅一夜足够；靠台词攻防、停顿与沉默推进，不靠场面调度。
+· 成稿仍按标准剧本版式与字数闸门：场景行、△动作行、角色（情绪）：台词行齐全。`,
+  multiverse: `【世界线推演式创作模式】（一个关键选择分叉多条世界线，逐线推演代价，可合并回主线）：
+· 先锁分叉点：一个不可逆的选择（救谁 / 签不签 / 说不说），分叉之前所有世界线共享同一段前史。
+· 每条世界线必须交代三件事：这条线里什么变了、为此付出什么代价、最终结局是什么；各线代价必须不对称。
+· 逐线推演而非平行剪辑堆砌：一条线走到底再切下一条，观众才能比较；每条线内部仍按钩子—冲突—转折推进。
+· 用"同一意象不同结局"做锚：同一个道具、同一句台词、同一个镜头在各线重复出现，差异即主题。
+· 合并回主线：选定一条为正史，其余线留下"残响"（一个残留物 / 一段记忆 / 一个人的直觉）。
+· 禁止用世界线逃避后果：每条线的代价都真实发生，不写"梦一场""其实没发生"。
+· 成稿仍按标准剧本版式与字数闸门：场景行、△动作行、角色（情绪）：台词行齐全。`,
 };
 
 const MODE_CRAFT_EN: Record<string, string> = {
@@ -312,11 +363,50 @@ const MODE_CRAFT_EN: Record<string, string> = {
 · Pacing: every 3-4 fragments must carry a turning point (reversal / revelation / relationship shift); act-point fragments (inciting incident / midpoint / climax) carry the biggest turns, tighten to the max before the climax, then leave breathing room after.
 · Theme is shown not told: let the story itself convey "the human choice when facing X", no preachy closing lines; you may leave one open image (prop / shot / an unfinished line) for the audience to complete.
 · Still obey the mandatory screenplay layout and word-count gate: scene heads, △ action lines, NAME (emotion): dialogue lines all present.`,
+  diary: `DIARY-MODE CRAFT (the user writes real diary entries → explicit authorization → distill into a script):
+· Authorization precedes creation: use ONLY the granted scope (summary / selected passages / all). Never read, quote or infer from ungranted passages.
+· Two stages: extract FACTS first (who / when / where / what happened / the exact emotional words), then dramatize. Real facts may be compressed, reordered and merged by function, never fabricated.
+· Keep the author's first-person voice and original emotional lines: turn them into scene heads / △ action lines / dialogue lines; do not rewrite into third-person summary and do not uplift the meaning for them.
+· Anonymisation is mandatory: real names, employers, addresses and contact details become aliases or generic terms; passages involving a third party's privacy become "someone / somewhere".
+· Structure: reorder diary chronology into dramatic order (conflict → cost → turn); pick ONE core event as the mainline, everything else becomes background and emotional colour.
+· Revocable: the user may withdraw authorization and delete diary-derived content at any time; the draft must not retain details that could identify a real person.
+· Still obey the mandatory screenplay layout and word-count gate: scene heads, △ action lines, NAME (emotion): dialogue lines all present.`,
+  spark: `SPARK-MODE CRAFT (one-line spark or existing material → AI proposes → multi-round dialogue → draft only after explicit confirmation):
+· Confirmation gate: before the user explicitly confirms, output only candidates / synopsis / scene beats — never finished script body. Advance one decision point at a time.
+· Three input tiers: one-line spark (offer 3 distinct directions, one line each); half-formed idea (fill in the key conflict and cost); full material (route to material-rewrite / signature-scene / hit-reverse tracks).
+· Every proposal carries four elements: hook line + core conflict + cost + twist — let the user pick among options instead of making them think.
+· Proposals must differ substantively (at least one of persona / setting / conflict); never resend reworded versions.
+· Once confirmed, lock the outline and only then write the draft; the draft may not drift from the confirmed four elements — any change goes back to the dialogue for confirmation.
+· Still obey the mandatory screenplay layout and word-count gate: scene heads, △ action lines, NAME (emotion): dialogue lines all present.`,
+  persona: `PERSONA-MONOLOGUE MODE CRAFT (first-person narration drives the story; unreliable narration creates the twist):
+· Decide three things first: WHO speaks (stance and desire), WHY now (motive: deathbed / interrogation / livestream / suicide note / confession), and TO WHOM (the listener governs tone and what is withheld).
+· The narration must "leak while telling": each passage leaves one mismatch with the facts or one deliberate skip, so the audience notices before the listener does.
+· Build one breaking point: a slip of the tongue / emotional collapse / being cut off; after it, reliability collapses and earlier passages must be re-interpretable.
+· Point-of-view iron law: write only what the narrator can see or know — no god view; others' reactions come through reported speech, interruption and silence.
+· After the twist lands, pay it off: keep at least 3 earlier details that can be re-read (an object, a time, a form of address, a repeated verbal tic).
+· Still obey the mandatory screenplay layout and word-count gate: scene heads, △ action lines, NAME (emotion): dialogue lines all present.`,
+  duel: `TWO-HANDER DUEL MODE CRAFT (two opposed characters trade moves, escalating until one cannot retreat):
+· Fix the "unretreatable positions" first: what each side wants, what each stands to lose, where each line is; both positions must be valid — no straw-man villain.
+· Alternate turns: A moves → B answers and raises → A escalates; every round must cost one side something visible or change the chips. No talking past each other.
+· Each round resolves one problem and opens the next; the audience must re-guess "who is winning" every round.
+· Escalation ladder: argue → expose → strike → flip the last card, at least four rounds; the final round must leave one side with nowhere to retreat.
+· Information asymmetry is the fuel: one side knows what the other does not; reveal it in the decisive round.
+· The scene can be minimal: one table, two chairs, one night; drive it with attack/defence dialogue, pauses and silence — not staging.
+· Still obey the mandatory screenplay layout and word-count gate: scene heads, △ action lines, NAME (emotion): dialogue lines all present.`,
+  multiverse: `WORLD-LINE DEDUCTION MODE CRAFT (one pivotal choice forks multiple world-lines; deduce each cost, then merge back to the mainline):
+· Lock the fork first: one irreversible choice (who to save / sign or not / speak or not); all world-lines share the same pre-fork history.
+· Each world-line must state three things: what changed here, what it cost, how it ends — and the costs must be asymmetric.
+· Deduce line by line rather than stacking parallel montage: run one line to its end, then cut to the next, so the audience can compare; inside each line keep hook → conflict → turn.
+· Anchor on "same image, different ending": the same prop, the same line, the same shot recurs across lines — the difference is the theme.
+· Merge back: pick one line as canon; the others leave "echoes" (a residual object / a memory / a character's intuition).
+· Never let world-lines dodge consequence: every line's cost really happens — no "it was all a dream" / "it never happened".
+· Still obey the mandatory screenplay layout and word-count gate: scene heads, △ action lines, NAME (emotion): dialogue lines all present.`,
 };
 
 /** 长系列IP：跨季结构、连续性与系列宇宙指令 */
 export function buildLongIpDirective(mode: string | undefined, lang: MLang = 'zh'): string {
-  if (!mode || mode !== 'long_ip') return '';
+  // v2.329：历史 long_ip 经 craftKeyOf 仍为 long_ip；multiverse 另走自身世界线方法论
+  if (!mode || craftKeyOf(mode) !== 'long_ip') return '';
   if (lang === 'en') {
     return `LONG-RUNNING IP MODE (multi-season / long series / shared universe & IP crossover). Engineer continuity deliberately:
 · Series bible first: maintain a master timeline, power/relationship ledger, unresolved-foreshadow ledger and a per-season status snapshot; nothing later may contradict established canon.
@@ -344,7 +434,8 @@ export function buildLongIpDirective(mode: string | undefined, lang: MLang = 'zh
  * 纯函数·双语·零 IO；非 film 模式、片段总数 <8 或序号越界返回空串（短片不值得分幕，长片 40-60 片段是主场景）。
  */
 export function buildFilmActDirective(mode: string | undefined, episodeIndex: number, episodeCount: number, lang: MLang = 'zh'): string {
-  if (!mode || mode !== 'film') return '';
+  // v2.329：历史 film（含 mature_x/xscript）经 craftKeyOf 仍为 film
+  if (!mode || craftKeyOf(mode) !== 'film') return '';
   const total = Math.floor(Number(episodeCount) || 0);
   const idx = Math.floor(Number(episodeIndex) || 0);
   if (total < 8 || idx < 0 || idx >= total) return '';
