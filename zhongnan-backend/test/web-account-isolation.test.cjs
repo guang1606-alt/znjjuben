@@ -108,6 +108,8 @@ function setup(handler = async () => response([])) {
     // v2.330 多方评议理由预取：测试内以记录桩替代，不发网络
     'loadCouncilHints', 'renderSelects', 'renderScriptTypes',
     'openAuth', 'xnSay', 'renderProgress', 'renderResult', 'showFail', 'renderAigcDash',
+    // v2.340 制片可行性面板：refreshResultScripts 末尾按最新集 format 复现，逐函数求值需注入桩
+    'renderLiveProdDash',
     'populateProfileOptions', 'loadCaps', 'openListen', 'openListenSeries', 'resetPanels',
     'failGenerationSession', 'alert', 'openModal', 'renderDpPage', 'renderDpSummary',
     'toastError', 'toastOk', 'toastInfo',

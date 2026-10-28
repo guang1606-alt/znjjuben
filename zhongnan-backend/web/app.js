@@ -2536,7 +2536,7 @@
     dpPages = []; dpActive = dpEpisodeCount = 0; matData = null;
     tagChosen = [];
     ['worksGrid', 'worksCount', 'worksDetailTitle', 'epsList', 'scriptText', 'scoreGrid', 'diagBars', 'waveChart',
-      'roleStrip', 'staffLog', 'taskQueue', 'aigcDash', 'dashBody', 'listenSegments', 'listenMeta', 'listenNote',
+      'roleStrip', 'staffLog', 'taskQueue', 'aigcDash', 'liveProdDash', 'dashBody', 'listenSegments', 'listenMeta', 'listenNote',
       'dpBody', 'dpSummary', 'dpTabs', 'matBody', 'matSummary', 'tagChosen', 'tagReport', 'tagWhy',
       'meAvatar', 'meNickname', 'meLevel', 'mePen', 'meBio', 'mePoints', 'meStorage', 'meInvite',
       'mineBox', 'fullText', 'fullTitle', 'fullNotice'].forEach((id) => {
@@ -6601,6 +6601,28 @@
       </div>
       ${issues.length ? `<div class="ad-issues">${en ? 'To fix: ' : '小南建议：'}${issues.map((x) => `· ${escapeHtml(x)}`).join(' ')}</div>` : `<div class="ad-ok">${en ? 'Composition is production-ready for an AI-video pipeline.' : '构成合理，可直接进入 AI 视频自动化工作流拆分镜。'}</div>`}`;
   }
+  // v2.340 真人实拍制片可行性面板：v2.337 起 LIVE 的 format.feasibility 已产出 level/score/issues，
+  // 但只有 high 会进 violations——场次偏多/零复用/夜戏多/群演·特效·特技风险这些成本提示此前无任何出口，
+  // 用户看不到"这稿要加钱/加人"。本面板按 level 出结论徽标，逐条列出 issue（high 红/mid 橙/low 灰）。
+  function renderLiveProdDash(done) {
+    const box = $('liveProdDash'); if (!box) return;
+    const fmt = done.format || null;
+    const f = fmt && fmt.feasibility; // 仅真人实拍制式产出，AIGC 为 undefined
+    if (!f) { box.classList.add('hidden'); box.innerHTML = ''; return; }
+    box.classList.remove('hidden');
+    const en = lang === 'en';
+    const lvl = { ok: [en ? 'Shootable' : '可拍', '#3fbf8f'], watch: [en ? 'Shootable · cost flags' : '可拍 · 有成本提示', '#e08a2e'], over: [en ? 'Not shootable' : '不可拍', '#e0564a'] }[f.level] || ['-', '#8a94a6'];
+    const sev = { high: '#e0564a', mid: '#e08a2e', low: '#8a94a6' };
+    const st = f.stats || {};
+    const items = (f.issues || []).map((it) =>
+      `<li style="border-left:3px solid ${sev[it.severity] || '#8a94a6'};margin:4px 0;padding-left:8px">${escapeHtml(it.message)}</li>`).join('');
+    box.innerHTML = `
+      <div class="ad-head"><b>${en ? 'Live-action production feasibility' : '真人实拍制片可行性'}</b>
+        <span class="ad-plan" style="color:${lvl[1]}">${lvl[0]}　${en ? 'score' : '制片分'} ${f.score}</span></div>
+      <div class="ad-meta">${en ? 'Scenes' : '场次'} ${st.sceneCount ?? '-'}　${en ? 'Speaking roles' : '说话角色'} ${st.castCount ?? '-'}　${en ? 'Locations' : '地点'} ${st.distinctLocations ?? '-'}　${en ? 'Night' : '夜戏'} ${st.nightScenes ?? '-'}／${st.sceneCount ?? '-'}</div>
+      ${items ? `<ul class="ad-issues" style="margin:6px 0 0;padding-left:2px;list-style:none">${items}</ul>`
+        : `<div class="ad-ok">${en ? 'No production risk detected — this episode can be scheduled as written.' : '未发现制片风险，这一集可直接排通告。'}</div>`}`;
+  }
 
   async function renderResult(done, projectId) {
     currentProjectId = projectId;
@@ -6867,6 +6889,7 @@
       } else htTip.classList.add('hidden');
     }
     renderAigcDash(done);
+    renderLiveProdDash(done);
     refreshResultScripts(projectId);
     if (done.opportunity) xnSay(lang === 'en' ? 'Done. Check the opportunity radar.' : '完成啦，记得看机会雷达评估～');
     // 全本质量诊断（craft/emotion/webnovel/去AI 四套尺子归一的六维报告）
@@ -6902,6 +6925,9 @@
       } else {
         const box = $('aigcDash'); if (box) { box.classList.add('hidden'); box.innerHTML = ''; }
       }
+      // v2.340 制片可行性刷新复现：顶层 qcReport.format 在 /fix 后已重算（v2.339），刷新/改写后
+      // 面板必须跟着最新集走，否则刷新即失明；AIGC 制式 feasibility 为 undefined，面板自动隐藏。
+      renderLiveProdDash({ format: (latest && latest.qcReport) ? latest.qcReport.format : null });
       refreshListenBtn();
     } catch { if (isPrivateSessionCurrent(account) && (!currentProjectId || currentProjectId === projectId)) $('scriptText').textContent = ''; }
   }

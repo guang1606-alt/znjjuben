@@ -44,6 +44,20 @@ describe('前端站点托管 + 项目创建端点', { concurrency: 1 }, () => {
     const html = await (await fetch(base + '/')).text();
     assert.match(html, /id="scriptFormatTip"/);
   });
+  // v2.340 制片可行性面板：v2.337/2.338/2.339 后端已把 feasibility 算准并按新正文重算，
+  // 但前端此前零出口——这里锁死「容器 + 渲染函数 + SSE/刷新两条调用路径 + 中英分级文案」都已下发。
+  it('v2.340 真人实拍制片可行性面板资源已下发（容器/渲染函数/双路径/分级文案）', async () => {
+    const html = await (await fetch(base + '/')).text();
+    assert.match(html, /id="liveProdDash"/);
+    const app = await (await fetch(base + '/app.js')).text();
+    assert.match(app, /function renderLiveProdDash\(done\)/);
+    assert.match(app, /fmt\.feasibility/);
+    assert.match(app, /'liveProdDash'/); // 切项目清屏列表必须含新容器，否则残影
+    assert.match(app, /renderLiveProdDash\(done\);/, 'SSE done 路径必须调用');
+    assert.match(app, /renderLiveProdDash\(\{ format:/, '刷新路径必须从最新集 qcReport.format 复现');
+    assert.match(app, /真人实拍制片可行性/);
+    assert.match(app, /Not shootable/);
+  });
   it('前端路由任意非 /api 路径回退 index.html（刷新不 404）', async () => {
     const r = await fetch(base + '/studio/some/deep/route', { headers: { Accept: 'text/html' } });
     assert.strictEqual(r.status, 200);

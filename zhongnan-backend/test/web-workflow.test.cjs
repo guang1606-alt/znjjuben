@@ -49,7 +49,7 @@ function setup(names, extra = {}) {
     _genStarting: false, _retryProject: null, _retryBrief: null,
     // v2.329 三维契约：剧本类型 + 输出语种为模块级 let/const，逐函数求值需预置
     selectedScriptType: 'live_action_drama', outputLangValue: () => 'zh', renderScriptTypes() {},
-    renderAigcDash() {}, loadDiagnosis: async () => {}, loadEmotionWave: async () => {}, loadInvestorLens: async () => {},
+    renderAigcDash() {}, renderLiveProdDash() {}, loadDiagnosis: async () => {}, loadEmotionWave: async () => {}, loadInvestorLens: async () => {},
     _uiLangEn: () => ((typeof extra.lang === 'string' ? extra.lang : 'zh') === 'en'),
     ...extra };
   vm.createContext(context);
