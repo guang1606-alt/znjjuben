@@ -148,3 +148,50 @@ describe('项目剧本读取端点（作品库/结果正文，归属隔离）', 
     assert.strictEqual(oneOther.status, 403);
   });
 });
+
+// v2.328 自动匹配：mode=auto 时不再要求用户手选模式，由后端意图路由落到 canonical 模式
+mem._seedUser({ id: 'u_auto_adv', level: 'ADVANCED' });
+const tokAutoAdv = signAccess({ sub: 'u_auto_adv', level: 'ADVANCED' });
+
+describe('自动模式立项（mode=auto）', { concurrency: 1 }, () => {
+  const post = (title, token, body) => fetch(base + '/api/generate/projects', {
+    method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+    body: JSON.stringify({ title, ...body }),
+  });
+
+  it('短视频描述 → 落 canonical video_short 并回传匹配结果', async () => {
+    const r = await post('自动短视频', tokAutoAdv, { mode: 'auto', brief: '做个30秒抖音带货口播，前三秒要抓人' });
+    assert.strictEqual(r.status, 200);
+    const p = await r.json();
+    assert.strictEqual(p.mode, 'video_short');           // 落库不得是字符串 auto
+    assert.strictEqual(p.autoRouted.mode, 'video_short');
+    assert.ok(p.autoRouted.confidence >= 0.6);
+    assert.ok(Array.isArray(p.autoRouted.alternatives));
+    assert.ok(p.autoRouted.name.length > 0);
+  });
+
+  it('小说改编描述 → 落 adapt（基础会员即可）', async () => {
+    const r = await post('自动改编', tok, { mode: 'auto', brief: '把这本小说改成竖屏短剧，走同人续写线' });
+    assert.strictEqual(r.status, 200);
+    const p = await r.json();
+    assert.strictEqual(p.mode, 'adapt');
+    assert.strictEqual(p.autoRouted.mode, 'adapt');
+  });
+
+  it('无有效描述 → 不硬猜高等级模式，落轻量模式并标记需澄清', async () => {
+    const r = await post('自动兜底', tok, { mode: 'auto', brief: '' });
+    assert.strictEqual(r.status, 200);
+    const p = await r.json();
+    assert.strictEqual(p.mode, 'tag');
+    assert.strictEqual(p.autoRouted.needsClarify, true);
+    assert.strictEqual(p.autoRouted.confidence, 0);
+  });
+
+  it('手选模式不产生 autoRouted（旧契约不变）', async () => {
+    const r = await post('手选标签', tok, { mode: 'tags' });
+    assert.strictEqual(r.status, 200);
+    const p = await r.json();
+    assert.strictEqual(p.mode, 'tags');
+    assert.strictEqual(p.autoRouted, undefined);
+  });
+});

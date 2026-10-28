@@ -99,6 +99,7 @@ import { pickEpisodeForFix, buildFixPrompt, isUsableRewrite } from '../engine/po
 import { diffScripts, assessRewrite, summarizeChanges } from '../engine/script-diff'; // c202 版本对比纯引擎（零 token、确定性）；c204 变更摘要
 import { modeAvailable, unlockLevel, canonicalModeId, CREATION_MODES as CREATION_MODE_LIST, MODE_ALIASES, trackAvailable, trackUnlockLevel, canonicalHitLabTrack, HIT_LAB_TRACKS } from '../config/modes';
 import { requiresMatureConsent } from '../lib/auth-policy';
+import { isAutoMode, routeIntent, type IntentRouteResult } from '../engine/intent-router'; // v2.328 自动模式路由（零 LLM）
 import { evaluateConsent, GATING_VALID_DAYS, type Region } from '../engine/mature-gating';
 import { buildSampleScript } from '../engine/sample-script';
 import { extractDocument } from '../lib/doc-extract';
@@ -213,7 +214,9 @@ function sanitizeProjectTags(tags: unknown): string[] {
 // 创建项目（发起 SSE 生成的前置，作品库数据源）
 const projectSchema = z.object({
   title: z.string().min(1, '项目名不能为空').max(120),
+  // v2.328 mode 传 auto/smart/recommend 时不手选模式，由 intent-router 按 brief+标题+标签自动路由
   mode: z.string().min(1).max(40),
+  brief: z.string().max(8000).optional(), // 自动路由用创意文本（仅 mode=auto 时消费）
   track: z.string().min(1).max(40).optional(), // v2.14 名场面工作台内部轨道 signature_scene/hit_reverse
   totalEps: z.number().int().min(1).max(500).optional(),
   engineTier: z.nativeEnum(EngineTier).optional(),
@@ -261,7 +264,16 @@ generateRouter.post('/projects', authRequired, async (req: AuthRequest, res) => 
   const isStaff = isAdminUser(owner as { phone?: string | null; isAdmin?: boolean } | null);
   // 模式闭环闸门（P0）：未知模式拒绝；会员等级不足拒绝并给升级方向；成年向必须已完成分级授权
   const ownerLevel = (owner?.level ?? MemberLevel.FREE) as MemberLevel;
-  const canonMode = canonicalModeId(d.mode);
+  // v2.328 自动模式：mode=auto 时由意图路由在「当前等级可用」的模式里选，用户不再手选
+  const autoRequested = isAutoMode(d.mode);
+  let autoRouted: IntentRouteResult | null = null;
+  if (autoRequested) {
+    autoRouted = routeIntent({
+      brief: d.brief ?? '', title: d.title, tags: d.tags,
+      level: ownerLevel, isStaff,
+    });
+  }
+  const canonMode = autoRouted ? autoRouted.mode : canonicalModeId(d.mode);
   if (!canonMode) return res.status(400).json({ error: `未知创作模式：${d.mode}` });
   // 合规红线：X剧本成年分级授权对任何身份都不豁免（内部账户也必须完成问卷与免责授权）
   if (requiresMatureConsent(d.mode)) {
@@ -278,7 +290,8 @@ generateRouter.post('/projects', authRequired, async (req: AuthRequest, res) => 
     });
   }
   // v2.14 轨道级闸门：名场面工作台的“爆款逆向批量”轨道需专业版（名场面拓展高级即可）
-  const canonTrack = d.track ? canonicalHitLabTrack(d.track) : undefined;
+  // v2.328 自动路由可直接给定轨道（hit_reverse 在等级不足时已由 routeIntent 降级为 signature_scene）
+  const canonTrack = autoRouted?.track ?? (d.track ? canonicalHitLabTrack(d.track) : undefined);
   if (!isStaff && canonMode === 'hit_lab' && !trackAvailable(canonMode, canonTrack, ownerLevel)) {
     const needTrack = trackUnlockLevel(canonMode, canonTrack);
     return res.status(403).json({
@@ -395,7 +408,7 @@ generateRouter.post('/projects', authRequired, async (req: AuthRequest, res) => 
   };
   const project = await prisma.project.create({
     data: {
-      userId: req.userId!, title: d.title, mode: d.mode, totalEps: d.totalEps ?? 0,
+      userId: req.userId!, title: d.title, mode: autoRouted ? autoRouted.mode : d.mode, totalEps: d.totalEps ?? 0,
       engineTier: d.engineTier ?? EngineTier.STANDARD, tags: d.tags ?? [],
       format: fmt, status: 'draft',
       investWan: d.investWan ?? null, specialTopic: d.specialTopic ?? false, filing: filing as object,
@@ -423,7 +436,8 @@ generateRouter.post('/projects', authRequired, async (req: AuthRequest, res) => 
       data: { usedCount: { increment: 1 } },
     }).catch(() => null);
   }
-  res.json(project);
+  // v2.328 自动路由结果随创建响应回传：前端据此告知「已自动识别为 X」并可提示切换备选
+  res.json(autoRouted ? { ...(project as Record<string, unknown>), autoRouted } : project);
 });
 // 四层钩子选项契约：前端据此渲染“系统智能/我来指定/混合”三模式 + 强度档 + 各层钩子偏好/禁用
 // 十二模式权威清单（前端据此做等级软拦截，与后端强校验同一来源；含前端 wire-id 别名）

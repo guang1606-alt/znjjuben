@@ -6,6 +6,7 @@
   'use strict';
   // v2.325 整合：删 mature_x（xscript 成年向）；novel 并入 adapt（创意改编内加小说压缩子轨道）；softad 并入 shortvideo（短视频脚本内加品牌简报可选）
   const MODES = [
+    { id: 'auto', free: 'free' }, // v2.328 自动模式：由后端意图路由按创意自动选模式与轨道
     { id: 'interview', free: 'basic' }, { id: 'adapt', free: 'basic' }, { id: 'tags', free: 'free' },
     { id: 'interactive', free: 'basic' }, { id: 'hit_lab', free: 'advanced' },
     { id: 'hot', free: 'advanced' }, { id: 'shortvideo', free: 'advanced' },
@@ -153,11 +154,12 @@
       tbTdBoom: '为什么好 · 为什么爆', tbTdTech: '可取技法（已同步进创作技能）', tbTdTagsL: '勾选要保留的标签（可增删，决定改编基因）',
       tbTdDirsL: '改编方向（只借底层逻辑，不抄表达）', tbTdOutline: '生成改编大纲（基础20/高级16/专业12积分）',
       mode: {
-        interview: '采访式创作', adapt: '创意改编', tags: '标签创建', interactive: '互动短剧',
+        auto: '自动匹配', interview: '采访式创作', adapt: '创意改编', tags: '标签创建', interactive: '互动短剧',
         hit_lab: '爆款拆解·名场面', hot: '热点追更', shortvideo: '爆款短视频脚本',
         long_ip: '长系列IP创作', film: '电影剧本',
       },
       modeDesc: {
+        auto: '只写想做什么，系统自动判断模式、轨道与策略（可随时改）',
         interview: '对话式引导，碎片灵感变完整剧本', adapt: '续写/衍生/联动/同人/小说压缩（v2.325 合并小说改编）', tags: '标签组合，快速定向出本',
         interactive: '分支选择、多结局可视化', hit_lab: '名场面前铺后延｜拆爆款批量出不侵权新本（逆向轨道专业版）',
         hot: '借势全网热点快速出本', shortvideo: '强钩子前3秒 · 分镜化口播 · 每镜一句（v2.325 合并剧情软广，可加品牌简报）',
@@ -305,11 +307,12 @@
       tbTdBoom: 'Why it works · why it blew up', tbTdTech: 'Reusable techniques (synced into craft skills)', tbTdTagsL: 'Keep these tags (editable; sets the adaptation DNA)',
       tbTdDirsL: 'Adaptation direction (reuse logic only, not expression)', tbTdOutline: 'Build adaptation outline (Basic 20 / Adv 16 / Pro 12 pts)',
       mode: {
-        interview: 'Interview', adapt: 'Adaptation', tags: 'By Tags', interactive: 'Interactive',
+        auto: 'Auto', interview: 'Interview', adapt: 'Adaptation', tags: 'By Tags', interactive: 'Interactive',
         hit_lab: 'Hit Lab & Signature Scene', hot: 'Trend Chasing', shortvideo: 'Viral Short Video',
         long_ip: 'Long-Running IP', film: 'Feature Film',
       },
       modeDesc: {
+        auto: 'Just describe what you want — mode, track and strategy are picked for you (changeable anytime)',
         interview: 'Conversational guidance, fragments to full script', adapt: 'Continue / spin-off / crossover / fanfic / novel compression (v2.325 merged Novel)',
         tags: 'Combine tags for a targeted draft', interactive: 'Branching choices & multi-ending',
         hit_lab: 'Expand a signature scene | deconstruct hits into safe new drafts (reverse track: Pro)',

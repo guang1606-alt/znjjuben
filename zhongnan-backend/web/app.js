@@ -410,6 +410,8 @@
   // ═══ MODULE: config (107行, 0fn) ═══ 各模式内联创意输入（替代 window.prompt，按模式给专属引导，杜绝无输入入口的断点）
   /* ---------- 各模式内联创意输入（替代 window.prompt，按模式给专属引导，杜绝无输入入口的断点） ---------- */
   const MODE_BRIEF = (typeof window !== 'undefined' && window.ZN_DATA && window.ZN_DATA.MODE_BRIEF) || {
+    // v2.328 自动匹配：用户只写想做什么，模式/轨道/策略由后端意图路由决定
+    auto: { zh: ['直接写你想做什么，系统自动匹配模式', '例如「做个30秒抖音带货口播，前三秒要抓人」「把这部小说改成竖屏短剧」「拆解这部剧的爆款结构，批量出新本」——不用自己选模式，生成前会告诉你匹配到了什么，可随时改。'], en: ['Just describe what you want — mode is auto-picked', 'e.g. "a 30s TikTok voiceover with a 3-second hook", "adapt this novel into a vertical drama", "deconstruct this hit and batch out safe new drafts". No mode picking needed; we tell you what we matched before generating, and you can change it.'] },
     interview: { zh: ['把你零散的想法先倒在这里', '可以想到哪写到哪：核心创意、世界观、人物、想要的冲突都行；小南会在出本时把它们结构化，也可随时回来补充。'], en: ['Dump your scattered ideas here', 'Write freely: core idea, world, characters, conflicts. Xiaonan structures them at generation; you can come back anytime.'] },
     adapt: { zh: ['粘贴要改编的原作片段，或上传文件（自有/已授权内容）', '支持 txt/md/docx/epub/pdf（≤8MB），上传后自动提取正文；并在末尾写清想要续写/衍生/联动/同人中的哪种、原著尊重度高低。'], en: ['Paste the source you own/license, or upload a file', 'txt/md/docx/epub/pdf up to 8MB are auto-extracted. Add one line: sequel/spin-off/crossover/fanfic and how faithful to stay.'] },
     novel: { zh: ['粘贴小说原文，或上传小说文件（txt/md/docx/epub/pdf）', '上传后自动识别章节；注明必须保留的名场面或人物；系统会压缩冗余、按竖屏短剧节奏重排钩子与冲突。'], en: ['Paste novel chapters or upload a file (txt/md/docx/epub/pdf)', 'Chapters are auto-detected; mark must-keep scenes/characters; redundant narration is compressed into vertical-drama pacing.'] },
@@ -6271,6 +6273,8 @@
       if (!project) {
         const pr = await Api.request('/api/generate/projects', { method: 'POST', body: JSON.stringify({
           title: projTitle, mode: selectedMode, ...(selectedMode === 'hit_lab' ? { track: selectedTrack } : {}), totalEps, engineTier: $('engine').value,
+          // v2.328 自动匹配：创意随立项一起提交，后端据此路由模式/轨道（不手选）
+          ...(selectedMode === 'auto' ? { brief: brief.trim() } : {}),
           // v2.319 tags 模式：选中标签结构化上传（中文原名，服务端消费端按中文精确匹配；不再只依赖纯文本 brief）
           ...(useTagBench ? { tags: tagChosen.slice(0, TAG_MAX) } : {}),
           // v2.319 adapt/novel/hit_lab：原文立项即持久化进 bible，刷新续写/草稿恢复版权闸门不中断（与 episodes 同口径）
@@ -6289,6 +6293,15 @@
           throw new Error(znSanitizeErr(ej.message || ej.error || ('HTTP ' + pr.status), pr.status)); // v2.239：内部裸码脱敏
         }
         project = await pr.json();
+        // v2.328 自动匹配结果如实告知：匹配到什么、置信度、备选与是否需要澄清
+        if (project.autoRouted) {
+          const ar = project.autoRouted;
+          const pct = Math.round((ar.confidence || 0) * 100);
+          const alt = (ar.alternatives || []).slice(0, 2).map((x) => x.name).join(' / ');
+          toastInfo(lang === 'en'
+            ? `Auto-matched: ${ar.name} (${pct}%)${alt ? ` · also close: ${alt}` : ''}${ar.needsClarify ? ' · description is thin; switching to Interview is recommended' : ''}`
+            : `已自动匹配：${ar.name}（${pct}%）${alt ? ` · 备选：${alt}` : ''}${ar.needsClarify ? ' · 描述偏少，建议改用采访式创作聊清楚' : ''}`, lang === 'en' ? 'Auto mode' : '自动匹配');
+        }
       }
       if (!isPrivateSessionCurrent(account)) return;
       session.project = project;
