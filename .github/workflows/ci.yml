@@ -8,13 +8,14 @@ on:
 
 jobs:
   test:
-    name: typecheck + test (Node 20)
+    name: typecheck + build + test (Node 20)
     runs-on: ubuntu-latest
     defaults:
       run:
         working-directory: zhongnan-backend
     env:
       NODE_ENV: test
+      # prisma generate 仅解析 schema 中 env("DATABASE_URL")，不连库；测试全部走 memory-prisma mock
       DATABASE_URL: postgresql://dummy:dummy@localhost:5432/dummy
     steps:
       - name: Checkout
@@ -32,21 +33,15 @@ jobs:
 
       - name: Generate Prisma client
         run: npm run prisma:generate
-
-      - name: Environment diagnostics
-        run: |
-          echo "node: $(node --version)"
-          echo "npm:  $(npm --version)"
-          echo "os:   $(uname -a)"
-          echo "arch: $(uname -m)"
-          echo "cwd:  $(pwd)"
-          echo "files (top 30):"
-          ls -la | head -30
-          echo "env (filtered):"
-          env | grep -iE 'node|db|env|path|home|tmp|ci|github' | sort
+        # 本地 npm install 隐式生成过；CI 全新沙盒必须显式跑
 
       - name: TypeScript typecheck
         run: npm run typecheck
+
+      - name: Build (dist/)
+        run: npm run build
+        # 关键：测试文件直接 require('../dist/...') 编译产物，
+        # 而 dist/ 被 .gitignore 排除，全新检出必须现场构建
 
       - name: Run full test suite
         run: |
