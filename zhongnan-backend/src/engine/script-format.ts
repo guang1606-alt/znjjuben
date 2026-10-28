@@ -46,6 +46,8 @@ const SCENE_RE = /(第\s*[0-9一二三四五六七八九十]+\s*集|内景|外�
 const ACTION_RE = /(^|\n)\s*[△▲*✦]\s*\S/;
 const DIALOGUE_RE = /(^|\n)\s*(?:[一-龥·]{2,6}|[A-Z][A-Za-z.'-]{1,19}(?:\s[A-Z][A-Za-z.'-]{1,19})?)(?:（[^）]{0,10}）|\([^)]{0,20}\))?\s*[：:]\s*\S/m;
 
+import { checkLiveFeasibility, type LiveFeasibilityReport } from './live-action-feasibility';
+
 export interface FormatReport {
   mode: ScriptMode;
   /** 字数当量：中文为汉字数；英文为单词×1.67 折算的汉字当量 */
@@ -60,6 +62,8 @@ export interface FormatReport {
   violations: string[];
   pass: boolean;
   score: number; // 0-100
+  /** v2.337 真人实拍可拍性/制片可行性（AIGC 制式不适用，缺省不填） */
+  feasibility?: LiveFeasibilityReport;
 }
 
 export function validateScript(text: string, mode: ScriptMode = 'LIVE', durationMin = 1): FormatReport {
@@ -102,16 +106,23 @@ export function validateScript(text: string, mode: ScriptMode = 'LIVE', duration
   if (!hasAction) violations.push('缺动作提示行（应以 △ 标注可拍摄动作）');
   if (!hasDialogue) violations.push('缺规范角色台词（角色名：台词）');
   if (pollution.length) violations.push(`含提示词式污染 ${pollution.length} 处`);
+  // v2.337 可拍性闸门：制片维度的硬伤（场次/角色数超上限）与版式违规同级拦截；
+  // 成本提示走 feasibility.issues（mid/low），不阻断但计入打分，供 QC 面板与 /fix 消费。
+  const feasibility = checkLiveFeasibility(text, lang);
+  for (const iss of feasibility.issues) {
+    if (iss.severity === 'high') violations.push(lang === 'en' ? `Production: ${iss.message}` : `制片不可行：${iss.message}`);
+  }
 
-  // 打分：字数贴合度 40 + 三要素 30 + 无污染 30
+  // 打分：字数贴合度 40 + 三要素 30 + 无污染 30；v2.337 再按制片可行性折损（无问题时保持原分）
   const wordScore = cjk < lo ? Math.max(0, 40 * cjk / lo)
     : cjk > hi ? Math.max(0, 40 * (1 - (cjk - hi) / hi))
     : 40;
   const elemScore = (hasScene ? 10 : 0) + (hasAction ? 10 : 0) + (hasDialogue ? 10 : 0);
   const cleanScore = pollution.length ? 0 : 30;
-  const score = Math.round(wordScore + elemScore + cleanScore);
+  const baseScore = wordScore + elemScore + cleanScore;
+  const score = Math.round(baseScore * (feasibility.score / 100));
 
-  return { mode, cjk, lang, range: [lo, hi], inRange: cjk >= lo && cjk <= hi, hasScene, hasAction, hasDialogue, pollution, violations, pass: violations.length === 0, score };
+  return { mode, cjk, lang, range: [lo, hi], inRange: cjk >= lo && cjk <= hi, hasScene, hasAction, hasDialogue, pollution, violations, pass: violations.length === 0, score, feasibility };
 }
 
 /**
@@ -133,7 +144,7 @@ SCENE N: Location - Time (INT./EXT.)
 NAME (emotion): dialogue
 △ next action
 NAME: dialogue
-Rules: one △ line = one action; one dialogue line = one character's one utterance; no long narration blocks (never more than 3 consecutive non-action lines); keep dialogue short (under 30 chars per line); leave room for the director/actors; no shot-size or camera jargon; no prompt-style text.`;
+Rules: one △ line = one action; one dialogue line = one character's one utterance; no long narration blocks (never more than 3 consecutive non-action lines); keep dialogue short (under 30 chars per line); leave room for the director/actors; no shot-size or camera jargon; no prompt-style text. Production discipline (decided before writing, not after): 3-5 scenes per episode (hard cap 8 — a 9-scene episode cannot be scheduled); every scene header must state INT./EXT., location and time; reuse at least one existing location; no more than 6 speaking roles (hard cap 8); no crowd scenes, explosions, gunfights, car chases, underwater or high-altitude set pieces, and no more than half the scenes at night.`;
   }
   return `【输出制式·真人实拍剧本·强制版式】你写的是剧本不是小说，严禁大段连贯叙述、严禁把台词嵌在叙述段落里。单集严格800-1000字（3-4个场景，每场景约250字）。必须严格按以下骨架逐行排版：
 第X集 标题
@@ -142,6 +153,6 @@ Rules: one △ line = one action; one dialogue line = one character's one uttera
 角色名（情绪/动作）：台词
 △ 下一个动作
 角色名：台词
-硬性规则：①每个动作独占一行且必须以△开头；②每句台词独占一行，格式为“角色名（可选情绪）：台词”，不得写成“他说：”“某人喊道：”；③△动作行与台词行交替推进，不允许出现超过3行连续无△的纯叙述；④台词要短，单句尽量不超过30字；⑤给导演现场调度与演员表演留发挥空间，不要写景别/运镜术语，不要写提示词式文字。`;
+硬性规则：①每个动作独占一行且必须以△开头；②每句台词独占一行，格式为“角色名（可选情绪）：台词”，不得写成“他说：”“某人喊道：”；③△动作行与台词行交替推进，不允许出现超过3行连续无△的纯叙述；④台词要短，单句尽量不超过30字；⑤给导演现场调度与演员表演留发挥空间，不要写景别/运镜术语，不要写提示词式文字；⑥制片铁律（写之前就定，不是写完再改）：单集3-5场（硬上限8场，超过就排不出通告）；每场场头必须写清「内景/外景+地点+时间」；至少复用一次已有场景；有台词角色不超过6人（硬上限8人）；不写群演、爆炸、枪战、追车、水下、高空这类要额外预算的场面；夜戏不超过一半。`;
 }
 
