@@ -100,11 +100,13 @@ function setup(handler = async () => response([])) {
     }),
   };
   c.window.Api = c.Api;
+  c.councilHints = {}; // v2.330 模块级 let：resetPrivateAccountState 会清空它
   for (const name of [
     'syncDraftProject', 'stopWaitTips', 'listenFinish', 'listenBumpReqSeq', 'closeWorkbench',
     'renderTaskQueue', 'refreshListenBtn', 'refreshAdminNav', 'renderModes', 'initInterviewPanel',
     // v2.329 退出登录后按新等级刷新下拉/剧本类型锁定态（测试内以记录桩替代）
-    'renderSelects', 'renderScriptTypes',
+    // v2.330 多方评议理由预取：测试内以记录桩替代，不发网络
+    'loadCouncilHints', 'renderSelects', 'renderScriptTypes',
     'openAuth', 'xnSay', 'renderProgress', 'renderResult', 'showFail', 'renderAigcDash',
     'populateProfileOptions', 'loadCaps', 'openListen', 'openListenSeries', 'resetPanels',
     'failGenerationSession', 'alert', 'openModal', 'renderDpPage', 'renderDpSummary',

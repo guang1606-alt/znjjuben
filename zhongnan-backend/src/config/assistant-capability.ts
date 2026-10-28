@@ -3,8 +3,8 @@
  * 对齐 PRD 6.2.2：
  *  免费：基础操作引导、FAQ、简单创作建议、基础提醒
  *  基础：创作灵感建议、基础台词润色、余额/进度通知
- *  高级：深度创作建议、人设/剧情优化、个性化题材推荐、长期创作记忆
- *  专业：全功能语音操控、专属创作助理、深度市场分析、定制化习惯学习
+ *  高级：深度创作建议、人设/剧情优化、个性化题材推荐、长期创作记忆、定制化习惯学习、听剧本
+ *  专业：全功能语音操控、专属创作助理、深度市场分析
  * 企业版等同专业。所有判定在服务端执行，前端仅做隐藏/引导，永远不信前端。
  */
 import { MemberLevel } from './pricing';
@@ -22,7 +22,7 @@ export type AssistantAction =
   | 'dedicated_assistant'   // 专属创作助理
   | 'market_analysis'       // 深度市场分析
   | 'habit_learning'        // 定制化创作习惯学习
-  | 'listen_script';        // 听剧本（朗读脚本/语音听稿，高级会员起）
+  | 'listen_script';        // 听剧本（朗读脚本/语音听稿，基础会员起）
 
 /** 各能力所需最低会员等级 */
 const ACTION_MIN_LEVEL: Record<AssistantAction, MemberLevel> = {
@@ -37,8 +37,8 @@ const ACTION_MIN_LEVEL: Record<AssistantAction, MemberLevel> = {
   voice_control: MemberLevel.PRO,
   dedicated_assistant: MemberLevel.PRO,
   market_analysis: MemberLevel.PRO,
-  habit_learning: MemberLevel.PRO,
-  listen_script: MemberLevel.ADVANCED,
+  habit_learning: MemberLevel.ADVANCED,
+  listen_script: MemberLevel.BASIC,
 };
 
 const LEVEL_RANK: Record<MemberLevel, number> = {

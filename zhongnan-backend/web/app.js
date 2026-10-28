@@ -102,6 +102,25 @@
   const SCRIPT_TYPES = (typeof window !== 'undefined' && window.ZN_DATA && window.ZN_DATA.SCRIPT_TYPES) || [];
   const OUT_LANGS = (typeof window !== 'undefined' && window.ZN_DATA && window.ZN_DATA.OUT_LANGS) || [];
   const TIER_NAME = { basic: '基础', advanced: '高级', pro: '专业' };
+  // v2.330 多方评议（Council）理由缓存：登录后拉取一次（47 项），锁定项以 title 展示「为什么是这个档」
+  let councilHints = {};
+  function councilText(id) {
+    const hints = typeof councilHints === 'undefined' ? null : councilHints;
+    const h = hints && hints[String(id)];
+    if (!h) return '';
+    return (lang === 'en' ? h.en : h.zh) || '';
+  }
+  function councilTitle(id) { const s = councilText(id); return s ? ` title="${escapeHtml(s)}"` : ''; }
+  function loadCouncilHints() {
+    if (!Api.isAuthed()) { councilHints = {}; return; }
+    Api.request('/api/generate/council?module=all').then((r) => r.json()).then((data) => {
+      const items = data && Array.isArray(data.items) ? data.items : [];
+      const next = {};
+      items.forEach((it) => { next[it.id] = { zh: it.summary, en: it.summaryEn, status: it.status }; });
+      councilHints = next;
+      renderModes(); renderSelects(); renderScriptTypes();
+    }).catch(() => {});
+  }
   // 内部账户（超管杨光本人手机号 + 杨光指定的副管理员）：创作全免费，前端等级墙一律按专业级开放
   const _RANK = { free: 0, basic: 1, advanced: 2, pro: 3, paid: 3 };
   function isStaffAcct(me) { const m = me || meCache; return !!(m && (m.staff || m.isAdmin)); }
@@ -159,6 +178,7 @@
       const tierLocked = !m.soon && !m.lock && (RANK[m.free] ?? 0) > myRank0;
       const card = document.createElement('button');
       card.className = 'mode-card' + (m.id === selectedMode ? ' on' : '') + (m.soon ? ' soon' : '') + (m.lock ? ' lock' : '') + (tierLocked ? ' tier-lock' : '');
+      const modeHint = councilText('mode:' + m.id); if (modeHint) card.title = modeHint;
       card.innerHTML = `<b>${D.mode[m.id] || m.id}</b><span>${D.modeDesc[m.id] || ''}</span>` +
         (m.soon ? `<em class="badge soon-badge">${lang === 'en' ? 'coming soon' : '研发中'}</em>` : '') +
         (m.lock ? `<em class="badge lock-badge">${lang === 'en' ? 'gated, age-verified' : '分级授权'}</em>` : '') +
@@ -1559,7 +1579,7 @@
         if (id !== 'outLang' || !OUT_LANGS.length) return `<option value="${v}">${lab}</option>`;
         const meta = OUT_LANGS.find((l) => l.code === v);
         const locked = meta ? (_RANK[meta.min] ?? 0) > my : false;
-        return `<option value="${v}"${locked ? ' disabled' : ''}>${lab}${locked ? (lang === 'en' ? ` · 🔒 ${meta.min}` : ` · 🔒 需${TIER_NAME[meta.min] || ''}会员`) : ''}</option>`;
+        return `<option value="${v}"${locked ? ' disabled' : ''}${councilTitle('language:' + v)}>${lab}${locked ? (lang === 'en' ? ` · 🔒 ${meta.min}` : ` · 🔒 需${TIER_NAME[meta.min] || ''}会员`) : ''}</option>`;
       }).join('');
       el.value = cur;
       // 当前值被降级锁定时回落到第一个可用项（如换账号/退出后）
@@ -1579,7 +1599,7 @@
     el.innerHTML = SCRIPT_TYPES.map((x) => {
       const locked = (_RANK[x.min] ?? 0) > my;
       const name = lang === 'en' ? x.en : x.zh;
-      return `<option value="${x.id}"${locked ? ' disabled' : ''}>${name}${locked ? (lang === 'en' ? ` · 🔒 ${x.min}` : ` · 🔒 需${TIER_NAME[x.min] || ''}会员`) : ''}</option>`;
+      return `<option value="${x.id}"${locked ? ' disabled' : ''}${councilTitle('scriptType:' + x.id)}>${name}${locked ? (lang === 'en' ? ` · 🔒 ${x.min}` : ` · 🔒 需${TIER_NAME[x.min] || ''}会员`) : ''}</option>`;
     }).join('');
     el.value = want;
     if (!el._znBound) {
@@ -2424,6 +2444,7 @@
     progress = lastDone = abortCtrl = currentProjectId = pendingWarnings = lastFiling = null;
     currentScripts = []; currentWorksProject = currentWorksDiagnosis = null;
     lastDiagnosis = lastWave = waveProjectId = meCache = capsCache = null;
+    councilHints = {}; // v2.330 账号切换清空评议理由，防串号
     castAssetsLoaded = propAssetsLoaded = sceneAssetsLoaded = false;
     dashJumpTarget = dashConflictScroll = null;
     castThinActive = propThinActive = sceneThinActive = false;
@@ -3027,6 +3048,7 @@
     $('inRegion').value = me.region || ''; $('inAgeBand').value = me.ageBand || '';
     $('inGender').value = me.gender || ''; $('inPersonalized').checked = me.personalized !== false;
     refreshAdminNav(); renderModes(); renderHome(); renderSelects(); renderScriptTypes(); staffCostPatch(); loadCaps(); loadCastAssets(); loadPropAssets(); loadSceneAssets(); // v2.151/v2.159/v2.161 登录后预取角色/道具/场景资产清单
+    loadCouncilHints(); // v2.330 登录后预取多方评议结论，锁定项 hover 可见档位理由
   }
   // v2.71 显式画像下拉（与后端 profile-mapping 白名单一致；幂等，只填充一次）
   const PF_REGIONS = ['黑龙江','吉林','辽宁','北京','天津','陕西','甘肃','宁夏','青海','新疆','河南','河北','山西','内蒙古','山东','四川','重庆','湖南','湖北','上海','江苏','浙江','安徽','广东','广西','海南','福建','台湾','云南','贵州','江西','海外','其他'];

@@ -1069,7 +1069,70 @@ describe('v2.54 小南能力硬闸门与黑盒', { concurrency: 1 }, () => {
     assert.strictEqual(j.capabilities.length, 13);
     assert.strictEqual(j.capabilities.find((c) => c.action === 'dialogue_polish').allowed, true);
     assert.strictEqual(j.capabilities.find((c) => c.action === 'deep_advice').allowed, false);
-    assert.strictEqual(j.capabilities.find((c) => c.action === 'listen_script').allowed, false);
+    assert.strictEqual(j.capabilities.find((c) => c.action === 'listen_script').allowed, true); // v2.330 评议下调至基础档
+    assert.strictEqual(j.capabilities.find((c) => c.action === 'habit_learning').allowed, false); // v2.330 下调至高级档，基础仍不可用
+  });
+});
+
+describe('v2.330 多方评议 Council 接口', { concurrency: 1 }, () => {
+  const h = (uid, level = 'BASIC') => {
+    mem._seedUser({ id: uid, level });
+    return { Authorization: `Bearer ${signAccess({ sub: uid, level })}` };
+  };
+  it('未登录 401', async () => {
+    const r = await fetch(base + '/api/generate/council');
+    assert.strictEqual(r.status, 401);
+  });
+  it('缺省 all：47 项、计数合计自洽、无空理由的主席保留', async () => {
+    const r = await fetch(base + '/api/generate/council', { headers: h('u_council_all') });
+    assert.strictEqual(r.status, 200);
+    const j = await r.json();
+    assert.strictEqual(j.module, 'all');
+    assert.strictEqual(j.items.length, 47);
+    const sum = Object.values(j.summary.byStatus).reduce((a, b) => a + b, 0);
+    assert.strictEqual(sum, 47, '状态计数必须覆盖全部评议项');
+    assert.strictEqual(Object.values(j.summary.byModule).reduce((a, b) => a + b, 0), 47);
+    for (const it of j.items) {
+      if (it.status === 'upheld') assert.ok(it.chairNote?.zh, `主席保留项必须写明理由：${it.id}`);
+      if (it.status === 'anchor') assert.strictEqual(it.target, it.current, `锚点不得改档：${it.id}`);
+      assert.ok(it.suggested >= 0 && it.suggested <= 3);
+      assert.ok(it.consensus >= 0 && it.consensus <= 1);
+    }
+  });
+  it('module=membership：30 项且不混入定价/助理板块', async () => {
+    const r = await fetch(base + '/api/generate/council?module=membership', { headers: h('u_council_mem') });
+    assert.strictEqual(r.status, 200);
+    const j = await r.json();
+    assert.strictEqual(j.items.length, 30);
+    assert.ok(j.items.every((it) => it.module === 'membership'));
+  });
+  it('未知板块 400 并列出可选值', async () => {
+    const r = await fetch(base + '/api/generate/council?module=grow', { headers: h('u_council_bad') });
+    assert.strictEqual(r.status, 400);
+    const j = await r.json();
+    assert.strictEqual(j.error, 'UNKNOWN_COUNCIL_MODULE');
+    assert.deepStrictEqual(j.allowed, ['all', 'membership', 'pricing', 'assistant']);
+  });
+  it('board=1：8 席 / 5 维 / 6 步协议 / 分歧榜', async () => {
+    const r = await fetch(base + '/api/generate/council?board=1', { headers: h('u_council_board') });
+    assert.strictEqual(r.status, 200);
+    const j = await r.json();
+    assert.strictEqual(j.seats.length, 8);
+    assert.strictEqual(j.dimensions.length, 5);
+    assert.strictEqual(j.protocol.length, 6);
+    assert.ok(j.tensions.length > 0 && j.tensions.length <= 5);
+    assert.ok(j.digest['assistant:listen_script'].hint.includes('基础'));
+  });
+  it('/modes 每项携带 council 结论（前端挂理由，不在前端硬编码）', async () => {
+    const r = await fetch(base + '/api/generate/modes', { headers: h('u_council_modes') });
+    assert.strictEqual(r.status, 200);
+    const j = await r.json();
+    assert.strictEqual(j.modes.length, 8);
+    assert.ok(j.modes.every((m) => m.council && m.council.status));
+    assert.ok(j.scriptTypes.every((t) => t.council && t.council.status));
+    assert.ok(j.languages.every((l) => l.council && l.council.status));
+    assert.ok(j.sparkTracks.every((t) => t.council && t.council.status));
+    assert.strictEqual(j.modes.find((m) => m.id === 'tag').council.status, 'anchor');
   });
 });
 
@@ -1084,16 +1147,17 @@ describe('v2.55 听剧本朗读接口', { concurrency: 1 }, () => {
     mem._projects.set(`proj_${uid}`, { id: `proj_${uid}`, userId: uid, bible: null });
     mem._scripts.push({ id, projectId: `proj_${uid}`, epNo: 1, version: 1, content: listenText, title: '雨夜归来', wordCount: listenText.length, score: 80 });
   };
-  it('基础会员听剧本 → 403 ASSISTANT_LEVEL_REQUIRED 且不扣分', async () => {
+  it('v2.330 基础会员听剧本 → 200 且不扣分（评议由高级下调为基础档）', async () => {
     seedScript('u_lis_basic', 'BASIC', 's_lis_b');
     const before = mem._accounts.get('u_lis_basic').balance;
     const h = { Authorization: `Bearer ${signAccess({ sub: 'u_lis_basic', level: 'BASIC' })}` };
     const r = await fetch(base + '/api/generate/scripts/s_lis_b/listen', { headers: h });
-    assert.strictEqual(r.status, 403);
+    assert.strictEqual(r.status, 200);
     const j = await r.json();
-    assert.strictEqual(j.error, 'ASSISTANT_LEVEL_REQUIRED');
-    assert.strictEqual(j.needLevel, 'ADVANCED');
-    assert.strictEqual(mem._accounts.get('u_lis_basic').balance, before);
+    assert.strictEqual(j.scriptId, 's_lis_b');
+    assert.ok(j.segments.length > 0, '基础档必须拿到完整分段朗读稿');
+    assert.ok(j.cast, '角色声线表随响应下发');
+    assert.strictEqual(mem._accounts.get('u_lis_basic').balance, before, '听稿不扣积分');
   });
   it('高级会员听剧本 → 200，分段/角色/时长/朗读稿齐备，技术行剔除', async () => {
     seedScript('u_lis_adv', 'ADVANCED', 's_lis_a');

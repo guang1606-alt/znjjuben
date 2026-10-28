@@ -111,6 +111,8 @@ import { evaluateConsent, GATING_VALID_DAYS, type Region } from '../engine/matur
 import { buildSampleScript } from '../engine/sample-script';
 import { extractDocument } from '../lib/doc-extract';
 import { assistantGate, assistantCapabilitiesOf, fixActionByDim } from '../config/assistant-capability';
+import { COUNCIL_MODULES, type CouncilModuleId } from '../config/council';
+import { councilBoard, reviewCouncil, councilBrief } from '../engine/council'; // v2.330 多方评议（分级依据可查询）
 import { sanitizeClientError } from '../lib/blackbox';
 import { buildListenScript, listenEntitleNote } from '../engine/listen-script';
 import { buildVoiceCast } from '../engine/listen-voice-cast';
@@ -136,6 +138,37 @@ generateRouter.get('/assistant/capabilities', authRequired, async (req: AuthRequ
   const u = await prisma.user.findUnique({ where: { id: req.userId! }, select: { level: true } });
   const level = (u?.level as MemberLevel) ?? MemberLevel.FREE;
   res.json({ level, capabilities: assistantCapabilitiesOf(level) });
+});
+
+/**
+ * v2.330 多方评议（Council）：把「谁是会员、谁拿到哪一档权限」的依据变成可查询事实。
+ *  · ?module=membership|pricing|assistant|all（缺省 all）→ 逐项结论 + 计数摘要
+ *  · ?board=1 → 追加 8 席席位、5 个维度、可复用协议与分歧榜
+ * 纯函数确定性输出，不含任何用户私有数据，登录即可读（前端用于锁定项挂理由、客服答疑）。
+ */
+generateRouter.get('/council', authRequired, async (req: AuthRequest, res) => {
+  const raw = String(req.query.module ?? 'all').trim().toLowerCase();
+  const valid = ['all', ...COUNCIL_MODULES.map((m) => m.id)];
+  if (!valid.includes(raw)) {
+    return res.status(400).json({
+      error: 'UNKNOWN_COUNCIL_MODULE',
+      message: `未知评议板块：${raw}`,
+      allowed: valid,
+    });
+  }
+  const scope = raw as CouncilModuleId | 'all';
+  if (String(req.query.board ?? '') === '1') {
+    if (scope === 'all') return res.json(councilBoard());
+    const board = councilBoard();
+    const review = reviewCouncil(scope);
+    return res.json({
+      ...board,
+      review,
+      digest: Object.fromEntries(review.items.map((r) => [r.id, board.digest[r.id]])),
+      tensions: board.tensions.filter((r) => r.module === scope),
+    });
+  }
+  res.json(reviewCouncil(scope));
 });
 
 // v2.18 X剧本成年分级授权（mature-gating 技能接线）：以数据库签署记录 + 已支付开通订单做服务端核验，前端自报布尔值不可信
@@ -484,12 +517,15 @@ generateRouter.get('/modes', authRequired, async (req: AuthRequest, res) => {
       // 成年分级只看历史 wire-id（mature_x/xscript），8 模式本身无成人向入口
       mature: requiresMatureConsent(m.id),
       unlocked: modeAvailable(m.id, level),
+      // v2.330 分级依据：前端在锁定项上挂「为什么在这一档」，不在前端硬编码文案
+      ...(councilBrief(`mode:${m.id}`) ? { council: councilBrief(`mode:${m.id}`) } : {}),
       ...(m.costNote ? { costNote: m.costNote, costNoteEn: m.costNoteEn ?? m.costNote } : {}),
       // v2.329 灵感式三条子轨道及其解锁态（前端据此渲染轨道切换与专业版引导）
       ...(m.id === 'spark' ? {
         tracks: SPARK_TRACKS.map((tk) => ({
           id: tk.id, name: tk.name, nameEn: tk.nameEn, desc: tk.desc, descEn: tk.descEn,
           minLevel: tk.minLevel, unlocked: trackAvailable('spark', tk.id, level),
+          ...(councilBrief(`track:${tk.id}`) ? { council: councilBrief(`track:${tk.id}`) } : {}),
         })),
       } : {}),
     })),
@@ -497,14 +533,17 @@ generateRouter.get('/modes', authRequired, async (req: AuthRequest, res) => {
     scriptTypes: SCRIPT_TYPES.map((t) => ({
       id: t.id, name: t.name, nameEn: t.nameEn, desc: t.desc, descEn: t.descEn,
       minLevel: t.minLevel, unlocked: scriptTypeAvailable(t.id, level),
+      ...(councilBrief(`scriptType:${t.id}`) ? { council: councilBrief(`scriptType:${t.id}`) } : {}),
     })),
     languages: OUTPUT_LANGUAGES.map((l) => ({
       code: l.code, name: l.name, nameEn: l.nameEn, native: l.native,
       minLevel: l.minLevel, unlocked: languageAvailable(l.code, level),
+      ...(councilBrief(`language:${l.code}`) ? { council: councilBrief(`language:${l.code}`) } : {}),
     })),
     sparkTracks: SPARK_TRACKS.map((tk) => ({
       id: tk.id, name: tk.name, nameEn: tk.nameEn, minLevel: tk.minLevel,
       unlocked: trackAvailable('spark', tk.id, level),
+      ...(councilBrief(`track:${tk.id}`) ? { council: councilBrief(`track:${tk.id}`) } : {}),
     })),
   });
 });
