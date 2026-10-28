@@ -188,6 +188,24 @@ test('opening an adaptation draft offers a resume action with the saved brief an
   assert.equal($('episodes').disabled, true);
 });
 
+test('v2.322 opening a novel project offers a resume action with the saved sourceText', async () => {
+  const project = { id: 'novel1', title: '小说改短剧', mode: 'novel', totalEps: 20, engineTier: 'STANDARD', format: 'LIVE_ACTION',
+    bible: { sourceText: '小说原文：第一章他离开了故乡，踏入陌生的城市，开始了新的生活。' } };
+  const { context: c, $ } = setup(['openProject', 'resumeAdaptationProject', 'syncDraftProject', 'clearDraftProject'], {
+    draftProject: null, Api: { request: async () => ({}), jsonOrThrow: async () => [] },
+    closeWorkbench() {}, switchView() {}, renderModes() {}, syncTagBench() {}, syncModeBrief() {},
+  });
+  await c.openProject(project);
+  assert.match($('epsList').innerHTML, /worksResumeDraft/, '小说项目立项后必须有「继续创作」入口（与 adapt 对称）');
+  $('worksResumeDraft').onclick();
+  assert.equal(c.selectedMode, 'novel', '点继续创作后 selectedMode 必须切到 novel');
+  assert.equal(c.draftProject.id, 'novel1', 'draftProject 必须复用已立项项目，不再造孤儿');
+  assert.equal($('sourceText').value, project.bible.sourceText, '持久化的小说原文必须回填，续写版权闸门不中断');
+  assert.equal($('modeBrief').value, '', '小说模式无改编大纲，modeBrief 留空让用户写本集方向');
+  assert.equal($('episodes').value, 20);
+  assert.equal($('episodes').disabled, true);
+});
+
 test('submitting a resumed adaptation uses its project without creating a duplicate', async () => {
   const requests = [];
   const project = { id: 'draft1', title: '改编草稿', mode: 'adapt', totalEps: 20, engineTier: 'STANDARD', format: 'LIVE_ACTION' };

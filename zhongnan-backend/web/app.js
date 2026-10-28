@@ -2450,12 +2450,17 @@
   }
   function clearDraftProject() { draftProject = null; syncDraftProject(); }
   function resumeAdaptationProject(project) {
+    if (!project?.id) return;
+    const isNovel = project.mode === 'novel';
     const draft = project?.bible?.adaptationDraft;
-    if (!project?.id || !draft?.brief) return;
+    const hasAdaptBrief = !!draft?.brief;
+    const hasNovelSource = isNovel && typeof project.bible?.sourceText === 'string' && project.bible.sourceText.trim().length >= 10;
+    if (!hasAdaptBrief && !hasNovelSource) return; // 两种模式都不满足门槛就放弃（与作品库 canResume 对称）
     draftProject = project;
-    selectedMode = 'adapt';
+    selectedMode = isNovel ? 'novel' : 'adapt'; // v2.322 novel 模式切回 novel，而非硬编码 adapt
     switchView('studio'); renderModes(); syncTagBench(); syncModeBrief();
-    $('modeBrief').value = draft.brief;
+    // v2.322 novel 没有改编大纲，modeBrief 留空让用户写本集方向；adapt 才回填 brief
+    $('modeBrief').value = isNovel ? '' : (draft.brief || '');
     $('episodes').value = project.totalEps || 20;
     $('engine').value = project.engineTier || 'STANDARD';
     if ($('scriptFormatSel')) {
@@ -2463,11 +2468,13 @@
       $('scriptFormatSel').dispatchEvent?.(new Event('change'));
     }
     // v2.319 承接改编/草稿恢复时回填持久化原文（bible.sourceText；旧草稿兼容 adaptationDraft.sourceText），
-    // 续写生成时版权闸门继续生效；无原文才清空，不能再无条件清空使闸门裸奔
-    if ($('sourceText')) $('sourceText').value = project.bible?.sourceText || draft.sourceText || '';
+    // v2.322 novel 同样走这条路径（立项时 sourceText 已持久化进 bible）
+    if ($('sourceText')) $('sourceText').value = project.bible?.sourceText || draft?.sourceText || '';
     syncDraftProject(); closeWorkbench();
     $('modeBrief').focus();
-    xnSay(lang === 'en' ? 'Your adaptation brief is ready. Review it, then generate this project.' : '已恢复改编大纲，确认简报后点击「生成剧本」即可继续这个项目。');
+    xnSay(isNovel
+      ? (lang === 'en' ? 'Novel source restored. Describe this episode direction, then generate.' : '小说原文已回填，填写本集方向后点击「生成剧本」即可继续。')
+      : (lang === 'en' ? 'Your adaptation brief is ready. Review it, then generate this project.' : '已恢复改编大纲，确认简报后点击「生成剧本」即可继续这个项目。'));
   }
   window.addEventListener('zn-adaptation-project', (event) => resumeAdaptationProject(event.detail?.project));
   let worksReqSeq = 0; // v2.274：作品搜索同会话请求序号，弱网乱序时旧查询响应一律作废（同 mkReqSeq/feedReqSeq 范式）
@@ -2707,9 +2714,14 @@
     }
     if (!isCurrentProject()) return;
     if (!eps.length) {
-      const resumeBtn = p.bible?.adaptationDraft?.brief ? `<button type="button" class="btn-primary" id="worksResumeDraft">${lang === 'en' ? 'Continue adaptation' : '继续改编创作'}</button>` : '';
+      // v2.322 novel 模式与 adapt 对称：sourceText 已立项持久化进 bible，
+      // 作品库必须给"继续创作"入口，否则用户刷新页面后想生成第 2 集只能重新立项（造孤儿项目+原文重贴）
+      const hasAdaptDraft = !!p.bible?.adaptationDraft?.brief;
+      const hasNovelSource = p.mode === 'novel' && typeof p.bible?.sourceText === 'string' && p.bible.sourceText.trim().length >= 10;
+      const canResume = hasAdaptDraft || hasNovelSource;
+      const resumeBtn = canResume ? `<button type="button" class="btn-primary" id="worksResumeDraft">${lang === 'en' ? 'Continue creation' : '继续创作'}</button>` : '';
       $('epsList').innerHTML = znEmptyHtml(lang === 'en' ? 'No finished episodes yet.' : '暂无成稿分集。') + resumeBtn;
-      if (p.bible?.adaptationDraft?.brief) $('worksResumeDraft').onclick = () => resumeAdaptationProject(p);
+      if (canResume) $('worksResumeDraft').onclick = () => resumeAdaptationProject(p);
       return;
     }
     // c202 版本分组：/fix 每改一次新增一行版本，旧逻辑把每一行都渲染成独立 EP 块，改出 v2 后页面出现两个“EP1”。
