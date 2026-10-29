@@ -44,11 +44,33 @@ export interface AigcShotStats {
   maxLinesPerShot: number;
 }
 
+/** v2.343 逐镜健康面板：MachineShot 原始数据的聚合视图，每镜一行 */
+export interface ShotBreakdownItem {
+  scene: number;
+  shot: number;
+  size: string;
+  move: string;
+  /** 估算秒数（取视觉/发声较大值 / unitsPerSecond） */
+  seconds: number;
+  /** 字当量合计（视觉 + 发声） */
+  units: number;
+  /** 台词句数 */
+  lines: number;
+  /** 是否有画面描述 */
+  hasVisual: boolean;
+  /** 风险等级：与 issues 对齐 */
+  risk: 'ok' | 'mid' | 'high';
+  /** 画面摘要（截取前 30 字/词，供前端快速预览） */
+  visual: string;
+}
+
 export interface AigcShotReport {
   level: 'ok' | 'watch' | 'over';
   score: number;
   stats: AigcShotStats;
   issues: AigcShotIssue[];
+  /** v2.343 逐镜健康面板（按 seconds 降序 → units 降序 → scene 升序 → shot 升序） */
+  shotBreakdown: ShotBreakdownItem[];
 }
 
 function countCjk(s: string): number {
@@ -110,14 +132,28 @@ export function checkAigcShotFeasibility(
     maxLinesPerShot,
   };
 
-  if (!shots.length) return { level: 'ok', score: 100, stats, issues: [] };
+  if (!shots.length) return { level: 'ok', score: 100, stats, issues: [], shotBreakdown: [] };
 
   const issues: AigcShotIssue[] = [];
+  const breakdown: ShotBreakdownItem[] = [];
   for (const sh of shots) {
     const u = shotUnits(sh, en);
     const sec = shotSeconds(sh, en);
     const at = en ? `Scene ${sh.scene} shot ${sh.shot}` : `第${sh.scene}场第${sh.shot}镜`;
-    if (!String(sh.visual || '').trim()) {
+    const hasVisual = !!String(sh.visual || '').trim();
+    // risk 判定（high 覆盖 mid）
+    let risk: 'ok' | 'mid' | 'high' = 'ok';
+    if (!hasVisual || sec >= AIGC_SHOT_LIMITS.shotHighSeconds) risk = 'high';
+    else if (sec >= AIGC_SHOT_LIMITS.shotMidSeconds || sh.lines.length >= AIGC_SHOT_LIMITS.linesPerShotMid) risk = 'mid';
+    // 画面摘要：中英都按字符截取前 30
+    const visual = String(sh.visual || '').slice(0, 30);
+    breakdown.push({
+      scene: sh.scene, shot: sh.shot, size: sh.size, move: sh.move,
+      seconds: sec, units: u, lines: sh.lines.length,
+      hasVisual, risk, visual,
+    });
+
+    if (!hasVisual) {
       issues.push({
         kind: 'visualess_shot',
         severity: 'high',
@@ -158,9 +194,14 @@ export function checkAigcShotFeasibility(
     }
   }
 
+  // 排序：seconds 降序 → units 降序 → scene 升序 → shot 升序
+  breakdown.sort((a, b) =>
+    b.seconds - a.seconds || b.units - a.units || a.scene - b.scene || a.shot - b.shot,
+  );
+
   const high = issues.filter((i) => i.severity === 'high').length;
   const mid = issues.filter((i) => i.severity === 'mid').length;
   const level: AigcShotReport['level'] = high ? 'over' : mid ? 'watch' : 'ok';
   const score = Math.max(0, 100 - high * 25 - mid * 12);
-  return { level, score, stats, issues };
+  return { level, score, stats, issues, shotBreakdown: breakdown };
 }
