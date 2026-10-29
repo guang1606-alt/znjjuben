@@ -46,6 +46,23 @@ const SFX_CUE_RE = /（(?:音效|配乐|环境音)[：:]([^）]*)）/;
 const SFX_CUE_EN_RE = /\((?:SFX|SOUND\s?EFFECT|MUSIC|AMBIENT|AMBIENCE)[^:)]*:?\s*([^)]*)\)/i;
 const INNER_CUE_RE = /（(?:内心|OS|画外音)[：:]?([^）]*)）/;
 const INNER_CUE_EN_RE = /\((?:INNER|V\.?O\.?|O\.?S\.?)[^:)]*:?\s*([^)]*)\)/i;
+/** v2.355 外观登记槽：（外观：角色=描述）/(LOOK: Name=look)/(WARDROBE: …)，全半角括号都认。
+ *  独立于 INLINE_CUE 家族且必须带冒号——避免英文自然语 "(look at …)" 被误抽。 */
+const LOOK_CUE_RE = /[（(]\s*(?:外观|LOOK|WARDROBE)\s*[：:][^）)]*[）)]/gi;
+const LOOK_ITEM_RE = /[（(]\s*(?:外观|LOOK|WARDROBE)\s*[：:]([^）)]*)[）)]/i;
+/** 外观槽内容拆分：分号分隔多角色，首个 =/＝ 分名与描述；空名/空描述段丢弃（宁缺毋滥） */
+function parseLookItems(content: string): { name: string; look: string }[] {
+  const out: { name: string; look: string }[] = [];
+  for (const seg of content.split(/[;；]/)) {
+    let eq = seg.indexOf('=');
+    if (eq < 0) eq = seg.indexOf('＝');
+    if (eq < 0) continue;
+    const name = seg.slice(0, eq).trim();
+    const look = seg.slice(eq + 1).trim();
+    if (name && look) out.push({ name, look });
+  }
+  return out;
+}
 
 // 五维可理解性词表（机器判断正文是否把“画面/动作/微情绪/声音”写足）
 const VISUAL_WORDS = ['灯', '光', '影', '天色', '墙', '地', '桌', '窗', '门', '风', '雾', '雨', '雪', '街', '楼道', '走廊', '房间', '车', '树', '天空', '暖', '冷', '昏暗', '明亮', '逆光', '阴影', '空间', '巷', '楼'];
@@ -68,7 +85,7 @@ const BRACKET_STACK_RE = /【[^】]{1,8}】[^【\n]*【[^】]{1,8}】/;
 // 关键词堆砌：顿号分隔 ≥4 段且整段没有动作动词
 const KEYWORD_STACK_RE = /、[^、\n]{1,10}、[^、\n]{1,10}、[^、\n]{1,10}、/;
 
-export type AigcBlockType = 'narrate' | 'dialogue' | 'inner' | 'sfx';
+export type AigcBlockType = 'narrate' | 'dialogue' | 'inner' | 'sfx' | 'look';
 export interface AigcBlock { type: AigcBlockType; speaker?: string; cue?: string; text: string }
 export interface AigcScene {
   no: number; head: string; place: string; time: string;
@@ -168,6 +185,12 @@ export function parseAigcEpisode(text: string): AigcParse {
       if (SFX_CUE_RE.test(c) || SFX_CUE_EN_RE.test(c)) pushBlock({ type: 'sfx', text: c.replace(/[（）()]/g, '') });
       else if (INNER_CUE_RE.test(c) || INNER_CUE_EN_RE.test(c)) pushBlock({ type: 'inner', text: c.replace(/[（）()]/g, '') });
     }
+    // v2.355 外观登记槽：独立于 inner/sfx 家族分流，一段内允许多个外观括号
+    for (const c of rest.match(LOOK_CUE_RE) || []) {
+      rest = rest.replace(c, '');
+      const m = c.match(LOOK_ITEM_RE);
+      if (m) for (const it of parseLookItems(m[1])) pushBlock({ type: 'look', speaker: it.name, text: it.look });
+    }
     rest = rest.trim();
     if (rest) {
       // 自然段中夹带的“角色（情绪）：台词”也拆成独立台词块（LLM 常把台词写进段落里）；
@@ -234,6 +257,8 @@ export function planAigcVolume(durationMin = 1): AigcVolumePlan {
 
 export interface AigcComposition {
   totalCjk: number; narrativeCjk: number; spokenCjk: number; sfxCjk: number;
+  /** v2.355 外观登记台账字数：非发声内容，计入总量但不占发声分子（否则外观槽会虚高发声占比） */
+  lookCjk: number;
   spokenRatio: number; dialogueLines: number; avgDialogueLen: number;
   compositionIssues: string[];
 }
@@ -241,14 +266,15 @@ export interface AigcComposition {
 export function analyzeAigcComposition(text: string): AigcComposition {
   const p = parseAigcEpisode(text);
   const en = isEnglishText(text);
-  let narrativeCjk = 0, spokenCjk = 0, sfxCjk = 0, dialogueLines = 0, dialogueLenSum = 0;
+  let narrativeCjk = 0, spokenCjk = 0, sfxCjk = 0, lookCjk = 0, dialogueLines = 0, dialogueLenSum = 0;
   for (const sc of p.scenes) for (const b of sc.blocks) {
     const n = blockUnits(b.text, en);
     if (b.type === 'narrate') narrativeCjk += n;
     else if (b.type === 'sfx') sfxCjk += n;
+    else if (b.type === 'look') lookCjk += n;
     else { spokenCjk += n; if (b.type === 'dialogue') { dialogueLines++; dialogueLenSum += n; } }
   }
-  const totalCjk = narrativeCjk + spokenCjk + sfxCjk;
+  const totalCjk = narrativeCjk + spokenCjk + sfxCjk + lookCjk;
   const spokenRatio = totalCjk ? Math.round((spokenCjk / totalCjk) * 100) / 100 : 0;
   const compositionIssues: string[] = [];
   // 英文用单词计量，最低样本量与台词长度阈值相应换算（1 汉字 ≈ 0.6 英文词）
@@ -268,7 +294,7 @@ export function analyzeAigcComposition(text: string): AigcComposition {
       }
     }
   }
-  return { totalCjk, narrativeCjk, spokenCjk, sfxCjk, spokenRatio, dialogueLines, avgDialogueLen: dialogueLines ? Math.round(dialogueLenSum / dialogueLines) : 0, compositionIssues };
+  return { totalCjk, narrativeCjk, spokenCjk, sfxCjk, lookCjk, spokenRatio, dialogueLines, avgDialogueLen: dialogueLines ? Math.round(dialogueLenSum / dialogueLines) : 0, compositionIssues };
 }
 
 // ---------- v2.80 确定性发声比提升：把叙述中描写人物内心的句子转为 (inner: …) ----------
@@ -308,6 +334,7 @@ export function boostSpokenRatio(text: string, targetAdd: number): string {
       const t = s.trim();
       if (!t) return s;
       if (curSpoken / total >= FLOOR || added >= targetAdd) return s;
+      if (LOOK_ITEM_RE.test(t)) return s; // v2.355 外观登记句不转内心独白
       if (innerKw.test(t) && t.length >= 8) {
         const units = blockUnits(t, en);
         // 加上这一句会冲过占比上限（或外层 targetAdd 上限）：跳过这句，找下一句更小的
@@ -341,7 +368,7 @@ export function analyzeAigcSceneCurve(text: string): SceneCurvePoint[] {
     let narrativeCjk = 0, spokenCjk = 0, dialogueLines = 0;
     for (const b of sc.blocks) {
       const len = blockUnits(b.text, en);
-      if (b.type === 'narrate' || b.type === 'sfx') narrativeCjk += len;
+      if (b.type === 'narrate' || b.type === 'sfx' || b.type === 'look') narrativeCjk += len; // v2.355 外观台账归非发声侧
       else { spokenCjk += len; if (b.type === 'dialogue') dialogueLines++; }
     }
     const cjk = narrativeCjk + spokenCjk;
@@ -435,6 +462,8 @@ export interface MachineShot {
   lines: { speaker: string; cue: string; text: string }[];
   audio: string[];
   inner: string[];
+  /** v2.355 外观槽：本镜新登记的角色外观（增量，非全量）；整集生效表用 resolveLooksByShot 逐镜继承计算 */
+  looks: { name: string; look: string }[];
 }
 
 const CLOSEUP_WORDS = ['指尖', '手', '眼', '眸', '嘴角', '泪', '指节', '睫毛', '唇', '手腕'];
@@ -474,15 +503,15 @@ export function buildShotManifest(text: string): { title: string; shots: Machine
   const shots: MachineShot[] = [];
   for (const sc of p.scenes) {
     let cur: MachineShot | null = null;
-    // 场首若先出现音效/内心/台词（叙述在后），先缓存并并入下一个有画面的镜头
-    const pending: { lines: MachineShot['lines']; audio: string[]; inner: string[] } = { lines: [], audio: [], inner: [] };
+    // 场首若先出现音效/内心/台词/外观登记（叙述在后），先缓存并并入下一个有画面的镜头
+    const pending: { lines: MachineShot['lines']; audio: string[]; inner: string[]; looks: MachineShot['looks'] } = { lines: [], audio: [], inner: [], looks: [] };
     const flushPending = (sh: MachineShot) => {
-      sh.lines.unshift(...pending.lines); sh.audio.unshift(...pending.audio); sh.inner.unshift(...pending.inner);
-      pending.lines = []; pending.audio = []; pending.inner = [];
+      sh.lines.unshift(...pending.lines); sh.audio.unshift(...pending.audio); sh.inner.unshift(...pending.inner); sh.looks.unshift(...pending.looks);
+      pending.lines = []; pending.audio = []; pending.inner = []; pending.looks = [];
     };
     const ensure = (visual: string): MachineShot => {
       if (!cur) {
-        cur = { scene: sc.no, shot: shots.length + 1, size: inferSize(visual), move: inferMove(visual), light: inferLight(sc, visual), visual, lines: [], audio: [], inner: [] };
+        cur = { scene: sc.no, shot: shots.length + 1, size: inferSize(visual), move: inferMove(visual), light: inferLight(sc, visual), visual, lines: [], audio: [], inner: [], looks: [] };
         shots.push(cur);
       }
       return cur;
@@ -524,14 +553,29 @@ export function buildShotManifest(text: string): { title: string; shots: Machine
       } else if (b.type === 'inner') {
         const c = cur as MachineShot | null;
         if (c) c.inner.push(b.text); else pending.inner.push(b.text);
+      } else if (b.type === 'look') {
+        const c = cur as MachineShot | null;
+        if (c) c.looks.push({ name: b.speaker ?? '', look: b.text }); else pending.looks.push({ name: b.speaker ?? '', look: b.text });
       }
     }
     // 场末仍有残留（整场无叙述段，纯台词场）：兜底建一个镜头承载，保证信息不丢
-    if (pending.lines.length || pending.audio.length || pending.inner.length) {
+    if (pending.lines.length || pending.audio.length || pending.inner.length || pending.looks.length) {
       const sh = ensure(''); flushPending(sh);
     }
   }
   return { title: p.title, shots, shotCount: shots.length };
+}
+
+/**
+ * v2.355 逐镜生效外观表：外观登记整集继承（短剧单集内服装默认连续），
+ * 遇到同名新登记（换装）当场覆盖。返回与 shots 等长的快照数组，供逐镜生成与连贯检测直接消费。
+ */
+export function resolveLooksByShot(shots: MachineShot[]): Record<string, string>[] {
+  const book = new Map<string, string>();
+  return (shots || []).map((sh) => {
+    for (const l of sh.looks || []) if (l.name && l.look) book.set(l.name, l.look);
+    return Object.fromEntries(book);
+  });
 }
 
 // ---------- 生成前写作指令（下发架构师/撰写/润色岗） ----------
@@ -547,6 +591,7 @@ export function aigcScreenplayDirective(lang: 'zh' | 'en' = 'zh'): string {
       'Every scene must let downstream text/image/video/audio models see five dimensions: a visual environment that establishes the space, a concrete character action, a micro-emotion or expression, a sound or ambience cue, and dialogue (a sub-10-second transition scene may skip dialogue).',
       'Organize one micro narrative unit (small goal → small obstacle → small result) per ~30 seconds; the system will split paragraphs into shots automatically, so do NOT write shot-size or camera-move jargon in the text itself.',
       'Micro example of the correct texture: "She presses every crease of the shirt flat with her fingertips; the cold white tube light flickers, half her face sunk in shadow. (SFX: the lamp hums, a cardboard box scrapes the floor.) The door slams open and the frame jolts, warm hallway light cutting two silhouettes onto the floor."',
+      '5) Wardrobe registry slot: the first time a character with dialogue or a close-up appears in the episode, register their look once in a natural parenthetical — (LOOK: Name=wardrobe/hair/signature prop; separate multiple characters with ;) — the look persists and is inherited across the whole episode; re-register on the spot ONLY when the story calls for a costume change, never repeat otherwise. The slot is a registry, not a substitute: keep weaving clothing into the prose as before.',
       'Volume is budgeted by finished runtime: 1200-1500 chars per on-screen minute (a ~2-min episode = 2400-2800). Spoken content (dialogue + V.O. + inner monologue) is only 18-28% — speech runs 4-5 chars/sec, so two minutes allow at most ~600 spoken chars, roughly 14-18 lines of 25-38 chars each; the other 72-82% MUST be non-spoken visual narrative (environment/action/micro-emotion/atmosphere). That extra bulk is exactly why an AIGC script is longer than a live-action one: the extra words are written for image/video/audio models to SEE, not for actors to say.',
     ].join('\n');
   }
@@ -559,6 +604,7 @@ export function aigcScreenplayDirective(lang: 'zh' | 'en' = 'zh'): string {
     '每个场都必须让下游语言/图片/视频/音频模型看清五个维度：能定场的环境画面、具体的人物动作、表情或微情绪、声音/氛围线索、人物台词（10秒内过场短场可无台词）。',
     '约每30秒一个微叙事单元（小目标→小阻碍→小结果）；系统会自动把自然段拆成分镜，所以正文里不要写景别、运镜术语。',
     '正确质感示例：“她指尖把衬衫每一道折痕压平，冷白灯管一闪一闪，半边脸埋在阴影里。（音效：灯管滋滋电流声，纸箱蹭着地面。）门‘砰’地被踹开，画面跟着晃了一下，走廊暖光在地上切出两道人影。”',
+    '5）外观登记槽：凡有台词或近景戏的角色，在其本集首次出场那场用自然括号登记一次——（外观：角色名=服装/发型/标志性道具，多角色用；分隔）；全集默认沿用继承，只有换装剧情才当场重新登记，没换装不要重复写。括号槽是登记台账不是替代品：正文里该有的穿着描写照常自然带出。',
     '单集容量按成片时长精算：每分钟成片对应1200-1500字（两分钟单集约2400-2800字）；其中台词+OS+内心独白只占18%-28%——中文语速4-5字/秒，两分钟最多约600发声字、约14-18句、单句25-38字；其余72%-82%必须是环境、动作、微情绪、氛围的画面叙述。AIGC本比真人实拍本厚的根本原因就在这里：多出来的字不是台词，是写给图片/视频/音频模型“看”的。',
   ].join('\n');
 }

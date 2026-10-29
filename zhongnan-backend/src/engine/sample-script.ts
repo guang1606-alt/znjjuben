@@ -46,9 +46,9 @@ const LIVE_SCRIPT = `《离婚当天，我继承了亿万家产》 第1集
 // AIGC 制作版（v2.33 Z-AIGC 流畅制作本）：流畅自然段承载五维细节，自然括号承载内心/音效，
 // 不出现【景别】【运镜】标签堆叠；景别/运镜由机器层 buildShotManifest 自动推断。
 const AV_BLOCKS = [
-  '镜头贴着她叠衬衫的手起，指尖把每一道折痕压得平平整整，再慢慢退成中景，扫过起泡的墙皮和那碗凝住的泡面。冷白灯管一闪一闪，半边脸埋在青色阴影里，她越平静，后面那口气憋得越足。（音效：灯管电流滋滋作响，纸箱蹭着水泥地，一下，又一下。）门“砰”地被踹开时画面跟着轻轻一晃，走廊暖光斜切进来，在地上拖出两道人影，皮鞋声由远及近。黄发女人往门框上一靠，眼神慢慢扫过整间屋子，像在清点战利品，嘴角那点笑全是施舍。',
+  '（外观：林晚=洗得发白的素色毛衣和旧牛仔裤，长发松松挽在脑后）镜头贴着她叠衬衫的手起，指尖把每一道折痕压得平平整整，再慢慢退成中景，扫过起泡的墙皮和那碗凝住的泡面。冷白灯管一闪一闪，半边脸埋在青色阴影里，她越平静，后面那口气憋得越足。（音效：灯管电流滋滋作响，纸箱蹭着水泥地，一下，又一下。）门“砰”地被踹开时画面跟着轻轻一晃，走廊暖光斜切进来，在地上拖出两道人影，皮鞋声由远及近。（外观：陈凯=崭亮的皮夹克，头发抹了发胶；女人=酒红色紧身裙，卷发披散）黄发女人往门框上一靠，眼神慢慢扫过整间屋子，像在清点战利品，嘴角那点笑全是施舍。',
   '昏黄的声控灯一明一灭，台阶上的阴影一格一格压下来，她一级一级往下挪箱子，影子被拉得老长。镜头跟在她身后慢慢后退，最后停在拐角，空楼道里多留半拍，远处一声狗吠，把她的孤衬得扎扎实实。（音效：行李箱轮子磕在台阶上的钝响，声控灯啪地亮起又熄灭。）她没哭，也没摔门，只在下一级台阶前轻轻吸了口气，指尖在拉杆上收紧又松开。林晚（很轻，像对自己说）：走慢点，别回头，过了今晚谁也别想再踩我一脚。',
-  '先用远景定场，巷口两束远光慢慢压过来，车灯逆光给人影勾出一圈毛边，深夜的冷蓝里，迈巴赫的暖黄车灯划出另一个世界。风掀起小卖部的塑料帘子，镜头缓缓横移，最后停在车门合上的一瞬。西装男人躬身等着，手搭在门框上，礼数越周全，对比越扎心。（音效：塑料帘哗啦、手机震动、引擎低鸣、车门沉闷合拢。）她把钥匙搁进垃圾桶时给了指尖一个近景，金属碰撞声清脆，像这一集的句点；陈凯举着的手缓缓垂下，手机啪地落地，黑屏，钩子吊在下一集。',
+  '先用远景定场，巷口两束远光慢慢压过来，车灯逆光给人影勾出一圈毛边，深夜的冷蓝里，迈巴赫的暖黄车灯划出另一个世界。风掀起小卖部的塑料帘子，镜头缓缓横移，最后停在车门合上的一瞬。（外观：管家=深色老派西装，鬓角花白，手上一双白手套）西装男人躬身等着，手搭在门框上，礼数越周全，对比越扎心。（音效：塑料帘哗啦、手机震动、引擎低鸣、车门沉闷合拢。）她把钥匙搁进垃圾桶时给了指尖一个近景，金属碰撞声清脆，像这一集的句点；陈凯举着的手缓缓垂下，手机啪地落地，黑屏，钩子吊在下一集。',
 ];
 
 // AIGC 英文制作版（Z-AIGC flowing production script）：与中文版同故事同标准——
@@ -56,7 +56,7 @@ const AV_BLOCKS = [
 const AIGC_SCRIPT_EN = `EP1 The Divorce Day Inheritance
 
 INT. CRAMPED RENTAL ROOM - NIGHT
-The cold-white ceiling lamp buzzes and flickers, throwing half her face into blue-grey shadow; the wall paint bubbles at one corner, and a half bowl of cold noodles sits on the windowsill, the soup already skinned over. Lin Wan crouches on the floor, folding a man's shirts one by one into a cardboard box, pressing every crease flat with her fingertips, her stare quiet, her lips pressed into a tight line, her movements slow as if counting off days. (SFX: electric hum from the lamp, the box scraping the concrete floor, once, then again.) The door slams open and warm hallway light cuts across the floor; two shadows stretch long. Chen Kai steps in with a yellow-haired woman on his arm, his leather shoes marking the tiles she just mopped, and she leans against the doorframe, her eyes sweeping the room, smiling like someone counting winnings.
+(LOOK: Lin Wan=faded beige cardigan and worn jeans, hair loosely pinned back) The cold-white ceiling lamp buzzes and flickers, throwing half her face into blue-grey shadow; the wall paint bubbles at one corner, and a half bowl of cold noodles sits on the windowsill, the soup already skinned over. Lin Wan crouches on the floor, folding a man's shirts one by one into a cardboard box, pressing every crease flat with her fingertips, her stare quiet, her lips pressed into a tight line, her movements slow as if counting off days. (SFX: electric hum from the lamp, the box scraping the concrete floor, once, then again.) The door slams open and warm hallway light cuts across the floor; two shadows stretch long. (LOOK: Chen Kai=glossy leather jacket, slicked-back hair; Lily=tight wine-red dress, loose curls) Chen Kai steps in with a yellow-haired woman on his arm, his leather shoes marking the tiles she just mopped, and she leans against the doorframe, her eyes sweeping the room, smiling like someone counting winnings.
 Chen Kai (irritated): Still not gone? With your dragging pace, my mother must have been blind to let you marry into this family.
 Lily (giggling): Kai, is this the worn-out wife you fed for three years? My, she really can endure.
 Lin Wan (not raising her eyes): Endure or not, after tonight none of it has anything to do with me.
@@ -68,7 +68,7 @@ The sound-activated lamp is half dead, bright and dim by turns, as grid after gr
 Lin Wan (very quietly, to herself): Walk slowly. Do not look back. After tonight, nobody gets to step on me again.
 
 EXT. ALLEY MOUTH - NIGHT
-The wind rises and flips the plastic curtain of the corner shop with a clatter; the street is dark blue and empty under the dim neon sign, cold air carrying fried-oil smell from the kitchen vent. The phone vibrates in her pocket and the screen shows one word: Butler. She stares at it, cancels the call, and it rings again, until at last she grips it and answers. Two beams of light drift slowly in at the alley mouth, backlighting her against the deep-blue night, and a black sedan glides up and rests inside a pool of warm yellow from a streetlamp. A man in a dark suit steps out, bows, and pulls the rear door open, one hand resting on the frame. (SFX: the plastic curtain snapping, a phone buzzing, a low engine purr, the heavy dull thud of a car door.)
+The wind rises and flips the plastic curtain of the corner shop with a clatter; the street is dark blue and empty under the dim neon sign, cold air carrying fried-oil smell from the kitchen vent. The phone vibrates in her pocket and the screen shows one word: Butler. She stares at it, cancels the call, and it rings again, until at last she grips it and answers. Two beams of light drift slowly in at the alley mouth, backlighting her against the deep-blue night, and a black sedan glides up and rests inside a pool of warm yellow from a streetlamp. (LOOK: Butler=dark old-fashioned suit, greying temples, white gloves) A man in a dark suit steps out, bows, and pulls the rear door open, one hand resting on the frame. (SFX: the plastic curtain snapping, a phone buzzing, a low engine purr, the heavy dull thud of a car door.)
 Butler (V.O., trembling): Young mistress, the old master passed away this morning. The lawyers have finished the inventory: under your name, thirty-seven hundred million, plus three companies.
 Lin Wan (silent for two seconds): Sir, you have the wrong number. I am in a hurry.
 Butler: No mistake. You are the Lin family's only blood child, lost for twenty years. The car is already downstairs. Turn around and look.
