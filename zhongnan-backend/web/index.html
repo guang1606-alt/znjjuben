@@ -113,8 +113,21 @@
       <div class="section-title"><span class="eyebrow" data-i="modesEyebrow">MODES</span><h2 data-i="modesTitle"></h2><small data-i="modeTip"></small><button class="chip" id="sampleEntryBtn" data-i="sampleEntry" style="margin-left:auto"></button></div>
       <div class="grid" id="modeGrid"></div>
 
+      <!-- v2.343 模式独立二级界面：点击模式卡后全屏进入，返回键回到网格 -->
+      <section class="mode-detail hidden" id="modeDetail" role="region" aria-label="mode detail workbench">
+        <header class="mode-detail-head">
+          <button class="mode-back" id="modeBackBtn" aria-label="back to modes grid">← <span data-i="modeBack">返回模式选择</span></button>
+          <div class="mode-detail-title">
+            <h3 id="modeDetailName"></h3>
+            <p id="modeDetailDesc" class="muted"></p>
+          </div>
+          <span class="mode-detail-cost muted" id="modeDetailCost"></span>
+        </header>
+        <div class="mode-detail-body" id="modeDetailBody"></div>
+      </section>
+
       <!-- v2.329 剧本类型（9 种，按会员等级解锁）：创作模式 × 剧本类型 × 输出语言 三维 -->
-      <div class="configbar" id="scriptTypeBar">
+      <div class="configbar hidden" id="scriptTypeBar">
         <div class="field"><label data-i="scriptTypeLabel" for="scriptTypeSel">剧本类型</label><select id="scriptTypeSel"></select></div>
       </div>
 
@@ -450,7 +463,8 @@
         <div class="muted" style="margin-top:6px;font-size:12px" id="stHint"></div>
       </section>
 
-      <section class="configbar">
+      <!-- v2.344 出本配置（剧集/平台/语言/引擎/制式/资产/生成按钮）：仅二级界面显示，由 showModeDetail 挂载 -->
+      <section class="configbar hidden" id="genConfigBar">
         <div class="field"><label data-i="episodes" for="episodes"></label><input id="episodes" type="number" min="1" max="300" value="20" /></div>
         <div class="field"><label data-i="platform" for="platform"></label><select id="platform"></select></div>
         <div class="field"><label data-i="outLang" for="outLang"></label><select id="outLang"></select></div>
@@ -470,7 +484,7 @@
       </section>
 
       <!-- 钩子编排（v1.83，导演钩子体系：用户选项 vs 系统默认，默认折叠不增负担） -->
-      <div class="hook-console">
+      <div class="hook-console hidden" id="hookConsole">
         <button type="button" class="chip" id="hookToggle">🎣 <span id="hookToggleText">钩子编排：系统智能·均衡</span> ▾</button>
         <div class="hook-panel hidden" id="hookPanel">
           <div class="hook-row"><b id="hookModeLbl">编排方式</b>

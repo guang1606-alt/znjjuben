@@ -203,7 +203,9 @@
           return;
         }
         clearDraftProject();
-        selectedMode = m.id; if (m.id !== 'spark') selectedTrack = 'material_rewrite'; renderModes(); syncTagBench(); syncModeBrief();
+        selectedMode = m.id; if (m.id !== 'spark') selectedTrack = 'material_rewrite';
+        renderModes(); syncTagBench(); syncModeBrief();
+        showModeDetail(m.id); // v2.343 跳转二级界面
       };
       grid.appendChild(card);
     });
@@ -243,6 +245,7 @@
           switchView('studio');
           selectedMode = m.id; if (m.id !== 'spark') selectedTrack = 'material_rewrite';
           renderModes(); syncTagBench(); syncModeBrief();
+          showModeDetail(m.id); // v2.343 跳转二级界面
         };
         qg.appendChild(card);
       });
@@ -2303,7 +2306,65 @@
     // 注：不主动扫描初始状态。syncTagBench/syncModeBrief 在 Observer 启动前的 toggle 不触发 layer 显示，
     // 用户主动点击 mode-card / bench-chip / tool-card 时 Observer 才捕捉到状态变化，自然展开工作台板块。
   }
+  // v2.343 模式独立二级界面路由状态（showModeDetail / backToGrid 控制；Observer 与 workbench 显隐受其守卫）
+  let _modeDetailOpen = false;
+  let _modeDetailMode = null;
+  // 模式 → 既有 panel 映射（无既有 panel 的模式数组为空，全靠 _renderModeBody 动态渲染）
+  const _MODE_PANEL_MAP = {
+    tag:        ['tagBench'],
+    interview:  ['interviewPanel'],
+    hot:        ['trendPanel'],
+    spark:      ['modeBriefPanel', 'sourceTextPanel'], // hitLabTracks 在 modeBriefPanel 内部
+    auto:       ['modeBriefPanel'],
+    diary:      ['modeBriefPanel'],
+    persona:    [],
+    duel:       [],
+    multiverse: [],
+  };
+
+  // v2.344 一级界面瘦身：出本配置（剧本类型/生成配置/钩子编排）只在二级界面按模式显示。
+  // 一级界面 = 纯模式选择；点卡进入二级后，配置随模式挂载到侧栏，返回时还原并重新隐藏。
+  const _LEVEL2_CONFIG_IDS = ['scriptTypeBar', 'genConfigBar', 'hookConsole'];
+  const _level2Homes = {}; // id -> {parent, next} 原始挂载点（首次移动前记录）
+  function _level2Remember() {
+    _LEVEL2_CONFIG_IDS.forEach(id => {
+      if (_level2Homes[id]) return;
+      const el = $(id);
+      if (el) _level2Homes[id] = { parent: el.parentNode, next: el.nextSibling };
+    });
+  }
+  // 各模式要隐藏的生成配置字段（field 容器 id 或其内部首个控件 id）；默认全部显示。
+  // 用独立的 mode-hidden 类，不碰各字段自有 hidden 逻辑（如 AIGC 字段按制式显隐）。
+  const _MODE_CONFIG_HIDE = {
+    auto:      ['engine'], // 全自动：引擎档位交给意图路由
+    interview: ['engine'], // 采访式：先聊出东西，引擎由系统定
+  };
+  function _applyModeConfigFilter(modeId) {
+    const bar = $('genConfigBar'); if (!bar) return;
+    const hide = new Set(_MODE_CONFIG_HIDE[modeId] || []);
+    bar.querySelectorAll('.field').forEach(f => {
+      const key = f.id || (f.querySelector('[id]') || {}).id || '';
+      f.classList.toggle('mode-hidden', !!key && hide.has(key));
+    });
+  }
+  function _restoreLevel2Config() {
+    _LEVEL2_CONFIG_IDS.forEach(id => {
+      const el = $(id), home = _level2Homes[id];
+      if (!el) return;
+      if (home && el.parentNode !== home.parent) {
+        const ref = (home.next && home.next.parentNode === home.parent) ? home.next : null;
+        home.parent.insertBefore(el, ref);
+      }
+      el.classList.add('hidden');
+    });
+    const bar = $('genConfigBar');
+    if (bar) bar.querySelectorAll('.mode-hidden').forEach(f => f.classList.remove('mode-hidden'));
+  }
+
   function _showWorkbenchLayer(id) {
+    // v2.343 守卫：modeDetail 打开期间不允许 Observer 重开 workbenchLayer；
+    // 用 typeof 防御 vm 测试环境（测试不注入 _modeDetailOpen → ReferenceError 被 Observer 吞）
+    if (typeof _modeDetailOpen !== 'undefined' && _modeDetailOpen) return;
     const layer = $('workbenchLayer'); if (!layer) return;
     const body = $('workbenchBody');
     const el = $(id); if (!el) return;
@@ -2410,6 +2471,259 @@
       const layer = $('workbenchLayer');
       if (layer && !layer.classList.contains('hidden')) _uiTrapTab(e, layer);
     }
+  }
+
+  // ═══ v2.343 模式独立二级界面路由 ═══
+  function showModeDetail(modeId) {
+    const mode = (window.I18N?.MODES || []).find(m => m.id === modeId);
+    const D = (window.I18N?.DICT?.[lang] || window.I18N?.DICT?.zh || {});
+    const detail = $('modeDetail'), body = $('modeDetailBody');
+    if (!detail || !body || !mode) return;
+
+    // 1. 隐藏 studio 主区
+    document.querySelectorAll('#view-studio > .section-title, #view-studio > .grid#modeGrid, #view-studio > #scriptTypeBar')
+      .forEach(el => el.classList.add('hidden'));
+
+    // 2. 关掉 workbenchLayer（panel 还在 workbenchBody）
+    closeWorkbench();
+
+    // 3. 先把所有 panel 安全放回 workbenchBody（防上次 backToGrid 中途失败残留）
+    const wb = $('workbenchBody');
+    if (wb) {
+      Object.values(_MODE_PANEL_MAP).flat().forEach(id => {
+        const el = $(id);
+        if (el && el.parentNode !== wb) wb.appendChild(el);
+      });
+    }
+    // 3.5 出本配置若还挂在 modeDetailBody 内（上次异常残留），先还原再清 body，防止被 innerHTML 销毁
+    _restoreLevel2Config();
+
+    // 4. 清空 modeDetailBody（只清 main/side 容器 + 动态块；panel 已安全放回 wb）
+    body.innerHTML = '';
+
+    // 5. 创建 main / side 两栏容器（CSS grid 自动分栏）
+    const main = document.createElement('div'); main.className = 'mode-detail-main';
+    const side = document.createElement('div'); side.className = 'mode-detail-side';
+    body.appendChild(main); body.appendChild(side);
+
+    // 6. 把该模式需要的既有 panel 从 workbenchBody 移到 main 容器
+    const panelIds = _MODE_PANEL_MAP[modeId] || [];
+    panelIds.forEach(id => {
+      const el = $(id);
+      if (el) { el.classList.remove('hidden'); main.appendChild(el); }
+    });
+
+    // 6.5 v2.344 出本配置挂载到侧栏：剧本类型居侧栏顶部（模式×类型是出本第一维度），
+    // 生成配置 + 钩子编排居侧栏底部（配置完即生成）；按模式隐藏无关字段
+    _level2Remember();
+    const stBar = $('scriptTypeBar');
+    if (stBar) { stBar.classList.remove('hidden'); side.appendChild(stBar); }
+
+    // 7. 动态渲染（无既有 panel 的模式 + 所有模式的侧栏）
+    _renderModeBody[modeId]?.(modeId, main, side);
+
+    const cfgBar = $('genConfigBar'), hookC = $('hookConsole');
+    if (cfgBar) { cfgBar.classList.remove('hidden'); side.appendChild(cfgBar); }
+    if (hookC) { hookC.classList.remove('hidden'); side.appendChild(hookC); }
+    _applyModeConfigFilter(modeId);
+
+    // 8. 注入标题 / 描述 / 成本
+    $('modeDetailName').textContent = D.mode?.[modeId] || mode.name || modeId;
+    $('modeDetailDesc').textContent = D.modeDesc?.[modeId] || '';
+    $('modeDetailCost').textContent = mode.cost || '';
+
+    detail.classList.remove('hidden', 'view-out');
+    detail.setAttribute('data-mode', modeId);
+
+    _modeDetailOpen = true;
+    _modeDetailMode = modeId;
+
+    // 9. 焦点
+    $('modeBackBtn')?.focus();
+  }
+
+  function backToGrid() {
+    const detail = $('modeDetail'), body = $('modeDetailBody'), wb = $('workbenchBody');
+    if (!detail) return;
+
+    const _finish = () => {
+      // 把所有被移到 main 的 panel 放回 workbenchBody + hidden（恢复 Observer 初始态）
+      Object.values(_MODE_PANEL_MAP).flat().forEach(id => {
+        const el = $(id);
+        if (el) {
+          el.classList.add('hidden');
+          if (wb && el.parentNode !== wb) wb.appendChild(el);
+        }
+      });
+      // 清空 body（清 main/side 容器 + 动态块）
+      if (body) body.innerHTML = '';
+
+      // v2.344 出本配置还原到一级界面原位置并保持隐藏（一级界面 = 纯模式选择）
+      _restoreLevel2Config();
+
+      // 恢复 studio 主区
+      document.querySelectorAll('#view-studio > .section-title, #view-studio > .grid#modeGrid')
+        .forEach(el => el.classList.remove('hidden'));
+
+      detail.classList.add('hidden');
+      detail.classList.remove('view-out');
+      detail.removeAttribute('data-mode');
+
+      _modeDetailOpen = false;
+      _modeDetailMode = null;
+
+      renderModes(); renderScriptTypes();
+      syncTagBench(); syncModeBrief();
+    };
+
+    const reduce = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+    if (reduce) { _finish(); return; }
+    detail.classList.add('view-out');
+    setTimeout(_finish, 180);
+  }
+
+  // Esc capture 阶段：modeDetail → 关闭 → workbench → modal（优先级最高）
+  function _modeDetailEsc(e) {
+    if (!_modeDetailOpen) return;
+    if (e.key === 'Escape') { e.stopPropagation(); e.preventDefault(); backToGrid(); }
+  }
+  document.addEventListener('keydown', _modeDetailEsc, true);
+  // 返回按钮（幂等绑定）
+  document.addEventListener('DOMContentLoaded', () => {
+    $('modeBackBtn')?.addEventListener('click', backToGrid);
+  });
+
+  // ═══ _renderModeBody：9 种模式的二级界面渲染器 ═══
+  // 签名 fn(modeId, mainEl, sideEl) — mainEl 已包含 move 过来的既有 panel
+  const _renderModeBody = {
+    tag(_mid, _main, side) { side.appendChild(_sideBlocks([
+      { title: '为什么标签先行', body: '题材 / 人设 / 冲突 / 世界观 四维度组合 → 系统定向出本；标签越准，钩子越狠。' },
+      { title: '生成前三件事', body: '① 题材 + 冲突维度必选；② 人设至少 2 个反差；③ 点「🧩 补齐维度」让系统帮你查漏。' },
+    ])); },
+    interview(_mid, _main, side) { side.appendChild(_sideBlocks([
+      { title: '采访式创作', body: '小南来采访你，想到哪说到哪即可；系统在你「落稿」时把对话结构化，不会中途自动写剧本。' },
+      { title: '真实优先', body: '不必润色、不必有逻辑漏洞，越像真实对话，后面 AI 能挖到的金矿越多。' },
+    ])); },
+    hot(_mid, _main, side) { side.appendChild(_sideBlocks([
+      { title: '四借法', body: 'persona_spin（换主角）/ setting_remix（换场景）/ formula_clone（抄结构）/ reversal（反转结局）。' },
+      { title: '快即是命', body: '热点 24 小时内蹭最有效；填完简报直接生成，别等想清楚再来。' },
+    ])); },
+    spark(_mid, _main, side) { side.appendChild(_sideBlocks([
+      { title: '三条轨道', body: '素材改编（基础）→ 名场面拓展（高级）→ 爆款逆向批量（专业）。选你当前需要的。' },
+      { title: '原作参考必填', body: '素材改编轨道建议粘贴原作原文，系统做 n-gram 重合度检测，防侵权。' },
+    ])); },
+    auto(_mid, _main, side) { side.appendChild(_sideBlocks([
+      { title: '意图路由', body: '你只管写想法，系统自动判断最匹配的创作模式（采访 / 灵感 / 标签 / …）并切引擎。' },
+      { title: '写得越啰嗦越好', body: '不用挑模式、不用管结构，倒完就行 — 路由靠的是意图识别。' },
+    ])); },
+
+    // —— 无既有 panel 的模式：往 main 里 append 动态块 ——
+
+    diary(_mid, main, side) {
+      const auth = document.createElement('div');
+      auth.className = 'dyn-mode-block mode-section';
+      auth.innerHTML = `
+        <div class="mode-section-title"><span>🔒 落稿授权</span><em class="muted">未经授权不进入剧本</em></div>
+        <div class="diary-auth" role="radiogroup" aria-label="diary authorization level">
+          <label><input type="radio" name="diaryAuth" value="summary" checked />
+            <span><b>① 仅摘要</b><span class="muted"> · 系统只提炼梗概，逐字不进剧本</span></span></label>
+          <label><input type="radio" name="diaryAuth" value="selected" />
+            <span><b>② 指定段落</b><span class="muted"> · 在日记里用「// 纳入」标记想纳入的段落</span></span></label>
+          <label><input type="radio" name="diaryAuth" value="full" />
+            <span><b>③ 全部放行</b><span class="muted"> · 完整进入剧本，风险自担，随时可撤回</span></span></label>
+        </div>`;
+      main.appendChild(auth);
+      side.appendChild(_sideBlocks([
+        { title: '隐私承诺', body: '日记默认仅你可见；选哪档、什么时候撤回，全在你。系统不会偷偷读。' },
+        { title: '推荐做法', body: '第一次用「仅摘要」，觉得好再加「指定段落」，「全部放行」给特别棒的素材。' },
+      ]));
+    },
+
+    persona(_mid, main, side) {
+      const card = document.createElement('div');
+      card.className = 'dyn-mode-block mode-section persona-card';
+      card.innerHTML = `
+        <div class="mode-section-title"><span>第一人称叙述者</span><em class="muted">填四个字段，系统用不可靠叙述在线索</em></div>
+        <label><span>他 / 她是谁（身份 / 职业 / 处境）</span><textarea id="personaIdentity" rows="2" placeholder="32 岁急诊医生，刚升主治，婚姻在名存实亡边缘"></textarea></label>
+        <label><span>他 / 她最想要什么（可以拿命换的）</span><textarea id="personaWant" rows="2" placeholder="把三年前那场手术的真相查出来，哪怕砸掉自己的饭碗"></textarea></label>
+        <label><span>他 / 她最怕什么（不敢面对的）</span><textarea id="personaFear" rows="2" placeholder="害怕自己其实早就知道真相，只是不敢承认"></textarea></label>
+        <label><span>他 / 她可能对自己撒的谎（埋在前半的线）</span><textarea id="personaLie" rows="2" placeholder="对所有人说「我没事」，其实已经三个月没睡过整觉"></textarea></label>`;
+      main.appendChild(card);
+      side.appendChild(_sideBlocks([
+        { title: '不可靠叙述', body: '前半段让叙述者撒谎 / 隐瞒 / 选择性记忆，后半段撕开 → 观众情绪翻三倍。' },
+        { title: '谎 vs 秘密', body: '谎是对自己撒的（自欺），秘密是对别人藏的；前者更有张力。' },
+      ]));
+    },
+
+    duel(_mid, main, side) {
+      const duel = document.createElement('div');
+      duel.className = 'dyn-mode-block mode-section';
+      duel.innerHTML = `
+        <div class="mode-section-title"><span>双人对撞</span><em class="muted">A 和 B 各填三字段，轮流出招逐轮加码</em></div>
+        <div class="duel-ab">
+          <div class="duel-col duel-col-a">
+            <h4>A<span class="muted">· 不可退让</span></h4>
+            <label><span>身份</span><input id="duelAIdentity" placeholder="刚拿到融资的 CEO"></label>
+            <label><span>要什么</span><textarea id="duelAWant" rows="2" placeholder="必须砍掉 30% 团队才能活"></textarea></label>
+            <label><span>为什么不能退</span><textarea id="duelALine" rows="2" placeholder="投资人签的是生死协议，退了就坐牢"></textarea></label>
+          </div>
+          <div class="duel-vs" aria-hidden="true">VS</div>
+          <div class="duel-col duel-col-b">
+            <h4>B<span class="muted">· 不可退让</span></h4>
+            <label><span>身份</span><input id="duelBIdentity" placeholder="跟着公司干了 8 年的老员工"></label>
+            <label><span>要什么</span><textarea id="duelBWant" rows="2" placeholder="这批兄弟一个都不能走"></textarea></label>
+            <label><span>为什么不能退</span><textarea id="duelBLine" rows="2" placeholder="走了对不起当年一起在车库打地铺的兄弟"></textarea></label>
+          </div>
+        </div>`;
+      main.appendChild(duel);
+      side.appendChild(_sideBlocks([
+        { title: '轮流出招', body: '系统让 A 和 B 各说一句、各出一招、每轮加码。直到一方掀底牌或被迫妥协。' },
+        { title: '不要写好坏人', body: 'A 和 B 都必须有道理 — 观众才能被撕到。' },
+      ]));
+    },
+
+    multiverse(_mid, main, side) {
+      const mv = document.createElement('div');
+      mv.className = 'dyn-mode-block mode-section';
+      mv.innerHTML = `
+        <div class="mode-section-title"><span>关键选择 + 世界线分叉</span><em class="muted">2-4 条线，每条写清路线和代价</em></div>
+        <div class="field"><label>那个关键选择是</label><textarea id="mvChoice" rows="2" placeholder="女主发现丈夫的保险单受益人不是她"></textarea></div>
+        <div class="multiverse-choices" id="mvChoices"></div>
+        <button type="button" class="chip" id="mvAddLineBtn">+ 再加一条世界线（2-4 条）</button>`;
+      const choicesEl = mv.querySelector('#mvChoices');
+      const _mkLine = (i) => {
+        const wrap = document.createElement('div');
+        wrap.className = 'multiverse-choice';
+        wrap.innerHTML = `
+          <h4>世界线 ${String.fromCharCode(64 + i)}</h4>
+          <label><span>走哪条路</span><input class="mv-line-route" placeholder="女主假装不知道，继续过日子"></label>
+          <label><span>代价是什么</span><textarea class="mv-line-cost" rows="2" placeholder="三年后发现丈夫一直在转移资产，自己已成弃子"></textarea></label>`;
+        return wrap;
+      };
+      for (let i = 1; i <= 3; i++) choicesEl.appendChild(_mkLine(i));
+      mv.querySelector('#mvAddLineBtn').onclick = () => {
+        if (choicesEl.children.length >= 4) { xnSay(lang === 'en' ? 'Max 4 worldlines.' : '最多 4 条世界线'); return; }
+        choicesEl.appendChild(_mkLine(choicesEl.children.length + 1));
+      };
+      main.appendChild(mv);
+      side.appendChild(_sideBlocks([
+        { title: '每条线必须自洽', body: '路线写「人物做了什么选择」，代价写「这个选择不可逆地改变了什么」。' },
+        { title: '合并回主线', body: '系统默认把所有世界线的教训合并回主线结局；你也可以明确写「不合并、每条线独立」。' },
+      ]));
+    },
+  };
+
+  // 侧栏块生成器
+  function _sideBlocks(blocks) {
+    const side = document.createElement('aside');
+    side.className = 'mode-detail-side dyn-mode-block';
+    blocks.forEach(b => {
+      const block = document.createElement('div');
+      block.className = 'side-block';
+      block.innerHTML = `<h4>${b.title}</h4><p>${b.body}</p>`;
+      side.appendChild(block);
+    });
+    return side;
   }
 
   // 5 工具卡 → 工作台 panel（toolPitch/toolRead → 编剧室；toolTeardown → 拆爆款；toolDiversity → 去重；toolBranch → 分支）
