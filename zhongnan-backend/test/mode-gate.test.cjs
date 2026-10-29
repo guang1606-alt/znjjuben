@@ -366,3 +366,22 @@ test('v2.96 screenModeGate hit_lab+sourceText：照搬爆款台词触发重合�
   const r = MG.screenModeGate('hit_lab', draft, 'zh', source);
   assert.ok(r.warnings.some((w) => w.rule === 'source_text_overlap'), 'hit_lab 模式触发 source_text_overlap');
 });
+
+test('v2.346 diary 闸门：summary 档成稿逐字引用日记原文 → warning', () => {
+  const source = '今天被领导当众批评，我攥紧了笔，指甲掐进掌心。其实我想哭，但忍住了。';
+  const draft = '△ 办公室。\n林晚攥紧了笔，指甲掐进掌心。\n林晚（忍泪）：我没事。';
+  const r = MG.screenModeGate('diary', draft, 'zh', source);
+  assert.ok(r.warnings.some((h) => h.rule === 'diary_unauthorized_quote'), '必须命中未授权引用');
+});
+test('v2.346 diary 闸门：无原文（full 档/未提交）→ 空报告不干扰', () => {
+  const r = MG.screenModeGate('diary', '△ 办公室。\n林晚（笑）：早。', 'zh');
+  assert.strictEqual(r.allowed, true);
+  assert.strictEqual(r.warnings.length, 0);
+  assert.strictEqual(r.blocked.length, 0);
+});
+test('v2.346 diary 闸门：成稿全部自写、与禁引范围无重合 → 不命中', () => {
+  const source = '今天被领导当众批评，我攥紧了笔，指甲掐进掌心。';
+  const draft = '△ 天台。\n林晚（释然）：风真大。';
+  const r = MG.screenModeGate('diary', draft, 'zh', source);
+  assert.ok(!r.warnings.some((h) => h.rule === 'diary_unauthorized_quote'));
+});

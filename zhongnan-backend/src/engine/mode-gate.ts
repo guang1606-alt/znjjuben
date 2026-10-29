@@ -372,6 +372,28 @@ function adaptGate(text: string, lang: GateLang, sourceText?: string): ModeGateR
   return { mode: 'adapt', blocked: [], warnings, allowed: true, score };
 }
 
+/* ---------- v2.346 diary 软闸门：日记模式授权档边界校验 ----------
+ * 调用方（pipeline）按授权档把「禁止引用范围」作为 sourceText 传入：
+ *   summary=日记全文（只许提炼梗概，逐字引用即命中）；selected=未纳入段；full=不传（脱敏靠生成侧指令）。
+ * 与三原文模式的 8% 重合阈值不同：日记语义是「禁止任何逐字引用」，fragments 非空即报。 */
+function diaryGate(text: string, lang: GateLang, sourceText?: string): ModeGateReport {
+  const en = lang === 'en';
+  const warnings: GateHit[] = [];
+  if (sourceText) {
+    const ov = nGramOverlap(text, sourceText, lang);
+    if (ov.fragments.length) {
+      const sample = ov.fragments.slice(0, 2).map((f) => `"${f.slice(0, 40)}${f.length > 40 ? '…' : ''}"`).join(en ? ', ' : '、');
+      warnings.push({
+        rule: 'diary_unauthorized_quote',
+        evidence: en ? `Draft quotes diary text outside the authorized scope — e.g. ${sample}` : `成稿逐字引用了授权范围外的日记内容，片段如：${sample}`,
+        advice: en ? 'Distill only the gist and emotional arc; rewrite every sentence in screenplay expression, never quote verbatim.' : '只提炼梗概与情绪走向；每一句都须用剧本化表达重写，不得逐字引用日记原文。',
+      });
+    }
+  }
+  const score = Math.max(0, 100 - warnings.length * 30);
+  return { mode: 'diary', blocked: [], warnings, allowed: true, score };
+}
+
 /* ---------- novel 软闸门：小说改编模式 ---------- */
 function novelGate(text: string, lang: GateLang, sourceText?: string): ModeGateReport {
   const en = lang === 'en';
@@ -626,6 +648,8 @@ export function screenModeGate(modeRaw: string | undefined | null, text: string,
       return hitLabGate(text, lang, sourceText);
     case 'interview':
       return interviewGate(text, lang);
+    case 'diary':
+      return diaryGate(text, lang, sourceText);
     case 'tag':
     case 'tags':
       return tagGate(text, lang);

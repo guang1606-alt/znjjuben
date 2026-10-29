@@ -208,3 +208,32 @@ export function buildModeInputDirective(canonMode: string | null | undefined, in
   if (canonMode === 'diary' && input.diary) return diaryDirective(input.diary, lang);
   return '';
 }
+
+/* ------------------------------------------------------------------ */
+/* v2.346 diary 三档授权·岗位分级消费（确定性裁剪，非 prompt 软约束）      */
+/* ------------------------------------------------------------------ */
+
+/** 消费角色：架构师（可读原文提炼）/ 撰写师（成稿者，逐字隔离线）/ 闸门（取禁止引用范围做重合校验） */
+export type DiaryRole = 'architect' | 'writer' | 'gate';
+
+const DIARY_INCLUDE_MARK = /^\s*\/\/\s*(纳入|include)(?![a-zA-Z])\s*[:：]?\s*/i; // 中文非 \w 不能用 \b，用负前瞻防 includes 误配
+
+/** 按授权档裁剪日记正文（brief）：
+ *  summary  —— architect 得全文（只提炼梗概与情绪走向，指令禁止逐字引用）；writer 不得见原文；gate 拿全文校验逐字引用
+ *  selected —— architect/writer 仅见「// 纳入 / // include」标记段（标记剥离，无标记则空）；gate 拿未纳入段
+ *  full     —— 双岗位得全文（真实人名/地名脱敏靠指令）；gate 不查
+ *  非法档兜底最严 summary（授权只能显式放宽，不能默许收紧失败）。纯函数·零 IO。 */
+export function applyDiaryAuth(auth: DiaryAuth | string, text: string, role: DiaryRole): string {
+  const t = (typeof text === 'string' ? text : '').trim();
+  if (!t) return '';
+  const a: DiaryAuth = (DIARY_AUTHS as string[]).includes(auth) ? (auth as DiaryAuth) : 'summary';
+  if (a === 'full') return role === 'gate' ? '' : t;
+  if (a === 'summary') return role === 'writer' ? '' : t;
+  // selected：按段落切分，含纳入标记的段落放行（剥离标记），其余进闸门禁引范围
+  const paras = t.split(/\n+/).map((p) => p.trim()).filter(Boolean);
+  if (role === 'gate') return paras.filter((p) => !DIARY_INCLUDE_MARK.test(p)).join('\n');
+  return paras.filter((p) => DIARY_INCLUDE_MARK.test(p))
+    .map((p) => p.replace(DIARY_INCLUDE_MARK, '').trim())
+    .filter(Boolean)
+    .join('\n');
+}

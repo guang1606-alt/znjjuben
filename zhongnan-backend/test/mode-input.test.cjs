@@ -94,3 +94,43 @@ describe('模式表单事实源·buildModeInputDirective 双语指令', () => {
     assert.strictEqual(M.buildModeInputDirective('persona', { duel: { a: { identity: 'x' } } }, 'zh'), '');
   });
 });
+
+describe('v2.346 diary 三档授权·applyDiaryAuth 岗位分级裁剪', () => {
+  const diary = '今天被领导当众批评，我攥紧了笔。\n// 纳入 晚上回家妈妈说：没事，吃饭。\n其实我想哭，但忍住了。';
+  it('summary：架构师得全文提炼梗概，撰写师与原文隔离', () => {
+    assert.strictEqual(M.applyDiaryAuth('summary', diary, 'architect'), diary);
+    assert.strictEqual(M.applyDiaryAuth('summary', diary, 'writer'), '');
+  });
+  it('summary：闸门拿全文做逐字引用校验', () => {
+    assert.strictEqual(M.applyDiaryAuth('summary', diary, 'gate'), diary);
+  });
+  it('selected：双岗位仅见「// 纳入」段（标记剥离），闸门见未纳入段', () => {
+    const inc = M.applyDiaryAuth('selected', diary, 'architect');
+    assert.ok(inc.includes('晚上回家妈妈说：没事，吃饭。'));
+    assert.ok(!inc.includes('//'));
+    assert.ok(!inc.includes('攥紧了笔'));
+    assert.strictEqual(M.applyDiaryAuth('selected', diary, 'writer'), inc);
+    const exc = M.applyDiaryAuth('selected', diary, 'gate');
+    assert.ok(exc.includes('攥紧了笔') && exc.includes('忍住了'));
+    assert.ok(!exc.includes('妈妈说'));
+  });
+  it('selected 支持英文 // include 标记', () => {
+    const en = 'Got yelled at.\n// include Mom said: dinner first.\nI held back tears.';
+    const inc = M.applyDiaryAuth('selected', en, 'writer');
+    assert.ok(inc.includes('Mom said: dinner first.') && !inc.includes('yelled'));
+  });
+  it('selected 无任何标记 → 双岗位空、闸门全文禁引', () => {
+    assert.strictEqual(M.applyDiaryAuth('selected', '无标记的日记全文', 'architect'), '');
+    assert.strictEqual(M.applyDiaryAuth('selected', '无标记的日记全文', 'gate'), '无标记的日记全文');
+  });
+  it('full：双岗位全文，闸门不查（脱敏靠指令）', () => {
+    assert.strictEqual(M.applyDiaryAuth('full', diary, 'writer'), diary);
+    assert.strictEqual(M.applyDiaryAuth('full', diary, 'architect'), diary);
+    assert.strictEqual(M.applyDiaryAuth('full', diary, 'gate'), '');
+  });
+  it('空文本 → 空；非法档兜底最严按 summary 处理', () => {
+    assert.strictEqual(M.applyDiaryAuth('summary', '', 'architect'), '');
+    assert.strictEqual(M.applyDiaryAuth('bogus', diary, 'writer'), '');
+    assert.strictEqual(M.applyDiaryAuth('bogus', diary, 'architect'), diary);
+  });
+});
