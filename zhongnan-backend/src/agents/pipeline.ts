@@ -14,7 +14,7 @@ import { clicheScan, buildStyleDirective, AntiStrength, CLICHE_TROPES } from '..
 import { dialogueScan, buildVoiceDirective, levelFromStyle, ColloquialLevel } from '../engine/dialogue';
 import { lifeDetailDirective, groundedScan } from '../engine/lifelike';
 import { validateScript, ScriptMode, scriptFormatDirective } from '../engine/script-format';
-import { buildShotManifest, planAigcVolume, analyzeAigcSceneCurve, validateAigcScreenplay, boostSpokenRatio, analyzeAigcComposition } from '../engine/aigc-screenplay';
+import { buildShotManifest, planAigcVolume, analyzeAigcSceneCurve, validateAigcScreenplay, boostSpokenRatio, analyzeAigcComposition, extractFinalLooks } from '../engine/aigc-screenplay'; // v2.357 extractFinalLooks：跨集外观传承数据源
 import { checkAigcShotFeasibility } from '../engine/aigc-shot-feasibility'; // v2.341 单镜可生成性闸门（拆不开的巨镜/纯台词镜进修复轮）
 import { collectSceneKernelIssues, aigcKernelRescan } from '../engine/aigc-kernel-issues'; // v2.347 AIGC 修复轮消费真人内核诊断 + 修复后内核重扫
 import { planAigcBeats, type AigcBeatPlan } from '../engine/aigc-beat';
@@ -854,6 +854,7 @@ ${techLines}
     prevForeshadow: options.prevForeshadow ?? null,
     prevArc: options.prevArc ?? null,
     prevEnding: options.prevEpisode?.ending ?? null, // v2.80 前集结尾原句（跨集焊点）
+    prevLooks: isAigcFmt ? extractFinalLooks(options.prevEpisode?.summary ?? '') : null, // v2.357 跨集外观传承：上集终态外观台账（AIGC 制式门控，真人稿无需）
   });
   // v2.80 焊点块按层拼接进 continuityDirective：架构师/撰写师/打回重写三处注入点零改动全覆盖
   const continuityDirective = hookLang === 'en'

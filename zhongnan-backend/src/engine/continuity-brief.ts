@@ -27,9 +27,11 @@ export interface ContinuityBriefInput {
   prevArc?: { characters: CharacterArc[]; epNo: number } | null;
   /** v2.80 前集结尾原句（最后一段，≤400 字）：跨集焊点——下一集开场必须从此瞬间接起 */
   prevEnding?: string | null;
+  /** v2.357 上集终态外观台账（AIGC 稿式）：本集沿用继承，换装需剧情理由+当场重登 */
+  prevLooks?: { name: string; look: string }[] | null;
 }
 
-export type ContinuityItemKind = 'secret' | 'revealed' | 'state' | 'foreshadow' | 'arc';
+export type ContinuityItemKind = 'secret' | 'revealed' | 'state' | 'foreshadow' | 'arc' | 'look';
 export interface ContinuityItem {
   kind: ContinuityItemKind;
   priority: 'high' | 'mid';
@@ -137,6 +139,21 @@ export function continuityBrief(input: ContinuityBriefInput = {}): ContinuityBri
       kind: 'arc', priority: arcWeight(c) >= 2 ? 'high' : 'mid',
       zh: `角色「${c.name}」前集处于${STAGE_ZH[c.stage]}/${EMOTION_ZH[c.emotion]}${rel.length ? `，关系对象：${rel.join('、')}` : ''}——本集情绪与关系必须从此状态延续，变化要有过程，禁跳变。`,
       en: `Character "${c.name}" left ep${input.prevArc?.epNo ?? prevEpNo} at stage "${c.stage}" / emotion "${c.emotion}"${rel.length ? `, relations with: ${rel.join(', ')}` : ''} — continue from this state; emotional shifts need process, no jump cuts.`,
+    });
+  }
+
+  // 6) v2.357 外观传承：上集终态外观台账——本集沿用继承，换装需剧情理由+当场重登。
+  //    单条汇总（不逐角色刷条，提示词预算有限），CAP 4 列名，超出折「等 N 人」。
+  const looks = (input.prevLooks ?? []).filter((l) => l && l.name && l.look);
+  if (looks.length) {
+    const CAP_LOOK = 4;
+    const shown = looks.slice(0, CAP_LOOK);
+    const listZh = shown.map((l) => `${l.name}=${l.look}`).join('；') + (looks.length > CAP_LOOK ? `；等${looks.length}人` : '');
+    const listEn = shown.map((l) => `${l.name}=${l.look}`).join('; ') + (looks.length > CAP_LOOK ? `; and ${looks.length} in total` : '');
+    items.push({
+      kind: 'look', priority: 'mid',
+      zh: `外观传承：上集已登记外观——${listZh}。本集沿用继承，这些角色首次出场不必重新登记；只有换装剧情（宴会/受伤/时间跳跃）才当场重新登记，且要有剧情理由，禁无声换造型。`,
+      en: `Look continuity — registered last episode: ${listEn}. Carry them over: no re-registration needed on first appearance; only re-register on a story-driven costume change (banquet / injury / time jump), never silently restyle.`,
     });
   }
 

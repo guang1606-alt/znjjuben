@@ -578,6 +578,23 @@ export function resolveLooksByShot(shots: MachineShot[]): Record<string, string>
   });
 }
 
+/**
+ * v2.357 上集终态外观台账：扫全集 look 块按名归并（同名后者覆盖前者=换装取终态），
+ * 供跨集外观传承（continuityBrief prevLooks）消费。名归一 trim+toLowerCase 做 key、
+ * 保留原名出账；真人稿无 look 块 → 空数组（天然门控，调用方无需额外判 format）。
+ */
+export function extractFinalLooks(text: string): { name: string; look: string }[] {
+  if (!text) return [];
+  const book = new Map<string, { name: string; look: string }>();
+  for (const sc of parseAigcEpisode(text).scenes) {
+    for (const b of sc.blocks) {
+      if (b.type !== 'look' || !b.speaker || !b.text) continue;
+      book.set(b.speaker.trim().toLowerCase(), { name: b.speaker.trim(), look: b.text });
+    }
+  }
+  return [...book.values()];
+}
+
 // ---------- 生成前写作指令（下发架构师/撰写/润色岗） ----------
 
 export function aigcScreenplayDirective(lang: 'zh' | 'en' = 'zh'): string {
