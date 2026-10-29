@@ -231,6 +231,7 @@ import { causalLogicCheck, type CausalLogicResult } from '../engine/causal-logic
 import { protagonistGoalCheck, type ProtagonistGoalResult } from '../engine/protagonist-goal-check';
 import { antagonistQualityCheck, type AntagonistQualityResult } from '../engine/antagonist-quality-check';
 import { payoffRhythmCheck, type PayoffRhythmResult } from '../engine/payoff-rhythm-check';
+import { payoffCurveCheck, type PayoffCurveResult } from '../engine/payoff-curve-check'; // v2.348 爽点蓄力曲线（前憋后爆位置形状，倒置稿盲区补位）
 import { relationshipProgressionCheck, type RelationshipResult } from '../engine/relationship-progression-check';
 import { scenePaddingCheck, type ScenePaddingResult } from '../engine/scene-padding-check';
 import { supportingCharacterCheck, type SupportingCharacterResult } from '../engine/supporting-character-check';
@@ -2096,6 +2097,8 @@ ${techLines}
   let antagonistQualityRes = antagonistQualityCheck(draft, hookLang);
   // v2.130 压抑-释放节奏检测（PRD 2.1.27 憋爽节奏过硬线）：只虐不爽/一路平推/憋太久/羞辱欠账/尾段烂尾
   let payoffRhythmRes = payoffRhythmCheck(draft, hookLang);
+  // v2.348 爽点蓄力曲线检测（前憋后爆位置形状）：开头就爆/结尾干憋/蓄力错配/曲线平——倒置稿盲区补位
+  let payoffCurveRes = payoffCurveCheck(draft, hookLang);
   // v2.131 情感关系递进检测（PRD 2.1.28 CP 关系过硬线）：有名无实/突飞猛进/一路糖水/暧昧原地踏步/告知式爱情
   let relationshipRes = relationshipProgressionCheck(draft, hookLang);
   // v2.132 场景注水/空转检测（PRD 2.1.29 场景效率过硬线）：三无场景/复述注水/闪回注水/寒暄开场/结尾拖堂
@@ -2293,6 +2296,7 @@ ${techLines}
     protagonistGoalRes = protagonistGoalCheck(draft, hookLang);
     antagonistQualityRes = antagonistQualityCheck(draft, hookLang);
     payoffRhythmRes = payoffRhythmCheck(draft, hookLang);
+    payoffCurveRes = payoffCurveCheck(draft, hookLang); // v2.348 重写后重扫蓄力曲线
     relationshipRes = relationshipProgressionCheck(draft, hookLang);
     scenePaddingRes = scenePaddingCheck(draft, hookLang);
     supportingRes = supportingCharacterCheck(draft, cast, hookLang);
@@ -2358,6 +2362,8 @@ ${techLines}
     const antagonistQualityHigh = antagonistQualityRes.issues.filter((i) => i.severity === 'high');
     // v2.130 憋爽节奏 high 级问题（只虐不爽/憋太久）触发重试——短剧爽感兑现生死线
     const payoffRhythmHigh = payoffRhythmRes.issues.filter((i) => i.severity === 'high');
+    // v2.348 蓄力曲线 high 级问题（开头就爆/结尾干憋）触发重试——前憋后爆位置形状生死线
+    const payoffCurveHigh = payoffCurveRes.issues.filter((i) => i.severity === 'high');
     // v2.131 情感关系 high 级问题（有名无实/突飞猛进）触发重试——短剧 CP 关系生死线
     const relationshipHigh = relationshipRes.issues.filter((i) => i.severity === 'high');
     // v2.132 场景注水 high 级问题（三无场景）触发重试——短剧节奏密度生死线
@@ -2394,7 +2400,7 @@ ${techLines}
     const characterPresenceHigh = characterPresenceRes.issues.filter((i) => i.severity === 'high');
     // v2.80 焊点断裂 high 级问题（前集结尾说话人全灭且零词汇衔接）触发重试——跨集焊点生死线
     const openingWeldHigh = openingWeldRes.issues.filter((i) => i.severity === 'high');
-    const craftPass = craft.p1.length === 0 && depthP1.length === 0 && rhythmHigh.length === 0 && charHigh.length === 0 && styleHigh.length === 0 && foreshadowHigh.length === 0 && arcHigh.length === 0 && voiceHigh.length === 0 && sdtHigh.length === 0 && cliffhangerHigh.length === 0 && coolMomentHigh.length === 0 && dialogueWaterHigh.length === 0 && conflictDensityHigh.length === 0 && punchlineDensityHigh.length === 0 && sceneDensityHigh.length === 0 && repetitionHigh.length === 0 && characterBalanceHigh.length === 0 && twistDensityHigh.length === 0 && dialogueLengthHigh.length === 0 && informationDensityHigh.length === 0 && suspenseTensionHigh.length === 0 && sceneHeaderHigh.length === 0 && dialogueFunctionHigh.length === 0 && causalLogicHigh.length === 0 && protagonistGoalHigh.length === 0 && antagonistQualityHigh.length === 0 && payoffRhythmHigh.length === 0 && relationshipHigh.length === 0 && scenePaddingHigh.length === 0 && supportingHigh.length === 0 && conflictEscalationHigh.length === 0 && subtextHigh.length === 0 && supportingArcHigh.length === 0 && scenePurposeHigh.length === 0 && timelineHigh.length === 0 && continuityHigh.length === 0 && misunderstandingHigh.length === 0 && plotArmorHigh.length === 0 && evidenceChainHigh.length === 0 && cheatRuleHigh.length === 0 && memoryFakeoutHigh.length === 0 && emotionalAftermathHigh.length === 0 && locationContinuityHigh.length === 0 && characterPresenceHigh.length === 0 && openingWeldHigh.length === 0;
+    const craftPass = craft.p1.length === 0 && depthP1.length === 0 && rhythmHigh.length === 0 && charHigh.length === 0 && styleHigh.length === 0 && foreshadowHigh.length === 0 && arcHigh.length === 0 && voiceHigh.length === 0 && sdtHigh.length === 0 && cliffhangerHigh.length === 0 && coolMomentHigh.length === 0 && dialogueWaterHigh.length === 0 && conflictDensityHigh.length === 0 && punchlineDensityHigh.length === 0 && sceneDensityHigh.length === 0 && repetitionHigh.length === 0 && characterBalanceHigh.length === 0 && twistDensityHigh.length === 0 && dialogueLengthHigh.length === 0 && informationDensityHigh.length === 0 && suspenseTensionHigh.length === 0 && sceneHeaderHigh.length === 0 && dialogueFunctionHigh.length === 0 && causalLogicHigh.length === 0 && protagonistGoalHigh.length === 0 && antagonistQualityHigh.length === 0 && payoffRhythmHigh.length === 0 && payoffCurveHigh.length === 0 && relationshipHigh.length === 0 && scenePaddingHigh.length === 0 && supportingHigh.length === 0 && conflictEscalationHigh.length === 0 && subtextHigh.length === 0 && supportingArcHigh.length === 0 && scenePurposeHigh.length === 0 && timelineHigh.length === 0 && continuityHigh.length === 0 && misunderstandingHigh.length === 0 && plotArmorHigh.length === 0 && evidenceChainHigh.length === 0 && cheatRuleHigh.length === 0 && memoryFakeoutHigh.length === 0 && emotionalAftermathHigh.length === 0 && locationContinuityHigh.length === 0 && characterPresenceHigh.length === 0 && openingWeldHigh.length === 0;
     if (antiAi.pass && consist.pass && cliche.pass && tongue.pass && craftPass) break;
     const reason = hookLang === 'en'
       ? (!antiAi.pass
@@ -2601,6 +2607,12 @@ ${techLines}
           ? `\n[Payoff rhythm issues — MUST address]\n${payoffRhythmHigh.map((i) => `- ${i.type}: ${i.advice}`).join('\n')}`
           : `\n【憋爽节奏·必须解决】\n${payoffRhythmHigh.map((i) => `- ${i.type}：${i.advice}`).join('\n')}`)
       : '';
+    // v2.348 爽点蓄力曲线 high 级问题建议注入重试提示词（开头就爆/结尾干憋——前憋后爆位置形状）
+    const payoffCurveAdvice = payoffCurveHigh.length
+      ? (hookLang === 'en'
+          ? `\n[Payoff buildup curve — front-load/flat tail — MUST address]\n${payoffCurveHigh.map((i) => `- ${i.type}: ${i.advice}`).join('\n')}`
+          : `\n【爽点蓄力曲线·前憋后爆位置形状·必须解决】\n${payoffCurveHigh.map((i) => `- ${i.type}：${i.advice}`).join('\n')}`)
+      : '';
     // v2.131 情感关系递进问题建议注入重试提示词（advice 字段已按 hookLang 本地化）
     const relationshipAdvice = relationshipHigh.length
       ? (hookLang === 'en'
@@ -2711,8 +2723,8 @@ ${techLines}
       : '';
     const fixed = (await _textRole(tier, 'polisher',
       `${hookLang === 'en'
-        ? `${directive('polisher', 'en')}\n${G.removeAiTells}${antiAi.hits.join(', ')}\n${G.replaceCliche}${cliche.hits.map((h) => `${h.found}->${h.alt}`).join('; ')}\n${G.makeSpeakable}${tongue.hits.map((h) => `${h.word}->${h.fix}`).join('; ')}\n${lifeDetailDirective(draft, 'en')} ${G.filmable} ${G.genericReaction}${craftAdvice}${rhythmAdvice}${charAdvice}${styleAdvice}${foreshadowAdvice}${arcAdvice}${voiceAdvice}${sdtAdvice}${cliffhangerAdvice}${coolMomentAdvice}${dialogueWaterAdvice}${conflictDensityAdvice}${punchlineDensityAdvice}${sceneDensityAdvice}${repetitionAdvice}${characterBalanceAdvice}${twistDensityAdvice}${dialogueLengthAdvice}${informationDensityAdvice}${suspenseTensionAdvice}${sceneHeaderAdvice}${dialogueFunctionAdvice}${causalLogicAdvice}${protagonistGoalAdvice}${antagonistQualityAdvice}${payoffRhythmAdvice}${relationshipAdvice}${scenePaddingAdvice}${supportingAdvice}${conflictEscalationAdvice}${subtextAdvice}${supportingArcAdvice}${scenePurposeAdvice}${timelineAdvice}${continuityAdvice}${misunderstandingAdvice}${plotArmorAdvice}${evidenceChainAdvice}${cheatRuleAdvice}${memoryFakeoutAdvice}${emotionalAftermathAdvice}${locationContinuityAdvice}${characterPresenceAdvice}${openingWeldAdvice}\n${G.keepChars}${Object.keys(cast).join(', ')}\n${formatDirective}\n${layoutKeepRule}\n${G.originalDraft}${draft.slice(0, 8000)}`
-        : `${directive('polisher')}\n必须删除AI腔:${antiAi.hits.join('、')}\n必须替换老套桥段:${cliche.hits.map((h) => `${h.found}→${h.alt}`).join('；')}\n必须把书面腔改成能念出口的人话:${tongue.hits.map((h) => `${h.word}→${h.fix}`).join('；')}\n${lifeDetailDirective(draft)}；把抽象叙述改成可拍摄的具体动作/道具${(() => { const g = genericReactionScan(draft); return g.hits.length ? `；身份/真相揭晓处把这些偷懒的通用反应(${g.hits.join('、')})改成只有此人物才会说的专属反应/动作` : ''; })()}${craftAdvice}${rhythmAdvice}${charAdvice}${styleAdvice}${foreshadowAdvice}${arcAdvice}${voiceAdvice}${sdtAdvice}${cliffhangerAdvice}${coolMomentAdvice}${dialogueWaterAdvice}${conflictDensityAdvice}${punchlineDensityAdvice}${sceneDensityAdvice}${repetitionAdvice}${characterBalanceAdvice}${twistDensityAdvice}${dialogueLengthAdvice}${informationDensityAdvice}${suspenseTensionAdvice}${sceneHeaderAdvice}${dialogueFunctionAdvice}${causalLogicAdvice}${protagonistGoalAdvice}${antagonistQualityAdvice}${payoffRhythmAdvice}${relationshipAdvice}${scenePaddingAdvice}${supportingAdvice}${conflictEscalationAdvice}${subtextAdvice}${supportingArcAdvice}${scenePurposeAdvice}${timelineAdvice}${continuityAdvice}${misunderstandingAdvice}${plotArmorAdvice}${evidenceChainAdvice}${cheatRuleAdvice}${memoryFakeoutAdvice}${emotionalAftermathAdvice}${locationContinuityAdvice}${characterPresenceAdvice}${openingWeldAdvice}\n保持人物:${Object.keys(cast).join('、')}\n${formatDirective}\n${layoutKeepRule}\n原稿:${draft.slice(0, 8000)}`}`, cost)).text;
+        ? `${directive('polisher', 'en')}\n${G.removeAiTells}${antiAi.hits.join(', ')}\n${G.replaceCliche}${cliche.hits.map((h) => `${h.found}->${h.alt}`).join('; ')}\n${G.makeSpeakable}${tongue.hits.map((h) => `${h.word}->${h.fix}`).join('; ')}\n${lifeDetailDirective(draft, 'en')} ${G.filmable} ${G.genericReaction}${craftAdvice}${rhythmAdvice}${charAdvice}${styleAdvice}${foreshadowAdvice}${arcAdvice}${voiceAdvice}${sdtAdvice}${cliffhangerAdvice}${coolMomentAdvice}${dialogueWaterAdvice}${conflictDensityAdvice}${punchlineDensityAdvice}${sceneDensityAdvice}${repetitionAdvice}${characterBalanceAdvice}${twistDensityAdvice}${dialogueLengthAdvice}${informationDensityAdvice}${suspenseTensionAdvice}${sceneHeaderAdvice}${dialogueFunctionAdvice}${causalLogicAdvice}${protagonistGoalAdvice}${antagonistQualityAdvice}${payoffRhythmAdvice}${payoffCurveAdvice}${relationshipAdvice}${scenePaddingAdvice}${supportingAdvice}${conflictEscalationAdvice}${subtextAdvice}${supportingArcAdvice}${scenePurposeAdvice}${timelineAdvice}${continuityAdvice}${misunderstandingAdvice}${plotArmorAdvice}${evidenceChainAdvice}${cheatRuleAdvice}${memoryFakeoutAdvice}${emotionalAftermathAdvice}${locationContinuityAdvice}${characterPresenceAdvice}${openingWeldAdvice}\n${G.keepChars}${Object.keys(cast).join(', ')}\n${formatDirective}\n${layoutKeepRule}\n${G.originalDraft}${draft.slice(0, 8000)}`
+        : `${directive('polisher')}\n必须删除AI腔:${antiAi.hits.join('、')}\n必须替换老套桥段:${cliche.hits.map((h) => `${h.found}→${h.alt}`).join('；')}\n必须把书面腔改成能念出口的人话:${tongue.hits.map((h) => `${h.word}→${h.fix}`).join('；')}\n${lifeDetailDirective(draft)}；把抽象叙述改成可拍摄的具体动作/道具${(() => { const g = genericReactionScan(draft); return g.hits.length ? `；身份/真相揭晓处把这些偷懒的通用反应(${g.hits.join('、')})改成只有此人物才会说的专属反应/动作` : ''; })()}${craftAdvice}${rhythmAdvice}${charAdvice}${styleAdvice}${foreshadowAdvice}${arcAdvice}${voiceAdvice}${sdtAdvice}${cliffhangerAdvice}${coolMomentAdvice}${dialogueWaterAdvice}${conflictDensityAdvice}${punchlineDensityAdvice}${sceneDensityAdvice}${repetitionAdvice}${characterBalanceAdvice}${twistDensityAdvice}${dialogueLengthAdvice}${informationDensityAdvice}${suspenseTensionAdvice}${sceneHeaderAdvice}${dialogueFunctionAdvice}${causalLogicAdvice}${protagonistGoalAdvice}${antagonistQualityAdvice}${payoffRhythmAdvice}${payoffCurveAdvice}${relationshipAdvice}${scenePaddingAdvice}${supportingAdvice}${conflictEscalationAdvice}${subtextAdvice}${supportingArcAdvice}${scenePurposeAdvice}${timelineAdvice}${continuityAdvice}${misunderstandingAdvice}${plotArmorAdvice}${evidenceChainAdvice}${cheatRuleAdvice}${memoryFakeoutAdvice}${emotionalAftermathAdvice}${locationContinuityAdvice}${characterPresenceAdvice}${openingWeldAdvice}\n保持人物:${Object.keys(cast).join('、')}\n${formatDirective}\n${layoutKeepRule}\n原稿:${draft.slice(0, 8000)}`}`, cost)).text;
     if (fixed.length > 100) draft = fixed;
   }
   // v2.18 双制式字数闭环（PRD 2.5 刚性）：闸门判 → 离线无损压缩/润色岗精修，超标先删叙述填充绝不动台词，不足按场景补视听细节不编造剧情
@@ -3095,6 +3107,7 @@ ${techLines}
   protagonistGoalRes = protagonistGoalCheck(draft, hookLang);
   antagonistQualityRes = antagonistQualityCheck(draft, hookLang);
   payoffRhythmRes = payoffRhythmCheck(draft, hookLang);
+  payoffCurveRes = payoffCurveCheck(draft, hookLang); // v2.348 终稿重算蓄力曲线（scorecard 同源）
   relationshipRes = relationshipProgressionCheck(draft, hookLang);
   scenePaddingRes = scenePaddingCheck(draft, hookLang);
   supportingRes = supportingCharacterCheck(draft, cast, hookLang);
