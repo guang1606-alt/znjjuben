@@ -16,6 +16,7 @@ import { lifeDetailDirective, groundedScan } from '../engine/lifelike';
 import { validateScript, ScriptMode, scriptFormatDirective } from '../engine/script-format';
 import { buildShotManifest, planAigcVolume, analyzeAigcSceneCurve, validateAigcScreenplay, boostSpokenRatio, analyzeAigcComposition } from '../engine/aigc-screenplay';
 import { checkAigcShotFeasibility } from '../engine/aigc-shot-feasibility'; // v2.341 单镜可生成性闸门（拆不开的巨镜/纯台词镜进修复轮）
+import { collectSceneKernelIssues, aigcKernelRescan } from '../engine/aigc-kernel-issues'; // v2.347 AIGC 修复轮消费真人内核诊断 + 修复后内核重扫
 import { planAigcBeats, type AigcBeatPlan } from '../engine/aigc-beat';
 import { adaptScriptLength, planTrim, hardTrimToRange } from '../engine/script-length';
 import { buildSampleScript } from '../engine/sample-script';
@@ -2822,7 +2823,18 @@ ${techLines}
     while ((!cov.pass || shotPlan.level === 'over') && aigcFmtRetry < maxFmtRetry) {
       aigcFmtRetry += 1;
       const shotIssues = shotPlan.issues.filter((i) => i.severity === 'high').map((i) => i.message);
-      const issueList = [...cov.sceneIssues, ...cov.smoothnessIssues, ...cov.compositionIssues, ...shotIssues].slice(0, 10);
+      // v2.347 缺口 1：真人内核引擎的场级 high 诊断也进修复轮——打回重写最多 2 轮没修完的硬伤，修复轮必须看得到
+      const kernelIssues = collectSceneKernelIssues([
+        { name: 'sceneSoftEnding', issues: sceneSoftEndingRes?.issues },
+        { name: 'scenePadding', issues: scenePaddingRes?.issues },
+        { name: 'scenePurpose', issues: scenePurposeRes?.issues },
+        { name: 'coolMoment', issues: coolMomentRes?.issues },
+        { name: 'conflictDensity', issues: conflictDensityRes?.issues },
+        { name: 'subtext', issues: subtextRes?.issues },
+        { name: 'cliffhanger', issues: cliffhangerRes?.issues },
+        { name: 'suspenseTension', issues: suspenseTensionRes?.issues },
+      ]);
+      const issueList = [...cov.sceneIssues, ...cov.smoothnessIssues, ...cov.compositionIssues, ...shotIssues, ...kernelIssues].slice(0, 10);
       const comp = cov.composition;
       const spokenGap = comp && comp.spokenRatio < 0.18
         ? Math.max(80, Math.round((0.22 * comp.totalCjk) - comp.spokenCjk))
@@ -2927,6 +2939,16 @@ ${techLines}
             : `发声下限微补：按场次配额补约${addUnits}字发声，现发声比${Math.round(ncov.composition.spokenRatio * 100)}%` });
         }
       }
+    }
+    // v2.347 缺口 2：AIGC 版式修复（含发声兜底）落订后，对爽点/冲突/集尾钩子做内核轻量重扫。
+    // 防止"版式修好了、爽点修没了"——修复动作可能把台词改成独白、把冲突场面删平。
+    // 只显性化（SSE warnings 提示），不阻塞交付；high 级提示修复造成了内核退化。
+    const kernelWarns = aigcKernelRescan(draft, hookLang === 'en' ? 'en' : 'zh');
+    const kernelHigh = kernelWarns.filter((w) => w.severity === 'high');
+    if (kernelWarns.length) {
+      emit({ role: 'polisher', status: 'running', note: hookLang === 'en'
+        ? `Post-repair kernel rescan: ${kernelWarns.length} note(s)${kernelHigh.length ? `, ${kernelHigh.length} HIGH (cool/conflict/cliffhanger degraded by layout repair)` : ''} — ${kernelWarns.slice(0, 3).map((w) => `${w.engine}: ${w.message}`).join('; ')}`
+        : `修复后内核重扫：${kernelWarns.length}项提示${kernelHigh.length ? `，其中${kernelHigh.length}项高优（版式修复可能削弱了爽点/冲突/钩子）` : ''}——${kernelWarns.slice(0, 3).map((w) => `${w.engine}：${w.message}`).join('；')}` });
     }
   }
   // 所有改稿与元注释清理必须先完成；下方完整复扫及跨集台账只读取实际交付稿。
