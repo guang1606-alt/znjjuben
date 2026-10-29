@@ -120,6 +120,8 @@ function setup(handler = async () => response([])) {
   for (const name of [
     'brandBriefPayload', 'trendBriefPayload', 'branchBriefPayload', 'hookPayload', 'beatPayload',
     'castAssetPayload', 'propAssetPayload', 'sceneAssetPayload', 'aigcPayload', 'sourceTextPayload',
+    // v2.345 四模式表单事实源：startGenerate 立项调用 modeInputPayload，注入同族空桩
+    'modeInputPayload',
   ]) c[name] = () => ({});
   c.outLocale = () => 'zh';
   // v2.329 三维契约：立项 payload 读取剧本类型与输出语种（测试内固定默认值）

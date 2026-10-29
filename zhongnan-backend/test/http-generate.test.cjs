@@ -789,6 +789,69 @@ describe('钩子编排偏好落库（v1.83，串行）', { concurrency: 1 }, () 
   });
 });
 
+describe('四模式表单事实源落库（v2.345，串行）', { concurrency: 1 }, () => {
+  async function createProject(uid, level, mode, modeInput) {
+    const headers = { 'Content-Type': 'application/json', Authorization: `Bearer ${signAccess({ sub: uid, level })}` };
+    mem._seedUser({ id: uid, level, balance: 0 });
+    const r = await fetch(base + '/api/generate/projects', { method: 'POST', headers, body: JSON.stringify({ title: '四模式项目', mode, modeInput }) });
+    return { s: r.status, j: await r.json().catch(() => null) };
+  }
+  it('persona 四字段入库并 trim；夹带其他命名空间被剥离', async () => {
+    const { s, j } = await createProject('u_mi1', 'ADVANCED', 'persona', {
+      persona: { identity: '  32 岁急诊医生 ', want: '查出真相', fear: '自己早知道', lie: '「我没事」' },
+      duel: { a: { identity: '不该入库' } },
+    });
+    assert.strictEqual(s, 200);
+    assert.deepStrictEqual(j.bible.modeInput.persona, { identity: '32 岁急诊医生', want: '查出真相', fear: '自己早知道', lie: '「我没事」' });
+    assert.ok(!j.bible.modeInput.duel, '非当前模式的命名空间不落库');
+  });
+  it('duel A/B 双侧入库；一侧全空剔除该侧', async () => {
+    const { s, j } = await createProject('u_mi2', 'ADVANCED', 'duel', {
+      duel: { a: { identity: 'CEO', want: '裁员 30%', line: '生死协议' }, b: { identity: '老员工', want: '保住兄弟', line: '车库情分' } },
+    });
+    assert.strictEqual(s, 200);
+    assert.strictEqual(j.bible.modeInput.duel.a.want, '裁员 30%');
+    assert.strictEqual(j.bible.modeInput.duel.b.line, '车库情分');
+    const one = await createProject('u_mi2b', 'ADVANCED', 'duel', { duel: { a: { identity: 'CEO' }, b: { identity: ' ', want: '', line: '' } } });
+    assert.ok(one.j.bible.modeInput.duel.a && !one.j.bible.modeInput.duel.b);
+  });
+  it('multiverse choice+lines 入库；空 route 行剔除、超 4 条截断', async () => {
+    const { s, j } = await createProject('u_mi3', 'PRO', 'multiverse', {
+      multiverse: {
+        choice: '保险单受益人不是她',
+        lines: [
+          { route: '假装不知道', cost: '三年后成弃子' },
+          { route: ' ', cost: '空路线剔除' },
+          { route: '当场摊牌', cost: '净身出户' },
+          { route: '第三条', cost: '' },
+          { route: '第四条', cost: '' },
+          { route: '第五条截断', cost: '' },
+        ],
+      },
+    });
+    assert.strictEqual(s, 200);
+    const mv = j.bible.modeInput.multiverse;
+    assert.strictEqual(mv.choice, '保险单受益人不是她');
+    assert.strictEqual(mv.lines.length, 4);
+    assert.strictEqual(mv.lines[0].route, '假装不知道');
+    assert.strictEqual(mv.lines[1].route, '当场摊牌');
+  });
+  it('diary 授权档入库；非法档不落库', async () => {
+    const { s, j } = await createProject('u_mi4', 'BASIC', 'diary', { diary: { auth: 'selected' } });
+    assert.strictEqual(s, 200);
+    assert.deepStrictEqual(j.bible.modeInput.diary, { auth: 'selected' });
+    const bad = await createProject('u_mi4b', 'BASIC', 'diary', { diary: { auth: 'everything' } });
+    assert.ok(!bad.j.bible || !bad.j.bible.modeInput, '非法授权档不写 bible');
+  });
+  it('非四模式（tags）携带 modeInput 不落库；字段全空不落库', async () => {
+    const { s, j } = await createProject('u_mi5', 'BASIC', 'tags', { persona: { identity: '医生' } });
+    assert.strictEqual(s, 200);
+    assert.ok(!j.bible || !j.bible.modeInput);
+    const empty = await createProject('u_mi5b', 'ADVANCED', 'persona', { persona: { identity: ' ', want: '', fear: '', lie: '' } });
+    assert.ok(!empty.j.bible || !empty.j.bible.modeInput);
+  });
+});
+
 describe('节拍偏好落库（v1.84，串行）', { concurrency: 1 }, () => {
   async function createProject(uid, body) {
     const headers = { 'Content-Type': 'application/json', Authorization: `Bearer ${signAccess({ sub: uid, level: 'BASIC' })}` };

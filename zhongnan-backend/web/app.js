@@ -5467,6 +5467,36 @@
     const ids = [...sel.selectedOptions].map((o) => o.value).filter(Boolean);
     return ids.length ? { sceneAssetIds: ids.slice(0, 10) } : {};
   }
+  // v2.345 四模式表单事实源：按当前模式收集 persona/duel/multiverse/diary 表单字段，
+  // 随立项落库 project.bible.modeInput（全剧沿用，生成时注入架构师/撰写师双岗）；全空不上传
+  function modeInputPayload() {
+    const v = (id) => { const el = $(id); return el ? String(el.value || '').trim() : ''; };
+    if (selectedMode === 'persona') {
+      const persona = { identity: v('personaIdentity'), want: v('personaWant'), fear: v('personaFear'), lie: v('personaLie') };
+      return Object.values(persona).some(Boolean) ? { modeInput: { persona } } : {};
+    }
+    if (selectedMode === 'duel') {
+      const a = { identity: v('duelAIdentity'), want: v('duelAWant'), line: v('duelALine') };
+      const b = { identity: v('duelBIdentity'), want: v('duelBWant'), line: v('duelBLine') };
+      if (!Object.values(a).some(Boolean) && !Object.values(b).some(Boolean)) return {};
+      return { modeInput: { duel: { a, b } } };
+    }
+    if (selectedMode === 'multiverse') {
+      const choice = v('mvChoice');
+      const box = $('mvChoices');
+      const lines = box ? [...box.querySelectorAll('.multiverse-choice')].map((row) => ({
+        route: String((row.querySelector('.mv-line-route') || {}).value || '').trim(),
+        cost: String((row.querySelector('.mv-line-cost') || {}).value || '').trim(),
+      })).filter((l) => l.route).slice(0, 4) : [];
+      if (!choice && !lines.length) return {};
+      return { modeInput: { multiverse: { choice, lines } } };
+    }
+    if (selectedMode === 'diary') {
+      const r = document.querySelector('input[name="diaryAuth"]:checked');
+      return { modeInput: { diary: { auth: r ? r.value : 'summary' } } };
+    }
+    return {};
+  }
   // —— v2.167 资产看板：跨族热度榜 + 空壳补全优先级队列（L3 运营决策面，三族共用入口） ——
   // 痛点：编导沉淀一堆资产后，不知道"哪些是明星资产/哪些待激活/空壳该先补哪个"。
   // dashboard 端点聚合三族：热度榜 top10（按 usedCount 降序）+ 空壳补全队列（score<55，缺失维度越少越优先）。
@@ -6745,7 +6775,7 @@
           ...(useTagBench ? { tags: tagChosen.slice(0, TAG_MAX) } : {}),
           // v2.319 adapt/novel/hit_lab：原文立项即持久化进 bible，刷新续写/草稿恢复版权闸门不中断（与 episodes 同口径）
           ...sourceTextPayload(),
-          format: $('scriptFormatSel') ? $('scriptFormatSel').value : 'LIVE_ACTION', investWan, specialTopic, ...hookPayload(), ...beatPayload(), ...castAssetPayload(), ...propAssetPayload(), ...sceneAssetPayload() }) });
+          format: $('scriptFormatSel') ? $('scriptFormatSel').value : 'LIVE_ACTION', investWan, specialTopic, ...hookPayload(), ...beatPayload(), ...castAssetPayload(), ...propAssetPayload(), ...sceneAssetPayload(), ...modeInputPayload() }) });
         if (!isPrivateSessionCurrent(account)) return;
         if (!pr.ok) {
           genSessions = genSessions.filter((x) => x !== session); renderTaskQueue(); // 建单失败即时撤卡

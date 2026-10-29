@@ -16,6 +16,7 @@ import { buildEmotionWave, adviseWavePoint } from '../engine/emotion-wave';
 import { isValidVisualStyleId, listVisualStyles } from '../engine/visual-style-library'; // v2.148 视觉画风编码库（AIGC 漫剧画风编号 → 可执行 prompt 模板）
 import { isValidCameraStyleId, listCameraStyles } from '../engine/camera-language-library'; // v2.149 镜头语言编码库（AIGC 漫剧镜头语言编号 → 可执行 prompt 模板）
 import { buildCastAssetDirective, extractCastAssetDrafts, type CastAssetSeed } from '../engine/character-asset'; // v2.151 角色资产库（L3 角色可资产化：跨剧复用强约束 + 沉淀草稿提取）
+import { sanitizeModeInput } from '../engine/mode-input'; // v2.345 四模式表单事实源（persona/duel/multiverse/diary 立项落库 bible.modeInput，生成时双岗注入）
 import { scoreCastAsset, detectCastAssetConflicts, autoFillCastAsset } from '../engine/asset-health'; // v2.152 资产体检（五维完整度 + 库级冲突预警）+ v2.181 规则模板补全
 import { buildAssetUsageMap } from '../engine/asset-usage'; // v2.165 资产引用统计（当前被哪些项目引用，与 usedCount 历史累计口径互补）
 import { extractPropAssetDrafts, type PropAssetSeed } from '../engine/prop-asset'; // v2.159 道具资产库（L3 道具可资产化：关键信物跨集沉淀）
@@ -277,6 +278,9 @@ const projectSchema = z.object({
   propAssetIds: z.array(z.string().max(40)).max(10).optional(), // v2.159 引用道具资产 id（归属校验后快照进 project.bible.propAssets，全剧沿用）
   sceneAssetIds: z.array(z.string().max(40)).max(10).optional(), // v2.161 引用场景资产 id（归属校验后快照进 project.bible.sceneAssets，全剧沿用）
   matureConsented: z.boolean().optional(),                // X剧本：已完成成年分级问卷与免责授权
+  // v2.345 四模式表单事实源（persona/duel/multiverse/diary）：schema 层守类型（record），
+  // sanitizeModeInput 管数值（按模式命名空间剥离/截断/剔除空行），全空不落库
+  modeInput: z.record(z.unknown()).optional(),
   // 四层钩子编排偏好（用户选项 vs 系统默认）：随项目落库，续写/重生成自动沿用；非法钩子id入库前清洗
   hookPref: z.object({
     mode: z.enum(['auto', 'manual', 'hybrid']).optional(),
@@ -414,6 +418,8 @@ generateRouter.post('/projects', authRequired, async (req: AuthRequest, res) => 
   const hookPrefs = sanitizeCuePref(d.hookPref, new Set(ALL_HOOKS.map((h) => h.id)), true);
   const beatIds = new Set((['reversal', 'payoff', 'emotion'] as const).flatMap((k) => BEAT_LIBRARY[k].map((b) => b.id)));
   const beatPrefs = sanitizeCuePref(d.beatPref, beatIds, true, 900);
+  // v2.345 四模式表单事实源：按归一后模式清洗（非四模式/全空不落库，非法 diary 授权档不落库）
+  const modeInput = sanitizeModeInput(d.modeInput, canonMode);
   // v2.151 角色资产引用：仅接受本人资产，快照进 project.bible.castAssets（生成时注入三岗位强约束）；非法/他人 id 静默丢弃，引用计数+
   const castAssetsSnapshot: CastAssetSeed[] = [];
   if (d.castAssetIds?.length) {
@@ -468,6 +474,8 @@ generateRouter.post('/projects', authRequired, async (req: AuthRequest, res) => 
     ...(projectSourceText.length >= 10 ? { sourceText: projectSourceText } : {}),
     ...(hookPrefs ? { hookPrefs } : {}),
     ...(beatPrefs ? { beatPrefs } : {}),
+    // v2.345 四模式表单事实源快照：立项即锁定（全剧沿用，续写/重生成自动读取，生成时注入架构师/撰写师）
+    ...(modeInput ? { modeInput } : {}),
     // v2.148 视觉画风编号：仅 AIGC 项目接受，非法编号静默丢弃（不阻断建项目）
     ...(fmt === 'AIGC' && isValidVisualStyleId(d.visualStyleId) ? { visualStyleId: d.visualStyleId } : {}),
     // v2.149 镜头语言编号：仅 AIGC 项目接受，非法编号静默丢弃（不阻断建项目）
@@ -3244,6 +3252,11 @@ generateRouter.post('/episodes', authRequired, async (req: AuthRequest, res) => 
     })();
     const hp = parsed.data.hookPref ?? storedHookPref;
     const bp = parsed.data.beatPref ?? storedBeatPref;
+    // v2.345 四模式表单事实源：立项时快照进 project.bible.modeInput，生成时整段读出注入架构师/撰写师（全剧沿用）
+    // 边界层防御性 re-sanitize：老数据/手改数据可能带非字符串值，按项目模式再清洗一次（注入只认干净结构）
+    const storedModeInput = (() => {
+      try { return sanitizeModeInput((bible as any)?.modeInput, projCanonMode ?? '') ?? null; } catch { return null; }
+    })();
     // v2.84 自主学习知识库：拉取已生效知识（高分剧本技法/市场趋势/政策规则），按 brief 相关性注入各岗位
     const knowledgeRows = await prisma.knowledgeItem.findMany({
       where: { status: 'APPROVED' },
@@ -3318,6 +3331,8 @@ generateRouter.post('/episodes', authRequired, async (req: AuthRequest, res) => 
       ...(trendBrief ? { trendBrief, trendRisk: trendRisk ?? undefined } : {}),
       // v2.95 互动分支·结构化分支简报（已过闭环校验），注入架构师/撰写师
       ...(branchBrief ? { branchBrief } : {}),
+      // v2.345 四模式表单事实源（persona/duel/multiverse/diary 立项落库），注入架构师/撰写师
+      ...(storedModeInput ? { modeInput: storedModeInput } : {}),
       // v2.96 原作/小说/名场面原文：adapt/novel/hit_lab 模式启用 n-gram 重合度侵权检测
       // v2.319 body 缺原文（刷新续写/草稿恢复/前端框被清空）时从 project.bible 兜底，闸门不静默失效
       ...(effectiveSourceText ? { sourceText: effectiveSourceText } : {}),
