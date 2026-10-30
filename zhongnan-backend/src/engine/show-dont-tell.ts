@@ -261,6 +261,41 @@ export function showDontTellScan(text: string, lang: SdtLang = 'zh'): ShowDontTe
   return { score, issues, tellEmotionHits, summaryHits, abstractAdjHits, innerMonologueHits, longestProseBlock };
 }
 
+/**
+ * v2.359 前置教学：把上面五类检测口径反向前置成「写之前就教」的指令。
+ * 与 showDontTellScan 同文件 = 同源（v2.157 铁律：教学与检测同源，改口径不漂移）。
+ * 制式分叉：LIVE 教 △ 动作行；AIGC 正文是流畅自然段（不加 △），内心只走（内心：…）。
+ * en 层零中文。
+ */
+export function buildShowDontTellDirective(mode: 'LIVE' | 'AIGC' = 'LIVE', lang: SdtLang = 'zh'): string {
+  if (lang === 'en') {
+    return `[PRE-WRITING RULE · Show, don't tell — the first law of screenwriting] A screenplay shows; it never narrates. This list mirrors the five-class showDontTellScan checks (format dimension, 20% weight), so write it right the first time:
+1) Never name an emotion in narration ("he felt angry", "she was nervous", "with anger", "angrily") — convert it to visible action, physiology or expression (the cup hits the floor, knuckles go white, breath shortens, he turns and walks out).
+2) Never summarize a scene ("they talked for a while", "time passed", "after a long discussion", "eventually they agreed") — stage the negotiation or confrontation as actual dialogue and action; never skip it.
+3) No abstract adjectives ("beautiful", "handsome", "mysterious", "gentle", "cold", "domineering") — replace each with one concrete visual detail (hair like spilled ink, a frayed cuff, shoes that never carry dust).
+4) No inner-monologue narration ("he thought", "she remembered", "he knew that", "in his mind") — externalize into action, props or dialogue; the camera cannot film the inside of a head.
+5) No prose walls: every action gets its own △ line, and never run more than 3 consecutive lines without △ action or dialogue.
+Exception: the emotion/action cue inside a dialogue line "NAME (emotion): line" is a performance note for the actor — keep it. What is banned is narrating emotions in the prose body.
+AIGC mode: the body stays flowing prose without △ markers; inner voice only as the (inner: …) parenthetical, never as "he thought" narration; every paragraph must land on a filmable image, an audible cue or a concrete action.`;
+  }
+  if (mode === 'AIGC') {
+    return `【前置教学·展示而非叙述（影视编剧第一法则·AIGC 流畅制作本）】剧本只展示、不叙述；本清单与 showDontTellScan 五类检测同源（format 维度占 20% 权重），先写对再谈润色：
+① 禁止叙述句直报情绪：不写「他感到很生气」「心里很慌」「十分紧张」「内心挣扎」「生气地摔门」里的情绪名——改成可见动作、生理反应或表情（杯子砸在地上、指节发白、呼吸变急、转身就走）。
+② 禁止总结代替场景：不写「他们聊了很久」「时间过得飞快」「经过一番争吵」「就这样定了」——把关键谈判/摊牌展开成实际对话与动作，绝不跳过。
+③ 禁止抽象形容：不写「美丽的」「帅气的」「神秘的」「温柔的」「霸道的」——换成一个具体视觉细节（发如泼墨、袖口磨得起毛、皮鞋从不沾灰）。
+④ 禁止内心独白叙述：不写「他想到了」「她记得」「他心想」「脑海里浮现」——内心活动只用自然括号（内心：…）承载，或外化为动作、道具、台词；影视拍不到角色脑子里。
+⑤ 禁止纯叙述墙：AIGC 正文是流畅自然段（不加 △），但严禁连续堆叠心理/环境叙述——每段必须落到可拍摄画面、可听声音或具体动作，一段只承载一层信息。
+例外：台词行「角色名（情绪/动作）：台词」里的情绪/动作括号是给演员的表演提示，允许保留；被禁的只是叙述句里直报情绪。`;
+  }
+  return `【前置教学·展示而非叙述（影视编剧第一法则）】剧本只展示、不叙述；本清单与 showDontTellScan 五类检测同源（format 维度占 20% 权重），先写对再谈润色：
+① 禁止叙述句直报情绪：不写「他感到很生气」「心里很慌」「十分紧张」「内心挣扎」「生气地摔门」里的情绪名——改成可见动作、生理反应或表情（杯子砸在地上、指节发白、呼吸变急、转身就走）。
+② 禁止总结代替场景：不写「他们聊了很久」「时间过得飞快」「经过一番争吵」「就这样定了」——把关键谈判/摊牌展开成实际对话与动作，绝不跳过。
+③ 禁止抽象形容：不写「美丽的」「帅气的」「神秘的」「温柔的」「霸道的」——换成一个具体视觉细节（发如泼墨、袖口磨得起毛、皮鞋从不沾灰）。
+④ 禁止内心独白叙述：不写「他想到了」「她记得」「他心想」「脑海里浮现」——外化为动作、道具或台词；影视拍不到角色脑子里。
+⑤ 禁止纯叙述墙：每个动作独占 △ 行，△ 动作行与台词行交替推进，不得连续 3 行以上无 △ 无对白的纯叙述。
+例外：台词行「角色名（情绪/动作）：台词」里的情绪/动作括号是给演员的表演提示，允许保留；被禁的只是叙述句里直报情绪。`;
+}
+
 // —— c211 落库统一形态（批量生成 / SSE / /fix 重算三处共用，禁止手写分叉）——
 // 本引擎是 issues 形态（无顶层 hits），v2.150 的 buildQcEngineDigest 按 hits 硬过滤，
 // 导致它只在 SSE 流里出现、从不落库，刷新后质检面板永久失明。
