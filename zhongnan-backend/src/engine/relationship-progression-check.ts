@@ -125,6 +125,49 @@ function count(text: string, re: RegExp): number {
 }
 
 /**
+ * v2.366 情感关系递进前置教学（与 relationshipProgressionCheck 同文件=同源铁律）
+ * ------------------------------------------------------------------
+ * 把五类检测口径（有名无实 high 扣 22、突飞猛进 high 扣 20、一路糖水 mid 扣 10、
+ * 只暧昧不推进 mid 扣 12、告知式爱情 low 扣 8，含 15%/5% 位置阈与后 30% 推进窗）
+ * 反向前置到撰写师首轮与润色师首轮，避免「先写错再打回重写」白付 retry token（v2.157）。
+ * 纯函数·中英双语·零 IO·确定性；LIVE/AIGC 按制式分发版式口径。
+ */
+export function buildRelationshipProgressionDirective(mode: 'LIVE' | 'AIGC' = 'LIVE', lang: RelLang = 'zh'): string {
+  if (lang === 'en') {
+    return [
+      '[PRE-WRITING RULE · Relationship progression — heartbeat, obstacle, escalation] This list mirrors the relationshipProgressionCheck five-class checks, so write it right the first time:',
+      'The romance line is the second heartbeat of a short drama: the audience ships a couple through buildup, obstacle and escalation, one rung at a time. These five failures are scored after the draft — avoid them in the first pass.',
+      '1) Decorative relationship: relationship titles (husband, wife, fiancee, ex, married) appear 2 or more times while strong intimacy, heartbeat beats and two-person interactions (held look, grabbed hand, hug) are all zero — high, 22 points off. Put the couple in a room together: one real two-hander, a held look, physical contact, a line only they could say.',
+      '2) Instant love: the first kiss, confession, proposal or bed scene lands after the 15% mark with zero heartbeat beats before it — high, 20 points off. Two exemptions: intimacy inside the opening 15% (already married or dating), or a relationship anchor within 5% of the strong beat. Otherwise lay three steps: an involuntary reaction (racing heart, blush), an encroaching closeness (brushing fingers, leaning in), a gaze that should have broken but did not.',
+      '3) Sweet without obstacle: 2 or more strong intimacy beats and zero obstacles (misunderstanding, jealousy, rival, contract marriage, ex, family objection, class gap) — mid, 10 points off. Put a barrier between every two candies so the audience fears losing the sugar before it lands.',
+      '4) Stagnant romance: 3 or more heartbeat, blush or hand-holding beats with zero strong intimacy and zero relationship upgrade (got together, made it official, back together, registered marriage, pregnant) — mid, 12 points off. Tension is a hook, not the meal: by the final 30% deliver one real escalation, even if a new conflict breaks it a beat later.',
+      '5) Told-not-shown love: two or more "he realized he loved her" declarations while filmable heartbeat beats stay under two — low, 8 points off. Translate narration into behavior: scanning the crowd for her first, freezing mid-sip at her name, sitting back down when he should leave.',
+      'Genre exemption: with zero relationship signals (no titles, no intimacy, no heartbeat) the check does not judge at all — never force a romance line into a revenge, male-power or business story.',
+      'Boundary: a vow three lines after the first meeting belongs to instant-love; how a couple meets belongs to convenient encounter, and falling for someone while trapped belongs to forced proximity; acting close right after a cross-episode breakup belongs to the relationship ledger, and how long a pair has been off screen together belongs to pair-bond freshness; emotional jumps belong to the arc tracker; general inner-life summary belongs to show-don\'t-tell. This list only owns the ratio of love declarations to filmable heartbeat beats.',
+      'Format: dialogue lines stay "NAME (emotion/action): line".',
+      mode === 'AIGC'
+        ? 'Flowing AIGC draft: body paragraphs are continuous prose with no △ markers; write the heartbeat, the encroachment and the obstacle into continuous action, keep inner life in the (inner: …) parenthetical, and never let narration announce "he fell for her".'
+        : 'LIVE shooting script: each action gets its own line starting with △, alternating with dialogue; stage the heartbeat, the encroachment and the obstacle as visible actions (△ her fingers brush the back of his hand, △ his hand stops on the door), never summarize them in one line of narration.',
+    ].join('\n');
+  }
+  return [
+    '【前置教学·情感关系递进（心动→阻碍→升级，一阶一阶来）】本清单与 relationshipProgressionCheck 五类检测同源，先写对再谈润色：',
+    '情感线是女频的第二条心跳：观众嗑 CP 要的是「铺垫 → 阻碍 → 升级」。以下五类在成稿会被判罚，请在第一稿就避开。',
+    '① 有名无实：关系身份（老公/老婆/未婚夫/前夫/夫妻/结婚）被提及 ≥2 处，却 0 处强亲密、0 处心动暧昧、0 处双人互动（对视/抓手/抱住）——high，扣 22 分。先让 CP 同框：至少一场两人正戏，一次对视、一次肢体接触、一句只有他们之间才说得出口的话。',
+    '② 突飞猛进：第一个吻/表白/求婚/上床落在全文 15% 之后，而它之前 0 个心动/暧昧节拍——high，扣 20 分。豁免两种：亲密就在开场 15% 内（开场即已婚/已恋日常）；强亲密前后 5% 内出现关系身份锚点（「低头吻了吻妻子的额头」——身份即铺垫）。其余请铺三级台阶：一次身体本能（心跳/脸红）、一次越界靠近（指尖相碰/凑近耳边）、一次本该收回却没收的对视。',
+    '③ 一路糖水：强亲密（吻/表白/求婚/上床）≥2 处，阻力（误会/吃醋/情敌/契约婚姻/前任/家族反对/门第）0 处——mid，扣 10 分。每两颗糖之间夹一道阻力，让观众先慌一下，糖才甜。',
+    '④ 只暧昧不推进：心动/脸红/牵手/凑近 ≥3 处，却 0 次强亲密、0 次关系升级（在一起/确定关系/复合/领证/怀孕）——mid，扣 12 分。暧昧是钩子不是正菜，本集后 30% 必须给一次关系实质推进，哪怕推进后立刻被新矛盾打断。',
+    '⑤ 告知式爱情：旁白「他发现自己爱上了她」类宣告 ≥2 处，可拍摄的心动动作不足 2 处——low，扣 8 分。把旁白翻译成动作：人群里第一眼找她、听到她名字停住手里的杯子、明明该走却又坐下。',
+    '题材豁免：全文零关系信号（零身份、零亲密、零心动）时不评判——复仇/男频逆袭/商战别硬塞感情戏。',
+    '边界：初见三行就「非你不嫁」归「秒爱」检测；怎么相遇归「巧遇」、被困生情归「困处」；跨集决裂后又贴贴归「关系翻转账本」、跨集多久没同场归「关系线同场保鲜」；情绪跳变归「情绪弧光」；一般心理概述归「展示而非叙述」，本清单只管「爱情宣告」与心动动作的配比。',
+    '版式：台词行保持「角色名（情绪/动作）：台词」。',
+    mode === 'AIGC'
+      ? 'AIGC 流畅本：正文是流畅自然段、不加 △；把心动、越界、阻力写进连续动作与（内心：…），不要用旁白宣布「他动心了」。'
+      : 'LIVE 分镜稿：每个动作独占 △ 行，与台词交替；心动/越界/阻力都写成可见动作（△ 她指尖擦过他的手背、△ 他停住推门的手），别用一句旁白概括。',
+  ].join('\n');
+}
+
+/**
  * 情感关系递进检测
  * @param text 剧本正文
  * @param lang 语言
