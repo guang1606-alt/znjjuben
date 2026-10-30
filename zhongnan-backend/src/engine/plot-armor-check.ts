@@ -146,6 +146,48 @@ const adviceEn = {
 };
 
 /**
+ * v2.365 反派降智 / 主角光环前置教学（与 plotArmorCheck 同文件=同源铁律）
+ * ------------------------------------------------------------------
+ * 把四类检测口径（放人 1 处 mid/≥2 处 high、自白 1 处 mid/≥2 处 high、
+ * 束缚 1 处 low/≥2 处 mid、光环 1 处 mid/≥2 处 high，以及 2/4/3 行窗口、
+ * 智取每处回补 2 分最多 6 分）反向前置到撰写师首轮与润色师首轮，避免
+ * 「先写错再打回重写」白付 retry token（v2.157）。
+ * 纯函数·中英双语·零 IO·确定性；LIVE/AIGC 按制式分发版式口径。
+ */
+export function buildPlotArmorDirective(mode: 'LIVE' | 'AIGC' = 'LIVE', lang: PaLang = 'zh'): string {
+  if (lang === 'en') {
+    return [
+      '[PRE-WRITING RULE · Villain stupidity / plot armor — the win must be earned] This list mirrors the plotArmorCheck four-class checks, so write it right the first time:',
+      'The peak joy of a short drama is "the harder the press, the sweeter the comeback"; the peak complaint is "the hero won nothing". Victory must be earned by the hero, never handed over by a suddenly stupid opponent.',
+      '1) Villain spares the hero (heaviest): when the hero is under control, a kill order ("deal with him", "take care of her", "finish him off") followed within 2 lines by the villain leaving ("turned and left", "walked away", "ordered his men"), or a delay line ("save him for later", "let him live a little longer") — 1 instance is mid, 2 or more is high. Either have him see the execution through and make the hero pay a price to break it, or give a hard reason to keep the hero alive (needed signature, hostage, cameras on site, useful alive, cannot get the goods if he dies).',
+      '2) Monologue at knifepoint: with the hero under control the villain explains ("you want to know why", "allow me to tell you", "so you can die knowing") and the hero escapes within the next 4 lines — 1 instance is mid, 2 or more is high. Spread the explanation into the earlier confrontation, let the lethal blow actually land, and let the hero escape through a planted edge or a split-second move instead of waiting for the speech to end.',
+      '3) Restraint and guarding as a joke: loose ropes, an unlocked door, the key in the lock, a sleeping or drunk guard or a lone guard, paired with an easy escape — 1 instance is low, 2 or more is mid. Give the restraint real strength; escape must cost a tool, outside help or physical pain.',
+      '4) Plot armor at the lethal event: after a gunshot, stab, cliff fall, car crash or explosion, "unharmed / just a flesh wound / brushed it off and ran" within 3 lines, with no cost and no gear earlier in the scene — 1 instance is mid, 2 or more is high. Either let the hero truly go down (coma, broken bones, surgery, hospital, rescued and bedridden), or plant protective gear and a buffer beforehand.',
+      '5) Positive signal · clever escape: hidden blade, cut ropes, bribed guard, planned ahead, one step ahead, feigned surrender — each instance recovers 2 points (up to 6), and exempts the spares, monologue and restraint checks in the same scene. Write the comeback as "was ready for this", never as "the opponent softened".',
+      'Boundary: the line in which a villain reveals his secret is the job of dialogue subtext; this list only owns the structural escape window left after the speech. Wounds that vanish after the event belong to continuity; this list owns the lethal moment itself.',
+      'Format: dialogue lines stay "NAME (emotion/action): line".',
+      mode === 'AIGC'
+        ? 'Flowing AIGC draft: body paragraphs are continuous prose with no △ markers; write the execution, the escape and the cost into continuous action, keep inner life in the (inner: …) parenthetical, and never let narration announce "he won".'
+        : 'LIVE shooting script: each action gets its own line starting with △, alternating with dialogue; stage the sparing, the monologue and the loose bonds as visible actions (△ the villain actually pulls the trigger, △ the hero actually bleeds) instead of skipping them in one line of narration.',
+    ].join('\n');
+  }
+  return [
+    '【前置教学·反派降智/主角光环（翻盘必须靠主角挣来）】本清单与 plotArmorCheck 四类检测同源，先写对再谈润色：',
+    '短剧顶格爽点是「压迫越狠翻盘越爽」，顶格差评是「主角赢得毫无含金量」——胜利必须由主角挣来，不能由对手突然犯蠢送出。',
+    '① 占尽上风却放人（最重）：主角已被控制时，反派下令「处理掉他/做掉她/干掉他」后 2 行内转身就走/扬长而去/吩咐手下，或甩一句「改日再杀/留你一条狗命」，就判放人——1 处 mid，2 处及以上 high。要么让他盯着执行到底、由主角付出代价破局；要么给放人一个硬理由（必须本人签字/留作人质/现场有监控/留着他还有用/杀了他拿不到东西）。',
+    '② 刀架脖子长篇自白：主角被控制时反派说「你想知道为什么吗/不妨告诉你/让你死个明白」，随后 4 行内主角脱身——1 处 mid，2 处及以上 high。把解释拆散到此前的对峙里，致命一击让他真的动手；主角靠抢先一步/藏好的后手脱身，而不是等反派讲完。',
+    '③ 束缚与看守法儿戏：绳子松松的/门没锁/钥匙插在锁孔/看守睡着喝醉或只剩一个，配一句轻易挣脱——1 处 low，2 处及以上 mid。给束缚一个可信强度，逃脱必须靠道具、外援或伤痛代价。',
+    '④ 致命事件当下毫发无伤：中枪/中刀/坠崖/车祸/爆炸后 3 行内「毫发无伤/只是皮外伤/拍拍灰就跑」，且此前同场既无伤害代价、也无护具——1 处 mid，2 处及以上 high。要么让他真的倒下（昏迷/骨折/手术/住院/被人救走养伤），要么提前铺垫护具与缓冲。',
+    '⑤ 正信号·智取：袖里藏刀片/磨断绳子/买通看守/早有准备/将计就计/假意投降——每处回补 2 分（最多 6 分），同场的①②③判定全部豁免。翻盘请写成「早有准备」，而不是「对手突然心软」。',
+    '边界：反派把秘密说破这句话本身的写法归「台词潜台词」；本清单只管「说完还留了逃脱窗口」这个结构。致命事件之后的伤口无痕归场记一致性；本清单只管致命事件当下就没事。',
+    '版式：台词行保持「角色名（情绪/动作）：台词」。',
+    mode === 'AIGC'
+      ? 'AIGC 流畅本：正文是流畅自然段、不加 △；把执行、逃脱、代价写进连续动作里，心理走（内心：…），不要用旁白把「他赢了」直接宣布。'
+      : 'LIVE 分镜稿：每个动作独占 △ 行，与台词交替；放人/自白/松绑都写成可见动作（△ 反派真的扣下扳机、△ 主角真的见血），别用一句旁白跳过。',
+  ].join('\n');
+}
+
+/**
  * 反派降智 / 主角光环检测
  * @param text 剧本全文
  * @param lang zh | en
