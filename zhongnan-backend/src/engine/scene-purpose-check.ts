@@ -396,3 +396,43 @@ export function scenePurposeCheck(text: string, lang: SpLang = 'zh'): ScenePurpo
 
 // 瞬态判定数据（不进对外类型字段）
 const internal = new WeakMap<ScenePurposeReport, { fillerBefore: number; endsSoft: boolean; domHits: number; body: string }>();
+
+/**
+ * v2.362 场景目的效率前置教学（与 scenePurposeCheck 同文件=同源铁律）
+ * ------------------------------------------------------------------
+ * 把四类检测口径（多目的稀释 / 跨场重复目的 / 目的迟到 / 软收尾）反向前置到
+ * 撰写师首轮与润色师首轮，避免「先写错再打回重写」白付 retry token（v2.157）。
+ * 纯函数·中英双语·零 IO·确定性；LIVE/AIGC 按制式分发版式口径。
+ */
+export function buildScenePurposeDirective(mode: 'LIVE' | 'AIGC' = 'LIVE', lang: SpLang = 'zh'): string {
+  if (lang === 'en') {
+    const en = [
+      '【Pre-writing rule · scene purpose economy (every second on screen is money)】',
+      'This list mirrors the post-generation scenePurposeCheck. Write it right the first time instead of getting bounced back:',
+      'The five purpose clusters are exposition, confrontation, decision/action, romance, and reveal. Each scene must carry exactly one dominant purpose — one scene, one punch.',
+      '① Do not dilute: a short scene (6-13 lines) must never touch three or more purpose clusters with each hit once. Before writing, ask "if only one result survives this scene, which one?" Move the rest into their own scenes or cut them; if two beats must coexist, let one clearly dominate.',
+      '② Do not repeat: two thin scenes must not pursue the same purpose on the same topic (the same will, the same accident, the same affair). Repetition is not resonance: either merge the first scene into the second, or escalate the second — first time heard, second time seen; first time suspicion, second time evidence lands.',
+      '③ Do not delay: in a scene of 8+ lines, the first purpose beat must land before 55% of the scene; target the first 3 lines. Open on the conflict or the question, and slide greetings into the pauses between blows.',
+      '④ Do not exit soft: the last 25% of a scene must not settle on "see you / goodbye / another time / take care". The final line carries a hook — a decision, a threat, an unanswered question, or a secret someone just saw. A clean scene is one purpose that lands in its last 30%.',
+      'Format: dialogue lines stay "NAME (emotion/action): line".',
+      mode === 'AIGC'
+        ? 'This is the flowing AIGC draft: body paragraphs are continuous prose with no △ markers; when you cut a diluted beat, fold its information into the adjacent action or inner voice (inner: …) instead of narrating it.'
+        : 'This is the LIVE shooting script: each action gets its own line starting with △, alternating with dialogue lines; delete the △ decoration together with any line you cut.',
+    ].join('\n');
+    return en;
+  }
+  const lines = [
+    '【前置教学·场景目的效率（短剧一场只打一拳）】本清单与 scenePurposeCheck 同源，先写对再谈润色：',
+    '短剧的场景经济学：一场只干一件事，一件事只在一场干。五个目的簇——交代背景、正面冲突、决定行动、情感推进、反转揭晓——每场只准有一个主导目的。',
+    '① 不稀释：6-13 行的短场里，撞上三个以上目的、且每件只点一下，就是目的稀释。动笔前先问「这场戏如果只留一个结果，留哪个」，次要的事拆出去另开一场或干脆删并；真要同时推进，必须让一条线压过另一条，主次分明。',
+    '② 不重复：两个薄场不能追同一个目的、同一个话题（同一份遗嘱、同一场车祸、同一个出轨），后一场还毫无升级——重复不是回响，是磨蹭。要么删掉前一场把信息并进后一场；要么让第二场带新代价升级：第一次是听说，第二次就要亲眼看见；第一次是怀疑，第二次就要有证据砸脸。',
+    '③ 不迟到：8 行以上的场，第一个目的信号必须出现在 55% 之前，目标前 3 行就进戏——开场直接上冲突或难题，寒暄挪到对峙的间隙里当喘息。',
+    '④ 不软收尾：场末 25% 不能落在「慢走」「不送」「再见」「改天再聊」「回去等消息」这类告别客套上；最后一句必须带钩子——一个决定、一个威胁、一个没回答的问题，或一个被看见的秘密。',
+    '⑤ 干净场标准：单一目的 + 最后 30% 有推进落地。',
+    '版式：台词行保持「角色名（情绪/动作）：台词」。',
+    mode === 'AIGC'
+      ? 'AIGC 流畅本：正文是流畅自然段、不加 △；删掉稀释的次要事件时，把必要信息并进相邻动作或内心（内心：…），不要用旁白复述。'
+      : 'LIVE 分镜稿：每个动作独占 △ 行，与台词交替推进；删掉一个次要目的时，连带删掉它独占的 △ 装饰行。',
+  ];
+  return lines.join('\n');
+}
