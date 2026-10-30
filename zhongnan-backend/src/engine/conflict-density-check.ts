@@ -304,3 +304,45 @@ export function conflictDensityCheck(text: string, lang: CdLang = 'zh'): Conflic
 
   return { score, hits: deduped, count, maxLevel, variety, distribution, hasEscalation, strengthCurve, issues };
 }
+
+/**
+ * v2.363 冲突密度与升级阶梯前置教学（与 conflictDensityCheck 同文件=同源铁律）
+ * ------------------------------------------------------------------
+ * 把五类检测口径（数量≥3 / 三段分布 / 最高等级≥对峙 / 强度递增 / 类型多样）
+ * 反向前置到撰写师首轮与润色师首轮，避免「先写错再打回重写」白付 retry token（v2.157）。
+ * 纯函数·中英双语·零 IO·确定性；LIVE/AIGC 按制式分发版式口径。
+ */
+export function buildConflictDensityDirective(mode: 'LIVE' | 'AIGC' = 'LIVE', lang: CdLang = 'zh'): string {
+  if (lang === 'en') {
+    return [
+      '【Pre-writing rule · conflict density and escalation ladder (the life-or-death line of short drama)】',
+      'This list mirrors the post-generation conflictDensityCheck. Write it right the first time instead of getting bounced back:',
+      'Short drama runs on conflict: no conflict, no story; conflict that never escalates and viewers walk out.',
+      '① Count: every episode needs at least 3 conflict points — not three lines of bickering, but three confrontations that actually change the situation.',
+      '② Strength ladder: verbal (30) → confrontation (55) → physical (80) → life-death (95). The peak conflict must reach at least confrontation (55); a whole episode stuck at verbal is dead air.',
+      '③ Spread: the head, mid, and tail each need at least one conflict — do not save all the heat for the last five minutes.',
+      '④ Escalation: intensity rises from small to large — argue first, then block, then hit, and only then stake a life; never open high and coast flat.',
+      '⑤ Variety: mix emotional, interest, power, identity, and life-death conflicts — never one single category for the whole episode (all arguing wears thin fastest).',
+      '⑥ Signal check (same source as the detector): verbal looks like "argue, yell, scold, who do you think you are"; physical looks like "slap, kick, smash, grab"; life-death looks like "kill, fall, poison, gun, knife". After writing, verify each confrontation truly lands in a line or an action.',
+      'Format: dialogue lines stay "NAME (emotion/action): line".',
+      mode === 'AIGC'
+        ? 'This is the flowing AIGC draft: body paragraphs are continuous prose with no △ markers; write conflict into continuous action and dialogue, and when you need inner life use (inner: …) rather than narrating "he was furious".'
+        : 'This is the LIVE shooting script: each action gets its own line starting with △, alternating with dialogue lines; turn conflict into shootable △ actions (push, snatch, smash) instead of shouting it all in dialogue.',
+    ].join('\n');
+  }
+  const lines = [
+    '【前置教学·冲突密度与升级阶梯（短剧驱动力生死线）】本清单与 conflictDensityCheck 同源，先写对再谈润色：',
+    '短剧靠冲突驱动：没有冲突就没有故事，冲突不升级观众就弃剧。',
+    '① 数量：每集至少 3 个冲突点——不是 3 句拌嘴，是 3 次真正改变局面的对抗。',
+    '② 强度阶梯：口角（30）→ 对峙（55）→ 肢体冲突（80）→ 生死对抗（95）。最高冲突等级必须≥对峙（55），全片停在口角就是没戏。',
+    '③ 分布：开头、中段、结尾三段各至少 1 个冲突，不许把劲全攒在最后五分钟。',
+    '④ 升级：强度从小到大递增——先吵、再拦、再动手，最后才见生死；不能高开后一路平走。',
+    '⑤ 多样：情感、利益、权力、身份、生死五类混搭，禁止全片单一类型（全是吵架最易疲劳）。',
+    '⑥ 信号词自检（与检测同源）：口角看「吵、骂、怼、你凭什么」；肢体冲突看「一巴掌、扇、踹、砸」；生死对抗看「杀、坠楼、毒、枪、刀」。写完对一遍，该有的对抗要真落地在台词/动作里。',
+    '版式：台词行保持「角色名（情绪/动作）：台词」。',
+    mode === 'AIGC'
+      ? 'AIGC 流畅本：正文是流畅自然段、不加 △；冲突写进连续动作与对白里，需要心理时用（内心：…）交代，不要用旁白解释「他很生气」。'
+      : 'LIVE 分镜稿：每个动作独占 △ 行，与台词交替；把冲突落实成可拍的 △ 动作（推、抢、砸），别只在台词里喊。',
+  ];
+  return lines.join('\n');
+}
