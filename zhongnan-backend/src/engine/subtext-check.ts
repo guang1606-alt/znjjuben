@@ -86,6 +86,48 @@ const DEFLECTION_EN = /^(?:nothing|nothing\.$|i(?:['’]m| am) fine|it(?:['’]s
 const clamp = (n: number) => Math.max(0, Math.min(100, n));
 
 /**
+ * v2.364 台词潜台词前置教学（与 subtextCheck 同文件=同源铁律）
+ * ------------------------------------------------------------------
+ * 把五类检测口径（底牌直给 1 处 mid / ≥2 处 high、反派自曝 1 处即硬伤、
+ * 知情者科普 2 句起报、问答喂信息 2 组起报、情绪直报 3 处起报）反向前置到
+ * 撰写师首轮与润色师首轮，避免「先写错再打回重写」白付 retry token（v2.157）。
+ * 纯函数·中英双语·零 IO·确定性；LIVE/AIGC 按制式分发版式口径。
+ */
+export function buildSubtextDirective(mode: 'LIVE' | 'AIGC' = 'LIVE', lang: SbLang = 'zh'): string {
+  if (lang === 'en') {
+    return [
+      '[PRE-WRITING RULE · Dialogue subtext — an agenda is never spoken aloud] This list mirrors the five-class subtextCheck checks, so write it right the first time:',
+      'Good dialogue says one thing and plays another; a character never turns to the camera to read the manual.',
+      '1) On-the-nose declaration (heaviest): a real goal, secret or plan must never be spoken by the character — 1 instance is mid, 2 or more is high (rewrite-grade). Ban "I got close to you just to...", "I arranged all of this", "I never loved you", "I have been using you". Play it through three channels instead: an unexplainable action (tenderness toward an enemy), a slip immediately taken back, a glance only the audience catches.',
+      "2) Villain exposition: a villain never explains his scheme to the victim's face — 1 instance is a hard flaw (mid). Ban \"you want to know why\", \"since you are done for, allow me to tell you\", \"let me explain\". On stage the villain gets only the winner's tease (\"guess why I kept you alive\") and never the answer; let the hero assemble the plan from evidence.",
+      '3) As-you-know: never lecture someone who already knows the shared fact — flags from 2 lines. Ban "as you know, our company IPOs next month", "we have known each other for twenty years". Recast facts as leverage ("guess what one extra contract in the filing would do").',
+      '4) Q&A exposition: one fake question, one recited answer — flags from 2 pairs. Make questions sting (accusations), make answers dodge, counter-question or refuse; if exposition is unavoidable, bury half a line inside an argument, or let a genuine outsider ask and the insider refuse.',
+      '5) Named emotion: never shout the emotion\'s name in the line itself ("I am so sad", "I am angry", "you disappoint me") — flags from 3 instances (confessions and climaxes keep room for honest directness). Perform feeling through action and detail. Boundary with show-don\'t-tell: the bracket in "NAME (emotion/action): line" is a performance note for the actor and may stay; what is banned is naming the emotion inside the spoken line.',
+      '6) Positive signal: deflection and evasion are good subtext ("nothing", "whatever", "I am tired", "none of your business") — every 3 instances recover 1 point (up to 3), evasive scripts are rewarded.',
+      'Format: dialogue lines stay "NAME (emotion/action): line".',
+      mode === 'AIGC'
+        ? 'Flowing AIGC draft: body paragraphs are continuous prose with no △ markers; write subtext into continuous action and the negative space of dialogue, keep inner life in the (inner: …) parenthetical, and never translate the line\'s meaning in narration.'
+        : 'LIVE shooting script: each action gets its own line starting with △, alternating with dialogue; carry subtext through △ actions and silence instead of footnoting the line in narration.',
+    ].join('\n');
+  }
+  const lines = [
+    '【前置教学·台词潜台词（底牌不能让角色说破）】本清单与 subtextCheck 五类检测同源，先写对再谈润色：',
+    '好台词是嘴上说一件事、心里演另一件事；角色不能转过头替编剧念说明书。',
+    '① 底牌直给（最重）：真实目的/秘密/计划绝不由角色亲口说破——1 处就是 mid，2 处及以上直接 high（重写级）。禁止「我接近你就是为了…」「这一切都是我安排的」「我从没爱过你」「我一直在利用你」。改成三样东西演出来：一个反常动作（对仇人莫名温柔）、一句失言后立刻收回、一个只有观众看到的眼神。',
+    '② 反派自曝：反派不许当着仇人讲解自己的计划/动机——1 处即硬伤（mid）。禁「你想知道为什么吗」「既然你输定了，我不妨告诉你」「让我来告诉你」。反派在场只说赢家的消遣（「你猜我为什么留你到现在」），答案永远不给；计划让主角靠证据拼出来。',
+    '③ 知情者科普：不对本该知情的人背诵双方已知事实——2 句起报。禁「你也知道，我们公司下个月就要上市」「我们认识二十年了」。把事实改成冲突筹码（「上市材料里要是多一份合同，你猜会怎样」）。',
+    '④ 问答喂信息：一个人假提问、另一个配合背诵——2 组起报。让提问带刺（质问），让回答闪躲/反问/拒答；非要交代就塞进争吵半句带过，或让真正的局外人来问、知情人拒答。',
+    '⑤ 情绪直报：台词正文张口喊情绪名（「我好难过」「我很生气」「你让我很失望」）——3 处起报（告白/高潮的合理直抒留空间）。情绪靠动作/细节演，不靠报名。注意与「展示而非叙述」的边界：台词行「角色名（情绪/动作）：台词」里的括号是给演员的表演提示，允许保留；被禁的是台词正文把情绪当台词喊出来。',
+    '⑥ 正信号：回避/嘴硬/答非所问是好潜台词（「没什么」「随便」「我累了」「不关你事」）——每 3 处回补 1 分（最多 3 分），会藏的剧本有奖励。',
+    '版式：台词行保持「角色名（情绪/动作）：台词」。',
+    mode === 'AIGC'
+      ? 'AIGC 流畅本：正文是流畅自然段、不加 △；潜台词写进连续动作与对白留白里，心理走（内心：…），不要用旁白把台词的含义翻译一遍。'
+      : 'LIVE 分镜稿：每个动作独占 △ 行，与台词交替；潜台词尽量交给 △ 动作与沉默，别用旁白注解台词。',
+  ];
+  return lines.join('\n');
+}
+
+/**
  * v2.135 台词潜台词检测
  * @param text 剧本正文
  * @param lang 语言
