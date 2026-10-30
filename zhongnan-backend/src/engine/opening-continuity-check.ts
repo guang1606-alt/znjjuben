@@ -213,3 +213,40 @@ export function openingContinuityCheck(prevEnding: string, draft: string, lang: 
     issueCount: issues.length, issues,
   };
 }
+
+/**
+ * v2.367 跨集开场焊点前置教学（与 openingContinuityCheck 同文件=同源铁律）
+ * ------------------------------------------------------------------
+ * 三类断焊口径（说话人全灭 high 扣 18 / 零星重叠 mid 扣 10、冷开场 mid 扣 10、
+ * 跳时间 low 扣 5；开场块 800 字上限、跳时 300 字窗口、前集结尾 20 字有效线、
+ * 说话人取末尾 4 位；接住末位说话人 +2、2-gram 重叠 ≥3 +1）反向前置到
+ * 撰写师首轮与润色师首轮，避免「先写错再打回重写」白付 retry token（v2.157）。
+ * 纯函数·中英双语·零 IO·确定性；LIVE/AIGC 按制式分发版式口径。
+ */
+export function buildOpeningContinuityDirective(mode: 'LIVE' | 'AIGC' = 'LIVE', lang: OcLang = 'zh'): string {
+  if (lang === 'en') {
+    return [
+      '[PRE-WRITING RULE · Cross-episode opening weld — catch the last beat before moving on] This list mirrors the openingContinuityCheck three-class checks, so write it right the first time. Only episode 2 onward: with no previous ending, or one under 20 characters, the check does not run and this rule does not apply.',
+      'The previous ending is a weld: the opening block (from the first line up to the second scene header, capped at 800 characters) must catch the final beat of the last episode before advancing this one. Three broken welds are scored after the draft:',
+      '1) Speaker missing: the speaker labels of the previous ending\'s dialogue lines (the name before the colon, deduplicated, last 4 kept) appear nowhere in the opening block — high, 18 points off when lexical overlap with the ending is zero, still mid, 10 points off when a few words overlap. Have the last speaker answer or react first, then establish their immediate whereabouts in one line; never pretend nothing happened and start fresh.',
+      '2) Cold open: the previous ending yields no dialogue line at all (pure action or image) and the opening block shares zero 2-gram overlap with it — mid, 10 points off. Pick up from the same action, the same place or the very next line, settle the beat, then move on.',
+      '3) Time jump: a time-jump marker (the next day, days later, a week later, months later, a year later) lands in the first 300 characters of the opening — low, 5 points off. Close the previous beat with half a line first (an afterbeat, a reaction, the result of the final action), then jump; never let the audience open their eyes to another day.',
+      'Positive signals: catching the last speaker in the opening earns 2 points back; 2-gram overlap of 3 or more earns 1 more.',
+      'Boundary: an opening line that dissolves last episode\'s strong hook ("just kidding / it was a misunderstanding") belongs to the cliffhanger-dissolve quality check; cross-episode time anchors running backwards or going dry belong to the timeline ledger; place continuity belongs to the location check; repeating last episode\'s lines belongs to the replay check; hook types for the episode opening belong to the hook system. This list only covers whether the opening block catches the people, connects the words, and closes the beat before jumping time.',
+      'LIVE format: write the pickup and the reaction as separate lines starting with a triangle marker, catch the last beat in one action line, then land the first line of dialogue.',
+      'AIGC format: no triangle markers in the body, catch the last beat in flowing prose, and route inner thought through the parenthetical (inner: ...) convention.',
+    ].join('\n');
+  }
+  return [
+    '[撰写前置铁律 · 跨集开场焊点——先接住上一瞬，再推进本集] 本清单与 openingContinuityCheck 的三类检测同源，第一遍就写对。仅第 2 集及以后生效：第 1 集或前集结尾不足 20 字时不检测，本规则直接跳过。',
+    '前集结尾是焊点：本集开场块（正文开头到第二个场标之前，上限 800 字）必须先接住上一集最后那一瞬，再推进本集。三类断焊在成稿后计分，第一遍就避开：',
+    '1）说话人全灭：前集结尾台词行（"名字（情绪）：台词"）里的说话人（去重取末尾 4 位）在本集开场块里一个都没出现——与结尾零词汇重叠时 high 扣 18，有零星重叠仍 mid 扣 10。先让最后一位说话人接话或给反应镜头，再用一句台词交代 TA 的即时去向；严禁当无事发生另起炉灶。',
+    '2）冷开场：前集结尾没有可提取的台词行（纯动作/纯画面）且开场块与结尾零 2-gram 重叠——mid 扣 10。从结尾瞬间的同一动作、同一场地或下一句对话接起，先落定再推进本集。',
+    '3）跳时间：开场前 300 字直接出现时间跳变标记（次日/第二天/三天后/几天后/一周后/数月后/半年后/一年后/翌日）——low 扣 5。先给结尾瞬间的收束半句（余音、反应或动作结果）再跳，别让观众一睁眼就换了天。',
+    '正信号：结尾最后一位说话人在开场就被接住 +2；开场与结尾 2-gram 重叠 ≥3 处 +1。',
+    '边界：开场一句话把上集强钩消解（"逗你玩的/原来是误会"）归接钩质量检测（cliffhanger-dissolve）；跨集时间锚点倒流或干旱归时间线账本；场景地点连续归地点一致性；上集原话复述归跨集复读；集首承接的钩子类型归 hook-system 集钩。本清单只管开场块内"人物是否接住、词汇是否连上、有没有先收束再跳时"。',
+    mode === 'AIGC'
+      ? 'AIGC 制式：正文不加 △，用流畅自然段接住上一瞬；人物内心走（内心：…）。'
+      : 'LIVE 制式：接话与反应镜头都写成独占 △ 行，先用一行 △ 承接上一瞬，再落人物第一句台词。',
+  ].join('\n');
+}
