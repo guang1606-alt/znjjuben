@@ -158,3 +158,54 @@ export function sceneCrowdCheck(
     issues,
   };
 }
+
+/**
+ * v2.371 前置教学指令：单场 distinct 说话人数 ≤4
+ * ----------------------------------------------------------------------
+ * 与 sceneCrowdCheck 同文件同源（v2.157 同源铁律）。
+ * zh 七条：① distinct 说话人阈值（≤4 安全 / ≥5 mid / ≥7 high）
+ * ② 量化同源（22/high、10/mid 扣分）③ 三种正向动作（合并 / 拆场 / 动作代替台词）
+ * ④ 群体标签归并（众人/大家/crowd 算 1 人）+ 旁白/解说不计入
+ * ⑤ 边界五项（群戏轮转形式归 round-robin-dialogue / 全剧戏份比例归 character-balance-check /
+ *   单场信息推进数归 information-density / 全稿 speakerCount 归 character-presence-check /
+ *   拆场节奏归 craft-lint）⑥ LIVE/AIGC 制式分叉。
+ * en 层零中文。缺省 format=LIVE。
+ */
+export function buildSceneCrowdDirective(
+  format: 'LIVE' | 'AIGC' = 'LIVE',
+  lang: CrowdLang = 'zh',
+): string {
+  if (lang === 'en') {
+    const base = [
+      '◆ Scene crowd control: no more than 4 distinct speaking characters per scene.',
+      '  ≥5 speakers in one scene → mid penalty 10 per scene; ≥7 → high penalty 22 per scene.',
+      '  Vertical short-drama screens cannot show 7 faces clearly — viewers lose track.',
+      '◆ Three fixes: ① Merge minor roles into one speaker, ② Split the scene across two beats, ③ Replace some lines with actions, glances, or crowd reactions.',
+      '◆ Group labels (crowd / everyone / audience) count as 1 speaker each; narrator / voiceover does not count.',
+      '◆ Boundaries: group-scene read-aloud form → round-robin-dialogue / full-drama screen ratio → character-balance-check / per-scene info push count → information-density / whole-script speaker count → character-presence-check / beat-splitting rhythm → craft-lint.',
+    ];
+    if (format === 'AIGC') {
+      base.push('◆ AIGC mode: write crowd scenes as flowing paragraphs without △ lines. Silence, pauses, and crowd reactions go into continuous action; if a character only needs to react, write that reaction as a visual detail instead of a line of dialogue.');
+    } else {
+      base.push('◆ LIVE mode: crowd reactions written as dedicated △ action lines. One beat of △ before each speaker change keeps the camera following faces clearly.');
+    }
+    return base.join('\n');
+  }
+
+  const zh = [
+    '◆ 单场 distinct 说话人数控制：每场最多 4 个角色开口。',
+    '  同场 ≥5 人开口 → mid 扣 10 分/场；≥7 人开口 → high 扣 22 分/场。',
+    '  短剧竖屏单屏容不下 7 张脸，观众根本分不清谁是谁。',
+    '◆ 三种正向动作：① 把 2-3 个小角色合并成一个说话人（功能一样的人只留一个开口）',
+    '  ② 把 7 人轮流转的群戏拆成两场——前半 3 人达成共识，后半另一场景 4 人执行',
+    '  ③ 让部分人只做动作在场不开口：用眼神、点头、掏东西、起身等 △ 动作代替台词',
+    '◆ 群体标签归并：众人/大家/同学们/crowd/everyone 算 1 个说话人，不重复计；旁白/解说/画外音不计入说话人数。',
+    '◆ 边界五项：群戏"读稿感"轮转形式归 round-robin-dialogue、全剧戏份比例归 character-balance-check、单场信息推进数归 information-density、全稿不同 speaker 总数归 character-presence-check、拆场节奏归 craft-lint。',
+  ];
+  if (format === 'AIGC') {
+    zh.push('◆ AIGC 制式：正文不加 △。群戏的沉默、眼神交流和人群反应写进连续自然段里——如果某个角色只需要有反应，把那个反应写成视觉细节而不是一句台词。');
+  } else {
+    zh.push('◆ LIVE 制式：每次换说话人之前加一行 △ 动作行（△ 众人议论纷纷 / △ 顾言抬眼环视），让镜头有地方落、观众跟得上谁在说话。');
+  }
+  return zh.join('\n');
+}
