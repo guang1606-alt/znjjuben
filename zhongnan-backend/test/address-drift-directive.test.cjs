@@ -110,6 +110,8 @@ test('pipeline 从同源文件 import，撰写师与润色师两处注入', () =
     /import \{[^}]*buildAddressDriftDirective[^}]*\} from '\.\.\/engine\/address-drift-check'/.test(src),
     '必须从 address-drift-check 同源 import（防口径漂移）',
   );
-  const injected = src.split('${sdtDirective}\\n${addressDriftDirective}').length - 1;
+  // v2.361 后 sdt 与 addressDrift 之间插入 waterDirective，改按插值引用总数锚定（定义行不带 ${}）：
+  // 撰写师首轮 1 处 + 润色师首轮 1 处 = 2
+  const injected = src.split('${addressDriftDirective}').length - 1;
   assert.strictEqual(injected, 2, '撰写师首轮 + 润色师首轮各注入一次');
 });

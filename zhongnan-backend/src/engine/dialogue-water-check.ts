@@ -361,3 +361,42 @@ export function dialogueWaterCheck(text: string, lang: DwLang = 'zh'): DialogueW
 
   return { score, totalLines, waterCount, waterRatio: Number(waterRatio.toFixed(2)), hits, issues };
 }
+
+/**
+ * v2.361 台词信息密度前置教学（与 dialogueWaterCheck 同文件=同源铁律）
+ * ------------------------------------------------------------------
+ * 检测器五类水分（寒暄 / 不推进 / 重复已知 / 过长铺垫 / 无功能）历史上只做事后
+ * QC 与重试 advice；本指令把同一口径前移到撰写师/润色师首轮，按 LIVE/AIGC 制式分发。
+ * 阈值与检测器一致：水分率 mid 线 >25%、寒暄 high 线 >2 句、无功能 low 线 >30%。
+ * 不可变纯函数：mode 缺省 LIVE，en 层零中文。
+ */
+export function buildDialogueWaterDirective(mode: 'LIVE' | 'AIGC' = 'LIVE', lang: DwLang = 'zh'): string {
+  if (lang === 'en') {
+    return `[PRE-WRITING RULE · Dialogue must earn its screen time] A short drama has no room for small talk — every line must advance the plot, build character, create conflict, or deliver information; cut any line that does none of the four. This list mirrors the five-class dialogueWaterCheck scan, so write it right the first time:
+1) No greeting-only lines ("hi", "hello", "how are you", "long time no see", "good morning", "thanks") — if a greeting must stay, hide information inside it ("Have you eaten?" is really "Where were you last night?"), and start scenes mid-conflict.
+2) Never repeat what the audience already saw ("I told you", "listen to me", "you said", "last time", "you promised") — jump straight to the next story beat.
+3) No long setup: reach the point within the first three lines (conflict, deal, showdown, interrogation); after the third line every line must escalate (raise the price, press harder, turn hostile, show the evidence); never run more than three non-progressing lines of pure chat.
+4) Turn functionless short lines into action — answer with a gesture, prop or look instead of dialogue. Exception: short conflict detonators ("get out", "shut up", "let go", "how dare you") are functional lines, not water.
+5) Quantitative lines: water ratio ≤25%, greeting-only lines ≤2, functionless lines ≤30%.
+Layout: every action gets its own △ line; dialogue stays on its own "NAME (emotion/action): line"; when you cut a line, delete its △ decoration too.
+AIGC mode: the body stays flowing prose without △ markers; dialogue still sits on its own "NAME (emotion): line"; after cutting water, fold the needed information into an adjacent action or the (inner: …) parenthesis — never restate it as narration.`;
+  }
+  if (mode === 'AIGC') {
+    return `【前置教学·台词信息密度（短剧每一秒都是钱·AIGC 流畅制作本）】本清单与 dialogueWaterCheck 五类水分检测同源，先写对再谈润色：
+短剧没有闲聊的空间——每句台词至少要完成一项：推进剧情、塑造人物、制造冲突、传递信息；四项都不占的台词一律删掉。
+① 寒暄不单独成句：不写「你好」「最近怎么样」「吃了吗」「好久不见」「辛苦了」这类纯招呼；寒暄要留就让它藏信息（一句「吃了吗」其实是在试探昨晚去了哪），场景从冲突中途切入。
+② 不复述观众已知：不写「我告诉过你」「我跟你说过」「上次你说」「你答应过」这类把演过的事再说一遍的台词，直接跳下一个剧情节拍。
+③ 不铺垫：对话前三句内必须进入重点（冲突、交易、摊牌、追问），第三句之后每句都要升级（加价、逼问、翻脸、亮证据），不得连续三句以上不推进（纯闲聊）。
+④ 无功能短句换成动作：能用一个动作、道具或眼神回答的，不写台词；例外是短促冲突爆点（滚、闭嘴、放手、你敢、休想），它们本身就是有效台词。
+⑤ 量化线：台词水分率 ≤25%，纯寒暄 ≤2 句，无功能台词 ≤30%——越线就是观众划走的位置。
+版式（AIGC 流畅本）：正文是流畅自然段、不加 △；台词仍独立成「角色名（情绪）：台词」行；删掉水分台词后把必要信息并进相邻动作或内心（内心：…），不要用旁白复述。`;
+  }
+  return `【前置教学·台词信息密度（短剧每一秒都是钱）】本清单与 dialogueWaterCheck 五类水分检测同源，先写对再谈润色：
+短剧没有闲聊的空间——每句台词至少要完成一项：推进剧情、塑造人物、制造冲突、传递信息；四项都不占的台词一律删掉。
+① 寒暄不单独成句：不写「你好」「最近怎么样」「吃了吗」「好久不见」「辛苦了」这类纯招呼；寒暄要留就让它藏信息（一句「吃了吗」其实是在试探昨晚去了哪），场景从冲突中途切入。
+② 不复述观众已知：不写「我告诉过你」「我跟你说过」「上次你说」「你答应过」这类把演过的事再说一遍的台词，直接跳下一个剧情节拍。
+③ 不铺垫：对话前三句内必须进入重点（冲突、交易、摊牌、追问），第三句之后每句都要升级（加价、逼问、翻脸、亮证据），不得连续三句以上不推进（纯闲聊）。
+④ 无功能短句换成动作：能用一个动作、道具或眼神回答的，不写台词；例外是短促冲突爆点（滚、闭嘴、放手、你敢、休想），它们本身就是有效台词。
+⑤ 量化线：台词水分率 ≤25%，纯寒暄 ≤2 句，无功能台词 ≤30%——越线就是观众划走的位置。
+版式：每个动作独占 △ 行，台词行保持「角色名（情绪/动作）：台词」；删台词时连带删掉它的 △ 装饰。`;
+}
