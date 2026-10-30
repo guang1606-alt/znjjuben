@@ -164,3 +164,41 @@ export function addressDriftCheck(cast: CastMap, draft: string, lang: DriftLang 
   const score = Math.max(0, 100 - issues.reduce((s, i) => s + (i.severity === 'high' ? 22 : 10), 0));
   return { score, checked: true, driftCount: issues.length, compared: labels.size, issues };
 }
+
+/**
+ * v2.360 台词标签唯一前置教学（与上方 addressDriftCheck 同源同文件）。
+ * 检测口径只认冒号前的台词标签：同一角色换标签 → 配音/AIGC 角色表拆声部。
+ * 因此在撰写师首轮就把「一人一标签、用人物卡正名」教下去，而不是生成后打回。
+ * 空 cast 返回 ''（无正名可教，避免留下悬空标题）。
+ * en 层零中文硬断言：英文名以外的中文正名不进 en 指令。
+ */
+export function buildAddressDriftDirective(
+  cast: CastMap,
+  mode: 'LIVE' | 'AIGC' = 'LIVE',
+  lang: DriftLang = 'zh',
+): string {
+  const names = Object.keys(cast || {}).map((n) => n.trim()).filter((n) => n.length >= 2);
+  if (names.length === 0) return '';
+  if (lang === 'en') {
+    const enNames = names.filter((n) => !/[\u4e00-\u9fff]/.test(n));
+    const list = enNames.length > 0 ? enNames.join(', ') : 'the canonical name in each character sheet';
+    const fmt = mode === 'AIGC'
+      ? 'AIGC format: the body is flowing prose with no △ markers; dialogue still reads "NAME (emotion/action): line"; inner voice only as the (inner: ...) parenthetical.'
+      : 'LIVE format: every action gets its own △ line; scene headers and △ lines are not speaker labels and never enter the label check.';
+    return `[PRE-WRITING RULE · One speaker label per character — mirrors addressDriftCheck] Voice casting and AIGC character sheets split by the label before the colon, so every extra label turns one person into an extra voice. Write it right the first time:
+1) Use exactly one speaker label per character for the whole episode, preferably the canonical name from the character sheet: ${list}.
+2) Never mix surname+title, given-name short form, a bare title or the full name for the same person — do not switch between "Mr. Zhang", "Jianguo" and "Zhang Jianguo". On first appearance you may annotate identity once, e.g. "Zhang Jianguo (Mr. Zhang): line"; after that the label never changes.
+3) How a character addresses another inside the line ("Mr. Zhang, you...") is free — only the label before the colon is constrained.
+4) Crowd labels (crowd/everyone/everybody) and narrator/voice-over/narration labels are exempt; uncast minor roles (waiter/receptionist) may use their job title, but that one person keeps the same label throughout.
+5) ${fmt}`;
+  }
+  const fmt = mode === 'AIGC'
+    ? 'AIGC 制式：正文是流畅自然段、不加 △；台词行仍按「角色名（情绪/动作）：台词」，内心只走（内心：…）。'
+    : 'LIVE 制式：每个动作独占 △ 行；场头与 △ 动作行不是台词标签，不参与唯一性判断（△ 行里提到「张总」不影响标签）。';
+  return `【前置教学·台词标签唯一（与 addressDriftCheck 同源）】配音与 AIGC 角色表都按冒号前的台词标签拆声部——同一角色每多一个标签，就多出一个声部、多配一种声音。先写对再谈润色：
+① 每个角色全稿只用一个台词标签，优先人物卡正名：${names.join('、')}。
+② 禁止同一角色混用 姓氏+称谓 / 名简称 / 头衔 / 全名：不写「张总：」之后又写「建国：」「张建国：」；首次出场可写「张建国（张总）：台词」一次性交代身份，之后标签不再变。
+③ 台词里怎么称呼对方（「张总，您……」）不受限——受限的只有冒号前的标签本身。
+④ 群体标签（众人/大家）与旁白、画外音、解说标签豁免；无人物卡的野生角色（服务员/前台）可用职业名，但同一个人全程固定。
+⑤ ${fmt}`;
+}
