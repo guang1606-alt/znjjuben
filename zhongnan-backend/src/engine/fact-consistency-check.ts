@@ -357,3 +357,41 @@ export function factConsistencyCheck(
     issues,
   };
 }
+
+export type FactFormat = 'LIVE' | 'AIGC';
+
+/**
+ * v2.370 「同槽数值前后矛盾」前置教学指令（与 factConsistencyCheck 同文件=同源铁律）
+ *
+ * 检测后口径反向前置：五类 UnitClass（amount 金额/age 年龄/duration 时长/people 人数/count 次/件/套）
+ * + 同槽（名词片段 + 量词类）出现 ≥2 个不同归一值 → high fact_number_conflict，每对扣 22 分；
+ * 豁免五类（场标行/第X序数/裸阿拉伯数字/方位短语/日历年 19xx-2099+年）。
+ *
+ * 撰写师首轮 + 润色师首轮注入；架构师不注入。
+ */
+export function buildFactConsistencyDirective(format: FactFormat = 'LIVE', lang: FactLang = 'zh'): string {
+  if (lang === 'en') {
+    return [
+      '[Pre-writing iron law · Fact number consistency — one slot, one number; every noun+unit slot must keep ONE value across the whole draft. This list is authored from the same source as factConsistencyCheck; get it right on the first pass.] A wordcount band (script-format) only tells you "long enough"; numbers inside that wordcount may still drift. A slot = noun fragment + unit class; two distinct normalized values in the same slot = high fact_number_conflict, 22 points deducted per pair.',
+      'Five unit classes the engine scans: amount (yuan/k/million), age (years old), duration (years/months/days), people (people/guests), count (times/items/sets). A bare number with no noun slot does not count — it must be attached to a thing, a person, an age, an amount, or a span.',
+      'Penalty: every pair of distinct values in the same slot = one fact_number_conflict high issue, -22 points per pair (score floor 0). This is a pairwise conflict check — each combination of two values inside the same slot costs 22 points.',
+      'Five safe exemptions — do not treat these as contradictions: ① Header lines (scene headings / INT./EXT. / EPISODE) ② Ordinal numbers introduced by ordinal markers (first/second/third time, the N-th) — these mark progression, not the value itself ③ Bare Arabic digits like "5" without a noun ④ Locative phrases ending in on/in/next to/inside — these describe position, not a slot ⑤ Calendar years 19xx–2099 + y — timeline-ledger owns chronological shifts, not fact-consistency.',
+      'Fix forward: ① Give every number that must stay fixed a single canonical phrase (borrowed amount / age / headcount / duration) and repeat that exact phrase — never paraphrase. ② If a number must change (intentional twist, time jump), SAY SO explicitly in dialogue or narration ("three months later, that debt has ballooned ten-fold"). ③ If the change IS the beat, label the frame shift so the engine sees a deliberate reveal: "△ three months later, the 50k debt had grown to 500k" — same slot but framed as a reveal.',
+      'Boundary: physical state drift (injuries / destroyed props / revived devices / vanished restraints) → continuity-supervision; timeline order (chronological / date jumps) → timeline-ledger; wordcount band → script-format; this list ONLY covers amount/age/duration/people/count slots.',
+      format === 'AIGC'
+        ? 'AIGC format: no △ action lines in the main body; state your canonical numbers once per speaker and never drift; write intentional frame shifts into continuous prose + (inner: ...).'
+        : 'LIVE format: numbers land in dialogue lines — each speaker keeps their canonical phrase; an intentional frame shift gets its own △ action line right before the value changes.',
+    ].join('\n');
+  }
+  return [
+    '[撰写前置铁律 · 数值事实一致性——一个槽，一个数；每个「名词 + 量词类」槽在全稿里必须只保持一个口径。本清单与 factConsistencyCheck 的检测同源，第一遍就写对。字数带（script-format）只告诉你"够不够长"，带内的数字照样会飘。槽 = 名词片段 + 量词类；同一个槽出现 ≥2 个不同归一值 = high fact_number_conflict（前后矛盾），每对扣 22 分。典型：借款五十万后文变五百万 = 1 对冲突扣 22。',
+    '引擎扫描的五类量词类：amount 金额（元/万/k/million）、age 年龄（岁/years old）、duration 时长（年/个月/天/years/months/days）、people 人数（人/位/people）、count 次/件/套/个（times/items/sets）。裸数字不带名词槽的不参与比对——必须依附一个东西、一个人、一个年龄、一个金额或一段时长。',
+    '扣分规则：同一个槽内每出现一对 distinct 值（前后矛盾）= 1 条 high 级 fact_number_conflict，每对 -22 分（score 下限 0）。这是两两成对扣分——同一个槽里值越多，扣得越狠。',
+    '五种合法豁免——以下场景一律不视为矛盾：①场标行（场景1/内景/外景/EPISODE）②「第」开头的序数（第一次/第二次/第3 次/第一次见）——标记的是阶段推进，不是值本身；③裸阿拉伯数字（不带量词、不带名词槽的 5/100）④方位/处所结尾的短语（桌上/箱子里/旁边/里面）——表示位置不是槽；⑤19xx-2099 + 年的日历年 —— 归 timeline-ledger 时间线账本管，本引擎不收时间点。',
+    '正向动作：①每个必须固定的数值（借款/金额/年龄/人数/时长）只给**一个标准短语**，全稿重复使用那个短语，不要换说法。②数值必须变化（剧情反转/时间推进）时，必须在台词或旁白里**显式点明口径切换**（"三个月后，这笔钱已经翻了十倍"）。③如果变化就是这场戏的核心，给它单独落一行可见动作，让检测引擎识别到框架已经切换："△ 三个月后，那笔 50 万的债已经变成 500 万"。',
+    '边界：物理状态穿帮（伤势/毁物/设备/束缚）→ continuity-supervision 场记连续性；时间线顺序（日期/时刻跳变）→ timeline-ledger；字数带 → script-format；本清单只管 amount/age/duration/people/count 五类槽的数值一致性。',
+    format === 'AIGC'
+      ? 'AIGC 制式：正文不加 △；每个角色的固定数值只在开口时说一次，不要飘；需要切换口径的时刻写进连续自然段 + （内心：…），不用旁白宣布变了。'
+      : 'LIVE 制式：数值落在台词里；每个角色只重复那个标准短语；需要切换口径时，单独给一行 △ 动作或状态（△ 三个月后，债翻了十倍）垫在数值变化前。',
+  ].join('\n');
+}
