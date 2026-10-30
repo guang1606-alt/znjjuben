@@ -122,3 +122,44 @@ export function cliffhangerDissolveCheck(prevEnding: string, draft: string, lang
   out.score = Math.max(0, 100 - (strong ? 22 : 12));
   return out;
 }
+
+/**
+ * v2.368 接钩质量前置教学（buildCliffhangerDissolveDirective）
+ * ------------------------------------------------------------------
+ * 与 cliffhangerDissolveCheck 同源同文件（v2.157 铁律）：五类消解锚、300 字窗口、
+ * 120 字反升级豁免、strong 22 / soft 12 分级逐条反向前置，撰写师与润色师首轮一次写对。
+ */
+export function buildCliffhangerDissolveDirective(mode: 'LIVE' | 'AIGC' = 'LIVE', lang: DsLang = 'zh'): string {
+  if (lang === 'en') {
+    return [
+      '[Pre-write iron rule · Hook payoff — cash last episode\'s hook, never dissolve it in one line] This checklist shares the exact criteria of cliffhangerDissolveCheck. It only applies when the previous episode ended (20+ chars) on a substantive hook: reversal / crisis / reveal / mystery (strong), emotional / action cut (soft). Episode 1, endings under 20 chars, and none/weak hooks are not checked — skip this rule.',
+      'Scoring window: the first 300 characters of this episode\'s body (scene headers and title lines excluded). A dissolve anchor inside that window cancels the previous hook:',
+      '1) A crisis that was never real: "false alarm", "just a misunderstanding", "it was all a misunderstanding". Fix: let the crisis land for real — someone pays a price, the situation truly escalates.',
+      '2) A threat played as a joke: "just kidding", "fooled you", "I was only scaring you". Fix: treat the threat as real; the person from last episode really acts or really speaks.',
+      '3) Real events turned into performance: "pretend", "I was acting", "rehearsal", "we were filming". Fix: keep the event real, only change who is exploiting the "performance".',
+      '4) Conflict turned into a test: "I was testing you", "just a test", "I had to try you". Fix: let the conflict run on real interests; a test may be one layer only.',
+      '5) Weapons turned into props: "prop gun", "prop knife", "fake blood", "it\'s fake". Fix: the swap must be visible inside the story (the gun is empty but the knife is real) and the price must be paid on screen.',
+      'Grading: a strong hook dissolved = high, -22; a soft hook (emotional / action cut) dissolved = mid, -12.',
+      'Only legal exemption: within 120 characters after the anchor, a turn word (but/however/yet/suddenly/then) plus a NEW crisis (gun/knife/killer/truth/identity/blood/death/explosion/police/ambush/closing in) reads as fake-dissolve-then-escalate and is not penalized. If you use it, write the escalation fully: fake dissolve, then immediately a bigger threat.',
+      'Boundaries: whether this episode\'s own ending throws a hard hook belongs to cliffhanger-score (the throwing side); which episode pays off a registered hook belongs to the payoff ledger (hookPayoffDirective); a same-episode "it was a dream" belongs to memory-fakeout; a misunderstanding dragged past the window belongs to misunderstanding-drag; whether the opening reconnects characters and wording belongs to the opening weld (opening-continuity). This checklist only governs "is the previous hook cancelled by a dissolve anchor in the first 300 characters, and is any fake dissolve escalated within 120 characters".',
+      mode === 'AIGC'
+        ? 'AIGC format: no triangle action lines in the body; let the crisis land through continuous action and (inner: …); never use narration to announce "it was nothing".'
+        : 'LIVE format: write the payoff as standalone triangle action lines — he really pulls the trigger (the gun really fires / someone really bleeds), then continue the consequence; a fake dissolve must be followed by a visible new threat in its own line.',
+    ].join('\n');
+  }
+  return [
+    '[撰写前置铁律 · 接钩质量——上集抛的钩，本集开场必须正面兑现] 本清单与 cliffhangerDissolveCheck 的检测同源，第一遍就写对。仅当上集结尾 ≥20 字且被识别为实质钩时检测：反转/危机/揭秘/悬念为强钩，情感/动作收束为软钩；第 1 集、前集结尾不足 20 字、无钩（none/weak）不检测，本规则直接跳过。',
+    '消解窗口：本集正文前 300 字（剔除场头与剧名行）。窗口内出现下列五类消解锚，等于一句话把上集钩子作废，付费观众当场弃剧：',
+    '1）假的危机：「虚惊一场 / 原来是误会 / 一场误会」。替代：让危机真的落地——有人付出代价、局面真的升级。',
+    '2）威胁当玩笑：「开玩笑 / 逗你玩 / 吓你的」。替代：把威胁当真，让上一集那个人真的动手或真的开口。',
+    '3）真事变表演：「装的 / 假装 / 装死 / 演戏 / 排练 / 彩排 / 演习 / 拍戏」。替代：保留事件为真，只改解释方向（谁在利用这场"表演"）。',
+    '4）冲突变测试：「试探你 / 考验你 / 试试你」。替代：让冲突按真实利益推进，测试只作为其中一层。',
+    '5）实物变道具：「道具枪 / 道具刀 / 假血 / 是假的」。替代：道具必须是剧情内可见的替换（枪里没子弹但刀是真的），且当场揭示代价。',
+    '分级：强钩被消解 high 扣 22；软钩（情感/动作收束）被消解 mid 扣 12。',
+    '唯一合法豁免：消解锚之后 120 字内紧跟转折词（但/然而/突然/可是/谁知/没想到）+ 新危机（枪口/刀/杀手/真相/身份/血/死/爆炸/报警/围堵/逼近），读作"假化解真升级"，不罚。要写就把升级写完整：先假化解，立刻抛出更大的危机。',
+    '边界：本集结尾抛钩够不够硬归 cliffhanger-score 抛钩端；上集登记钩子在第几集兑现归跨集兑现记账（hookPayoffDirective）；同集内"原来是梦"归 memory-fakeout；窗口外的误会拖太久归 misunderstanding-drag；开场人物与词汇是否接住归开场焊点（opening-continuity）。本清单只管开场前 300 字内"是否用消解锚一句话作废上集钩子，以及假化解后 120 字内有没有真升级"。',
+    mode === 'AIGC'
+      ? 'AIGC 制式：正文不加 △，危机落地写进连续动作与（内心：…），不用旁白宣布"虚惊一场"。'
+      : 'LIVE 制式：兑现写成独占 △ 行——△ 他真的扣下扳机（枪真的响/人真的见血），再写后果；假化解后必须紧跟一行可见的新威胁。',
+  ].join('\n');
+}
