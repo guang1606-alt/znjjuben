@@ -127,3 +127,36 @@ export function dialogueRuntimeCheck(
   }];
   return out;
 }
+
+/**
+ * v2.369 台词时长前置教学（与 dialogueRuntimeCheck 同文件同源）：
+ * 把「只算台词段朗读秒数 vs 单集预算」的检测口径反向前置到撰写师/润色师首轮，
+ * 避免先写超支稿再打回重写白付 retry token（v2.157 前置教学优于事后纠偏）。
+ * 缺省 format=LIVE；en 层系统文案零中文。
+ */
+export function buildDialogueRuntimeDirective(format: RtFormat = 'LIVE', lang: RtLang = 'zh'): string {
+  if (lang === 'en') {
+    return [
+      '[Pre-write iron rule · Dialogue runtime — enough characters is not enough speech; count only spoken lines and fit the episode budget] This checklist shares the exact criteria of dialogueRuntimeCheck. The character band (LIVE 800-1000 / AIGC 1200-1500) only checks length, not whether the lines can be spoken: actors will machine-gun them and editors will butcher the script.',
+      'Counting: only spoken lines (NAME (emotion/action cue): dialogue) count; scene headers, title lines, triangle action lines and technical notes are excluded. Estimate: 4.3 Chinese chars/second, 2.6 English words/second; +0.35 second per sentence-final punctuation, +0.15 second per mid-sentence pause.',
+      'Budget: LIVE 90 seconds per episode (vertical short drama runs 60-90 seconds, we take the upper bound); AIGC budget = durationMin×60×0.9 (default 1 minute = 54 seconds, keeping 10% for visuals and action beats).',
+      'Grading: at or below 85% of budget passes; 85%-100% of budget = mid (too tight, the audience can barely breathe); above 100% = high (physically unfilmable, rewrite required).',
+      'Fixes that bring runtime back: merge repeated statements into the sharpest single line; delete exposition and move the information into triangle action lines or props; cut secondary characters down to one or two lines that push the conflict; turn persuasion/explanation/flashback into one visible action plus one key line; leave breathing room between lines instead of a wall of dialogue.',
+      'Boundaries: the character band belongs to script-format; the AIGC 18-28% spoken ratio belongs to aigc-screenplay; single-line length belongs to dialogue-length-score; colloquial style and sentence shape belong to the dialogue strategy; this checklist only governs total spoken seconds versus the episode budget.',
+      format === 'AIGC'
+        ? 'AIGC format: no triangle action lines in the body; write compressed silence and action into continuous prose, and carry shifted information through visible action.'
+        : 'LIVE format: alternate spoken lines with triangle action lines — after every two or three lines give one visible action/expression beat, which cuts runtime and gives the actors room to breathe.',
+    ].join('\n');
+  }
+  return [
+    '[撰写前置铁律 · 台词时长——字够 ≠ 读得完；只算台词段朗读秒数，必须压在单集预算内] 本清单与 dialogueRuntimeCheck 的检测同源，第一遍就写对。字数带（LIVE 800-1000 / AIGC 1200-1500）只管够不够长，读不读得完另算：写超了演员只能机关枪，剪辑只能狂删台词破坏剧情。',
+    '计数口径：只累计台词行（「角色名（情绪/动作）：台词」），场头、剧名、△ 动作行、技术提示一律不计。朗读估算：汉字 4.3 字/秒、英文 2.6 词/秒；每个句末标点（。！？…）加 0.35 秒、每个句中停顿（，、；）加 0.15 秒。',
+    '预算：LIVE 单集 90 秒（竖屏 60-90 秒取上限）；AIGC 预算 = 成片时长×60×0.9（缺省 1 分钟 = 54 秒，留 10% 给画面与动作节拍）。',
+    '分级：台词合计 ≤ 预算 85% 满分放行；85%-100% 报 mid（贴近上限，观众听得喘不过气）；>100% 报 high（物理读不完，必须重写）。',
+    '压回预算的正向动作：①合并同类表态——同一个意思只留最狠的一句；②删解释性对话，把信息转给 △ 动作行或道具（△ 他把协议推过去，签字栏空着）；③次要角色的长台词压成 1-2 句，只留推动冲突的那句；④把「说服/解释/回忆」改成「一个可见动作 + 一句关键台词」；⑤台词之间留呼吸（△ 沉默 / △ 他抬眼看她），别写台词墙。',
+    '边界：字数带归 script-format；AIGC 发声比 18-28% 归 aigc-screenplay；单句长度归 dialogue-length-score；口语与句长风格归台词风格策略（dialogueDirective）；本清单只管「台词段合计朗读秒数 vs 单集预算」。',
+    format === 'AIGC'
+      ? 'AIGC 制式：正文不加 △，压缩后的沉默与动作写进连续自然段，转移的信息用可见动作承载。'
+      : 'LIVE 制式：台词与 △ 动作行交替——每 2-3 句台词后给一行 △ 动作/神态，既压时长也给演员呼吸。',
+  ].join('\n');
+}
