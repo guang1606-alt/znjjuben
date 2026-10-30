@@ -86,6 +86,29 @@ export function antiAiScan(text: string): AntiAiResult {
   return { hitCount: hits.length, hits: Array.from(new Set(hits)), pass: hits.length <= AI_CLICHE.maxHitsPerEpisode };
 }
 
+/**
+ * v2.358 去AI味前置教学指令（与 AI_CLICHE 同文件同源：词表改动自动同步教学）
+ * ------------------------------------------------------------------
+ * 缺口：AI_CLICHE 此前只被 antiAiScan 用于生成后 QC 与打回重写理由，撰写师首轮
+ * 无人教、润色师岗位文案只有「禁用 AI_CLICHE 词表」常量名符号引用——词表内容
+ * 从未进入任何 prompt。前置教学优于事后纠偏（v2.157 场头教学铁律）：一次写对，
+ * 省 retry 轮次 token。
+ * zh 层词条直接编译自 AI_CLICHE.phrases（同源，禁复制粘贴漂移）；
+ * en 层为教学专用等效清单（antiAiScan 词表面向中文叙述，en 检测行为本轮不变）。
+ */
+export const AI_CLICHE_EN_TEACH = [
+  'her lips curled into a smile', 'a flicker of something in his eyes',
+  'as if time had stopped', 'the air seemed to freeze', 'little did she know',
+  'needless to say', 'a myriad of emotions', 'as if a century had passed',
+] as const;
+
+export function buildAntiAiDirective(lang: 'zh' | 'en' = 'zh'): string {
+  if (lang === 'en') {
+    return `[De-AI tells — banned before you write] Never use stock AI-narration clichés such as: ${AI_CLICHE_EN_TEACH.join('; ')}. Never pad with neat parallel structures (no "both... and... and...", no "some... some... some..."). No summary morals, no lecturing aphorisms: put emotion and information into concrete action, pauses and subtext — characters leave sentences unfinished, interrupt each other, and never explain the theme to the audience.`;
+  }
+  return `[去AI味前置教学·禁用清单] 以下AI腔高频词/句式一律禁用：${AI_CLICHE.phrases.join('、')}；禁用工整排比/对仗（如「既…又…又…」「有的…有的…有的…」三连）。不写总结腔与说教金句，情绪与信息改用具体动作、停顿与潜台词表达——台词说一半、可被打断，禁止角色替观众总结主题。`;
+}
+
 /** 双制式剧本格式（刚性字数区间，单位：字） */
 export const SCRIPT_FORMAT = {
   LIVE: { min: 800, max: 1000, name: '真人实拍', fields: ['集数+标题', '场景(时间/地点/内外景)', '人物', '动作提示', '台词(情绪/动作标注)'] },
@@ -141,7 +164,7 @@ export const ROLE_DIRECTIVE: Record<RoleId, string> = {
   character: '你是人设大师。用身份/性格/境遇/认知反差立人物，补齐隐性设定五维（原生家庭/习惯/喜忌/思维/底层欲望），所有行为由底层欲望驱动，配角与反派也需自洽动机。',
   writer: '你是单集撰写师。严格依据上游《大纲》的节拍/钩子和《人物卡》的底层欲望与说话风格写本集，不得另起炉灶；台词是口语、有潜台词、可被打断；冲突升级、结尾强钩子；遵守双制式格式与字数区间，禁止提示词式写法。',
   audience: '你是观众代言官，代表目标受众的“手指”。逐段预判哪里会划走、爽点是否到位、想不想看下一集；输出JSON {riskPoints:[{at,reason}],cravingScore:0-100,wantNext}。cravingScore低于70必须指出具体改法，倒逼撰写师强化。若体裁是单条带货/种草/口播短视频（非连续剧），cravingScore改评“转化欲”——看完是否想点行动引导、是否记住核心卖点；wantNext改为是否想点小黄车或记住品牌；打回理由围绕痛点未戳中、卖点未砸实、行动引导无力展开。',
-  polish: '你是细节润色师兼去AI专员。在撰写师原稿上做“整稿修订”（保留剧情骨架与人物，输出完整修订稿，不要另写一个新故事、不要重复堆叠）：注入有叙事作用的烟火气细节，清除一切AI腔（禁用 AI_CLICHE 词表与排比套路），台词回归生活的不完美。',
+  polish: '你是细节润色师兼去AI专员。在撰写师原稿上做“整稿修订”（保留剧情骨架与人物，输出完整修订稿，不要另写一个新故事、不要重复堆叠）：注入有叙事作用的烟火气细节，清除一切AI腔（逐字避开随稿附上的去AI味禁用清单与排比套路），台词回归生活的不完美。',
   compliance: '你是合规审核师。按目标平台尺度库逐条核对内容安全与价值观，风险点打回；用户选择忽略规则时仍需记录风险。',
   market: '你是市场分析师。从人物/剧情/台词/市场/格式/去AI化六维打分（每维0-100整数，overall同为0-100整数，不得用10分制），给出可执行优化建议与爆款潜力评估，匹配投稿渠道。',
 };
@@ -152,7 +175,7 @@ export const ROLE_DIRECTIVE_EN: Record<RoleId, string> = {
   character: 'You are a character master. Build people through identity/personality/circumstance/cognition contrast, complete the five hidden dimensions (family of origin, habits, likes & taboos, mindset, deepest desire), drive every action from that deepest desire, and give supporting roles and villains self-consistent motives.',
   writer: 'You are the episode writer. Strictly follow the upstream Outline beats/hooks and the Cast’s deepest desires and voices; do not start a different story. Dialogue is colloquial, carries subtext and can be interrupted; escalate conflict and end on a strong hook; obey the dual script format and word-count range; never write prompt-style text.',
   audience: 'You are the audience advocate, representing the viewer’s hovering finger. Beat by beat, predict where they swipe away, whether payoffs land, and whether they want the next episode; output JSON {riskPoints:[{at,reason}],cravingScore:0-100,wantNext}. Below 70 you must point to concrete fixes to force the writer to strengthen the draft. If the piece is a single short video (product selling / seeding / talking-head) rather than a serialized drama, cravingScore instead measures conversion intent — whether the ending makes viewers tap the call-to-action and remember the core selling point; wantNext describes whether they would tap the cart link or remember the brand; rejection reasons should target unpierced pain points, unproven selling points, or a weak call-to-action.',
-  polish: 'You are the detail polisher and de-AI officer. Revise the writer’s draft as a whole (keep the plot skeleton and characters, output a complete revised script, do not write a new story and do not stack duplicates): inject purposeful, lifelike detail, remove every AI tell (banned AI_CLICHE words and parallelism), and return dialogue to the imperfection of real life.',
+  polish: 'You are the detail polisher and de-AI officer. Revise the writer’s draft as a whole (keep the plot skeleton and characters, output a complete revised script, do not write a new story and do not stack duplicates): inject purposeful, lifelike detail, remove every AI tell (strictly avoid the banned de-AI list attached to the draft and all parallel-structure padding), and return dialogue to the imperfection of real life.',
   compliance: 'You are the compliance reviewer. Check content safety and values line by line against the target platform’s rules, and send risky points back; even when the user chooses to ignore rules, still record the risk.',
   market: 'You are a market analyst. Score six dimensions—character/plot/dialogue/market/format/de-AI—each on a 0-100 integer scale (overall must also be a 0-100 integer, never a 10-point scale); give actionable optimization advice and hit-potential assessment, and match submission channels.',
 };
