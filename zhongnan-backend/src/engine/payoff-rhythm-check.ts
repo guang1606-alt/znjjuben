@@ -292,3 +292,46 @@ export function payoffRhythmCheck(text: string, lang: PrLang): PayoffRhythmResul
     issues,
   };
 }
+
+/**
+ * v2.374 前置教学指令：憋爽节奏怎么写才不断裂
+ * ----------------------------------------------------------------------
+ * 与 payoffRhythmCheck 同文件同源（v2.157 同源铁律）。
+ * 本检测对 LIVE/AIGC 全制式生效，故 format 不设门控（保留参数与既有指令家族同签名）。
+ * 把五类检测口径反向前置：只虐不爽（≥4 受压/0 释放 high 30、40% 前首释放）/
+ * 一路平推（0 受压/≥3 释放 mid 12）/ 憋太久（首释放晚于 40% 或纯憋 >35% high 18）/
+ * 羞辱欠账（≥2 处且其后无强释放 mid 12）/ 尾段烂尾（后 30% 受压且无强释放 mid 10）/
+ * 释放前 20% 需受压铺垫 / 短稿 <20 字豁免 / 强释放与弱释放分级。
+ * en 层零中文。
+ */
+export function buildPayoffRhythmDirective(
+  format: 'LIVE' | 'AIGC' = 'LIVE',
+  lang: PrLang = 'zh',
+): string {
+  if (lang === 'en') {
+    return [
+      '◆ Payoff rhythm: press then release, one press one release, repaid in kind — this is the heartbeat of a short drama. Write it right in one pass.',
+      '  Suppression: the lead takes a loss, is humiliated, or is cornered (jilted, fired, framed, mocked, nowhere to go, forced to kneel, called "loser", "trash"). Release: turn the tables, face-slap, truth revealed, identity crush, the villain begging.',
+      '  Strong release: counter-kill, public face-slap, truth out, identity reveal, arrest on the spot, the villain on his knees. Weak release: fighting back, winning, calling the cops, producing evidence, holding the line. Repaying humiliation requires a strong release; a small counter only buys time.',
+      '  Pure suffering: 4 or more suppression beats and 0 release → high, 30 points off. The first real counter (even a small win) must land before the 40% mark, and the tail must deliver a decisive face-slap, truth reveal, or the villain begging. Give the pain, then give the medicine.',
+      '  Unearned wins: 0 suppression and 3 or more releases → mid, 12 points off. Compress one beat before each big win (underestimated, framed, cornered); pleasure comes from the gap, not the steamroll.',
+      '  Drought: the first release lands after the 40% mark with 2 or more suppression beats before it, or the longest dry stretch exceeds 35% of the script → high, 18 points off. Insert a small counter or an ally save every 30% so the audience is not waiting in the dark.',
+      '  Unpaid humiliation: 2 or more concrete insults or threats (public jilting, "loser", "you don\'t deserve it", "you\'ll regret this", "get out") with no strong release after them → mid, 12 points off. Repay in the same venue, before the same crowd, bigger than the original insult: the humiliator kneels, apologizes publicly, or is destroyed by exactly what he disdained.',
+      '  Weak tail: the final 30% presses the lead down again with 1 or more suppression beats and 0 strong release to close → mid, 10 points off. The last taste must be sweet: land one clear small win, then leave the next-episode hook.',
+      '  Paid cycle: every release needs suppression planted inside the 20% window before it, or the win feels cheap.',
+      '  Short draft exemption: under 20 characters is treated as an empty or placeholder draft, not a broken rhythm.',
+    ].join('\n');
+  }
+  return [
+    '◆ 憋爽节奏：先受压再释放，一压一放、兑付对等——这是短剧的心跳，五条硬线一次写对。',
+    '  受压：主角吃亏/受辱/被逼到墙角（被退婚、被开除、被冤枉、被嘲笑、走投无路、被迫下跪、废物、穷鬼）；释放：翻盘/打脸/真相揭晓/身份碾压/反派跪求。',
+    '  强释放：反杀、当场打脸、真相大白、身份揭晓、警察当场抓走、反派跪地求饶；弱释放：反击、赢了、报警、拿出证据、保住底线。羞辱兑付必须用强释放，小还手只算续命。',
+    '  只虐不爽：全集受压 ≥4 处、0 处释放 → high 扣 30 分。第一次实质反击（哪怕小赢）必须落在 40% 篇幅之前，尾段再给一次彻底打脸/真相揭晓/反派跪求——先给痛，更要给药。',
+    '  一路平推：0 处受压、释放 ≥3 处 → mid 扣 12 分。每次大胜前先压一拍（被轻视/被设局/被逼到墙角），爽感来自落差，不来自碾压本身。',
+    '  憋太久：首个释放晚于 40% 且此前已压 ≥2 处，或最长纯憋段超过 35% 篇幅 → high 扣 18 分。每 30% 篇幅至少插一次小还手或盟友撑腰，别让观众干等。',
+    '  羞辱欠账：当众退婚、骂废物、你配吗、你会后悔、给我滚出去等具体羞辱 ≥2 处，而其后没有强释放 → mid 扣 12 分。兑付要在同一场合、同一批观众、场面大于当初的难堪：让施辱者亲自下跪/当众认错，或被他最看不起的东西反杀。',
+    '  尾段烂尾：最后 30% 又受压 ≥1 处且 0 个强释放收尾 → mid 扣 10 分。本集最后一口必须是甜的：先给一次明确小胜，再留「下集即爆」的钩子。',
+    '  有效憋爽周期：每次释放前 20% 篇幅内要有受压铺垫，否则胜利廉价。',
+    '  短稿豁免：正文不足 20 字不按此判（空稿/占位稿不算节奏崩）。',
+  ].join('\n');
+}
