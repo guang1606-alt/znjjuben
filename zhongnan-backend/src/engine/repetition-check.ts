@@ -432,3 +432,48 @@ export function repetitionCheck(text: string, lang: RcLang = 'zh'): RepetitionRe
     issues,
   };
 }
+
+/**
+ * v2.376 集内重复感前置教学（与 repetitionCheck 五类检测同源）
+ * ------------------------------------------------------------------
+ * 缺口：repetitionCheck 五类重复检测存在、评分卡 dialogue 维度权重 0.0797 且三处重算，
+ * 但撰写师与润色师首轮零教学。episode-replay 只管跨集台词复读、dialogue-water 只管
+ * 无功能水词、conflict-density 只管烈度递增，均不覆盖"集内重复"。
+ * 教学只教检测实际有的五条硬线，不虚构口径；LIVE/AIGC 全制式生效。
+ */
+export function buildRepetitionDirective(_format: string = 'LIVE', lang: RcLang = 'zh'): string {
+  if (lang === 'en') {
+    return [
+      '[In-episode repetition guardrail — same source as repetition-check (five types)]',
+      'Goal: do not loop in place within one episode. A line, a sentence pattern, an emotion, an action verb, or a scene opener may repeat only a limited number of times; repetition is not banned, but every repeat must change — rephrase, escalate, swap the verb, change the opener.',
+      '',
+      'Five hard limits (thresholds mirror the checker):',
+      '1) Near-duplicate dialogue (high): any two dialogue lines with edit distance ≤3 and original length ≥4 count as near-duplicates; 2 occurrences deduct 8 points, 3+ deduct 15 points. Rewrite the second occurrence with a new structure, a new target, or new information — never repeat the original wording.',
+      '2) Repeated sentence pattern (mid): dialogue sharing the same first-4-character skeleton (e.g. "How dare you...") 3+ times deducts 8 points at 3, 12 at 4+; 2+ repeated pattern groups is flagged as mid. Alternate questions, statements, exclamations, and long/short lines.',
+      '3) Repeated emotional beat (mid): the same emotion word (anger/shout/cry/laugh/cold/tremble/smash/kneel/leave) appearing 3+ times across dialogue and action lines without escalation deducts 6 points at 3, 10 at 4+; 2+ repeated emotions is flagged as mid. Escalate silent → verbal → physical; never stay on the same rung.',
+      '4) Repeated action verb (mid): the same action verb in action lines 4+ times deducts 5 points at 4, 8 at 5+; 2+ repeated verbs is flagged as mid. Vary verbs for similar actions (smash/slam/hurl/throw), and give each action a different object and consequence.',
+      '5) Repeated scene opener (low): 2+ scenes opening with the same pattern (scene header + first 10 characters of the next line) deduct 5 points each. Alternate action, dialogue, and environment openings.',
+      '',
+      'Calibration:',
+      '- Freshness score = 100 - total penalties, floor 0; fewer repeats means a higher score.',
+      '- This guardrail covers in-episode repetition only. Reusing last episode\'s exact lines is cross-episode replay, checked separately by episode-replay — do not conflate them.',
+      '- Necessary repetition (thematic lines, character catchphrases, ritual actions) is allowed, but from the second occurrence on add a change marker: new context, new target, or new consequence, so it feels "again, but different".',
+    ].join('\n');
+  }
+  return [
+    '【集内重复感前置教学（检测同源：repetition-check 五类）】',
+    '目标：一集之内不要原地打转。同一句话、同一句式、同一种情绪、同一个动作、同一种场景开头都只能出现有限次；重复不是禁用，而是每次重复必须"变"——换说法、升级烈度、换动词、换开场。',
+    '',
+    '五条硬线（与本集检测阈值同源）：',
+    '1) 近似重复台词（high）：任意两句对白编辑距离 ≤3 且原句不少于 4 字即算近似重复；出现 2 次扣 8 分，出现 3 次及以上扣 15 分。写法：同一意思第二次出现必须换句式、换对象或加新信息，不许原话复读。',
+    '2) 重复句式模板（mid）：对白前 4 字骨架相同（如"你凭什么…"）出现 3 次及以上，3 次扣 8 分、4 次及以上扣 12 分；出现 2 组及以上重复模板记 mid。写法：疑问、陈述、感叹交替，长短句交替。',
+    '3) 重复情绪 beat（mid）：同一情绪词（怒/吼/哭/笑/冷/颤/摔/跪/走）在台词与△动作行中出现 3 次及以上且无升级，3 次扣 6 分、4 次及以上扣 10 分；2 种及以上情绪反复记 mid。写法：沉默→语言→肢体逐级递进，别在同一档反复。',
+    '4) 重复动作词（mid）：同一动作动词在△动作行出现 4 次及以上，4 次扣 5 分、5 次及以上扣 8 分；2 个及以上动作词反复记 mid。写法：同类动作换动词（摔/砸/掀/掷/甩），每个动作换对象、换后果。',
+    '5) 重复场景开头（low）：两个及以上场景以相同模式开场（场头+下一行前 10 字相同），每次扣 5 分。写法：动作开场、对白开场、环境开场交替。',
+    '',
+    '口径：',
+    '- 新鲜度分 = 100 - 总扣分，最低 0；重复越少分越高。',
+    '- 本教学只覆盖"集内重复"；把上集原话搬进本集属于跨集复读，由 episode-replay 另行检测，两者不要混为一谈。',
+    '- 必要重复（主题句、人物口头禅、仪式化动作）可以有，但第二次起必须给"变化标记"：换语境、换对象或换后果，让观众觉得"又来了，但不一样"。',
+  ].join('\n');
+}
