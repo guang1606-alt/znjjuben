@@ -158,3 +158,45 @@ export function lookRegistryCheck(text: string, format: 'LIVE' | 'AIGC' = 'LIVE'
     issues,
   };
 }
+
+/**
+ * v2.373 前置教学指令：AIGC 稿外观登记台账怎么写才不漂
+ * ----------------------------------------------------------------------
+ * 与 lookRegistryCheck 同文件同源（v2.157 同源铁律）。
+ * 既有 aigcScreenplayDirective 规则 5 只给泛化承诺；本指令把检测口径反向前置：
+ * 只算有台词角色 / 旁白与群体豁免 / 主角 ≥3 句 high 22 / 配角 1-2 句 mid 10 /
+ * 登记迟到 mid 10 / 同场互斥 mid 10 / 名归一只算一个 / 首次出场登记一次全集继承。
+ * LIVE 真人稿无外观槽机制（演员服化道由服装组管）→ 空串。en 层零中文。
+ */
+export function buildLookRegistryDirective(
+  format: 'LIVE' | 'AIGC' = 'LIVE',
+  lang: 'zh' | 'en' = 'zh',
+): string {
+  if (format !== 'AIGC') return '';
+  if (lang === 'en') {
+    return [
+      '◆ AIGC wardrobe registry: every speaking character must register a look once, so image/video models inherit it shot by shot.',
+      '  Only characters with dialogue lines are counted; narrator, voice-over, and group names (crowd, everyone, people, audience, onlookers, etc.) are exempt and need no registry.',
+      "  Register in the character's first scene: (LOOK: Name=wardrobe/hair/signature prop; Other=…) — separate multiple characters with semicolons, written inside a flowing paragraph, not as a tag wall.",
+      '  Lead (≥3 dialogue lines in the episode) with zero registry → high, 22 points off — cross-shot faces and costumes drift with no anchor.',
+      '  Supporting character (1-2 lines) with zero registry → mid, 10 points off — shared shots drift in the same way.',
+      "  Late registry: the registry appears in a scene after the character's first appearance → mid, 10 points off; earlier shots have no look to inherit, so move it to the first scene.",
+      '  Same-scene conflict: the same character registered twice in one scene with different descriptions → mid, 10 points off — a costume change cannot happen inside one scene, so it is a slip; keep one and delete the other.',
+      '  Name normalization: registration and dialogue use the same spelling (trimmed, case-insensitive), so one character counts once.',
+      '  Register once and inherit it for the whole episode; re-register only on a real costume change — otherwise do not repeat.',
+      '  The slot is a registry, not a replacement: keep the natural wardrobe description in the body prose.',
+    ].join('\n');
+  }
+  return [
+    '◆ AIGC 外观登记台账：有台词的角色必须在台账里登记一次外观，供逐镜生图/生视频继承。',
+    '  只统计有台词的角色；旁白、解说、画外音与群体（众人/群众/大家/人群等）豁免，不要求登记。',
+    '  登记写法：在该角色首次出场那场，用（外观：角色名=服装/发型/标志性道具；另一角色=…）登记；多角色用分号分隔，写在自然段里，不写成标签墙。',
+    '  主角（全集 ≥3 句台词）零登记：high 扣 22 分——生图模型跨镜无据，脸与服装在镜头间漂移。',
+    '  配角（1-2 句台词）零登记：mid 扣 10 分——同框镜头同样会漂移。',
+    '  登记迟到：登记所在场晚于该角色首次出场那场（已开口的镜头裸奔）→ mid 扣 10 分；把登记挪到首次出场那场。',
+    '  同场互斥：同一场同一角色登记两次且描述不同 → mid 扣 10 分；换装不可能同场瞬换，必为笔误，保留正确的一条、删掉另一条。',
+    '  名归一：登记与台词统一写法（去首尾空格、英文统一大小写），同一个角色只算一个。',
+    '  登记一次全集沿用继承，只有换装剧情才当场重新登记；没换装不要重复写。',
+    '  括号槽是登记台账不是替代品：正文里该有的穿着描写照常自然带出。',
+  ].join('\n');
+}
