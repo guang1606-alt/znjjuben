@@ -120,3 +120,53 @@ export function episodeReplayCheck(prevSummary: string, draft: string, lang: Rep
   const score = Math.max(0, 100 - issues.reduce((s, i) => s + (i.severity === 'high' ? 22 : 10), 0));
   return { score, checked: true, replayCount: issues.length, compared, issues };
 }
+
+/**
+ * v2.372 前置教学指令：本集不许原样搬运上集台词
+ * ----------------------------------------------------------------------
+ * 与 episodeReplayCheck 同文件同源（v2.157 同源铁律）。
+ * zh：只比对台词行 / 归一去标点 / 12 与 30 字门槛 / 22 与 10 扣分 /
+ * 三种正向动作 / 短句豁免 / callback 缩句 / 五项边界 / 制式分叉。
+ * en 层零中文（20 与 50 字母、22 与 10）。缺省 format=LIVE。
+ */
+export function buildEpisodeReplayDirective(
+  format: 'LIVE' | 'AIGC' = 'LIVE',
+  lang: ReplayLang = 'zh',
+): string {
+  if (lang === 'en') {
+    const base = [
+      '◆ Cross-episode line replay control: never copy a previous-episode line verbatim into this episode.',
+      '  Only dialogue lines are compared (scene headers, title lines, and △ action lines are skipped). Punctuation differences do not count as a change — after normalization the line is still the same line.',
+      '  Length gates: Chinese ≥12 chars, English ≥20 letters before comparison — a short line like "let it go" repeating is a normal beat, not replay.',
+      '  Long-line escalation: Chinese ≥30 chars / English ≥50 letters → high, 22 points off each; 12-29 chars / 20-49 letters → mid, 10 points off each.',
+      '◆ Three fixes: ① Rephrase it — keep the meaning, change the wording, ② Aim it at a different listener so the landing point changes, ③ Cut the line and let an action, a prop, or silence carry the beat.',
+      '◆ Intentional callback for returning viewers: shrink it under 12 chars into a quotable punchline; never truck in the whole line again.',
+      '◆ Exemptions: Episode 1 / previous summary under 20 chars / draft under 20 chars are not checked.',
+      '◆ Boundaries: in-episode repetition → repetition-check / in-episode recap filler → scene-padding / previous hook must reappear → cliffhanger-payoff / opening weld → opening-continuity / flashback replay → flashback-crutch.',
+    ];
+    if (format === 'AIGC') {
+      base.push('◆ AIGC mode: no △ lines in the body. Put a recalled line into a flowing paragraph and compress it into one short echo inside the paragraph; a whole verbatim block is not allowed.');
+    } else {
+      base.push('◆ LIVE mode: write a recall as a dedicated △ action line plus one short punchline, so the actor never re-reads the previous episode\'s lines.');
+    }
+    return base.join('\n');
+  }
+
+  const zh = [
+    '◆ 跨集台词复读控制：本集不许原样搬运上集说过的话。',
+    '  只比对台词行（场头/剧名/△ 动作行不计入）；标点差异不算改动——归一化去掉标点后，仍是同一句。',
+    '  长度门槛：中文 ≥12 字、英文 ≥20 字母才比对；「你走吧」这类短句复现是正常节拍，不算复读。',
+    '  长句升级：中文 ≥30 字 / 英文 ≥50 字母 单条判 high 扣 22 分；12-29 字 / 20-49 字母 判 mid 扣 10 分。',
+    '  同一句在本集内只报一次，改一处就够。',
+    '◆ 三种正向动作：① 换说法——同义改写，保住意思换措辞 ② 换说话对象——同一层意思对另一个人说，落点就变了 ③ 删掉用动作接住节拍——把台词落成 △ 动作、道具或沉默。',
+    '◆ 有意 callback 让追更观众回味：必须缩到 12 字以内做成金句，不许整段照搬。',
+    '◆ 豁免：第 1 集 / 上集摘要不足 20 字 / 本集正文不足 20 字 不检测。',
+    '◆ 边界五项：集内重复归 repetition-check、集内 recap 注水词归 scene-padding、上集钩子必须复现归 cliffhanger-payoff、开场承接归 opening-continuity、闪回搬运归 flashback-crutch。',
+  ];
+  if (format === 'AIGC') {
+    zh.push('◆ AIGC 制式：正文不加 △。复述回忆写进连续自然段，压成一句短回声即可（内心：…）合规，整段照搬不合规。');
+  } else {
+    zh.push('◆ LIVE 制式：复述回忆写成独占 △ 动作行 + 一句短金句，别让演员把上集的台词再念一遍。');
+  }
+  return zh.join('\n');
+}
