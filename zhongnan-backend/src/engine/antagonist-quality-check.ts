@@ -211,3 +211,48 @@ export function antagonistQualityCheck(text: string, lang: AqLang): AntagonistQu
     issues,
   };
 }
+
+/**
+ * 反派质量前置教学（与 antagonistQualityCheck 同源同文件）
+ * 全制式生效（真人稿同样需要可指认的压迫来源），故 format 不设门控，仅保留签名。
+ */
+export function buildAntagonistQualityDirective(_format: string = 'LIVE', lang: AqLang = 'zh'): string {
+  if (lang === 'en') {
+    return [
+      '[Antagonist quality guardrail — same source as antagonist-quality-check (six failure modes)]',
+      'Goal: the harder the pressure, the sweeter the comeback. The villain must be a concrete person who pressures, schemes, wants something, stands in the room, holds leverage, and cracks once.',
+      '',
+      'Six hard limits (thresholds mirror the checker):',
+      '1) Absent antagonist (high, 30 points off): zero pressure signals in the whole script. Pressure him face-to-face in the first scene — slam a contract, set a deadline, humiliate him in public — so the audience sees and hears the oppressor.',
+      '2) Paper tiger (mid, 15 points off): 3+ pressure moves but 0 strategic moves. Give him one smart cruelty: bribe a key person in advance, forge evidence, or turn the hero\'s plan into a trap.',
+      '3) Motiveless villain (mid, 12 points off): 4+ pressure moves but 0 motive cues. Add one line of his own warped logic ("Your father took everything from me years ago" / "I want the whole market").',
+      '4) Offstage villain (mid, 12 points off): 3+ pressure moves but 0 direct confrontations (pressure only in phone calls or hearsay). Stage one same-room scene: same frame, closing distance, eye contact, a slammed table.',
+      '5) Weak threat (low, 8 points off): 3+ threats but 0 leverage. Put leverage on the table — a contract that can ruin him, surveillance footage, a position of power, connections, capital he can pull.',
+      '6) Flat villain (low, 6 points off): 4+ pressure moves but 0 layered beats. Give a half-second crack: a twisted maxim about the world, a pause at an old wound, a flicker in his eyes. It is not redemption — it makes him human.',
+      '',
+      'Calibration:',
+      '- Antagonist score = 100 - total penalty, floor 0.',
+      '- At least 1 direct confrontation is required for the pressure to land.',
+      '- Scripts under 20 characters pass automatically (too short to judge).',
+      "- Pressure means threat, coercion, humiliation, or violence delivered by the antagonist — the protagonist's counterattack or retaliation does not count as pressure.",
+    ].join('\n');
+  }
+  return [
+    '【反派质量前置教学（检测同源：antagonist-quality-check 六类）】',
+    '目标：压迫越狠，翻盘越爽。反派必须是看得见、听得着、下得去手的具体施压者，并且会布局、有动机、正面对撞、握着筹码、留一道缝隙。',
+    '',
+    '六条硬线（与本集检测阈值同源）：',
+    '1) 反派缺席（high，扣 30 分）：全片 0 处施压信号即判缺席。第一场就让他当面施压——甩合同、下死线、当众羞辱，让观众看得见听得着具体对手。',
+    '2) 纸老虎（mid，扣 15 分）：施压 ≥3 处却 0 处布局。至少给一次聪明的狠：提前买通关键人物、伪造证据、将计就计设反杀圈套。',
+    '3) 反派无动机（mid，扣 12 分）：施压 ≥4 处却 0 句动机交代。补一句他自己的歪理（"当年你爸夺走我的一切"／"我要的是整块市场"），哪怕是歪理。',
+    '4) 反派不登场（mid，扣 12 分）：施压 ≥3 处但 0 次正面对抗（只在电话或转述里施压）。安排一场同框对峙：同场、逼近、对视、拍桌子、当面下最后通牒。',
+    '5) 弱威胁（low，扣 8 分）：施压 ≥3 处却 0 个筹码。把筹码摆上台面——能毁掉主角的合同、一段监控证据、一个掌权的职位、一层关系、一笔能撤的资本。',
+    '6) 纸片反派（low，扣 6 分）：施压 ≥4 处却 0 处层次。给半秒人性缝隙：一句"这个世界的规矩就是弱肉强食"的扭曲逻辑、听到旧事后的停顿、一闪而过的红眼。缝隙不是洗白，而是让他成为人。',
+    '',
+    '口径：',
+    '- 反派质量分 = 100 - 总扣分，最低 0。',
+    '- 正面对抗至少 1 次，压力才算落地；只靠转述和电话不算。',
+    '- 短稿不足 20 字满分放行。',
+    '- 施压只算反派发出的威胁、逼迫、羞辱、暴力；主角的反杀、还手不算施压。',
+  ].join('\n');
+}
