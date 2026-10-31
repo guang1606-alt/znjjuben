@@ -273,3 +273,50 @@ export function protagonistGoalCheck(text: string, lang: PgLang): ProtagonistGoa
     issues,
   };
 }
+
+/**
+ * v2.375 前置教学指令：主角怎么「想要 + 受阻 + 自己动手」才立得住
+ * ----------------------------------------------------------------------
+ * 与 protagonistGoalCheck 同文件同源（v2.157 同源铁律）。
+ * 本检测对 LIVE/AIGC 全制式生效，故 format 不设门控（保留参数与既有指令家族同签名）。
+ * 把六类检测口径反向前置：欲望隐形（开场 30% 零欲望且全文 <2 high 30）/
+ * 主角被动（被动 ≥3 且不少于主动 high 25）/ 有目标无障碍（欲望 ≥2 且障碍 0 mid 15）/
+ * 有目标无行动（欲望 ≥2 且强动作 0 mid 15）/ 中段失焦（25%-70% 零欲望 mid 10）/
+ * 尾段无兑付（强烈目标 ≥3 且全片 0 兑付 low 5）/ 三件套闭环 / 能动性比过半 / 短稿 <20 字豁免。
+ * en 层零中文。
+ */
+export function buildProtagonistGoalDirective(
+  format: 'LIVE' | 'AIGC' = 'LIVE',
+  lang: PgLang = 'zh',
+): string {
+  if (lang === 'en') {
+    return [
+      '◆ Protagonist drive: within one episode the lead must want something, be blocked by something, and go fight for it himself. Miss any of the three and the viewer loses the thread. Six hard lines, right in one pass.',
+      '  Desire: a first-person goal statement (I want / I must / I will / I decide / I swear / my goal) that names both what is wanted and what it costs to fail. No third-person narration to explain the want.',
+      '  Obstacle: external resistance aimed straight at the lead (blocked, refused, denied, set up, framed, torn-up contract, a deadline, medical bills, debt collectors).',
+      '  Strong action: filmable, self-initiated moves (rush, chase, push the door open, dial, negotiate, gather evidence, record, call the police). Passive beats (forced, no choice, was told) may be the situation, never the response.',
+      '  Invisible desire: zero goal statements in the opening 30% and fewer than 2 in the whole script → high, 30 points off. The first 10 seconds must tell the viewer what the lead is after and what he loses if he fails.',
+      '  Passive protagonist: 3 or more passive beats and no fewer than active moves → high, 25 points off. After every "forced / had no choice / was told" beat, attach an active counter-move (fired → secretly record it; thrown out → confront in the rain with leverage). The agency ratio (active over active plus passive) must stay above half.',
+      '  No obstacle: 2 or more goal statements and 0 external resistance → mid, 15 points off. Add someone who can say no to his face, a locked door, a deadline. The more valuable the goal, the tougher the resistance must be.',
+      '  No action: 2 or more goal statements and 0 strong action verbs → mid, 15 points off. Follow every "I will" with a filmable action (push the door, dial the number, climb through the window, kneel, press record) so desire turns into motion.',
+      '  Midpoint drift: 2 or more goal statements but none in the 25%-70% golden band → mid, 10 points off. Escalate or reframe the goal mid-script (from "borrow the money" to "find out who set me up"), with at least one line restating it or a price paid for it.',
+      '  No payoff: 3 or more strong desires and zero payoff in the whole script → low, 5 points off. A serial may suspend at the episode end, but the hook must point to the next move; otherwise grant a partial win (a clue, a small reversal).',
+      '  Three-piece closure: desire 1 or more plus obstacle 1 or more plus strong action 1 or more; declarations with no resistance and no motion are just a daydream.',
+      '  Short draft exemption: under 20 characters is treated as an empty or placeholder draft, not a lost protagonist.',
+    ].join('\n');
+  }
+  return [
+    '◆ 主角驱动：一集之内，主角必须「想要什么 + 被什么挡住 + 自己动手去争」——三件套缺一，观众就跟不住他，六条硬线一次写对。',
+    '  欲望：第一人称目标宣言（我要/我必须/我一定要/我决定/我发誓/我的目标），必须同时讲清「要什么 + 要不到会怎样」的代价；禁止第三人称旁白交代欲望。',
+    '  障碍：直接作用在主角身上的外部阻力（被拦、拒绝、设局、陷害、撕毁合同、最后期限、医药费、逼债）。',
+    '  强动作：可拍摄的主动行为（冲、闯、推开、追、拨通、谈判、取证、录音、报警）；被动（被逼/只好/被告知）只能是被处境，不能是被回应。',
+    '  欲望隐形：开场 30% 一处目标宣言都没有、且全文不足 2 处 → high 扣 30 分。前 10 秒就要让观众知道主角图什么、输了会失去什么。',
+    '  主角被动：被动反应 ≥3 处且主动行动数不比它多 → high 扣 25 分。每一次「被逼/只好/被告知」之后必须接一个主动反制（被开除→当场录音取证；被赶出→雨夜堵人对峙），能动性比（主动 / 主动+被动）要过半。',
+    '  有目标无障碍：目标宣言 ≥2 处、外部阻力 0 处 → mid 扣 15 分。立一个能当场说「不」的人、一道锁死的门、一条死线；欲望越值钱，障碍越要狠。',
+    '  有目标无行动：目标宣言 ≥2 处、强动作 0 个 → mid 扣 15 分。每句「我一定要」后跟一个可拍摄动作（推门、拨号、翻窗、下跪、按下录音键），让欲望立刻变成肢体动作。',
+    '  中段失焦：目标宣言 ≥2 处但 25%-70% 黄金段零欲望牵引 → mid 扣 10 分。中段升级或改写目标（从「借钱」到「查清谁在设局」），至少一次重提目标或为目标付出代价。',
+    '  尾段无兑付：强烈目标 ≥3 处、全片 0 兑付 → low 扣 5 分。连续剧可集尾悬置，但钩子必须指向下一步行动；否则至少给一个局部小兑付（拿到线索/扳回一城）。',
+    '  三件套闭环：欲望 ≥1 + 障碍 ≥1 + 强动作 ≥1 才算成立；只有宣言、没有阻挡也没有动作，就是白日梦。',
+    '  短稿豁免：正文不足 20 字不按此判（空稿/占位稿不算主角失焦）。',
+  ].join('\n');
+}
