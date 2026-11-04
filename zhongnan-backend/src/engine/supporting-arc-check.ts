@@ -395,3 +395,46 @@ export function supportingArcCheck(
     issues,
   };
 }
+
+/**
+ * v2.380 配角弧光前置教学（与 supporting-arc-check 检测口径 100% 同源）
+ * 全制式生效（真人稿同样需要群像变化），format 不设门控，仅保留签名。
+ * 三类硬线 + bonus + 豁免口径，详见正文中 supportingArcCheck 的罚分逻辑。
+ */
+export function buildSupportingArcDirective(_format: string = 'LIVE', lang: SaLang = 'zh'): string {
+  if (lang === 'en') {
+    return [
+      '[Supporting arc guardrail — same source as supporting-arc-check (three failure modes)]',
+      'Goal: side characters must change (before → after arc, full-episode timeline). Distinct from supporting-character-check which asks "does this side character have desire?" (cross-section); this one asks "does they change?" (time line).',
+      '',
+      'Three hard limits (thresholds mirror the checker):',
+      '1) Zero-change side character (≥2 chars high, 20 points off total penalty; single mid): side character ≥5 lines of dialogue, stays one-note attitude polarity ≥70% of lines (all support/trust or all doubt/scorn) from first scene to last — not a hard opponent (call police / sue / attack). Static chars get 9 points each, capped at 20 total.',
+      '2) Unplanted flip (≥2 chars high, 24 points off; single mid): first-half region already ≥60% one-sided with ≥2 lines, last two lines of the character flips completely to opposite polarity, and between old-position end and new-position start there is zero triggering event (no rescue, evidence, reveal, misunderstanding cleared). Abrupt chars get 12 points each, capped at 24 total.',
+      '3) Passive no-choice (low, 8 points off): ≥4 dialogue lines, agency=0 never makes a choice or demand of their own (no "i want / i decide / i refuse"), ≥75% are short acknowledgments (≤6 words each). Passive chars get 4 points each, capped at 8 total.',
+      '',
+      'Calibration:',
+      '- Final score = clamp(100 - penalty + bonus), floor 0.',
+      '- Bonus: every arc (planted conversion with real trigger event before) gives +2, capped at +6.',
+      '- Checked side characters: ≥4 lines of dialogue, not protagonist.',
+      '- Protagonist first key of cast card; falls back to character with most dialogue when cast absent.',
+      '- Hard opponent (call police / press charges / attack / imprison / kill) is exempted from static detection — opponent never changes is normal, opponent changes needs reason.',
+      '- Scene header resets dialogue groups, △ action beats not counted.',
+    ].join('\n');
+  }
+  return [
+    '【配角弧光前置教学（检测同源：supporting-arc-check 三类）】',
+    '目标：配角必须有变化（before → after 弧光，全集时间线）。与 supporting-character-check 分工：后者问"这个配角有没有欲望"（横截面），本检测问"这个配角有没有变化"（时间线）。',
+    '',
+    '三条硬线（与本集检测阈值同源）：',
+    '1) 零变化配角（≥2 配角 high 扣 20 分总扣分；单人 mid）：配角 ≥5 句对白，全程单一态度极性（全程帮衬/信任 或 全程怀疑/嘲讽）占比 ≥70%，不是硬对手（报警/起诉/动手）。静态配角每只扣 9 分，封顶 20 分。',
+    '2) 无铺垫倒戈（≥2 配角 high 扣 24 分；单人 mid）：前段一半区域内已经 ≥60% 一边倒且 ≥2 行，末两句全面翻到另一极性，旧立场结尾与新立场开头之间文本里没有任何转折事件（无救人/证据/真相/误会揭开）。突变配角每只扣 12 分，封顶 24 分。',
+    '3) 全程被动应答（low 扣 8 分）：≥4 句对白，agency=0 无主张零自我选择信号（没有 "我要/我决定/我拒绝"），≥75% 是短应答（≤8 字）。被动配角每只扣 4 分，封顶 8 分。',
+    '',
+    '口径：',
+    '- 最终分 = clamp(100 - penalty + bonus)，最低 0。',
+    '- 正信号 bonus：每个有铺垫转变 arc（翻转前文本区间命中了转折事件）回补 2 分，封顶 6 分。',
+    '- 参检配角：≥4 句对白台词、非主角（主角优先 cast 人设卡第一个 key；无人设卡时按对白字数最多者）。',
+    '- 硬对手位（报警/起诉/动手/送牢/弄死/开枪）豁免 static 检测——对手不转变是本分，对手转变才需要理由。',
+    '- 场头重置对白组、△ 动作行不计入参检对白。',
+  ].join('\n');
+}
