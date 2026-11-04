@@ -414,3 +414,36 @@ export function cheatRuleCheck(text: string, lang: CrLang = 'zh'): CheatRuleResu
     issues,
   };
 }
+
+/**
+ * v2.385 金手指规则前置教学（与上方 cheatRuleCheck 检测口径 100% 同源）
+ * 撰写师/润色师首轮即知道五类阈值、门控与三条正信号，而不是写完才被打回。
+ */
+export function buildCheatRuleDirective(_format: string = 'LIVE', lang: CrLang = 'zh'): string {
+  if (lang === 'en') {
+    return [
+      '[Cheat Rules · Pre-Briefing] System, power, and rebirth stories: the cheat can be strong, but never ruleless. The worst reaction is "the author handed out a cheat on the spot."',
+      'Gate: realistic family, revenge, or romance scripts with no cheat signal (none) pass at a full 100 and are never flagged; a system panel, shop, quest, golden finger, superpower, spatial inventory, mind-reading, x-ray vision, precognition, mystic inheritance, spiritual energy, or host means system; only rebirth or past-life memory means rebirth (checks 2 and 5 only).',
+      '1) Use before rules (unestablished_cheat, system only): a use of the cheat with no core rule line strictly earlier (a same-line retro-fix does not count). 1st hit is mid, 2nd hit is high, report at most 2, -12 points per use capped at 24.',
+      '2) Last-minute unlock (last_minute_unlock, system and rebirth): an awakening or unlock with no core rule before it is mid, 2nd hit high, at most 2 reports, -12 per hit capped at 22; a rule exists but no upgrade foreshadowing is low, -5 each capped at 8, at most 2 reports; rule plus foreshadowing together is a fairUnlock positive signal.',
+      '3) Costless all-purpose cheat (costless_overuse, system only): used 3 or more times, zero cost paid, and no cost, cooldown, use-count, or side-effect limit in any rule line; 3 to 4 uses is low, -7 points; 5 or more is mid, -12 points; one report only. A cost line counts as paid only when a use line is not later than it; a cost promise inside a rule line never counts.',
+      '4) Wishing machine (cheat_solves_all, system only): a ruleless ability ends the crisis on its own line (solved with a thought / enemies all fall). 1st hit is mid, 2nd hit is high, at most 2 reports, -11 per hit capped at 20.',
+      '5) Flawless foreknowledge (flawless_foreknowledge, rebirth only): past-life memory used 3 or more times with 0 butterfly effects or memory gaps (history changed / different from the past life / cannot remember / the timeline shifted). low, -7 points, one report only.',
+      'Positive signals: ruleFirst (rules established before use) +2 points each, caps at 6; costPaid (cost paid, first 2 only) +2 points each, caps at 4; fairUnlock (rule plus foreshadowing) +2 points each, caps at 4.',
+      'Order of checks: split by scene headers, tag lines, separate core rule lines from rebirth declarations, then run the five checks, sorted high to mid to low, then scene, then key.',
+      'Scoring: score = clamp(round(100 - penalty + bonus), 0, 100); no cheat signal means a full 100 pass; blank or under 20 characters also passes at 100.',
+    ].join('\n');
+  }
+  return [
+    '【金手指规则 · 前置教学】系统/异能/重生题材：外挂可以强，但不能没有规矩——顶格差评是"作者临时发外挂"。',
+    '题材门控：现实豪门/复仇/甜宠稿无外挂信号（none）满分 100 放行，绝不误伤；命中系统/面板/商城/任务/金手指/异能/超能力/随身空间/读心/透视/预知/传承之力/灵气/宿主→system；仅命中重生/前世记忆→rebirth（只跑②临时觉醒与⑤全知零误差）。',
+    '1) 先用后立规（unestablished_cheat，仅 system）：某次动用外挂之前没有任何核心规则行（同行事后补规不算，必须严格更早行）。第 1 次 mid，第 2 次起 high，最多报 2 条，扣分 min(次数×12, 24)。',
+    '2) 临时觉醒（last_minute_unlock，system 与 rebirth 均检）：觉醒/解锁之前无核心规则→mid（第 2 次起 high，最多报 2 条），扣分 min(次数×12, 22)；有规则但无升级预告→low，每次扣 5 分、封顶 8 分，报告最多 2 条；规则+预告俱全才算 fairUnlock 正信号。',
+    '3) 零代价万能外挂（costless_overuse，仅 system）：动用 ≥3 次、代价兑付 0 次、规则行里也没有代价/冷却/次数/副作用等限制时触发；3-4 次 low 扣 7 分，≥5 次 mid 扣 12 分，全文只报 1 条。代价行必须有不晚于它的动用才算兑付，规则里的代价承诺不算。',
+    '4) 许愿机（cheat_solves_all，仅 system）：无任何核心规则的能力同行直接终结危机（一个念头解决/敌人纷纷倒下）。第 1 次 mid，第 2 次起 high，最多报 2 条，扣分 min(次数×11, 20)。',
+    '5) 重生全知（flawless_foreknowledge，仅 rebirth）：前世记忆动用 ≥3 次，全文 0 处蝴蝶效应/记忆偏差（历史改变/与上一世不同/记不清/轨迹偏离）。low 扣 7 分，全文只报 1 条。',
+    '正信号：ruleFirst（先立规后使用）+2 分/次封顶 6 分；costPaid（代价兑付，取前 2 次）+2 分/次封顶 4 分；fairUnlock（规则+预告俱全的升级）+2 分/次封顶 4 分。',
+    '判定顺序：先按场标切场→行级打标→核心规则行与重生声明行分开→五类问题依次判定→按 high→mid→low、场次、key 排序。',
+    '评分：score = clamp(round(100 - 扣分 + 加分), 0, 100)；无外挂信号满分 100 放行；空白或不足 20 字同样满分放行。',
+  ].join('\n');
+}
