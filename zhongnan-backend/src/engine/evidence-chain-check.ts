@@ -319,3 +319,32 @@ export function evidenceChainCheck(text: string, lang: EcLang = 'zh'): EvidenceC
     issues,
   };
 }
+
+/**
+ * v2.386 翻盘证据链前置教学（与上方 evidenceChainCheck 检测口径 100% 同源）
+ * 撰写师/润色师首轮即知道四类阈值与 fairShow 正信号，而不是写完才被打回。
+ */
+export function buildEvidenceChainDirective(_format: string = 'LIVE', lang: EcLang = 'zh'): string {
+  if (lang === 'en') {
+    return [
+      '[Reversal Evidence · Pre-Briefing] The top thrill is "slamming the proof down in public"; the worst review is "the evidence exists because the plot needs it." Show the gun first; the shot lands later.',
+      '1) Unplanted evidence (unplanted_evidence): a recording, footage, report, contract, records, or photo produced on the spot with no acquisition or setup line strictly earlier (a same-line "I was prepared" does not count). 1st hit is mid, 2nd hit is high, report at most 2, -12 points per hit capped at 24.',
+      '2) Evidence overkill (evidence_overkill): 3 or more distinct kinds of ironclad proof produced in one episode; 3 kinds is low, -6 points; 4 or more is mid, -10 points; one report only.',
+      '3) Verbal evidence only (verbal_evidence_only): the evidence is claimed 2 or more times ("I have the evidence / I\'ve got your recording") but produced zero times this episode; low, -7 points, one report only.',
+      '4) Airdropped witness (airdropped_witness): a witness bursts through the door or a presumed-dead person testifies with no earlier "arranged / sent to fetch / agreed to testify / lined up to appear" line. 1st hit is mid, 2nd hit is high, report at most 2, -11 per hit capped at 20.',
+      'Positive signal: fairShow (the evidence was planted strictly before it was shown, whether across scenes or earlier in the same scene) +2 points each, caps at 6.',
+      'Order of checks: split by scene headers, tag lines (six show kinds, plant, claim, witness arrival and arrangement), run the four checks, sorted high to mid to low, then by scene.',
+      'Scoring: score = clamp(round(100 - penalty + bonus), 0, 100); no evidence signal means a full 100 pass; blank or under 20 characters also passes at 100.',
+    ].join('\n');
+  }
+  return [
+    '【翻盘证据链 · 前置教学】竖屏短剧的顶格爽点是"当众甩出铁证"，顶格差评是"证据想要就有"：先让观众看见枪，结尾枪响才过瘾。',
+    '1) 物证无铺垫（unplanted_evidence）：当场播放/甩出录音、监控、鉴定报告、合同、流水、照片六类铁证，但此前任何一行都没有获取/布置信号（同行补一句"我早有准备"不算，必须严格更早行）。第 1 次 mid，第 2 次起 high，最多报 2 条，扣分 min(次数×12, 24)。',
+    '2) 证据雨（evidence_overkill）：一集当场出示 ≥3 种不同铁证，3 种 low 扣 6 分，≥4 种 mid 扣 10 分，全文只报 1 条。',
+    '3) 空口证据（verbal_evidence_only）：≥2 次宣称"我有证据/我手里有你的录音"，本集却一次都没有真出示；low 扣 7 分，全文只报 1 条。',
+    '4) 人证空降（airdropped_witness）：关键时刻推门而入/死者复生作证，此前无"已安排/去接/答应作证/安排出庭"任何一行。第 1 次 mid，第 2 次起 high，最多报 2 条，扣分 min(次数×11, 20)。',
+    '正信号：fairShow（物证先埋后打，铺垫行严格早于出示行，跨场或同场早些时候均可）+2 分/次封顶 6 分。',
+    '判定顺序：先按场标切场→行级打标（六类出示/铺垫/宣称/人证到场与安排）→四类问题依次判定→按 high→mid→low、场次排序。',
+    '评分：score = clamp(round(100 - 扣分 + 加分), 0, 100)；无证据信号满分 100 放行；空白或不足 20 字同样满分 100。',
+  ].join('\n');
+}
