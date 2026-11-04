@@ -2907,10 +2907,10 @@
       const port = location.port || (location.protocol === 'https:' ? 443 : 80);
       if (port === '8099') {
         bar.style.cssText = 'font-size:12px;padding:8px 12px;border-radius:8px;margin-bottom:12px;line-height:1.6;background:#fff8e1;color:#8a6d00;border:1px solid #f0c800';
-        bar.innerHTML = '🏠 <b>演示模式</b>（内存数据，重启即清空）<br>测试账号：<b>18891995171</b> / <b>demo123456</b>';
+        bar.innerHTML = '🏠 <b>演示模式</b>（内存数据，重启即清空）<br>演示环境请自行注册账号试用';
       } else if (port === '8899') {
         bar.style.cssText = 'font-size:12px;padding:8px 12px;border-radius:8px;margin-bottom:12px;line-height:1.6;background:#e8f5e9;color:#2e7d32;border:1px solid #66bb6a';
-        bar.innerHTML = '🗄️ <b>生产模式</b>（真实 Postgres 数据）<br>账号：<b>18891995171</b> / <b>yxgnono0726</b>';
+        bar.innerHTML = '🗄️ <b>生产模式</b>（真实 Postgres 数据）<br>请使用你的账号登录';
       } else {
         bar.style.cssText = 'font-size:12px;padding:8px 12px;border-radius:8px;margin-bottom:12px;line-height:1.6;background:#e3f2fd;color:#1565c0;border:1px solid #42a5f5';
         bar.innerHTML = `当前端口 <b>${port || '默认'}</b>，请确认使用正确的账号密码`;

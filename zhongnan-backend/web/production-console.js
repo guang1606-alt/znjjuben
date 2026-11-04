@@ -74,7 +74,7 @@
       render();
     }).catch(function (e) {
       if (e && (e.code === 'AUTH_REQUIRED' || e.httpStatus === 401)) {
-        guard('<h2>需要登录</h2><p>请先在主站登录超级管理员账号（18891995171）。</p>', true);
+        guard('<h2>需要登录</h2><p>请先在主站登录超级管理员账号后重试。</p>', true);
       } else if (e && e.httpStatus === 403) {
         guard('<h2>无权访问</h2><p>制作中管理台仅超级管理员主账号可用。</p>');
       } else {
@@ -231,7 +231,7 @@
 
   if (!(Api && Api.request)) { guard('<h2>加载失败</h2><p>api.js 未就绪，请刷新页面。</p>'); return; }
   if (!Api.isAuthed || !Api.isAuthed()) {
-    guard('<h2>需要登录</h2><p>请先在主站登录超级管理员账号（18891995171）。</p>', true);
+    guard('<h2>需要登录</h2><p>请先在主站登录超级管理员账号后重试。</p>', true);
     return;
   }
   load();
