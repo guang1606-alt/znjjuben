@@ -297,3 +297,46 @@ export function characterBalanceCheck(
     }),
   };
 }
+
+/**
+ * 角色戏份均衡前置教学（与 characterBalanceCheck 同源同文件）
+ * 全制式生效（真人稿同样需要群像化学反应），故 format 不设门控，仅保留签名。
+ */
+export function buildCharacterBalanceDirective(_format: string = 'LIVE', lang: CbLang = 'zh'): string {
+  if (lang === 'en') {
+    return [
+      '[Character balance guardrail — same source as character-balance-check (five failure modes)]',
+      'Goal: the protagonist drives, but the ensemble must breathe. Share dialogue, share scenes, share weight — no one speaks 80% of the lines, no one fades into the furniture.',
+      '',
+      'Five hard limits (thresholds mirror the checker):',
+      '1) Protagonist underweight (high, 20 points off): protagonist\'s dialogue share <20% — the lead becomes a narrator. Target ≥30%. Give the lead more reactions, decisions, and reversals.',
+      '2) Monologue drama (high, 18 points off): protagonist holds >80% of dialogue (≥3 speaking characters). Or mid, 8 points off, borderline >70%. Give at least 2 other characters substantive lines — questions, objections, secrets — to create push-and-pull.',
+      '3) Share gap (mid, 10 points off): top-bottom word ratio >5:1 when the smallest role has ≥3 lines. Give that smallest role one decisive line or a reveal to matter.',
+      '4) Narrow co-scene (mid, 8 points off): protagonist shares scenes with ≤1 other character (≥3 speaking characters). Arrange at least one scene where the lead confronts a different character — the co-scene counter counts adjacent dialogue lines within each scene block as "same scene".',
+      '5) Too many cameos (low, 5 points off): ≥3 characters appear in only one line. Merge them into one or give each a second beat (a reaction, a follow-up question, a clue they hold).',
+      '',
+      'Calibration:',
+      '- Balance score = 100 - total penalty, floor 0.',
+      '- The protagonist is whichever character\'s name comes first in the cast card; falls back to the character with the most lines if no cast.',
+      '- The top-bottom ratio skips roles with fewer than 3 lines — tiny parts should not blow up the ratio.',
+      '- Co-scene counter: scene headers reset the window; only dialogue lines count — action beats do not create co-scene credit.',
+    ].join('\n');
+  }
+  return [
+    '【角色戏份均衡前置教学（检测同源：character-balance-check 五类）】',
+    '目标：主角驱动，群像呼吸。对白分配、对手戏、戏剧重量都要均衡——不能让一个角色说 80% 的台词，也不能让其他角色沦为家具。',
+    '',
+    '五条硬线（与本集检测阈值同源）：',
+    '1) 主角戏份不足（high，扣 20 分）：主角对白占比 <20% 即判背景板。目标 ≥30%；给主角多一些反应、决策、反转，让其他角色围绕他转而不是喧宾夺主。至少两个有台词角色才触发。',
+    '2) 工具人独白剧（high，扣 18 分）：主角对白 >80%（有台词角色 ≥3 个）。或 mid（扣 8 分），接近独白剧 >70%。至少给两个其他角色实质性对白——提问、反对、揭秘，制造拉锯张力。',
+    '3) 戏份悬殊（mid，扣 10 分）：最大/最小字数比 >5:1，且最小角色不少于 3 句才进比（少于 3 句不计入）。给戏份最少的那个角色一句决定性台词或揭秘，让他有存在感。',
+    '4) 对手戏缺失（mid，扣 8 分）：主角只和 ≤1 个角色同场（有台词角色 ≥3 个）。至少安排一场主角与其他角色的对手戏。同场判定口径：扫描场景块内相邻对白行，场景头重置同场窗口；△动作行不计入同场。',
+    '5) 龙套过场（low，扣 5 分）：≥3 个角色只出现 1 句即判纯工具人。合并为一个角色，或给每人第二拍（一个反应、一句追问、一个握有线索的动作）。',
+    '',
+    '口径：',
+    '- 戏份均衡分 = 100 - 总扣分，最低 0。',
+    '- 主角识别优先用人设卡 cast 里的第一个 key，没有人设卡才按对白字数最多者算。',
+    '- 最大/最小比只在最小角色 ≥3 句时计算，避免一句 3 字的跑龙套把比例炸到几千比一。',
+    '- 同场=场景块内相邻对白行，场头重置窗口；△动作行不建立同场关系。',
+  ].join('\n');
+}
