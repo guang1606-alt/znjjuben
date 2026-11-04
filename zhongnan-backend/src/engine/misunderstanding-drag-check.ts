@@ -278,3 +278,32 @@ export function misunderstandingDragCheck(text: string, lang: MdLang = 'zh'): Mi
     issues,
   };
 }
+
+/**
+ * v2.387 误会拖延前置教学（与上方 misunderstandingDragCheck 检测口径 100% 同源）
+ * 撰写师/润色师首轮即知道四类阈值与 resolved 正信号，而不是写完才被打回。
+ */
+export function buildMisunderstandingDragDirective(_format: string = 'LIVE', lang: MdLang = 'zh'): string {
+  if (lang === 'en') {
+    return [
+      '[Misunderstanding Drag · Pre-Briefing] Conflict cannot be propped up by forced misunderstanding: a misunderstanding per scene that gets cleared is normal short-drama usage and is not penalized; only dragging it is.',
+      '1) Refusal to listen (refusal_to_listen): one side says "let me explain" and the other refuses within 3 lines ("I don\'t want to hear it / slams the door / hangs up"), propping up conflict by cutting off communication. If it is cleared in the same scene or the immediately next scene, it does not count (it counts as a resolved positive signal); otherwise 1st hit is mid, -14 points, 2nd hit is high, capped at 28.',
+      '2) Repeated misunderstanding (misunderstanding_repeat): the same misunderstanding survives 3 or more scenes before the first clarification (counting scenes before that first resolve) — mid, -11 points, one report only.',
+      '3) Forced silence (forced_silence): the truth is swallowed or deliberately hidden 2 or more times — low, -7 points, one report only.',
+      '4) Half-truth conviction (half_truth_conviction): hearing only half a sentence or a fragment at the door and storming off to convict — low, -6 points each, at most 2 reports, capped at 12.',
+      'Positive signal: resolved (the refusal is cleared in the same scene or the immediately next scene, e.g. misunderstanding cleared / I was wrong about you) +2 points each, caps at 6.',
+      'Order of checks: split by scene headers, extract explain/refuse/misunderstanding/resolve/swallowed/half-heard signals per scene, run the four checks, sorted high to mid to low, then by scene.',
+      'Scoring: score = clamp(100 - penalty + bonus, 0, 100); no communication signal means a full 100 pass; blank or under 20 characters also passes at 100.',
+    ].join('\n');
+  }
+  return [
+    '【误会拖延 · 前置教学】冲突不能靠"按头误会"硬撑：一场误会一场解是短剧正常用法，不罚；拖才罚。',
+    '1) 拒绝沟通（refusal_to_listen）：一方"你听我解释"，另一方 3 行内"我不听/摔门/挂断"——冲突靠拒听硬撑。当场或紧邻下一场就澄清则不算（记为快速解开正信号）；解不开时第 1 次 mid 扣 14 分，第 2 次起 high，扣分封顶 28 分。',
+    '2) 误会反复（misunderstanding_repeat）：同一个误会跨 ≥3 场仍未澄清（以首次澄清场为界，之前存活 ≥3 场）——mid 扣 11 分，全文只报 1 条。',
+    '3) 有嘴不说（forced_silence）：话到嘴边咽回去/必须瞒住 ≥2 次——low 扣 7 分，全文只报 1 条。',
+    '4) 偷听定罪（half_truth_conviction）：只听到半句/在门外听到片段就转身走人定罪——每处 low 扣 6 分，最多报 2 处，扣分封顶 12 分。',
+    '正信号：resolved（拒绝沟通当场或紧邻下一场即澄清、误会解除/我错怪你了）+2 分/次封顶 6 分。',
+    '判定顺序：先按场标切场→逐场提取求解释/拒绝/误会/澄清/咽话/偷听信号→四类问题依次判定→按 high→mid→low、场次排序。',
+    '评分：score = clamp(100 - 扣分 + 加分, 0, 100)；无沟通类信号满分 100 放行；空白或不足 20 字同样满分 100。',
+  ].join('\n');
+}
