@@ -399,3 +399,36 @@ export function emotionalAftermathCheck(text: string, lang: EaLang = 'zh'): Emot
     issues,
   };
 }
+
+/**
+ * v2.383 情绪余波连续性前置教学（同源本引擎检测口径，撰写师/润色师首轮注入）
+ * 全制式生效（不按格式门控，仅保留签名与语言切换）。
+ */
+export function buildEmotionalAftermathDirective(_format: string = 'LIVE', lang: 'zh' | 'en' = 'zh'): string {
+  if (lang === 'en') {
+    return [
+      '[Emotional Aftermath · Pre-Briefing] A major emotional event must be paid for; emotion cannot reset within three lines.',
+      '1) Instant reset (instant_reset): within 10 lines after a trauma anchor (death / violence / betrayal / diagnosis / bankruptcy), a strong positive daily signal appears (laughing / shopping / dating / food / bubble tea) while neither an aftermath beat nor a time jump sits in between. 1st hit is mid, -12 points; 2nd hit is high; caps at 22 points; report at most 2. Fix: add a restrained aftermath beat (red-rimmed eyes while still working / a long silence / a forced bitter smile) or mark a clear time jump before recovery.',
+      '2) Unprocessed loss: after a loss anchor (death / funeral / body) no grief, mourning or time marker ever appears again, while at least 8 lines follow. mid, -14 points, one report only; with fewer than 8 lines after the anchor (event at the tail) no demand is made. Fix: add a mourning beat later (touching a keepsake / flinching at the name / waking from a nightmare), even half a line.',
+      '3) One-line cure: within 4 lines after a breakdown anchor a comfort cliche appears, and within the next 3 lines the character smiles and recovers with no aftermath beat in between. 1st hit is low, -6 points; 2nd hit is mid, -14 points; report at most 2; consecutive breakdown lines in the same scene (gap of 3 or less) count once. Fix: let the comfort be rejected, let the grief run its course, and delay recovery by at least a scene or make it self-earned.',
+      'Positive signals: griefCarry (aftermath beat before recovery) +2 points each, caps at 4; timeHeal (recovery after an explicit time jump) +1 point each, caps at 2; healthyComfort (comfort followed by aftermath or a recovery gap over 6 lines) +1 point each, caps at 2.',
+      'Waiver 1: faked death / acting / rehearsal / prank / dream events are not real - when such a marker sits within 1 line of the trauma anchor, the whole event is exempt.',
+      'Waiver 2 / exclusions: malicious joy (sneer / mockery / gloating) and bitter or tearful smiles are themselves aftermath, not emotional recovery; only true positive daily signals trigger an instant reset.',
+      'Waiver 3: trauma clustering - adjacent trauma lines within a gap of 2 merge into one anchor so the same event is never counted twice.',
+      'Order of checks: split by scene headers, tag lines, cluster trauma anchors, then run the three checks, sorted high to mid to low, then scene, then key.',
+      'Scoring: score = clamp(100 - penalty + bonus, 0, 100); no trauma signal means a full 100 pass; blank or under 20 characters also passes at 100.',
+    ].join('\n');
+  }
+  return [
+    '【情绪余波连续性 · 前置教学】重大情绪事件必须付得起代价，情绪不能在三行内清零。',
+    '1) 情绪秒清零（instant_reset）：创伤锚点（死亡/暴力/背叛/确诊/破产）之后 10 行窗口内（可跨场）出现强积极日常（大笑/逛街/约会/美食/奶茶），且中间既无余波节拍也无时间流逝标记。第 1 次 mid 扣 12 分，第 2 次起 high，扣分封顶 22 分，最多报 2 条。处理：补一个克制的余波节拍（红着眼眶继续办事/沉默良久/挤出苦笑）或在恢复前写明时间流逝。',
+    '2) 丧亲无消化（unprocessed_loss）：丧亡类锚点（死别/葬礼/遗体）之后全文再无任何悲伤/悼念/时间标记，且事件后仍有 ≥8 行正文。mid 扣 14 分，全文只报 1 条；锚点后不足 8 行（事件贴结尾）不苛求。处理：后文补一个悼念节拍（摸遗物/避开称谓/夜里惊醒），哪怕只有半行。',
+    '3) 鸡汤秒治愈（quick_comfort）：崩溃痛哭/寻死锚点后 4 行内出现劝慰套话，劝慰后 3 行内立刻振作露笑，中间无余波节拍。第 1 次 low 扣 6 分，第 2 次起 mid 扣 14 分，最多报 2 条；同场连续崩溃行（行距 ≤3）只算 1 次。处理：让劝慰被顶回来、让角色先哭完一场，恢复至少隔一场或靠她自己想通。',
+    '正信号：griefCarry（创伤后先出现余波节拍再恢复）+2 分/次封顶 4 分；timeHeal（明确时间流逝后恢复）+1 分/次封顶 2 分；healthyComfort（劝慰后有余波或隔 6 行以上才恢复）+1 分/次封顶 2 分。',
+    '豁免一：装死/演戏/排练/恶作剧/梦境事件是假的——创伤锚点 ±1 行内出现这些标记，整个事件豁免，不判余波。',
+    '豁免二/排除项：恶意笑（冷笑/嘲笑/得意）与苦笑/含泪笑本身就是余波，不算情绪恢复；只有真正的强积极日常才触发秒清零。',
+    '豁免三：创伤事件聚类——行距 ≤2 的相邻创伤行（事件行+反应行）合并为同一锚点，避免同一事件重复计数。',
+    '判定顺序：先按场标切场→行级打标→创伤锚点聚类→三类问题依次判定→按 high→mid→low、场次、key 排序。',
+    '评分：score = clamp(100 - 扣分 + 加分, 0, 100)；无创伤信号满分 100 放行；空白或不足 20 字同样满分放行。',
+  ].join('\n');
+}
