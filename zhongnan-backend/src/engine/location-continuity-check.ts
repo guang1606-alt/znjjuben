@@ -442,3 +442,38 @@ export function locationContinuityCheck(text: string, lang: LcLang = 'zh'): Loca
     issues,
   };
 }
+
+/**
+ * v2.382 空间位移连续性前置教学（同源本引擎检测口径，撰写师/润色师首轮注入）
+ * 全制式生效（不按格式门控，仅保留签名与语言切换）。
+ */
+export function buildLocationContinuityDirective(_format: string = 'LIVE', lang: 'zh' | 'en' = 'zh'): string {
+  if (lang === 'en') {
+    return [
+      '[Location Continuity · Pre-Briefing] The character cannot jump between cities and rooms like a quantum particle.',
+      '1) Instant travel (instant_travel): adjacent scene headers sit in different cities/countries while the last 3 lines of the previous scene, the first 3 of the next, and both headers carry zero transit and zero time jump - the character crosses the map at zero cost. 1st hit is mid, -12 points; 2nd hit is high; penalty caps at 22 points.',
+      '2) Location jump (location_jump): inside one scene, incompatible place anchors (home vs office, ward vs restaurant) within a line gap of 6 with no leaving/arriving/transition word. 1st hit is low, -6 points; 2nd hit is mid, -14 points.',
+      '3) Set conflict (set_conflict): an INT header playing outdoor action (in the rain / walking down the street / gazing up at the stars), or an EXT header playing indoor action (lay in bed / opened the fridge). Each hit is low, -5 points, caps at 10 points.',
+      'Positive signals: fairTravel (a cross-city pair that shows a flight, high-speed train, or time jump) +2 points per pair, caps at 4; transition (an explicit leaving/arriving/cut word between anchors) +1 point each, caps at 3.',
+      'Waiver 1: a header carrying a time jump (the next day / three days later / a week later / years later) or a transit bridge (plane / flight / airport / high-speed train / drove for hours) counts as fairTravel, not instant travel.',
+      'Waiver 2: a scene header already in transit (on the plane / in flight / on the train / in the car / en route) exempts the cross-city pairs on both sides.',
+      'Waiver 3: negation phrases cancel the matching indoor kind - home doorstep, outside the building, downstairs, the compound cancel home; office doorstep or building entrance cancel office; hospital gate cancels hospital; school gate cancels school.',
+      'Waiver 4: looking through a window is not being outdoors (through the window / from the window / behind the glass) - stargazing or rain-watching inside an INT scene is not a set conflict.',
+      'Waiver 5: an anchor gap over 6 lines is treated as elided blocking and never a location jump; an anchor line containing a transition word (left / walked out / got in / rushed to / arrived / entered / cut to / returned) resets space, so the kind switch around it is legal.',
+      'Order of checks: split scenes, read city and INT/EXT from each header, then scan line-level anchors; report at most one same-scene conflict per scene, sorted high to mid to low, then scene, then key.',
+    ].join('\n');
+  }
+  return [
+    '【空间位移连续性 · 前置教学】人物不能像量子一样在城市与房间之间跃迁。',
+    '1) 跨城瞬移（instant_travel）：相邻两场场标城市/国家不同，前场末 3 行+后场前 3 行+两场标窗口内零交通、零时间跳变，人物零耗时跨城。第 1 次 mid 扣 12 分，第 2 次起 high，扣分封顶 22 分。',
+    '2) 同场瞬移（location_jump）：同一场内互斥场所锚点（家↔办公室/医院↔餐厅）行距 ≤6，中间无离开/到达/转场词。第 1 次 low 扣 6 分，第 2 次起 mid 扣 14 分。',
+    '3) 内外景矛盾（set_conflict）：内景场标里演室外动作（淋雨/走在大街/仰望星空），或外景场标里演室内动作（躺上床/开冰箱）。每处 low 扣 5 分，封顶 10 分。',
+    '正信号：fairTravel（跨城但给了航班/高铁/时间跳变）+2 分/对，封顶 4 分；transition（锚点之间出现明确离开/到达/转场词）+1 分/次，封顶 3 分。',
+    '豁免一：场标自带时间跳变（次日/第二天/三天后/一周后/多年后）或交通桥接（飞机/航班/高铁/动车/机场/驱车/连夜赶路）→ 计入 fairTravel，不判跨城瞬移。',
+    '豁免二：场标本身即在途中（飞机上/机舱/高铁上/火车上/车里/途中/在途）→ 该场与前后场的跨城对直接豁免。',
+    '豁免三：否定短语撤掉对应室内类——家门口/家门外/楼下/小区撤 home，公司门口/公司门外/大楼门口撤 office，医院门口/医院大门撤 hospital，学校门口/校门口撤 school。',
+    '豁免四：隔窗观望不算身处室外（窗外/隔着窗/透过窗/玻璃窗/玻璃后），内景场标里望星空/看雨不判内外景矛盾。',
+    '豁免五：锚点行距 >6 视为中间有省略调度，不判同场瞬移；含转场词（离开/走出/出门/上车/赶往/抵达/走进/切到/回到）的锚点行重置空间，其前后异类切换合法。',
+    '判定顺序：先切场→提取场标城市/内外景声明→再行级锚点扫描；每场最多报 1 对同场矛盾，问题按 high→mid→low、场次、key 排序。',
+  ].join('\n');
+}
