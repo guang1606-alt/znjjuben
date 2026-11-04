@@ -518,3 +518,66 @@ export function dialogueFunctionalityCheck(script: string, lang: DfLang = 'zh'):
     issues,
   };
 }
+
+/**
+ * v2.381 对白功能性前置教学（与 dialogueFunctionalityCheck 检测口径 100% 同源）
+ * 全制式生效（真人稿同样需要对白功能分布），format 不设门控，仅保留签名。
+ */
+export function buildDialogueFunctionalityDirective(_format: string = 'LIVE', lang: DfLang = 'zh'): string {
+  if (lang === 'en') {
+    return [
+      '[Dialogue functionality guardrail — same source as dialogue-functionality-check (eight failure modes)]',
+      'Goal: every line should serve at least one of four functions: advance plot / build character / create conflict / deliver info. Whole-episode distribution must stay balanced.',
+      '',
+      'Balanced bands (share of primaryFunction):',
+      '- plot 25%-60% (center 42.5%)',
+      '- character 10%-45% (center 27.5%)',
+      '- conflict 10%-45% (center 27.5%)',
+      '- info 5%-35% (center 20%)',
+      '',
+      'Eight hard limits (thresholds mirror the checker):',
+      '1) Flat characters (character <10%, high, 12 points off): add 2-3 character-building lines per scene (hopes, fears, past, motives).',
+      '2) Info overload (info >35%, high, 12 points off): convert exposition into conflict or action.',
+      '3) Conflict vacuum (conflict <10%, high, 12 points off): at least one refusal, accusation, or ultimatum per scene.',
+      '4) Plot overload (plot >70%, mid, 5 points off): insert 1-2 reflective beats after every 5-6 plot lines.',
+      '5) Info-dump scene (one scene info >50% with >=3 lines in it; 1 scene mid 5 points off, >=2 scenes high 12 points off).',
+      '6) Conflict-vacuum scenes (>=2 scenes conflict <10% with >=3 lines each, mid 5 points off).',
+      '7) Monotone character (one character >80% single function with >=5 lines, 3 points off each; 1 low, >=2 mid 5 points off).',
+      '8) No-function lines (other >30%, mid 5 points off): cut greetings, small talk, empty echoes.',
+      '',
+      'Calibration:',
+      '- All four bands in range: no deduction. Otherwise deduct average deviation across out-of-band dimensions x 40, capped at 40.',
+      '- Priority: plot > conflict > character > info; a line with several signals takes the highest.',
+      '- Greetings, one-word replies and signal-less short lines count as other.',
+      '- Scene header resets grouping; action lines are not dialogue.',
+      '- Empty-dialogue script gets full 100.',
+    ].join('\n');
+  }
+  return [
+    '【对白功能前置教学（检测同源：dialogue-functionality-check 八类）】',
+    '目标：每一句台词至少承担四种功能之一——推进剧情 plot / 塑造人物 character / 制造冲突 conflict / 传递信息 info。全集功能分布要均衡，不能某类独大。',
+    '',
+    '四条均衡带（按 primaryFunction 占比计）：',
+    '- plot 25%~60%（中心 42.5%）',
+    '- character 10%~45%（中心 27.5%）',
+    '- conflict 10%~45%（中心 27.5%）',
+    '- info 5%~35%（中心 20%）',
+    '',
+    '八条硬线（与本集检测阈值同源）：',
+    '1) 塑造缺失（character <10%，high 扣 12 分）：全集几乎全是推进与交代，角色扁平。每场戏补 2-3 句展示性格/希望/恐惧/过往/动机的对白。',
+    '2) 信息倾倒（info >35%，high 扣 12 分）：设定交代过多，观众吸收率骤降。把交代转成冲突或动作——"你父亲就是被他害死的！"而不是"我父亲十年前去世了"。',
+    '3) 冲突真空（conflict <10%，high 扣 12 分）：全剧缺乏戏剧张力。每场至少一句反对/拒绝/指责/最后通牒/质疑。',
+    '4) 剧情过载（plot >70%，mid 扣 5 分）：节奏过快缺乏喘息。每 5-6 句推进后插 1-2 句塑造/反思对白。',
+    '5) 单场信息倾倒（单场 info >50% 且该场 ≥3 句，1 场 mid 扣 5 分 / ≥2 场 high 扣 12 分）：拆散设定，用冲突/动作/视觉交代。',
+    '6) 连续冲突真空（≥2 场 conflict <10% 且该场 ≥3 句，mid 扣 5 分）：注入微冲突——日常场景也要有反对/拒绝/暗流。',
+    '7) 角色功能单一（某角色单一功能 >80% 且该角色 ≥5 句，每只扣 3 分；1 只 low / ≥2 只 mid 扣 5 分）：让信息角色也推进剧情、表达情感、引发冲突。',
+    '8) 无功能对白过多（other >30%，mid 扣 5 分）：删除寒暄/客套/无意义回应。',
+    '',
+    '口径：',
+    '- 四维全在带内不扣分；越界按各维度偏差均值 ×40 扣，封顶 40 分。',
+    '- 功能优先级：plot > conflict > character > info；一句多信号取最高优先级为主功能。',
+    '- 寒暄/单字回应/无信号短句计 other，不计入四类。',
+    '- 场头重置统计；△ 动作行与纯动作行不计入对白。',
+    '- 无对白剧本满分 100。',
+  ].join('\n');
+}
