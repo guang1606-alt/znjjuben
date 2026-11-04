@@ -453,3 +453,34 @@ export function memoryFakeoutCheck(text: string, lang: MfLang = 'zh'): MemoryFak
     issues,
   };
 }
+
+/**
+ * v2.384 记忆诈欺结构前置教学（与上方 memoryFakeoutCheck 检测口径 100% 同源）
+ * 撰写师/润色师首轮即知道四类阈值与三条正信号，而不是写完后才被扣分。
+ */
+export function buildMemoryFakeoutDirective(_format: string = 'LIVE', lang: 'zh' | 'en' = 'zh'): string {
+  if (lang === 'en') {
+    return [
+      '[Memory Fake-Out · Pre-Briefing] Dreams, hallucinations, and flashbacks are storytelling tools, not con tools: used well they carry huge emotional charge; abused, the audience can no longer tell what is real.',
+      '1) Dream fake-out (dream_fakeout): no dream-entry cue (fell asleep / lost consciousness / entered a dream) within the 8 lines before the wake line, while a major dramatic event (death / blood / weapon / kiss / confession / divorce papers / a will) plays in the prior 10 lines. 1st hit is mid, -12 points; 2nd hit is high; caps at 22 points; report at most 2. Fix: cue the dream entry before the big event, or give real consequences after waking.',
+      '2) Unbound fantasy (hallucination_unbound): an imagine/visualize marker with no return-to-reality beat on the same line or within 5 lines, while the fantasy contains a dramatic action (same line or within the next 3 lines). 1st hit is low, -6 points; 2nd hit is mid, -16 points; report at most 2. Fix: add a grounding beat (snapping back / shaking the head / back to reality) or mark the fantasy with subtitle or sound design.',
+      '3) Flashback overload (flashback_overuse): flashback segments (markers merged when in the same scene with a gap of 1 or less) reaching 4 or more is low, -7 points; 6 or more is mid, -11 points; one report only. Fix: cap flashbacks at 3 per episode; each must deliver new information or emotional escalation.',
+      '4) Repetitive memory with no new information (flashback_repeat): the same memory event (14 root fingerprints such as car crash / funeral / fire / divorce) returns a 2nd time with no new-information cue (the truth / it turned out / only now did she know / realized). mid, -10 points per kind, at most 2 kinds, caps at 18 points; a referring phrase (that day / that night) within 10 lines inherits the previous segment\'s root. Fix: the second flashback must reveal a truth, a missing detail, or another witness\'s point of view.',
+      'Positive signals: markedDream (dream entry paired with wake) +2 points each, caps at 4; fairRecall (repeated flashback carrying new information) +2 points each, caps at 4; boundedFlash (a flashback segment with an explicit return-to-reality cue owned by the nearest segment within the prior 3 lines) +1 point each, caps at 3.',
+      'Waivers: a fantasy is exempt when a return beat appears on the same line or within the next 5 lines; a repeated flashback is exempt when a new-information cue appears in its window; a paired dream entry and wake counts as a positive signal, never a fake-out.',
+      'Order of checks: split by scene headers, tag lines, merge flashback segments, then run the four checks, sorted high to mid to low, then scene, then key.',
+      'Scoring: score = clamp(100 - penalty + bonus, 0, 100); no memory, dream, or flashback signal means a full 100 pass; blank or under 20 characters also passes at 100.',
+    ].join('\n');
+  }
+  return [
+    '【记忆诈欺结构 · 前置教学】梦、幻觉、闪回是叙事工具，不是诈骗工具：合法用法情绪浓度极高，滥用它就分不清真假。',
+    '1) 梦醒假反转（dream_fakeout）：梦醒行之前 8 行内没有任何入梦标记（睡着/昏迷/意识模糊/进入梦境），且前 10 行窗口内演了强戏剧事件（死亡/血/刀枪/亲吻/告白/离婚协议/遗嘱等）。第 1 次 mid 扣 12 分，第 2 次起 high，扣分封顶 22 分，最多报 2 条。处理：重大事件发生前先给入梦标记，或让梦醒后承接真实后果。',
+    '2) 幻想无收束（hallucination_unbound）：想象/脑补标记之后同行及 5 行内都没有回神/回到现实收束，且幻想内容含强戏剧动作（同行或后 3 行内）。第 1 次 low 扣 6 分，第 2 次起 mid 扣 16 分，最多报 2 条。处理：补一个回神动作（回过神/摇摇头甩开念头/回到现实），或用字幕音效区分想象与现实。',
+    '3) 闪回堆砌（flashback_overuse）：闪回段（同场行距 ≤1 的标记合并为一段）≥4 处 low 扣 7 分，≥6 处 mid 扣 11 分，全文只报 1 条。处理：每集闪回控制在 3 段以内，每段必须承担新信息或情绪递进。',
+    '4) 重复闪回无新信息（flashback_repeat）：同一记忆事件（车祸/葬礼/大火/离婚等 14 类词根指纹）第 2 次起闪回，窗口内没有新信息词（真相/原来/这才知道/realized…）。每种记忆 mid 扣 10 分，最多报 2 种，扣分封顶 18 分；带指代语（那天/那场）且行距 ≤10 的段落继承前一段词根。处理：第二次闪回必须揭示真相、补入当年缺失细节或换当事人视角。',
+    '正信号：markedDream（入梦+梦醒成对）+2 分/次封顶 4 分；fairRecall（重复闪回带新信息）+2 分/次封顶 4 分；boundedFlash（闪回段有明确回到现实收束，收束行归属前 3 行内最近一段）+1 分/次封顶 3 分。',
+    '豁免：幻想段同行或后 5 行内出现回神收束即豁免；重复闪回窗口内出现新信息词即豁免；入梦+梦醒成对算正信号不判假反转。',
+    '判定顺序：先按场标切场→行级打标→闪回段合并→四类问题依次判定→按 high→mid→low、场次、key 排序。',
+    '评分：score = clamp(100 - 扣分 + 加分, 0, 100)；无任何记忆/梦/闪回信号满分 100 放行；空白或不足 20 字同样满分放行。',
+  ].join('\n');
+}
