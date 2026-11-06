@@ -159,3 +159,52 @@ export function patheticFallacy(draft: string): PatheticFallacyResult {
 
   return { score, narrationLines, hits, issues, advice };
 }
+
+/**
+ * 前置教学：buildPatheticFallacyDirective(_format='LIVE', lang='zh')
+ * -------------------------------------------------------------------
+ * 同源铁律：教学函数与检测器 patheticFallacy 同文件；format 不门控（LIVE/AIGC/缺省一致）。
+ * 目的：撰写师/润色师首轮即拿到"天气替人演情绪"的三类判定与感知豁免口径，
+ *       避免写完被 prePolish fallacyHint 与 craft/deai 复评打回。
+ */
+export function buildPatheticFallacyDirective(_format: string = 'LIVE', lang: string = 'zh'): string {
+  if (lang === 'en') {
+    return [
+      '【Pathetic Fallacy Pre-Writing Briefing (same source as patheticFallacy: the weather performs the emotion for the character; 11 points per hit; floor 25)】',
+      '- Scope: narration lines only; scene headers and "speaker: line" dialogue lines are skipped, and the rest count as narration lines for diagnostics.',
+      '- Order of judgement: the perception exemption comes first, then heaven, then the simile frame, then direct personification; the first match on a line wins, so each line scores at most one hit.',
+      '- A frame: similitude frames (as if / as though / like / seemed to / seemed almost to) followed within 24 characters by an emotion verb are recorded as kind frame.',
+      '- A emotion verbs: weep / cry / mourn / sigh / sob / whisper / roar in anger / mock / laugh at / pity / watch over / grieve / wail.',
+      '- B direct: a weather or inanimate subject and a strong emotion verb on the same line whose starting positions are within 50 characters are recorded as kind direct.',
+      '- B inanimate subjects: the rain / rain / the wind / wind / the thunder / thunder / the sky / the moon / moonlight / the sun / sunlight / the clouds / the waves / the city / the night / the light / the lamp / the snow / the fog.',
+      '- B emotion verbs: wept / was weeping / started to cry / cried / mourned / sighed / sobbed / whispered sadly / mocked / pitied / grieved / wailed / watched him with pity; plain physical collocations are not judged (the wind howled / thunder rolled / the rain kept falling).',
+      '- C heaven: even heaven / the gods / god / the sky above / fate itself followed within 24 characters by wept / cried / mourned / sighed / pitied / could not bear to watch / was on her side / turned against / grieved, recorded as kind heaven.',
+      '- Perception exemption: a line with a perceiving subject (she / he / they / I) plus felt / thought / could hear / could see / imagined / in her eyes / in his ears / to her it sounded is exempt, because a perceiver makes it the character view rather than the narrator setting the tone.',
+      '- Hit fields: line, kind (frame / direct / heaven), subject, emotion, snippet (first 28 characters) and reason are returned so the polisher can locate the overreach.',
+      '- Score: max(25, 100 - hits x 11); empty draft = 100.',
+      '- Rewrite: let weather be an objective prop and plot pressure — a snapped rib of the umbrella, water over the steps, thunder drowning the key line — and give the emotion to human action.',
+      '- Division: scene-padding judges a weather opening that is structural padding and can simply be cut; this engine judges rhetorical overreach where the weather weeps or rages for a person, so cut the personification but keep the pressure.',
+      '- Pipeline consumption: prePolish injects hits into the polisher as fallacyHint; craft initial, craft re-eval and deai rescan consume the same result, which is also returned from the pipeline.',
+      '- Diagnostics: narrationLines is display-only and never charged.',
+      '- Self-check: is a person acting in this line, or is the sky acting? If the sky acts, delete the personification and let the rain be rain.',
+    ].join('\n');
+  }
+  return [
+    '【环境替演·前置教学（检测同源：patheticFallacy 让天气替角色演情绪，每条命中扣 11 分，25 分封底）】',
+    '- 检测范围：只扫叙述行；场头与「说话人：台词」行跳过，其余行计入 narrationLines（仅诊断）。',
+    '- 判定顺序：感知豁免最优先，其次天意代言、拟人框架、直接拟人；一行命中即停，每行最多记一条。',
+    '- A·拟人框架：仿佛/好像/像是/宛如/犹如/恍若/似乎 后 12 字内出现情绪动作（英文 as if / as though / like / seemed to 后 24 字符内出现情绪动词）→ 记 frame。',
+    '- A·情绪动作词表：哭泣/哭了/流泪/落泪/怒吼/咆哮/嘲笑/讥笑/嗤笑/叹息/叹气/呜咽/哀嚎/哀鸣/控诉/怒视/怜悯/同情/悲恸/默哀/不舍/低语/耳语/呢喃/呻吟；英文 weep/cry/mourn/sigh/sob/whisper/roar in anger/mock/laugh at/pity/watch over/grieve/wail。',
+    '- B·直接拟人：天气/无生命主语与强情绪动词同行，起点相距 ≤12 字（英文 ≤50 字符）→ 记 direct。',
+    '- B·无生命主语词表：雨/雨水/大雨/暴雨/细雨/冷雨/风/狂风/寒风/夜风/雷/雷声/天空/天/月亮/月光/太阳/阳光/云/乌云/海浪/江水/河水/灯火/灯光/烛火/城市/夜/夜色/雾气/雪。',
+    '- B·情绪动词词表：哭泣/哭了/流泪/落泪/怒吼/咆哮/嘲笑/讥笑/嗤笑/叹息/叹气/呜咽/哀嚎/哀鸣/控诉/怒视/怜悯地/同情地/悲泣/低语着/耳语着；客观物象搭配不报（风在吼/howled/雷声滚滚/雨越下越大/月光洒下）。',
+    '- C·天意代言：连老天/老天爷/上天/苍天 后 8 字内出现 也? + 看不下去/为她/替她/可怜/同情/哭/怒/叹息/动容/不公平/瞎了眼/落泪/悲鸣 → 记 heaven；英文 even heaven / the gods / fate itself 后 24 字符内出现 wept/pitied/could not bear to watch/was on her side。',
+    '- 感知豁免：句子含感知主体（她/他/它/我/你/人名）+ 觉得/感觉/感到/听着/听起来/看着/看上去/看来/眼里/耳里 → 整行豁免（有感知主体即角色视角，不是叙述者定调）；英文 she felt / he thought / could hear / in her eyes / to her it sounded。',
+    '- 命中字段：line（行号）、kind（frame/direct/heaven）、subject（主语）、emotion（情绪短语）、snippet（前 28 字）、reason 随命中返回，供润色师定位。',
+    '- 得分：score = max(25, 100 - 命中条数 × 11)；空稿 100。',
+    '- 改写方向：天气只做客观物象与情节压力——伞骨被吹折、积水漫过台阶、雷声盖住关键一句；情绪交给人的动作。',
+    '- 与 scene-padding 分界：它管天气开场流水账（结构空转、可以删）；本引擎管修辞越权（天气替人哭/怒/同情），删拟人但保留环境压力。',
+    '- pipeline 消费：prePolish 把命中注入润色师（fallacyHint）；craft 初评、craft 复评、deai 复扫同一结果，并随管线返回值透出。',
+    '- 成稿自查：这一句是人在演还是天在演？天在演就删掉拟人，让雨只是雨。',
+  ].join('\n');
+}
