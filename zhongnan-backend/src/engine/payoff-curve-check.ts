@@ -174,3 +174,43 @@ export function payoffCurveCheck(text: string, lang: PcLang = 'zh'): PayoffCurve
     issues,
   };
 }
+
+/**
+ * v2.392 前置教学函数：与 payoffCurveCheck 同源
+ * 四类形状病的 severity / 触发阈值 / 扣分 100% 对齐引擎源码
+ * 撰写师+润色师首轮注入，让阈值口径前置而不是写完再打回
+ */
+export function buildPayoffCurveDirective(_format: 'LIVE' | 'AIGC' = 'LIVE', lang: PcLang = 'zh'): string {
+  if (lang === 'en') {
+    return [
+      '[Pre-writing rule · payoff buildup curve (sibling to payoffCurveCheck)]',
+      'Short-drama law of position and shape — pent-up buildup in the first third, concentrated release in the last third. Four shape diseases; severity, trigger and penalty all mirror the detector:',
+      '',
+      'front_loaded_burst | high | head payoff density > tail × 1.5 and gap > 0.5 → -20 points',
+      'tail_no_payoff | high | tail buildup density > 0.3 and tail payoff = 0 → -22 points',
+      'tail_suppression_pileup | mid | tail buildup > 0.5 and tail buildup > head × 1.5 and tail payoff < head payoff → -15 points',
+      'flat_curve | low | total signal > 1.0 and |curve slope| < 0.4 with no other issue → -10 points',
+      '',
+      'Three segments: head 0-0.4 (buildup zone) / middle 0.4-0.6 (transition) / tail 0.6-1.0 (payoff zone)',
+      'Curve slope = (tail payoff - head payoff) + (head buildup - tail buildup); more positive is healthier',
+      'Exemption: skip when text < 20 chars; a clean script scores 100',
+      'Score formula: score = clamp(100 - penalty, 0, 100)',
+      'Shape mantra: build low early, explode late — press the spring all the way down before releasing.',
+    ].join('\n');
+  }
+  return [
+    '【前置教学·爽点蓄力曲线（PayoffCurveCheck 同源·v2.392）】',
+    '短剧铁律的位置形状：前 1/3 压抑蓄力（憋），后 1/3 集中释放（爆）。四类形状病——severity / 触发阈值 / 扣分与引擎 100% 对齐：',
+    '',
+    'front_loaded_burst | high | 前段爽点密度 > 后段 × 1.5 且 差值 > 0.5 → 扣 20 分',
+    'tail_no_payoff | high | 后段蓄力密度 > 0.3 且 后段爽点 = 0 → 扣 22 分',
+    'tail_suppression_pileup | mid | 后段蓄力 > 0.5 且 后段蓄力 > 前段 × 1.5 且 后段爽点 < 前段爽点 → 扣 15 分',
+    'flat_curve | low | 总信号 > 1.0 且 |落差斜率| < 0.4 且无其他问题 → 扣 10 分',
+    '',
+    '三段切分：前段 0-0.4（蓄力区）/ 中段 0.4-0.6（过渡）/ 后段 0.6-1.0（爆发区）',
+    '落差斜率 = (后段爽点 - 前段爽点) + (前段蓄力 - 后段蓄力)，越正越健康',
+    '豁免：正文 < 20 字不评；零问题满分 100',
+    '评分公式：score = clamp(100 - penalty, 0, 100)',
+    '形状口诀：前憋后爆，弹簧按到最底再松手——开头先让主角吃亏受辱，把打脸/身份揭晓/碾压留到尾段集中爆发',
+  ].join('\n');
+}
