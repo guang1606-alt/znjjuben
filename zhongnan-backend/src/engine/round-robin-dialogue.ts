@@ -142,3 +142,48 @@ export function roundRobinDialogue(draft: string): RoundRobinResult {
 
   return { score, sceneCount: scenes.length, hits, issues, advice };
 }
+
+/**
+ * 前置教学：buildRoundRobinDialogueDirective(_format='LIVE', lang='zh')
+ * --------------------------------------------------------------------
+ * 同源铁律：教学函数与检测器 roundRobinDialogue 同文件；format 不门控（LIVE/AIGC/缺省一致）。
+ * 目的：撰写师/润色师首轮即拿到"单场人头轮转读稿"的检测口径，
+ *       避免写完被 prePolish roundRobinHint 与 craft/deai 复评打回。
+ */
+export function buildRoundRobinDialogueDirective(_format: string = 'LIVE', lang: string = 'zh'): string {
+  if (lang === 'en') {
+    return [
+      '【Round-Robin Dialogue Pre-Writing Briefing (same source as roundRobinDialogue: ensemble lines rotate by roster; 14 points per hit; floor 20)】',
+      '- Scene split: split by scene headers; the opening block is labeled "(opening)"; each scene is judged independently and hits are counted per scene.',
+      '- Trigger: a scene needs at least 5 turns and 3 speakers, plus a strict rotation prefix of at least 4 turns; all three must hold.',
+      '- Rotation: adjacent turns have different speakers; after a full cycle of 3+ speakers the roster may repeat; repeating a third speaker before the cycle completes breaks it.',
+      '- Even lengths: the rotation segment must span 8 characters or fewer in Chinese (4 words or fewer in English); wider variance already reads human.',
+      '- Cross-talk exemption: any line in the scene with an interruption marker (cuts in / interrupts / talks over / chimes in / in unison / a dash or ellipsis tail) means a living room, so the scene is not judged; zero cross-talk is the symptom.',
+      '- Evidence fields: sceneHeader, turnCount, minLen / maxLen and the first 5 evidence lines are returned with every hit so the polisher can locate the scene.',
+      '- Score: max(20, 100 - hits x 14); empty draft = 100.',
+      '- Diagnostics: sceneCount is display-only and never charged.',
+      '- Rewrite: give the strongest voice more room, let the weak get cut off or stopped mid-line, and stretch the line lengths so the room has hierarchy.',
+      '- Division: dialogue-length-score covers episode-wide rhythm; this engine only judges roster rotation inside one scene.',
+      '- Division: character-balance covers screen share; this engine only judges the read-through feel.',
+      '- Pipeline consumption: prePolish lists every hit into the polisher hint (roundRobinHint); craft initial, craft re-eval and deai rescan the same result.',
+      '- Self-check: does this scene read like a board meeting? Who dominates, who gets cut off, who says only three words? If none of the three exists, it is a read-through.',
+    ].join('\n');
+  }
+  return [
+    '【会议体轮转对白·前置教学（检测同源：roundRobinDialogue 群戏按人头轮转读稿，每条命中扣 14 分，20 分封底）】',
+    '- 场景切分：按场头切场（isSceneHeaderLine 同源），开场段记作「(开场)」；每场独立判定，命中按场计。',
+    '- 触发门槛：单场台词 ≥5 句、≥3 个说话人，且最长严格轮转前缀 ≥4 句，三者同时满足才判。',
+    '- 短场跳过：单场台词 <5 句或说话人 <3 个直接不判；空稿 100。',
+    '- 轮转定义：相邻不重复——相邻两句说话人不同；一轮说满（≥3 人各说一次）后回头可以续；一轮未满就重复第三人，算破。',
+    '- 句长整齐：轮转段内句长极差 ≤8 字（英文 ≤4 词）才判——长短拉得开就不像读稿。',
+    '- 抢话豁免：整场任意一行出现抢话/打断/叠说标记（打断/插话/抢着/插嘴/没等…说完/叠声/齐声/异口同声/破折号/省略号收尾）→ 不判；零抢话才是病象。',
+    '- 证据字段：sceneHeader（场头）、turnCount（轮转句数）、minLen/maxLen（句长极差）、evidence（前 5 句样本）随命中返回，供润色师定位。',
+    '- 得分：score = max(20, 100 - 命中场数 × 14)；空稿 100。',
+    '- 诊断字段：sceneCount（总场数）只做展示，不参与扣分。',
+    '- 改写方向：给最强势的人压场加戏，让弱势者被打断、被抢话或只说半句被堵回去，句长刻意拉开——群戏才有主次。',
+    '- 与 dialogue-length-score 分界：它管全片长短节奏；本引擎只判单场多人轮转结构。',
+    '- 与 character-balance 分界：它管全片戏份占比；本引擎只判群戏的读稿感。',
+    '- pipeline 消费：prePolish 把命中逐场注入润色师（roundRobinHint）；craft 初评、craft 复评、deai 复扫同一结果。',
+    '- 成稿自查：这场像圆桌会议吗？谁最强势、谁被打断、谁只说三个字？三个都没有，就是读稿。',
+  ].join('\n');
+}
