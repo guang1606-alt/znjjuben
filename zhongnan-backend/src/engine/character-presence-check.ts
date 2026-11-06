@@ -526,3 +526,73 @@ export function characterPresenceCheck(text: string, lang: CpLang = 'zh'): Chara
     issues: finalIssues,
   };
 }
+
+/**
+ * v2.395 角色在场感前置教学（与 characterPresenceCheck 检测口径 100% 同源）
+ * 全制式生效（真人稿同样会穿帮），format 不设门控，仅保留签名。
+ * 三类在场穿帮 + 归属顺序 + 生还/回归豁免 + 评分口径，详见正文。
+ */
+export function buildCharacterPresenceDirective(_format: string = 'LIVE', lang: CpLang = 'zh'): string {
+  if (lang === 'en') {
+    return [
+      '[Character presence guardrail — same source as character-presence-check (three continuity breaks)]',
+      'Goal: someone who left cannot keep talking, someone written dead cannot speak in the next beat, and a hung-up call cannot continue as if still connected. This check only asks whether presence is accounted for: line-level, no cast needed, no genre gate.',
+      '',
+      'Division of labor: continuity-supervision owns physical state (wounds, restraints, phones, props); character-logic owns emotional jumps and character consistency; location-continuity owns legal spatial movement; this engine judges presence only.',
+      '',
+      'Three hard limits (thresholds mirror the checker):',
+      '1) ghost_speech (mid on the first hit, high from the second): a character makes a hard exit in the same scene and speaks again with no re-entry beat. 12 points for the first hit, 10 points for each additional hit, capped at 22. Counted once per character per scene.',
+      '   - Hard exits only: stormed out, slammed the door, walked out, ran out, rushed out, headed for the door, drove off, left the room. A cancellable line like "I should go" does not count.',
+      '   - Negation does not count: did not leave, stayed behind, remained in the room, could not leave.',
+      '   - Attribution: a full name in the action line wins; otherwise fall back to the nearest speaker within the last 2 lines.',
+      '2) dead_alive (high): a character is written dead in an action line, then speaks again without any rescue, survival or fake-death beat; same scene and cross-scene are judged alike. 18 points per death, capped at 24. One hit per dead character.',
+      '   - Death words must be explicit: died, was dead, flatlined, stopped breathing, no pulse, pronounced dead, killed instantly. A bare metaphor does not count.',
+      '   - Negation does not count: played dead, faked death, half-dead, near-death, left for dead, scared to death.',
+      '   - Attribution order: nearest name within 6 chars before the death word, then a name within 8 chars before or 4 chars after a lethal action in the same clause, then the earliest name before the first death word, then the nearest speaker within 2 lines; an unknown named subject blocks the speaker fallback; a death announced in dialogue is not attributed, so the doctor is not flagged.',
+      '   - Survival exemption: if a rescue or survival beat appears after the death line and before the next line by that character (was saved, pulled through, woke up, survived, still alive, heartbeat returned), the death is closed and not flagged.',
+      '3) phantom_call (low on the first hit, mid from the second): after a hangup, within the next 3 lines at least 2 different characters keep talking and at least 1 line has phone-talk wording, with no re-dial in the window. 7 points for one hit, 13 points for two or more, capped at 13.',
+      '   - Call context: on the phone, called, picked up, incoming call, video call, phone rang, got through. A hangup without that context does not count.',
+      '   - Hangup: hung up, ended the call, line went dead, dial tone, busy signal, put the phone down. Negation (did not hang up, refused to hang up) does not count.',
+      '   - Re-dial: called back, rang again, called again, reconnected, phone rang again; any of these in the window clears the issue.',
+      '   - Phone-talk wording: can you hear me, are you there, you listening, on the line, hello, bad signal.',
+      '',
+      'Positive signal: an explicit re-entry action after the exit (came back, returned, stepped back in, burst back in, reappeared, turned back) gives +2 per pair, capped at +4, and clears every open exit in the scene.',
+      '',
+      'Calibration:',
+      '- Final score = clamp(round(100 - penalty + bonus), 0, 100).',
+      '- Exemption: text < 20 chars scores a full 100; no dialogue, no exit, no death or no call signal also scores a full 100; ghost exits are judged within the same scene only, because a new scene header re-stages everyone by default.',
+      '- At most 2 evidence items are pushed per type, but the penalty uses the real hit counts.',
+      '- Self-check: after every hard exit either cut the lines or add a re-entry action; before a dead character appears again add a rescue or fake-death beat; after every hangup add a re-dial or move the exchange face to face.',
+    ].join('\n');
+  }
+  return [
+    '【角色在场感前置教学（检测同源：character-presence-check 三类穿帮）】',
+    '目标：走了的人不能还在说话，死了的人不能当场复活，电话挂了不能继续隔空对答。本引擎只管"人是否还在现场"的交代是否存在，行级触发、不需要 cast、无题材门控。',
+    '',
+    '分工：continuity-supervision 管伤势/束缚/手机/道具等物理状态；character-logic 管情绪跳变/人设；location-continuity 管空间位移合法性；本引擎只判在场状态。',
+    '',
+    '三类硬线（与检测阈值同源）：',
+    '1) ghost_speech 离场幽灵（首次 mid，第 2 次起 high）：同场内角色显式强离场后，没有任何回归动作却又开口。首次扣 12 分，其后每条扣 10 分，封顶 22 分；每场每角色只算 1 次（命中即消费）。',
+    '   - 强离场只收高区分度动作：摔门而去/夺门而出/拂袖而去/转身就走/起身离开/冲出去/跑出去/推门而出/大步离开/驱车离开/离开房间；"我走了"这类可反悔台词不算。',
+    '   - 否定词不算离场：没走/别走/不要走/留下来/并未离开/舍不得走。',
+    '   - 归属：动作行含角色全名即归该角色；否则回退最近 2 行内的说话人。',
+    '2) dead_alive 亡者复活（high）：角色被动作行明确写死，其后没有抢救/生还/假死交代却再次开口；同场与跨场同判。每条扣 18 分，封顶 24 分；每个死者只报 1 条。',
+    '   - 死亡词只收确定性强的动作：咽气/断气/气绝/停止呼吸/心跳停止/当场身亡/不治身亡/确认死亡/已经死了/中弹身亡；裸"死了"不收。',
+    '   - 否定词不算死亡：假死/装死/诈死/垂死/濒死/死里逃生/昏死。',
+    '   - 归属顺序：死亡词前 6 字符内紧邻名字 → 致死动作（中弹/中刀/坠楼/溺水/中毒/被车撞）前 8 字符或后 4 字符内同小句名字 → 第一个死亡词之前最早出现的名字 → 最近 2 行说话人；行内已有未知姓名主语时不许回退说话人；台词宣告死亡不归属（防归到医生）。',
+    '   - 生还豁免：死亡行之后、再次开口之前出现抢救过来/救回来了/苏醒/醒过来/奇迹生还/还活着/竟然没死/心跳恢复，即视为合法生还，不再追究。',
+    '3) phantom_call 断线幽灵（首次 low，第 2 次起 mid）：通话已挂断，挂断后 3 行窗口内仍有 ≥2 个不同角色对答且至少 1 条含通话特征词，窗口内又没有重新拨通。1 处扣 7 分，≥2 处扣 13 分（封顶 13 分）。',
+    '   - 通话语境：打电话/拨通/接起电话/来电/视频通话/手机响/接通；没有语境的"挂了"不算。',
+    '   - 挂断：挂断/挂了电话/通话结束/忙音/嘟嘟/手机离开耳边；否定"没挂/不肯挂/舍不得挂"不算。',
+    '   - 重拨：重新打来/又打来/回拨/再次拨通/手机再次响起，窗口内出现即豁免。',
+    '   - 通话特征词：电话/手机/那头/听到吗/你在听吗/还在吗/喂/信号不好。',
+    '',
+    '正信号：离场后给出明确回归动作（去而复返/再次出现/又回来/走进来/推门而入/折回来），每对 +2 分，封顶 +4 分，并清除本场全部未闭合离场。',
+    '',
+    '口径：',
+    '- 最终分 = clamp(round(100 - penalty + bonus), 0, 100)。',
+    '- 豁免：正文 < 20 字直接满分 100；无台词/无离场/无死亡/无通话信号即满分放行；离场幽灵只在同场追究，跨场默认由场头重新调度。',
+    '- 证据每类最多推 2 条，但扣分按实际发生次数计算。',
+    '- 成稿自查：每个强离场后要么删台词，要么补回归动作；每个死者再次出场前必须补抢救生还或假死反转；每次挂断后要么补重拨，要么改成面对面戏。',
+  ].join('\n');
+}
