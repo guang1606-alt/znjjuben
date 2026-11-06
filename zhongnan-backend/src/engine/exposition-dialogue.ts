@@ -132,3 +132,51 @@ export function expositionDialogue(draft: string): ExpositionDialogueResult {
 
   return { score, hits, dialogueLines, dumpRate, issues, advice };
 }
+
+/**
+ * 前置教学：buildExpositionDialogueDirective(_format='LIVE', lang='zh')
+ * ---------------------------------------------------------------------
+ * 同源铁律：教学函数与检测器 expositionDialogue 同文件；format 不门控（LIVE/AIGC/缺省一致）。
+ * 目的：撰写师/润色师首轮即拿到"框架词 + 成段事实载荷"的检测口径，
+ *       避免写完被 prePolish expoHint 与 craft/deai 复评打回。
+ */
+export function buildExpositionDialogueDirective(_format: string = 'LIVE', lang: string = 'zh'): string {
+  if (lang === 'en') {
+    return [
+      '【Exposition Lecture Pre-Writing Briefing (same source as expositionDialogue: frame + payload; 12 points per hit, floor 15)】',
+      '- Scan scope: only "speaker: line" lines (speaker 1-12 chars, optional parenthetical action, full-width or half-width colon); scene headers and action lines without a colon are ignored. dumpRate = hits / dialogue lines.',
+      '- Type 1 shared_memory: history both characters lived through is lectured back to the one who lived it - the info is really for the audience.',
+      '  Frames: do you remember / you remember / you have forgotten / back in the day / back when / years ago / ten years ago / twenty years ago / thirty years ago / when we were kids / do not forget / how could you forget / we have been married for X years / we have been together for X years / I was the one who / if it was not for me.',
+      '  Trigger: 16+ words after stripping punctuation; or a hard fact (a number, X years / X million / X days) with 10+ words.',
+      '- Type 2 rule_dump: a character recites the world rules like a manual.',
+      '  Frames: per policy / according to the rules / contract / law / handbook / terms / house rules / family rules / under section / the rules say / company policy states.',
+      '  Trigger: 12+ words after stripping punctuation.',
+      '- Length rule: English counts space-separated words (punctuation does not count); thresholds are 16 words for shared memory, 10 words with a hard fact, 12 words for rule_dump.',
+      '- Each dialogue line is counted once by its first matching type; both frames in one line do not double-charge.',
+      '- Score: max(15, 100 - hits x 12); empty draft = 100.',
+      '- Rewrite 1 (shared_memory): leak one fact at a time inside a present-tense fight, threat or trade; let the other side push back or raise the price instead of retelling what both already know.',
+      '- Rewrite 2 (rule_dump): make the rule visible by having someone break it, exploit it or pay for it (the ticket, the torn contract, the guard blocking the door); never recite the clauses.',
+      '- Division of labor: dialogue-water repeat only flags short filler ("you said / I told you"); this engine flags frame + a full payload - the information is real, the delivery is wrong.',
+      '- Pipeline consumption: prePolish lists every hit into the polisher hint (expoHint); craft initial, craft re-eval and deai rescan the same result.',
+      '- Self-check: did the other character already know this? Delete "do you remember" and "per policy" - can the remaining fact fit inside one argument?',
+    ].join('\n');
+  }
+  return [
+    '【保姆式对白·前置教学（检测同源：expositionDialogue 框架词 + 成段事实载荷，每条命中扣 12 分，15 分封底）】',
+    '- 检测范围：只扫「说话人：台词」行（说话人 1-12 字，可带（括号）动作提示，全角/半角冒号均可）；场头与无冒号的动作行不参与；dumpRate = 命中条数 ÷ 台词行数。',
+    '- 类型一 共知旧事 shared_memory：两个都在场、都记得的事被长篇讲给对方听，信息实际倒给观众。',
+    '  框架词：你还记得/你记不记得/你忘了/想当年/当年/那年/十年前/二十年前/三十年前/多年前/小时候/别忘了/不要忘了/难道你忘了/我们结婚 X 年/我们在一起 X 年/当初是我/当年要不是。',
+    '  触发阈值：去标点后长度 ≥18 字；或含硬事实（数字、X年/X岁/X万/X天）且长度 ≥12 字。',
+    '- 类型二 规矩宣讲 rule_dump：人物像念说明书一样交代世界观规则。',
+    '  框架词：根据…规定/规矩/律法/法律/合同/协议/家规/祖训/制度/条例/章程；按照…规定/规矩/律法/合同/协议/家规/祖训；依据…规定/律法/合同；咱们这行的规矩/行规是/按规矩。',
+    '  触发阈值：去标点后长度 ≥15 字。',
+    '- 长度口径：中文按去标点后的字符数计（逗号句号引号括号空白都不算）；英文按空格分词后的词数计，阈值分别为 16 / 10 / 12。',
+    '- 一条台词只按首个命中的类型记一次；两种框架同时出现不重复扣。',
+    '- 得分：score = max(15, 100 - 命中条数 × 12)；空稿 100。',
+    '- 改写方向一（共知旧事）：只在当下争吵/要挟/交易里漏一句，一次一个事实，让对方反驳或加价；不复述双方都记得的完整经过。',
+    '- 改写方向二（规矩宣讲）：让人物在违反、利用或承受规则时把规则演出来（罚单、合同被撕、保安拦人），不念条款。',
+    '- 与 dialogue-water 分界：dialogue-water 的 repeat 类只抓「你说过/我告诉过你」这类短句水分；本引擎抓框架词 + 成段事实载荷——信息是真信息，错在交付方式。',
+    '- pipeline 消费：prePolish 把命中逐条注入润色师（expoHint）；craft 初评、craft 复评、deai 复扫同一结果。',
+    '- 成稿自查：这段背景，对方本来就知道吗？删掉「你还记得」和「根据规定」这两类开头，剩下的信息能不能放进一次争执？',
+  ].join('\n');
+}
