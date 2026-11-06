@@ -137,3 +137,44 @@ export function vagueWord(draft: string): VagueWordResult {
 
   return { score, hits, counts, totalCount, narrationSentences: sentences.length, densityPer100, issues, advice };
 }
+
+/**
+ * 前置教学：buildVagueWordDirective(_format='LIVE', lang='zh')
+ * ----------------------------------------------------------------
+ * 同源铁律：教学函数与检测器 vagueWord 同文件；签名统一 format 不门控（LIVE/AIGC/缺省一致）。
+ * 目的：撰写师/润色师首轮即拿到"叙述要具体落判、敢下实体所指"的检测口径，避免写完被
+ *       prePolish / craft / deai 三段消费链打低分后才知道要改什么。
+ * zh 层带完整三类信号词表 + 密度扣分公式 + 自查；en 层零中文。
+ */
+export function buildVagueWordDirective(_format: string = 'LIVE', lang: string = 'zh'): string {
+  if (lang === 'en') {
+    return [
+      '【Vague Word Pre-Writing Briefing (same source as vagueWord: three types + density score formula + narration-only scope)】',
+      '- Scan scope: narration lines only (skip dialogue lines with "speaker name + colon" pattern and scene headers).',
+      '- Three vague-word types — each hit adds to densityPer100:',
+      '  hedge (9 zh / 8 en): hedging, noncommittal attitude, e.g. "seemed, appeared, as if, somehow".',
+      '  filler (5 zh / 5 en): empty noun blanks with no concrete referent, e.g. "something, thing, stuff".',
+      '  measure (10 zh / 9 en): vague quantity / sense-of, e.g. "a sense of, some kind of, an air of".',
+      '- Density formula: densityPer100 = round(totalCount / sentenceCount x 1000) / 10 (vague-word hits per 100 narration sentences).',
+      '- Score formula: score = max(0, round(100 - max(0, densityPer100 - 8) x 3.125)) — density ≤ 8.0 = full 100; density > 8 starts deducting; density 40 caps at 0.',
+      '- Empty script = 100; all three types weighted equally, no severity split.',
+      '- Rewrite direction: cut hedge/filler/measure; commit to concrete entity/sensation/action in narration.',
+      '- Pipeline consumption: prePolish triggers rewrite hint when score < 85; craft/deai dimensions consume score as quality input.',
+      '- Self-check: narration lines — is every noun/quantity a concrete thing/number? are there any "seemed/something/a sense of" left unchecked?',
+    ].join('\n');
+  }
+  return [
+    '【模糊词·空心词前置教学（检测同源：vagueWord 三类信号词 + 密度扣分公式 + 只扫叙述行）】',
+    '- 检测范围：只扫叙述行（跳过对白行「1-12 字姓名 + 冒号 + 台词」和场头）。口语里的「好像/那个东西」是自然的，只罚叙述体里的对冲与空心。',
+    '- 三类模糊词 —— 每命中一个 +1 到密度：',
+    '  hedge 对冲语态（zh 9 / en 8）：不敢下肯定判断，如「似乎/仿佛/好像/显得/看起来/seemed/as if/somehow」。',
+    '  filler 空心名词（zh 5 / en 5）：无具体所指的占位词，如「东西/事情/玩意儿/something/thing」。',
+    '  measure 模糊量词（zh 10 / en 9）：虚指感受不可量化，如「某种/一股/说不出的/a sense of/some kind of」。',
+    '- 密度公式：densityPer100 = round(总命中数 / 叙述句数 × 1000) / 10（每 100 句叙述里的模糊词数）。',
+    '- 得分公式：score = max(0, round(100 - max(0, densityPer100 - 8) × 3.125)) —— 密度 ≤ 8.0 满分 100；密度 > 8 开始扣分；密度 40 封顶 0。',
+    '- 空稿满分 100；三类同等权重，不分级。',
+    '- 改写方向：删掉对冲/空心/模糊指代，叙述里敢下具体判断和实体；"似乎有什么东西" → "门后传来指甲刮木头的声音"；"一种感觉" → 具体生理反应或动作。',
+    '- pipeline 消费：prePolish 在 score < 85 时触发定向改写提示；craft/deai 维度把 score 作为质量输入。',
+    '- 成稿自查：叙述行里每一个名词和量词 —— 是不是具体到某个东西/某个数？有没有任何「似乎/something/a sense of」逃过检查？',
+  ].join('\n');
+}
