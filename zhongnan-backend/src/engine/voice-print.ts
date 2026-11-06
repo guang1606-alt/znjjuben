@@ -268,3 +268,83 @@ export function voicePrint(cast: CastMap, text: string, lang: VoicePrintLang = '
 
   return { prints, similarPairs, homogeneousAll, score, issues };
 }
+
+/**
+ * v2.397 对白指纹前置教学（与 voicePrint 检测口径 100% 同源）
+ * 全制式生效，format 不设门控，仅保留签名。
+ * 只教角色之间的声音同质化；人设崩塌归 character-logic，书面腔归 dialogue。
+ */
+export function buildVoicePrintDirective(_format: string = 'LIVE', lang: 'zh' | 'en' = 'zh'): string {
+  if (lang === 'en') {
+    return [
+      '[Voice-print guardrail — same source as voicePrint (cross-character homogeneity)]',
+      'Input: cast card + episode script. This check only compares whether characters sound the same; it does not check single-character persona collapse (that is voice_break in character-logic) and does not check written-language style itself (that is the dialogue engine).',
+      '',
+      'Sample gate:',
+      '- Participants = characters declared in the cast card plus any character with 2 dialogue lines or more in this episode. A character with fewer than 2 dialogue lines gets voice_thin_sample (low, 1 point) and is excluded from pairwise comparison.',
+      '- Dialogue extraction reuses character-logic.parseDialogue: 2-6 character name at line start + optional parenthesized emotion + colon; action lines (triangle marker) and scene headers are not dialogue.',
+      '',
+      'Seven-dimension fingerprint per character:',
+      '1) avgLen: arithmetic mean of line length (characters, punctuation included), rounded.',
+      '2) shortRatio: share of lines with 8 chars or fewer; longRatio: share of lines with 30 chars or more.',
+      '3) questionRatio: share of lines containing a question mark; exclamRatio: share of lines containing an exclamation mark.',
+      '4) particles: 26 high-frequency Chinese particles (ah, ne, ba, bei, ma, ya, o, ha, hei, ei, en, la, lou, wa, ai, heng, pei, ke, shh, yo, lei, di, mie, ga, nie, re) counted per line.',
+      '5) writtenHits: cumulative hits of 29 written markers (however, therefore, besides, meanwhile, in other words, undoubtedly, as we all know, in short, in summary, hence, as if, like, cannot help, slowly, eyes, gaze, abruptly, in an instant, deep inside, surging, obvious, not only, moreover, the reason is, due to, clearly) across all lines.',
+      '',
+      'Pairwise similarity (0-100, higher means more alike):',
+      'sim = length score x 25% + mean of four sentence-pattern scores x 40% + particle score x 25% + written-marker score x 10%',
+      '- length score = max(0, 100 - average-length gap x 4): every 1-character gap costs 4 points.',
+      '- short / long / question / exclamation pattern scores = max(0, 100 - ratio gap x 150).',
+      '- particle score = round(Jaccard of the two particle sets x 100); if both characters use no particles, record 100, because sharing the no-particle habit is itself sameness.',
+      '- written-marker score = max(0, 100 - writtenHits gap x 10).',
+      '',
+      'Levels and deductions (identical to the checker):',
+      '- similarity above 85: high, voice_homogeneous_pair, 15 points deducted per pair.',
+      '- similarity above 70 and at most 85: mid, 5 points deducted per pair.',
+      '- 3 or more characters each pairing above 85: one extra voice_homogeneous_all high, another 15 points deducted. This is the number one short-drama complaint.',
+      '- fewer than 2 dialogue lines: low, 1 point per character.',
+      '- total = max(0, min(100, 100 - high x 15 - mid x 5 - low x 1)); any high triggers a rewrite.',
+      '',
+      'Self-check before writing:',
+      '- Pull every main pair apart on at least two axes: length (one short and clipped, one long and flowing), pattern (one question-heavy, one exclamatory or declarative), particles (one always uses a signature particle, one barely uses any), written markers (one keeps zero, one keeps 1-2).',
+      '- Ask of each line: would it feel wrong if another character said it? It only counts as a distinct voice when the answer is yes.',
+      '- Give every speaking character at least 2 dialogue lines so the fingerprint is judgeable.',
+      '- Keep the difference in speaking habit stable across scenes, not a one-off catchphrase swap.',
+    ].join('\n');
+  }
+  return [
+    '【对白指纹前置教学（检测同源：voicePrint 角色间声音同质化）】',
+    '输入：人物卡 cast + 本集正文；只比对角色之间"声音是否一个味儿"，不查单角色人设崩塌（那是 character-logic 的 voice_break），也不查书面腔本身（那是 dialogue 引擎）。',
+    '',
+    '样本门槛：',
+    '- 参与角色 = 人物卡声明过的角色 ∪ 本集台词 ≥ 2 句 的角色；同一角色台词 < 2 句 只记 voice_thin_sample（low，扣 1 分），不参与两两比对。',
+    '- 台词提取沿用 character-logic.parseDialogue：行首 2-6 字符姓名 + 可选「（情绪）」+ 冒号；△ 与场头不计。',
+    '',
+    '七维指纹（逐角色）：',
+    '1) 平均句长 avgLen：台词字数（含标点）的算术平均后四舍五入。',
+    '2) 短句占比 shortRatio：单句长度 ≤ 8 字 的占比；长句占比 longRatio：≥ 30 字 的占比。',
+    '3) 疑问句占比 questionRatio：含「？」或「?」的台词占比；感叹句占比 exclamRatio：含「！」或「!」的占比。',
+    '4) 语气词集合 particles：中文从 26 个高频语气词（啊/呢/吧/呗/嘛/呀/哦/哈/嘿/诶/嗯/啦/喽/哇/哎/哼/呸/咳/嘘/哟/嘞/滴/咩/嘎/捏/惹）逐字计数。',
+    '5) 书面词命中 writtenHits：逐句累计命中（然而/因此/此外/与此同时/换言之/毋庸置疑/众所周知/总而言之/综上所述/故而/仿佛/宛如/不禁/缓缓/眸子/眼眸/蓦地/霎时/内心深处/心潮澎湃/显而易见/不仅/而且/之所以/由于/显然）的次数。',
+    '',
+    '两两相似度（0-100，越高越像）：',
+    'sim = 句长分×25% + 四个句式分均值×40% + 语气词分×25% + 书面词分×10%',
+    '- 句长分 = max(0, 100 - 平均句长差 × 4)（每差 1 字扣 4 分）。',
+    '- 短句/长句/疑问/感叹四个句式分 = max(0, 100 - 占比差 × 150)。',
+    '- 语气词分 = round(两角色语气词集合的 Jaccard × 100)；双方都没有语气词时记 100——"都不用"也是同一种习惯。',
+    '- 书面词分 = max(0, 100 - 书面词命中差 × 10)。',
+    '',
+    '等级与扣分（与检测完全一致）：',
+    '- 相似度 > 85 → voice_homogeneous_pair，high，每个角色对扣 15 分。',
+    '- 相似度 > 70 且 ≤ 85 → mid，每个角色对扣 5 分。',
+    '- 3 个及以上角色两两 > 85 → 追加 voice_homogeneous_all 整体同质化 high，再扣 15 分——这是短剧第一差评点。',
+    '- 台词不足 2 句 → voice_thin_sample，low，每角色扣 1 分。',
+    '- 总分 = max(0, min(100, 100 - high×15 - mid×5 - low×1))；任一 high 触发重写。',
+    '',
+    '成稿自查（写前就把声音拉开）：',
+    '- 主要角色两两至少拉开两项：句长（一个 ≤ 8 字 短促、一个 ≥ 30 字 绵长）、句式（一个多疑问、一个多感叹/陈述）、语气词（一个固定爱用某词、一个几乎不用）、书面词（一人零书面词、一人最多留 1-2 处）。',
+    '- 每句台词先问"这句话换另一个角色说会不会违和"；会违和，声音才立住了。',
+    '- 每个说话角色至少给 2 句台词，避免指纹无法判定。',
+    '- 差异必须来自说话习惯并跨场稳定，不是临时改口头禅。',
+  ].join('\n');
+}
