@@ -258,3 +258,32 @@ export function causalLogicCheck(text: string, lang: ClLang): CausalLogicResult 
     issues,
   };
 }
+
+/**
+ * v2.389 因果逻辑链前置教学（与上方 causalLogicCheck 检测口径 100% 同源）
+ * 撰写师/润色师首轮即知道六类阈值与正信号写法，而不是写完才被打回。
+ */
+export function buildCausalLogicDirective(_format: string = 'LIVE', lang: ClLang = 'zh'): string {
+  if (lang === 'en') {
+    return [
+      '[Causal Logic · Pre-Briefing] Short drama can be exaggerated, but the logic cannot take a vacation. The number one reason viewers drop a script: the plot is driven by coincidence rather than character choice.',
+      '1) Coincidence overload (coincidence_overload): 3 or more coincidences ("coincidentally / just in time / conveniently") — severity high. -12 per extra beyond 2. At least one coincidence must be converted to the protagonist\'s deliberate action or sacrifice.',
+      '2) Coincidence resolution (coincidence_resolution): a coincidence lands in the tail (≥60% of the script) and payoff signals = 0 or causation ≤ 2 — severity high, +20 points. Give the protagonist a hard choice before the climax; the ending must be earned through action, not luck.',
+      '3) Deus ex machina (deus_ex_machina): rescue party / reinforcements / savior / cavalry appearing ≥1 time — severity high, +25 points. Any rescue force must be set up earlier (a prior call, a favor owed, a planted scheme) or the audience feels cheated.',
+      '4) Thin causation (thin_causation): sudden + sequence signals ≥ 4 AND causation ratio < 0.25 — severity mid, +15 points. A healthy script reaches at least 0.4 causal ratio. Add "because / in order to / therefore" motivations before key turns.',
+      '5) Unresolved oath (unresolved_oath): ≥ 2 oaths ("I swear / you\'ll pay / I will have my revenge") AND payoff = 0 — severity mid, +10 points. Let at least one oath drive a concrete action this episode (even a failed one) or declarations become noise.',
+      '6) Unsourced knowledge (unsourced_knowledge): ≥ 2 places where a character says "I already knew / I found out" AND causation < 2 — severity mid, +10 points. Add a discovery scene (investigation / informant / eavesdropping) or convert to on-the-spot deduction.',
+      'Order of checks: coincidence overload (high) → coincidence resolution (high) → deus ex machina (high) → thin causation (mid) → unresolved oath (mid) → unsourced knowledge (mid). Scoring: score = clamp(100 - penalty, 0, 100). Zero issues → full 100 pass.',
+    ].join('\n');
+  }
+  return [
+    '【因果逻辑链 · 前置教学】短剧可以夸张，但逻辑不能放假。观众弃剧头号原因：剧情靠"恰好/碰巧/幸好"推进，而不是人物选择。',
+    '1) 巧合过载（coincidence_overload）：正文出现 ≥3 处巧合信号（恰好/碰巧/幸好/方便）——severity high，超出 2 处每多一处扣 12 分。至少把其中一处巧合改为主角主动布局或付出代价换来的结果。',
+    '2) 巧合解决（coincidence_resolution）：一处巧合落在尾段（≥ 60% 位置）且 payoff = 0 或 causation ≤ 2——severity high，额外 +20 分。让主角在结尾前做一个艰难选择，用行动而非运气赢得结局。',
+    '3) 机械降神（deus_ex_machina）：救兵/贵人/援兵凭空出现 ≥ 1 处——severity high，+25 分。任何救援力量必须在前文提前铺垫（一通电话、一个人情、一笔布局），否则观众觉得作者作弊。',
+    '4) 因果稀薄（thin_causation）：sudden+seq（突然/于是/然后）≥ 4 次 且 causalRatio < 0.25——severity mid，+15 分。健康剧本因果比 ≥ 0.4。在关键转折前补一句"因为/为了/所以"的动机交代。',
+    '5) 誓言烂尾（unresolved_oath）：oath 强宣言 ≥ 2 个（我一定要/你等着/我发誓）且 payoff = 0——severity mid，+10 分。至少让其中一个誓言推动一次具体行动（哪怕失败），否则宣言变成噪音。',
+    '6) 信息空降（unsourced_knowledge）：unsourced "我早知道/我查到了" ≥ 2 处 且 causation < 2——severity mid，+10 分。补一场获知信息的戏（调查/线人/偷听），或改为当场推理得出。',
+    '判定顺序：巧合过载（high）→ 巧合解决（high）→ 机械降神（high）→ 因果稀薄（mid）→ 誓言烂尾（mid）→ 信息空降（mid）。评分：score = clamp(100 - penalty, 0, 100)；零问题满分 100 放行。',
+  ].join('\n');
+}
