@@ -349,3 +349,79 @@ export function supportingCharacterCheck(
     issues,
   };
 }
+
+/**
+ * v2.394 配角工具人前置教学（与 supporting-character-check 检测口径 100% 同源）
+ * 全制式生效（真人稿同样需要群像有欲望），format 不设门控，仅保留签名。
+ * 四类配角病根 + 一条全局夸夸群像 + 互斥链 + 参检/豁免口径，详见正文罚分逻辑。
+ */
+export function buildSupportingCharacterDirective(_format: string = 'LIVE', lang: ScLang = 'zh'): string {
+  if (lang === 'en') {
+    return [
+      '[Supporting character guardrail — same source as supporting-character-check (five failure modes)]',
+      'Goal: named side characters with multiple lines must have their own desire and their own action — never a prop, a human mic, an info kiosk or an emotional nanny. This check asks "does this side character have desire?" (cross-section); supporting-arc-check asks "do they change?" (timeline).',
+      '',
+      'Checked scope:',
+      '- Only scripts with ≥6 dialogue lines are checked; text < 20 chars or < 6 dialogue lines scores a full 100 and passes.',
+      '- Checked side characters: not the protagonist and ≥3 dialogue lines; characters with 1-2 lines belong to character-balance-check.',
+      '- Protagonist = first key of the cast card; falls back to the character with the most dialogue. Fewer than 2 speakers scores a full 100.',
+      '- Action mentions = occurrences of the name in non-dialogue, non-scene-header lines; dialogue lines are excluded.',
+      '',
+      'Five hard limits (thresholds mirror the checker):',
+      '1) echo_sidekick (high): ≥4 lines, zero self-desire signal, pure reaction lines ("yeah / really? / wow / then what? / you are right") ≥60% of lines. Penalty starts at 16, +4 per additional character, capped at 24.',
+      '2) info_dispenser (mid): zero self-desire signal, intel-delivery lines ≥2 and ≥40% of lines ("I have news / the report says / the boss said / here are the documents"). 10 points per character, capped at 16.',
+      '3) desireless_supporter (mid): ≥4 lines, zero self-desire signal, service lines ≥2 ("I will help / I will stay with you / are you okay / do not worry") and either reaction ratio ≥30% or service ratio ≥40%. 8 points per character, capped at 14.',
+      '4) praise_chorus (low, one global issue): ≥2 characters each praise the lead ≥1 line, or total praise ≥3 lines, or one character praises ≥3 lines ("as expected of you / amazing / you are the best"). 6 points off.',
+      '5) offstage_mouthpiece (low): ≥4 lines, zero self-desire signal, zero mention in action/description lines, functional lines ≥60%. 4 points per character, capped at 8.',
+      '',
+      'Exclusion and stacking:',
+      '- For one character echo wins over info/desireless — only one dominant root cause is recorded; offstage is an independent dimension and can stack with the first three.',
+      '- Each issue cites the exact character names and hit line counts.',
+      '',
+      'Signal lists (hit counts, prefer missing over false positives):',
+      '- Pure reaction: yeah / oh / wow / oh my god / really? / no way / then what? / you are right.',
+      '- Self-desire: I want / I need / I decided / I refuse / on what grounds / I have had enough / I will handle it / this is mine.',
+      '- Service: let me help / I will come with you / are you okay / do not worry / I am here.',
+      '- Intel delivery: I have news / the report says / the boss said / here are the documents.',
+      '- Praise: as expected of you / amazing / only you could / you are the best.',
+      '',
+      'Calibration:',
+      '- Final score = clamp(100 - penalty, 0, 100); no bonus.',
+      '- Exemption: text < 20 chars, < 6 dialogue lines, or < 2 speakers scores a full 100 and passes; scene headers are not dialogue.',
+      '- Self-check before submitting: every named side character gets at least one line about their own business (what they want, hide or oppose) and at least one action that belongs to them.',
+    ].join('\n');
+  }
+  return [
+    '【配角工具人前置教学（检测同源：supporting-character-check 五类）】',
+    '目标：有名有姓、多句台词的配角必须有自己的欲望与动作，不是人形收音麦、信息播报器或情绪保姆。本检测问"这个配角有没有欲望"（横截面），与 supporting-arc-check 的"有没有变化"（时间线）互补。',
+    '',
+    '参检口径：',
+    '- 对白 ≥6 句才进入检测；正文 < 20 字或对白 < 6 句 → 满分 100 放行。',
+    '- 参检配角 = 非主角且 ≥3 句对白；1-2 句龙套归 character-balance-check 管。',
+    '- 主角 = cast 人设卡第一个 key；无人设卡时取台词数最多者；说话人 < 2 人直接满分 100。',
+    '- 动作提及 = 非对白、非场头行中出现该配角名字的次数；对白行不计。',
+    '',
+    '五类硬线（与检测阈值同源）：',
+    '1) echo_sidekick 捧哏（high）：≥4 句，零自我欲望信号，纯承接反应句（嗯/哦/哇/天哪/真的吗/不会吧/然后呢/你说得对）占比 ≥60%。16 分起，每多 1 个配角 +4 分，封顶 24 分。',
+    '2) info_dispenser 信息播报员（mid）：零自我欲望信号，播报句 ≥2 句且占比 ≥40%（告诉你个消息/报告/董事长说/这是你要的文件）。每只扣 10 分，封顶 16 分。',
+    '3) desireless_supporter 无欲望保姆（mid）：≥4 句，零自我欲望信号，服务句 ≥2 句（我帮你/我陪你/你没事吧/别担心/有我在）且（反应占比 ≥30% 或 服务占比 ≥40%）。每只扣 8 分，封顶 14 分。',
+    '4) praise_chorus 夸夸群像（low，全局只报 1 条）：≥2 人各夸 ≥1 句，或总夸奖 ≥3 句，或单人 ≥3 句（不愧是/真厉害/大佬/还是你行）。扣 6 分。',
+    '5) offstage_mouthpiece 只动嘴的纸片人（low）：≥4 句，零自我欲望信号，动作/叙述行零提及，功能句占比 ≥60%。每只扣 4 分，封顶 8 分。',
+    '',
+    '互斥与叠加：',
+    '- 同一配角 echo 优先于 info/desireless，只记一条主导病根；offstage 独立维度，可与前三类叠加。',
+    '- 每条 issue 证据列出具体配角名与命中句数。',
+    '',
+    '信号词表（命中即计，宁漏不误）：',
+    '- 纯承接反应：嗯/哦/哇/天哪/真的吗/不会吧/然后呢/你说得对。',
+    '- 自我欲望：我要/我想/我决定/我拒绝/凭什么/我受够了/我来处理/这是我的。',
+    '- 服务句：我帮你/我陪你/你没事吧/别担心/有我在。',
+    '- 信息播报：告诉你个消息/报告/董事长说/这是你要的文件。',
+    '- 夸奖：不愧是/真厉害/大佬/还是你行。',
+    '',
+    '口径：',
+    '- 最终分 = clamp(100 - penalty, 0, 100)，无 bonus。',
+    '- 豁免：正文 < 20 字、对白 < 6 句、说话人 < 2 人，均满分 100 放行；场头不计入对白。',
+    '- 成稿自查：每个有名字的配角至少一句"我自己的事"（他要什么/瞒什么/反对什么），且至少一个只属于他的动作。',
+  ].join('\n');
+}
