@@ -156,3 +156,60 @@ export function hollowAction(draft: string): HollowActionResult {
 
   return { score, hits, actionSentences, gestureCounts, repeatedGestures, densityPer10, issues, advice };
 }
+
+/**
+ * 前置教学：buildHollowActionDirective(_format='LIVE', lang='zh')
+ * ---------------------------------------------------------------
+ * 同源铁律：教学函数与检测器 hollowAction 同文件；format 不门控（LIVE/AIGC/缺省一致）。
+ * 目的：撰写师/润色师首轮即拿到"整行只有调度动作才算空心"的检测口径，
+ *       避免写完被 prePolish hollowHint 与 craft/deai 复评打回。
+ */
+export function buildHollowActionDirective(_format: string = 'LIVE', lang: string = 'zh'): string {
+  if (lang === 'en') {
+    return [
+      '【Hollow Stage Business Pre-Writing Briefing (same source as hollowAction: 8 points per hollow beat + repeat penalty)】',
+      '- Scan scope: non-dialogue, non-scene-header lines only ("speaker 1-12 chars + colon" counts as dialogue; scene headers skipped); split each line into sentences and judge each one.',
+      '- Seven standalone blocking templates (line start allows 0-6 chars of subject/adverbial, soft adverbs such as slowly/quietly/again/then, optional trailing punctuation):',
+      '  sigh: let out a sigh / sighs / heaved a long sigh.',
+      '  breath: takes a deep breath / inhales deeply.',
+      '  stand: stands up / stood up / gets to his feet.',
+      '  sit: sits down / sat back down.',
+      '  pace: paces back and forth / paces the room.',
+      '  turn: turns around / turned back around.',
+      '  silence: says nothing / goes silent / does not say a word.',
+      '- Exemption: if the sentence contains an energy verb (snatch/slam/grab/storm/march/shove/kick/pound/slap/bolt/lunge/jab/bark/snap at/storm out), it is NOT hollow - an angry stand-and-storm-out is drama.',
+      '- A line counts only when it is nothing but the blocking beat; if concrete behavior, an object, or intent follows in the same sentence, it is not hollow.',
+      '- Nodding / head shaking are never judged hollow (they can be a valid reply); they are only counted for repetition.',
+      '- Repeat counting (whole draft): sigh / breath / stand / sit / pace / turn / nod / head shake; the same gesture appearing 4+ times is repeated blocking, penalty = (count - 3) x 3.',
+      '- Hollow beat penalty: 8 points each; score = max(0, 100 - hollowBeats x 8 - repeatPenalty); empty draft = 100.',
+      '- densityPer10 (hollow beats per 10 action sentences) is diagnostic only and never deducted.',
+      '- Three-way rule: every action must (1) reveal something the character wants hidden, (2) shift their relationship to the other person or the room, or (3) plant/pay off a concrete object. Keep at most one or two pure physiological beats per episode and make them character-specific.',
+      '- Division of labor: scene-padding owns recap padding, craft-lint owns passive voice, show-dont-tell owns emotion labels; this engine only owns lines that are nothing but blocking.',
+      '- Pipeline consumption: prePolish lists hollow lines into the polisher hint (hollowHint); craft initial/re-eval and deai rescan the same result.',
+      '- Self-check: for every stand/sit/sigh in this scene, does the plot lose anything if you delete it? If nothing is lost, replace it with an action that carries intent.',
+    ].join('\n');
+  }
+  return [
+    '【空心动作调度·前置教学（检测同源：hollowAction 每条空心调度扣 8 分 + 重复调度额外扣分）】',
+    '- 检测范围：只扫非台词、非场头行；「1-12 字说话人 + 冒号」算台词跳过，场头跳过。',
+    '- 切句：每行按 。！？； 切句，逐句判定。',
+    '- 七类整行调度模板（行首允许 0-6 字主语/状语，可带缓缓/慢慢/默默/轻轻/静静/又/重新/随即/这才/便/就，可带「长长地」，句末标点可省）：',
+    '  叹气：叹了口气 / 叹了一口气 / 长叹一声 / 叹息一声 / 轻叹一声。',
+    '  深呼吸：深吸一口气 / 深呼吸 / 深吸了口气 / 吸了口气。',
+    '  站起：站了起来 / 站起身来 / 站起身 / 站起来 / 站起。',
+    '  坐下：坐了下来 / 坐回… / 坐了下去 / 坐下。',
+    '  踱步：踱来踱去 / 来回踱步 / 走来走去 / 来回走了走 / 在房间里踱步。',
+    '  转身：转过身 / 转过身来 / 转回身 / 转身回来。',
+    '  沉默：沉默片刻/半晌/一会儿/一会 / 半晌不语 / 半天没说话 / 没有说话 / 没说话 / 沉默不语 / 不语。',
+    '- 豁免：句中出现强能量词（猛地/腾地/霍地/一把/冲/夺/摔/拍/踹/踢/吼/薅/拽/砸/掀/转身就走/扭头就走/拂袖/夺门/摔门/大步/拔腿/往外/冲出/跑向/揪住/抓起/拍桌/起身离）即不判空心——有能量的站起夺门不算。',
+    '- 只有调度动作：整句必须只有调度动作才判空心；后面接了具体行为、物件或意图（逗号后还有戏）不算。',
+    '- 点头/摇头：永不判空心（可当应答），只在重复维度统计。',
+    '- 重复调度：全片按正则统计八类手势（叹气/深呼吸/站起/坐下/踱步/转身/点头/摇头），同一动作 ≥4 次即重复，扣分 = (次数 - 3) × 3。',
+    '- 空心行扣分：每条 8 分；总分 = max(0, 100 - 空心条数 × 8 - 重复扣分)；空稿 100。',
+    '- densityPer10（每 10 个动作句的空心条数）只作诊断参考，不参与扣分。',
+    '- 三选一铁律：每个动作必须 ①暴露他不想让人看见的心理；②改变他与对方/环境的关系；③埋或收一个具体物件。纯生理调度（站坐/叹气/深呼吸）每集最多留一两个，并给人物辨识度。',
+    '- 分工：scene-padding 管前情复述注水、craft-lint 管被动词、show-dont-tell 管情绪标签，均不判纯调度行；本引擎只管「整行只有调度动作」。',
+    '- pipeline 消费：prePolish 逐条列空心行注入润色师（hollowHint）；craft 初评与复评、deai 复扫同一结果。',
+    '- 成稿自查：这场里每次站起/坐下/叹气，删掉后剧情有没有损失？如果毫无损失，就换成带意图的动作。',
+  ].join('\n');
+}
