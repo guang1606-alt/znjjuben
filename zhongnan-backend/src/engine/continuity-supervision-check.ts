@@ -468,3 +468,34 @@ export function continuitySupervisionCheck(text: string, lang: CsLang = 'zh'): C
     issues,
   };
 }
+
+/**
+ * v2.388 场记连续性前置教学（与上方 continuitySupervisionCheck 检测口径 100% 同源）
+ * 撰写师/润色师首轮即知道四类穿帮阈值与桥接正信号，而不是写完才被打回。
+ */
+export function buildContinuitySupervisionDirective(_format: string = 'LIVE', lang: CsLang = 'zh'): string {
+  if (lang === 'en') {
+    return [
+      '[Continuity Supervision · Pre-Briefing] The script supervisor\'s pen: injuries, destroyed items, broken phones, and restraints must leave a trace. Do not let physical state reset between shots.',
+      '1) Injury vanish (injury_vanish): after a stab, gunshot, bleeding, fracture, fainting, or coma, the character is fully mobile (leaps up / sprints / as if nothing happened) with no healing beat or time skip. 1st hit is mid, -12 points; 2nd hit is high; capped at 22.',
+      '2) Restored object (object_restored): a document, contract, will, photo, letter, check, key, necklace, ring, or recorder that was torn / shredded / burned / smashed is used intact later (signed / handed over / presented). mid, -11 points, capped at 20.',
+      '3) Resurrected device (device_resurrection): a phone that was smashed / dead / confiscated / dropped in water is used again (dialed / answered / rang) with no repair beat. 1st hit is low, -6 points; 2nd hit onward is mid, -9 points each, capped at 16.',
+      '4) Vanished restraint (restraint_vanish): a character tied up or locked in shows up moving freely with no escape, rescue, or release beat. 1st and 2nd hits are low; 3rd hit onward is mid; -5 points each, capped at 12.',
+      'Positive signal: bridged (a heal / time skip / copy or backup / repaired or new phone / escape or rescue beat connects the state change) +2 points each, caps at 6.',
+      'Time-skip waiver: a time-skip line ("the next day / three days later") clears injury and restraint states only — destroyed objects and broken phones never heal on their own and still need an on-screen bridge.',
+      'Order of checks: split by scene headers, run a per-line state machine (injure / confine / disable phone / destroy object → heal / escape / repair / use), then the four checks, sorted high to mid to low, then by scene.',
+      'Scoring: score = clamp(100 - penalty + bonus, 0, 100); no physical state change means a full 100 pass; blank or under 20 characters also passes at 100.',
+    ].join('\n');
+  }
+  return [
+    '【场记连续性 · 前置教学】场记那支笔：伤势、毁物、摔机、束缚都必须留下痕迹——镜头之间不能让物理状态自己复原。',
+    '1) 伤势无痕（injury_vanish）：中刀/枪伤/流血/骨折/晕倒/昏迷之后，人物活动自如（活蹦乱跳/健步如飞/跟没事人一样/飞奔），中间没有养伤或跳时交代。第 1 次 mid 扣 12 分，第 2 次起 high，扣分 min(次数×12, 22)。',
+    '2) 毁物复原（object_restored）：文件/合同/遗嘱/照片/书信/支票/钥匙/项链/戒指/录音笔等被撕碎/烧毁/砸烂之后，后文又完好地签字/递出/出示。mid 扣 11 分，扣分 min(次数×11, 20)。',
+    '3) 设备复活（device_resurrection）：手机被摔烂/没电/没收/掉水里之后，无修复交代又拨通/接听/来电。首 1 次 low 扣 6 分，第 2 次起 mid 每次扣 9 分，扣分 min(次数×9, 16)。',
+    '4) 束缚消失（restraint_vanish）：人物被绑/被关之后，没有挣脱/被救/被放的交代就自由行动（推门而入/大摇大摆走出/出现在会场）。第 1-2 次 low，第 3 次起 mid，每次扣 5 分，扣分 min(次数×5, 12)。',
+    '正信号 bridged：伤势痊愈/跳时交代/复印件备份/修好或换新手机/挣脱或被救，把状态变更合法接住，+2 分/次封顶 6 分。',
+    '跳时豁免：出现"次日/第二天/三天后/半年后"这类跳时行，只清空伤势与束缚两种状态；物件与设备属于物理毁坏不会自愈，仍须在画面上给出复印/修好/换新的桥接。',
+    '判定顺序：先按场标切场→逐行推进状态机（受伤/被绑/摔机/毁物→治好/逃脱/修复/使用）→四类问题依次判定→按 high→mid→low、场次排序。',
+    '评分：score = clamp(100 - 扣分 + 加分, 0, 100)；无任何物理状态变更满分 100 放行；空白或不足 20 字同样满分 100。',
+  ].join('\n');
+}
