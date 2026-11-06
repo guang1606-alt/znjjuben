@@ -174,3 +174,49 @@ export function phoneRelay(draft: string): PhoneRelayResult {
 
   return { score, calls, hits, issues, advice };
 }
+
+/**
+ * 前置教学：buildPhoneRelayDirective(_format='LIVE', lang='zh')
+ * -------------------------------------------------------------
+ * 同源铁律：教学函数与检测器 phoneRelay 同文件；format 不门控（LIVE/AIGC/缺省一致）。
+ * 目的：撰写师/润色师首轮即拿到"单边电话 12 行窗口数复读回声"的检测口径，
+ *       避免写完被 prePolish phoneRelayHint 与 craft/deai 复评打回。
+ */
+export function buildPhoneRelayDirective(_format: string = 'LIVE', lang: string = 'zh'): string {
+  if (lang === 'en') {
+    return [
+      '【Phone Relay Pre-Writing Briefing (same source as phoneRelay: 12-line window after a phone cue; 40 per hit + 10 per content echo; floor 20)】',
+      '- Trigger: a phone-context cue line first (phone ringing / buzzing / incoming call / answered the phone / picked up / held the phone to the ear / on the other end of the line / said into the phone / hello,), then count a 12 non-empty line window from it; stop at the next scene header.',
+      '- Only "speaker: line" lines inside the window are counted; action lines and scene headers are ignored.',
+      '- Relay echoes (no content, just "I am receiving shocking news"): what? / what did you say / say that again / come again / are you sure / really / for real / how could this / impossible / who / where / which hospital / when did this happen / do not move / do not hang up / I will be right there / I am on my way / wait there / where is he.',
+      '- Content echo (parroting the fact back - the worst kind): you are telling me / you mean to tell me / let me get this straight / so you are saying + he is dead / she is dead / he signed / he escaped / he turned himself in / the deal went through; or "he is dead?" / "he actually signed?".',
+      '- Count per clause: split each line on sentence punctuation - "What?! He is dead? I will be right there!" is 3 echoes, not 1.',
+      '- Threshold: content echo >= 1, or echo count >= 3; either one records a hit.',
+      '- Exemption 1: the window shows the other side (INTERCUT / CUT TO / ANGLE ON / voice on the other end / meanwhile / V.O. / O.S. / CALLER) - the audience can see the scene, so no hit.',
+      '- Exemption 2: the speaker is written as VOICE / CALLER / V.O. / O.S. / the other end - that is a two-sided call, the whole call is exempt.',
+      '- Exemption 3: a non-phone "What!" (shock in person) is not judged - there must be a real phone cue line.',
+      '- Score: max(20, 100 - hits x 40 - contentEchoes x 10); empty draft = 100.',
+      '- Rewrite direction: cut to the event itself (the ER entrance, the contract pushed back across the desk, the phone buzzing in a pocket during the arrest). If the call must stay, give a shard - "He is gone." - then hang up and let the character move with the question still unasked.',
+      '- Division of labor: info-delivery owns narration where a channel pushes the event forward; this engine only judges one-sided phone dialogue echo. character-presence owns ghost answering after the hang-up; action-echo owns actions retold in dialogue.',
+      '- Pipeline consumption: prePolish lists every hit into the polisher hint (phoneRelayHint); craft initial, craft re-eval and deai rescan the same result.',
+      '- Self-check: does the audience SEE this news, or is it read out by a character? After deleting every "What?!", how many lines of this call still carry information?',
+    ].join('\n');
+  }
+  return [
+    '【电话传话机·前置教学（检测同源：phoneRelay 单边电话 12 行窗口数复读回声，每条命中扣 40 + 每句内容复读再扣 10，20 分封底）】',
+    '- 触发条件：先要有电话语境锚点行（电话/手机响/震动/打来/来电/接起/接听/贴到耳边/听筒/来电显示/视频电话/电话那头/喂，/电话里说），再从该行起算 12 个非空行作为窗口；遇场头立即截断。',
+    '- 窗口内只数「角色：台词」行；△ 动作行、场头不参与计数。',
+    '- 复读回声（无语义、只表示“我在接收震惊消息”）：什么？/你说什么/你再说一遍/再说一遍/你确定/真的吗/是真的吗/怎么会/不可能/谁啊/在哪/哪家医院/什么时候的事/你们别动/别挂/我马上到/我马上来/我马上过去/怎么可能/你等着/他人呢/送哪家医院。',
+    '- 内容复读（把对方刚说的事实原样念回，最糟）：你（是）说 + 死了/没了/签了/跑了/逃了/自首/报警/抓住/怀孕/出轨/是他/回来了/输了/赢了/破产/结婚/离婚/失踪/绑架/车祸/坠楼/跳楼/跳河；或「他真的死了？」「他出事了？」。',
+    '- 分句计数：一行里按 。！？!?… 分句逐句数——「什么？！他死了？我马上到！」算 3 句回声，不是 1 句。',
+    '- 判定阈值：内容复读 ≥1 句即中；或回声 ≥3 句即中。二者满足其一就记一条命中。',
+    '- 豁免一：窗口内出现对切/另一边可见（切到电话另一边/电话那头的声音/与此同时/画外音：/INTERCUT/CUT TO/V.O./O.S./CALLER）——观众能看到现场，不判。',
+    '- 豁免二：说话人写成「画外/电话/听筒/对方/V.O./O.S./CALLER/VOICE」——双面对话，整通电话不判。',
+    '- 豁免三：非电话语境的「什么！」（当面震惊）不判，必须有上面那类电话锚点行。',
+    '- 得分：score = max(20, 100 - 命中条数 × 40 - 内容复读总句数 × 10)；空稿 100。',
+    '- 改写方向：重要事件直接切现场（急诊门口、合同被推回、抓捕时手机在口袋响）；必须留通话就只给半句「人没了。」然后挂断，让主角带着没问完的问题行动。',
+    '- 与 info-delivery 分界：info-delivery 管叙述行里渠道把事件送到眼前；本引擎只判单边电话台词复读。character-presence 管挂断后还在通话的幽灵对答；action-echo 管动作被台词复述。',
+    '- pipeline 消费：prePolish 逐条列命中注入润色师（phoneRelayHint）；craft 初评、craft 复评、deai 复扫同一结果。',
+    '- 成稿自查：这条新闻观众是看见的，还是被角色念出来的？删掉所有「什么？！」这通电话还剩几句有信息？',
+  ].join('\n');
+}
