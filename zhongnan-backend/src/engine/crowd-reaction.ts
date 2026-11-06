@@ -154,3 +154,52 @@ export function crowdReaction(draft: string): CrowdReactionResult {
 
   return { score, narrationLines, hits, issues, advice };
 }
+
+/**
+ * 前置教学：buildCrowdReactionDirective(_format='LIVE', lang='zh')
+ * ------------------------------------------------------------------
+ * 同源铁律：教学函数与检测器 crowdReaction 同文件；format 不门控（LIVE/AIGC/缺省一致）。
+ * 目的：撰写师/润色师首轮即拿到"群体主语 + 群体反应糊镜头、rescue 挽救"的检测口径，
+ *       避免写完被 prePolish crowdHint 与 craft/deai 复评打回。
+ */
+export function buildCrowdReactionDirective(_format: string = 'LIVE', lang: string = 'zh'): string {
+  if (lang === 'en') {
+    return [
+      '【Crowd-Reaction Laziness Pre-Writing Briefing (same source as crowdReaction: a collective noun replaces a shootable face; 12 points per un-rescued hit; floor 25)】',
+      '- Scope: narration and action lines only; scene headers and "speaker: line" dialogue lines are skipped, and the rest count as narration lines for diagnostics.',
+      '- Rule one: a crowd subject and a crowd reaction on the same line with their starting positions within 14 characters in Chinese or 60 characters in English count as one hit.',
+      '- Crowd subjects: everyone / everybody / the whole room / the entire room / all the guests / all the employees / all the reporters / the crowd / the onlookers / the audience / the room / people around.',
+      '- Crowd reactions: gasped / froze / went silent / fell quiet / went dead / nodded in agreement / erupted / burst into laughter / applauded / stood up / rose to their feet / stared / exchanged glances / buzzed / murmured / held their breath / stepped back.',
+      '- Rule two: a crowd idiom standing alone also counts, because it already implies a group — a collective gasp / dead silence filled the room / thunderous applause / gasps rippled.',
+      '- Rescue exemption: a hit is rescued when, within the next 2 lines and without crossing a scene header or a dialogue line, the camera lands on one specific person with one concrete physical beat; a rescued hit is never charged.',
+      '- Rescue beats: tightened his grip / clenched / gripped / stepped back / shrank / trembled / swallowed / looked away / lowered her head / frowned / froze / held her breath / knocked over / stood up, on a butler, secretary, assistant, driver, bodyguard, waiter, reporter, shareholder, guest, old man or child.',
+      '- Hit fields: line, crowd, reaction, snippet (first 28 characters), rescued and rescueLine, plus reason, are returned so the polisher can locate the blur.',
+      '- Score: max(25, 100 - un-rescued hits x 12); empty draft = 100; rescued hits stay in the hit list for diagnostics only.',
+      '- Rewrite: single out the one person in the room who should react most (the rival, the insider, a stranger) and give one concrete physical beat — crushing the invitation, stepping back into a chair, swallowing a sentence.',
+      '- Division: payoff-taxonomy recognises only 7 fixed thrill phrases of "the crowd is shocked"; this engine scans the crowd-subject plus reaction pattern in every scene and honours rescue.',
+      '- Division: hollow-action judges an individual doing a functionless action; this engine judges the case where there is no individual at all, only a group.',
+      '- Pipeline consumption: prePolish injects un-rescued hits into the polisher as crowdHint; craft initial, craft re-eval and deai rescan consume the same result.',
+      '- Score weight: the crowdReaction score enters the format dimension with a 0.05 weight (craft.avg 0.40 + showDontTell 0.20 + sceneDensity 0.15 + sceneHeader 0.20 + crowd 0.05).',
+      '- Diagnostics: narrationLines is display-only and never charged.',
+      '- Self-check: whose face can the director shoot in this beat? If there is no face, delete the crowd reaction and give one person one action.',
+    ].join('\n');
+  }
+  return [
+    '【群体反应偷懒·前置教学（检测同源：crowdReaction 用集体名词代替具体镜头，每条未挽救命中扣 12 分，25 分封底）】',
+    '- 检测范围：只扫叙述/动作行；场头与「说话人：台词」行跳过，其余行计入 narrationLines（仅诊断）。',
+    '- 口径一·群体主语 + 群体反应同行共现：两者起点相距 ≤14 字（英文 ≤60 字符）即记一条。',
+    '- 群体主语词表：众人/全场/满场/满座/在场的人/所有人/大家/围观者/人群/宾客们/客人们/员工们/股东们/亲戚们/家属们/学生们/同学们/记者们/台下/席上/席间。',
+    '- 群体反应词表：哗然/震惊/惊呆/愣住/倒吸一口凉气/议论纷纷/窃窃私语/交头接耳/纷纷点头/哄堂大笑/鸦雀无声/一片死寂/沸腾/掌声雷动/面面相觑/屏住呼吸/骚动/唏嘘。',
+    '- 口径二·成语独立成句：无需群体主语，议论纷纷/窃窃私语/交头接耳/鸦雀无声/哄堂大笑/掌声雷动/面面相觑/一片哗然 本身即隐含一群人，也记一条。',
+    '- rescue 豁免：命中后 2 行内（不跨场、不认台词）落到具体个体 + 具体生理动作 → 记 rescued，不扣分。',
+    '- rescue 动作词表：攥/握/捏/抓紧/后退/颤/抖/红了眼/咽/别过脸/低下头/皱眉/指节发白/屏住/捏皱/撞翻；个体可为管家/秘书/助理/司机/保镖/侍应/股东/亲戚/客人/学生/记者/老人/孩子。',
+    '- 命中字段：line（行号）、crowd（群体主语）、reaction（反应词）、snippet（前 28 字）、rescued / rescueLine、reason 随命中返回，供润色师定位。',
+    '- 得分：score = max(25, 100 - 未挽救命中数 × 12)；空稿 100；rescued 的命中留在 hits 里只做诊断。',
+    '- 改写方向：挑出在场最该有反应的那一个人（仇家/心腹/路人），给他一个具体生理动作——攥皱请帖、后退撞翻椅子、咽下半句话。',
+    '- 与 payoff-taxonomy 分界：它只认爽点「众人震惊」7 个固定短语（爽感类型学维度）；本引擎扫所有场景的群体主语 + 反应结构，且认 rescue。',
+    '- 与 hollow-action 分界：它管个体做了无功能动作；本引擎管「根本没有个体」，只有一群人。',
+    '- pipeline 消费：prePolish 把未挽救命中注入润色师（crowdHint）；craft 初评、craft 复评、deai 复扫同一结果。',
+    '- 评分权重：crowdReaction.score 以 0.05 权重计入 format 维度（craft.avg 0.40 + showDontTell 0.20 + sceneDensity 0.15 + sceneHeader 0.20 + crowd 0.05）。',
+    '- 成稿自查：这个镜头导演能拍谁的脸？拍不出来就删掉群体反应，给一个人一个动作。',
+  ].join('\n');
+}
