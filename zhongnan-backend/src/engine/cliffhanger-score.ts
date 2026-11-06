@@ -300,3 +300,84 @@ export function scoreCliffhangerForStorage(
   const lang = opts.lang ?? detectCliffhangerLang(text);
   return cliffhangerDigest(cliffhangerScore(text, lang, opts.planned ?? null));
 }
+
+/**
+ * v2.399 集尾钩子效力前置教学（与 cliffhangerScore 检测口径 100% 同源）
+ * 全制式生效，format 不设门控，仅保留签名。
+ * 只教集尾钩够不够硬；钩型策划归 hook-system，跨集兑现归 cliffhanger-payoff。
+ */
+export function buildCliffhangerScoreDirective(_format: string = 'LIVE', lang: 'zh' | 'en' = 'zh'): string {
+  if (lang === 'en') {
+    return [
+      '[Cliffhanger-strength guardrail — same source as cliffhangerScore (five-dimension evaluation)]',
+      'Input: the finished episode plus an optional planned cliffhanger from the outline. This check only judges whether the tail hook is strong enough; rhythm only checks whether a blank or suspense signal exists, hook-system only plans hook types, and cliffhanger-payoff only tracks cross-episode payoff.',
+      '',
+      'Ending window:',
+      '- Remove scene headers, the title page, episode titles and FADE OUT, take the last 5 body lines, join them, then keep the last 220 chars. The highest matching strength wins (no early break).',
+      '',
+      'Seven-type strength table (the matched type provides the base score):',
+      '- reversal (95 points): unexpectedly, suddenly, but then, little did, to his/her surprise, turned out, in fact, actually, no one knew, the truth was.',
+      '- crisis (92 points): gun, knife, cliff, fall, crash, caught, discovered, cornered, no way out, blood, collapse, ambulance, explosion, fire, siren, police.',
+      '- reveal (85 points): you are, you are the, identity, truth, secret, revealed, mask, took off, evidence, photo, video, surveillance, footage.',
+      '- mystery (75 points): who, what, why, how come, where, which one, whose, followed by a question mark.',
+      '- emotional (70 points): tears, cry, sob, tremble, collapse, silent, frozen, stiff, heartbroken, devastated, despair, bitter smile, closed his/her eyes.',
+      '- action_cut (65 points): slammed, grabbed, turned, dashed, rushed, chased, threw, smashed, ripped, kicked, blocked, snatched.',
+      '- weak (30 points): a lone question mark or ellipsis, to be continued, end of episode.',
+      '',
+      'Seven issue classes and deductions (subtracted from the base score):',
+      '- no_cliffhanger (high, 15 points): no hook signal inside the window; never end flat.',
+      '- weak_cliffhanger (high, 15 points): only the weak hook matched at 30 points; a single question mark or ellipsis is not a hook, escalate to reversal or crisis.',
+      '- medium_hook (mid, 5 points): only an emotional or action hook matched; it works but is soft, consider escalating to reversal or reveal.',
+      '- plan_misaligned (mid, 5 points): when a plan longer than 5 chars is supplied, take the first 5 keywords of length 2 or more and report when the ending hits none of them.',
+      '- low_urgency (low, 2 points): the hook is not none or weak, but has no urgency word and strength is below 90. Urgency words: suddenly, right now, immediately, no time, must, before it, or else, only chance, last chance, one way, do it now.',
+      '- dream_nullification (high, 15 points): the last beat says it was all a dream; the hook is void, so the total is capped at 40.',
+      '- hook_deflated (mid, 5 points): strength is at least 75 but the last beat lands on a wrap-up line such as everything was over, it was all over, drew to a close, lived happily ever after, back to normal, at peace; the total is capped at strength minus 20.',
+      '',
+      'Scoring:',
+      '- total = maxStrength - high x 15 - mid x 5 - low x 2; then apply the caps (dream 40, deflation strength minus 20); finally clamp(0, 100) and round.',
+      '',
+      'Self-check:',
+      '- Land the ending on a reversal (95) or crisis (92), not on an emotional or action hook.',
+      '- Never end on a lone question mark or ellipsis.',
+      '- Do not let the last beat say everything is over or the dust has settled.',
+      '- Do not end on it was all a dream.',
+      '- Add an urgency word when needed so the hook feels like it must be known right now.',
+      '- Align with the outline cliffhanger plan: the ending should hit at least one planned keyword.',
+    ].join('\n');
+  }
+  return [
+    '【集尾钩子效力前置教学（检测同源：cliffhangerScore 五维评估）】',
+    '输入：本集成稿全文 + 可选 outline.cliffhanger 规划；只评估集尾钩子够不够硬——rhythm 只看"有没有"留白信号，hook-system 只做钩型策划，cliffhanger-payoff 只管跨集兑现。',
+    '',
+    '- 结尾窗口：跳过场头/剧名页/集标题/FADE OUT 后取最后 5 行拼接，再截最后 220 字；按强度表取命中的最高强度类型（不 break）。',
+    '',
+    '七型强度表（命中即得该强度分，作为起算分）：',
+    '- reversal 反转钩（95 分）：没想到/谁知/原来你/岂料/话音刚落/下一秒/就在此时/突然/猛地/猛然/竟然/居然/倒吸。',
+    '- crisis 危机钩（92 分）：枪口/刀刃/悬崖/坠落/撞向/被发现/拦住/堵住/冲过来/扑过来/无路可退/走投无路/倒下/鲜血/血迹/昏倒/心跳停止/报警/警笛/爆炸/火光。',
+    '- reveal 揭秘钩（85 分）：原来你/身份/真相/秘密/揭开/面具/脱下/摘下/你就是/签名/证据/照片/录像/监控。',
+    '- mystery 悬念钩（75 分）：到底/究竟/为什么/怎么会/什么意思/谁/哪来的/怎么回事/什么人。',
+    '- emotional 情感钩（70 分）：泪水/哭/哽咽/颤抖/瘫坐/沉默/愣/僵/心碎/崩溃/绝望/苦笑/深吸/闭上眼。',
+    '- action_cut 动作钩（65 分）：猛地/一把/转身/冲向/跑/追/摔/砸/撕/扯/揪/拍/踹/踢/夺/拦。',
+    '- weak 弱钩（30 分）：只有？/…/未完/待续/本集完。',
+    '',
+    '七类问题与扣分（在起算分上逐条扣）：',
+    '- no_cliffhanger（high，扣 15 分）：窗口内没有任何钩子信号，绝不平收。',
+    '- weak_cliffhanger（high，扣 15 分）：只命中弱钩（30 分）——单个问号/省略号不是钩子，必须升级为反转或危机。',
+    '- medium_hook（mid，扣 5 分）：只命中情感钩/动作钩——有钩但偏软，建议升级反转/揭秘。',
+    '- plan_misaligned（mid，扣 5 分）：传入规划且规划 > 5 字时，取前 5 个长度 ≥ 2 的关键词，结尾一个都没命中即报。',
+    '- low_urgency（low，扣 2 分）：钩子非 none/weak 但无紧迫词且强度 < 90；紧迫词：突然/立刻/马上/来不及/只剩/最后一次/唯一机会/不然/否则/赶紧。',
+    '- dream_nullification（high，扣 15 分）：末拍落在"原来是一场梦"——钩子作废，总分封顶 40。',
+    '- hook_deflated（mid，扣 5 分）：末拍泄气（强度 ≥ 75 且落在平收/总结句——一切结束/尘埃落定/故事到此结束/从此幸福/恢复平静/风平浪静），总分封顶 = 强度 − 20。',
+    '',
+    '评分：',
+    '- 总分 = maxStrength - high×15 - mid×5 - low×2；再应用封顶（梦境 40 / 泄气 强度 − 20）；最后 clamp(0, 100) 并四舍五入。',
+    '',
+    '成稿自查：',
+    '- 结尾必须落在反转（95）或危机（92），不要停在情感/动作钩。',
+    '- 绝不单用问号/省略号收尾。',
+    '- 末拍不写"一切结束/尘埃落定"这类平收句。',
+    '- 末拍不写"原来是一场梦"。',
+    '- 需要时补一个紧迫词，让钩子有"现在必须知道"的劲。',
+    '- 与 outline.cliffhanger 规划关键词对齐，结尾至少命中规划里的一个词。',
+  ].join('\n');
+}
