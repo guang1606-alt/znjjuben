@@ -423,3 +423,49 @@ export function suspenseTensionCurve(text: string, lang: StcLang = 'zh'): Suspen
     issues,
   };
 }
+
+/**
+ * v2.404 悬念张力前置教学（与 suspenseTensionCurve 同源）
+ * ------------------------------------------------------------------
+ * 撰写师/润色师首轮即拿到检测口径，避免写完被 craftPass 打回。
+ */
+export function buildSuspenseTensionDirective(_format: string = 'LIVE', lang: StcLang = 'zh'): string {
+  if (lang === 'en') {
+    return [
+      '【Suspense Tension Pre-Writing Briefing (same source as suspenseTensionCurve: six signal types + three tension dimensions + curve shapes + eight deductions)】',
+      '- Scene splitting: headers use the script-scenes single source of truth; loose lines before the first header belong to no scene; a script without headers counts as 1 scene.',
+      '- Detection unit: tension is measured per scene on the whole scene body, not line by line.',
+      '- Six signal types: question / unknown / threat / time_pressure / reversal_foreshadow / mystery.',
+      '- Signal weights: question 10 / unknown 10 / reversal_foreshadow 9 / threat 8 / time_pressure 7 / mystery 6; repeats of one type count multiple times.',
+      '- Question signals only count WH words plus a question mark (why / who / what / where / when / how / how come); everyday questions such as what to eat for lunch do not count.',
+      '- Scene tension = count score + density score + variety score, capped at 100: count 5 per signal capped at 40; density = total signal weight / scene words x 1000 x 2 capped at 40; variety 4 per type capped at 24.',
+      '- Scene word count: Chinese counts CJK characters; English counts words x 1.67, rounded; a scene with 0 words scores 0 tension.',
+      '- Flat stretch: three consecutive scenes whose tension range is under 10 is flat_stretch.',
+      '- Curve shape: fewer than 3 scenes is flat; range under 15 is flat; one or more direction reversals with a single step over 40 is jumpy; last scene over first scene plus 10 with mid above first is rising; last scene under first scene minus 10 with mid below first is falling; both rises and falls is wave; everything else is flat.',
+      '- Opening suspense: any of the first 1-2 scenes reaching tension 40 counts as strong opening.',
+      '- Ending suspense: the last scene reaching tension 50 counts as strong ending.',
+      '- Deduction table: too few signals (3 or more scenes and total signals below scene count) minus 8; flat stretch minus 15; weak opening minus 12; weak ending minus 12; flat curve minus 15; jumpy curve minus 5; falling curve minus 8; tension range under 20 minus 8.',
+      '- Issue types: low_total_signals (mid), flat_stretch (high), weak_opening (high), weak_ending (high), flat_curve (high), jumpy_curve (mid), falling_curve (mid), low_range (mid).',
+      '- Total score: 100 minus all deductions, then clamp(0, 100).',
+      '- Self-check: at least one of the first 1-2 scenes reaches 40; the last scene reaches 50; no three consecutive flat scenes; overall range at least 20; the curve rises and falls without a single jump over 40.',
+    ].join('\n');
+  }
+  return [
+    '【悬念张力前置教学（检测同源：suspenseTensionCurve 六类信号 + 张力三维 + 曲线形态 + 八类扣分）】',
+    '- 场景切分：场头走 script-scenes 单一事实源；第一个场头之前的散行不计入任何场景；全篇无场头则整篇算 1 场。',
+    '- 检测单位：张力按场统计整场正文（含对白与动作），不逐行统计。',
+    '- 六类信号：question 问号悬念 / unknown 未知揭示 / threat 威胁暗示 / time_pressure 时间压力 / reversal_foreshadow 反转预告 / mystery 神秘描述。',
+    '- 信号权重：question 10 / unknown 10 / reversal_foreshadow 9 / threat 8 / time_pressure 7 / mystery 6；同一类出现多次按次数累计。',
+    '- 问号悬念只认 WH 疑问词 + 问号（为什么/到底/究竟/怎么会/怎么可能/是谁/是什么/在哪里/怎么办/难道），「中午吃什么？」之类日常问句不算。',
+    '- 单场张力 = 数量分 + 密度分 + 多样性分，封顶 100：数量分每条 5 分封顶 40；密度分 = 信号总权重 ÷ 场字数 × 1000 × 2 封顶 40；多样性分每类 4 分封顶 24。',
+    '- 场字数：中文按汉字数，英文按单词数 × 1.67 四舍五入；场字数为 0 时张力直接 0。',
+    '- 连续平铺：连续 3 场张力极差 <10 即 flat_stretch。',
+    '- 曲线形态：场数 <3 视为 flat；极差 <15 为 flat；单步差值 >40 且方向反转 ≥1 次为 jumpy；末场 > 首场 +10 且中段 ≥ 首场为 rising；末场 < 首场 −10 且中段 ≤ 首场为 falling；有升有降为 wave；其余 flat。',
+    '- 开场悬念：前 1-2 场任一场张力 ≥40 即达标。',
+    '- 收尾悬念：末场张力 ≥50 即达标。',
+    '- 扣分表：信号过少（场数 ≥3 且总信号 < 场数）扣 8；连续平铺扣 15；开场弱扣 12；收尾弱扣 12；曲线 flat 扣 15；jumpy 扣 5；falling 扣 8；极差 <20 扣 8。',
+    '- 问题类型：low_total_signals（mid）/ flat_stretch（high）/ weak_opening（high）/ weak_ending（high）/ flat_curve（high）/ jumpy_curve（mid）/ falling_curve（mid）/ low_range（mid）。',
+    '- 总分：100 减去全部扣分后 clamp(0, 100)。',
+    '- 成稿自查：前 1-2 场至少一场张力 ≥40；末场 ≥50；连续 3 场不能是无信号的温水戏；全剧极差 ≥20；曲线有升有降但不要单步 >40 的突跳。',
+  ].join('\n');
+}
