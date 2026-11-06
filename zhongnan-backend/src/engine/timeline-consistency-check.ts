@@ -388,3 +388,43 @@ export function timelineConsistencyCheck(text: string, lang: TcLang = 'zh'): Tim
     issues,
   };
 }
+
+/**
+ * v2.393 前置教学函数：与 timelineConsistencyCheck 同源
+ * 四类时钟穿帮的 severity / 触发阈值 / 扣分 100% 对齐引擎源码
+ * 撰写师+润色师首轮注入，让阈值口径前置而不是写完再打回
+ */
+export function buildTimelineConsistencyDirective(_format: 'LIVE' | 'AIGC' = 'LIVE', lang: TcLang = 'zh'): string {
+  if (lang === 'en') {
+    return [
+      '[Pre-writing rule · timeline consistency (sibling to timelineConsistencyCheck)]',
+      'A short drama\'s clock must never break — viewers are hyper-sensitive to "how many days left" and day/night. Four checks; severity, trigger and penalty mirror the detector line for line:',
+      '',
+      'countdown_reversal | mid at 1, high at 2+ | remaining time must only decrease; a later "days left" exceeding the previous by more than 2 hours → -10 points, +8 per extra occurrence, cap 22',
+      'day_night_mismatch | mid | a NIGHT header with sunlight in the body, or a DAY header with moonlight → 6 points per scene, cap 14',
+      'time_skip_stuffing | low at 3+, mid at 5+ | a line that is nothing but "three days later / the next day" as a transition → 2 points per line, cap 8',
+      'timeline_squash | mid | "just met / first time we met" coexisting with "married for years / known each other for years" in one scene → 8 points per scene, cap 12',
+      '',
+      'Timer rules: one timer per event noun (wedding/trial/surgery/launch/exam/signing...); normalize to hours (1 day=24, 1 week=168, 1 month=720) with a 2-hour tolerance; when only one timer is running, an unnamed "five days left" merges into it',
+      'Skip rules: every "three days later / two weeks after / the next day" subtracts from all running timers at once',
+      'Positive signal: a scene header with an explicit day/night tag (DAY/NIGHT) → +1 per scene, cap +3',
+      'Exemption: body under 20 characters is not scored; zero issues = full 100',
+      'Score: score = clamp(100 - penalty + bonus, 0, 100)',
+    ].join('\n');
+  }
+  return [
+    '[前置写作规则 · 时间线一致性（与 timelineConsistencyCheck 同源）]',
+    '短剧的时钟不能穿帮——观众对"还剩几天"和"白天黑夜"异常敏感。四类判定，severity / 触发阈值 / 扣分与检测器逐字对齐：',
+    '',
+    'countdown_reversal | 1 处 mid，≥2 处 high | 倒计时剩余只减不增，后文比前文多出 2 小时以上 → 扣 10 分，每多 1 处 +8 分，封顶 22 分',
+    'day_night_mismatch | mid | 标题写夜而正文出现阳光，或标题写日而正文出现月光 → 每场扣 6 分，封顶 14 分',
+    'time_skip_stuffing | ≥3 处 low，≥5 处 mid | 整行只有"三天后/次日"充当转场 → 每处扣 2 分，封顶 8 分',
+    'timeline_squash | mid | 同一场"刚认识/初次见面"与"结婚多年/认识好几年"并存 → 每场扣 8 分，封顶 12 分',
+    '',
+    '计时规则：按事件名词（婚礼/开庭/手术/发布会/考试/签约…）各自计时，跨单位换算到小时（1 天=24、1 周=168、1 个月=720），容差 2 小时；全片只有一个倒计时在跑时，省略事件名的"还有五天"归并到它',
+    '跳时规则：任何"三天后/两周之后/次日"都让所有在跑的倒计时同步扣减',
+    '正信号：场景标题带明确昼夜标注（日/夜/NIGHT）每场 +1，封顶 +3',
+    '豁免：正文 < 20 字不评；零问题满分 100',
+    '评分公式：score = clamp(100 - penalty + bonus, 0, 100)',
+  ].join('\n');
+}
