@@ -160,3 +160,51 @@ export function mirrorVisualDialogue(draft: string): MirrorVisualResult {
 
   return { score, dialogueLines, hits, issues, advice };
 }
+
+/**
+ * 前置教学：buildMirrorVisualDialogueDirective(_format='LIVE', lang='zh')
+ * ----------------------------------------------------------------------
+ * 同源铁律：教学函数与检测器 mirrorVisualDialogue 同文件；format 不门控（LIVE/AIGC/缺省一致）。
+ * 目的：撰写师/润色师首轮即拿到"台词用完整句复述上一镜头画面"的检测口径，
+ *       避免写完被 prePolish mirrorHint 与 craft/deai 复评打回。
+ */
+export function buildMirrorVisualDialogueDirective(_format: string = 'LIVE', lang: string = 'zh'): string {
+  if (lang === 'en') {
+    return [
+      '【Mirror-Visual Dialogue Pre-Writing Briefing (same source as mirrorVisualDialogue: a line restates the previous shot; 12 points per hit; floor 20)】',
+      '- Baseline: the comparison target is the immediately previous non-empty line; a scene header clears it, a line with a colon is dialogue, and any other line becomes the new narration baseline.',
+      '- Statement gate: the line must not end with a question mark, must not start with an imperative (give / take / stop / do not / look out), and must not carry a reaction frame (I cannot believe / you actually / how could you).',
+      '- Visual frame: the line must open by pointing at what is on screen — this / that / these / those / here / there / on the / in the / you are / he is / she is / it is / they are.',
+      '- New-information exemption: causal, temporal or planning words (because / so that / tomorrow / yesterday / next week / will / going to / plan / contract / inheritance / shares) mean the line adds something, so it is not judged.',
+      '- Length exemption: lines over 20 characters in Chinese after punctuation is stripped, or over 14 words in English, are treated as a viewpoint, not a restatement.',
+      '- Overlap threshold: Chinese needs at least 3 shared character bigrams with the previous narration after punctuation is stripped; English needs at least 2 shared content words and those must cover 40 percent or more of the line content words.',
+      '- Hit fields: line, speaker, narration, dialogue and the shared fragments are returned so the polisher can locate the restated shot.',
+      '- Score: max(20, 100 - hits x 12); empty draft = 100.',
+      '- Diagnostics: dialogueLines is display-only and never charged.',
+      '- Rewrite: cut the line, or replace it with what the image cannot show — a stance, a calculation, a misread, a demand or an old grudge.',
+      '- Division: action-echo-dialogue covers question or confirmation echoes of an action just performed, and mirror explicitly exempts "you actually hit me"; this engine only judges statements pointing at a static visible frame.',
+      '- Division: echo-dialogue covers narration restating dialogue, the opposite direction; this engine only judges dialogue restating the picture.',
+      '- Division: exposition shared memory covers background both sides already know; this engine only judges the image both sides are looking at right now.',
+      '- Pipeline consumption: prePolish injects mirrorHint into the polisher; craft initial, craft re-eval, deai rescan and the creative batch rescan all run the same detector.',
+      '- Self-check: delete the line and ask whether the audience loses any information. If nothing is lost, the line is a caption, not dialogue.',
+    ].join('\n');
+  }
+  return [
+    '【台词复述画面·前置教学（检测同源：mirrorVisualDialogue 台词用完整句复述上一镜头，每条命中扣 12 分，20 分封底）】',
+    '- 比对基准：上一非空行；场头出现即清空基准，带冒号的行是台词，其余行成为新的叙述基准（行首（动作提示）会先剥离）。',
+    '- 陈述句门槛：台词不以问号（？/?）结尾、不以祈使/命令开头（把/给我/拿/滚/住手/闭嘴/别/不要/走/来/坐下/让开/看招）、不含情绪反应框架（你居然/你竟敢/没想到/竟然/原来你/好啊你/行啊你）。',
+    '- 眼前框架：台词必须以指代眼前画面的词开头（这/那/这些/那些/这里/那里/这儿/那儿/桌上/地上/墙上/门口/窗外/手里/盘子里/杯子里/外面/里面/你在/他在/她在/它在/你们在/他们在/她们在）。',
+    '- 新信息豁免：台词含因果/时间/计划类词（因为/所以/为了/由于/明天/昨天/后天/上周/下个月/去年/当年/以后/回头/待会/准备/打算/计划/合同/转账/遗嘱/股权）→ 说明有增量，不判。',
+    '- 长台词豁免：中文去标点后 >20 字、英文 >14 词，视为表达观点而非复述，不判。',
+    '- 重合阈值：中文与上一叙述行去标点后共享连续二字片段 ≥3 个；英文共享实词 ≥2 个且占台词实词 40% 以上（停用词不计）。',
+    '- 命中字段：line（行号）、speaker（说话人）、narration（被复述的叙述）、dialogue（复述台词）、shared（重合片段）随命中返回，供润色师定位。',
+    '- 得分：score = max(20, 100 - 命中条数 × 12)；空稿 100。',
+    '- 诊断字段：dialogueLines（台词行数）只做展示，不参与扣分。',
+    '- 改写方向：删掉这句，或换成画面给不了的东西——立场、算计、误读、要价、翻旧账；让观众用眼睛看画面，让台词给画面之外的信息。',
+    '- 与 action-echo-dialogue 分界：它管问句/确认句回声刚发生的动作，且明确豁免「你居然打我？」；本引擎只判陈述句指着眼前静物复述。',
+    '- 与 echo-dialogue 分界：它管叙述行复述台词，方向相反；本引擎只判台词复述画面。',
+    '- 与 exposition 共知旧事分界：它管双方已知的背景旧事；本引擎只判此刻双方共见的画面。',
+    '- pipeline 消费：prePolish 把命中注入润色师（mirrorHint）；craft 初评、craft 复评、deai 复扫与 creative-batch-rescan 跑同一检测器。',
+    '- 成稿自查：把这句台词删掉，观众会少知道什么吗？什么都不少，它就是字幕不是台词，删。',
+  ].join('\n');
+}
