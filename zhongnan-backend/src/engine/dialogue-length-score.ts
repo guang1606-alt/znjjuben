@@ -492,3 +492,45 @@ export function dialogueLengthScore(text: string, lang: DlLang = 'zh'): Dialogue
     issues,
   };
 }
+
+/**
+ * v2.402 对白长度前置教学（与 dialogueLengthScore 同源）
+ * ------------------------------------------------------------------
+ * 撰写师/润色师首轮即拿到检测口径，避免写完被 craftPass 打回。
+ */
+export function buildDialogueLengthDirective(_format: string = 'LIVE', lang: DlLang = 'zh'): string {
+  if (lang === 'en') {
+    return [
+      '【Dialogue Length Pre-Writing Briefing (same source as dialogueLengthScore: five length bands + monologue/rhythm rules + deduction table)】',
+      '- Dialogue line recognition: a line is dialogue when it starts with a 1-6 char name (or up to 15 letters for English names), optional (emotion) in parentheses, then a colon and non-empty content.',
+      '- Action lines: any line starting with △ ▲ * ✦ is an action line and is never counted as dialogue.',
+      '- Word count: Chinese counts CJK characters; English counts words × 1.67, rounded to the nearest integer.',
+      '- Five length bands: short ≤15 / medium 16-25 / long 26-40 / extra_long 41-60 / wall >60.',
+      '- Over-long dialogue = extra_long + wall (over 40 chars); its ratio must stay under 0.15, and above 0.3 it becomes a high-severity issue.',
+      '- Monologue: the same character speaking 3 or more consecutive lines, or 80 or more accumulated chars; serious monologue = 4 or more consecutive lines, or 100 or more chars.',
+      '- Rhythm: skipped when there are fewer than 4 dialogue lines; rhythm passes when the average adjacent length gap is ≥3 or short lines (≤15) exceed 80%, and fails when lines over 25 chars exceed 60%.',
+      '- Average dialogue length: only judged from 5 dialogue lines up; over 25 is mid severity, over 20 is low severity; the ideal is 20 or less.',
+      '- Deduction table: each wall line −8; each extra_long line −3; average length over 25 −10, over 20 −5; over-long ratio over 0.3 −15, over 0.15 −8.',
+      '- Monologue deductions: each serious monologue −8, each mild monologue −4; no rhythm −8; too few dialogues −5.',
+      '- Issue types: dialogue_wall (high), overlong_ratio_high (high), overlong_ratio_mid (mid), monologue_serious (high), monologue_mild (mid), avg_too_long (mid), avg_slightly_long (low), no_rhythm (mid), too_few_dialogues (low).',
+      '- Total score starts at 100, subtracts the deductions above, then clamp(0, 100).',
+      '- Self-check before delivery: keep most lines at 15 chars or less, no line over 60, over-long ratio under 0.15, no same character speaking 3 lines in a row, and mix short and medium lines for rhythm.',
+    ].join('\n');
+  }
+  return [
+    '【对白长度前置教学（检测同源：dialogueLengthScore 五档长度与行识别口径）】',
+    '- 对白行识别（中英文对白同一口径）：行首为 1-6 字姓名（英文名至多 15 个字母），可选（情绪）括号，随后冒号，再接非空内容，才算一条对白。',
+    '- 动作行：以 △▲*✦ 开头的行一律是动作行，不计入对白。',
+    '- 字数口径：中文按汉字数统计；英文按单词数 × 1.67 后四舍五入。',
+    '- 五档分界：≤15 短（short）/ 16-25 中（medium）/ 26-40 长（long）/ 41-60 超长（extra_long）/ >60 台词墙（wall）。',
+    '- 超长对白占比 = （41-60 与 >60 合计）÷ 对白总条数；应低于 15%，超过 30% 升为 high 级。',
+    '- 独白：同一角色连续 3 条以上，或累计 80 字以上；严重独白 = 连续 4 条以上，或累计 100 字以上。',
+    '- 节奏：对白少于 4 条不判；相邻长度平均差 ≥3 或短句（≤15）占比 >80% 视为有节奏；超过 25 字的长句占比 >60% 视为无节奏。',
+    '- 平均对白长度：恰好 5 条起判；>25 为 mid 级，>20 为 low 级；理想值 ≤20。',
+    '- 扣分表：台词墙每条扣 8；超长对白每条扣 3；平均长度 >25 扣 10、>20 扣 5；超长占比 >30% 扣 15、>15% 扣 8。',
+    '- 独白扣分：严重独白每处扣 8、轻度独白每处扣 4；无节奏扣 8；对白过少扣 5。',
+    '- 问题类型：dialogue_wall（high）/ overlong_ratio_high（high）/ overlong_ratio_mid（mid）/ monologue_serious（high）/ monologue_mild（mid）/ avg_too_long（mid）/ avg_slightly_long（low）/ no_rhythm（mid）/ too_few_dialogues（low）。',
+    '- 总分：从 100 起扣上述各项后 clamp(0, 100)。',
+    '- 成稿自查：多数台词压在 15 字以内；不出现 >60 字的台词墙；超长占比 <15%；不让同一角色连续说 3 条；长短句交替制造节奏。',
+  ].join('\n');
+}
