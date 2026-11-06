@@ -416,3 +416,49 @@ export function informationDensityScore(text: string, lang: IdsLang = 'zh'): Inf
     issues,
   };
 }
+
+/**
+ * v2.403 信息密度前置教学（与 informationDensityScore 同源）
+ * ------------------------------------------------------------------
+ * 撰写师/润色师首轮即拿到检测口径，避免写完被 craftPass 打回。
+ */
+export function buildInformationDensityDirective(_format: string = 'LIVE', lang: IdsLang = 'zh'): string {
+  if (lang === 'en') {
+    return [
+      '【Information Density Pre-Writing Briefing (same source as informationDensityScore: seven info types + water/overload + eight deductions)】',
+      '- Scene splitting: headers use the script-scenes single source of truth; loose lines before the first header belong to no scene; a script without headers counts as 1 scene.',
+      '- Detection scope: only dialogue lines and action lines are scanned; dialogue = 1-6 char name (two English formats), optional (emotion), colon, non-empty; action = a line starting with the four action prefixes.',
+      '- Seven info types: identity / motive / truth / relation / goal / reversal / evidence (recordings, bank records, ledgers, contracts, lawyers, police reports).',
+      '- Per line: different types each count once, but the same type on the same line counts only once; total pushes = sum of all scene hits.',
+      '- Scene word count: Chinese counts CJK characters; English counts words x 1.67, rounded.',
+      '- Density = info pushes / word count x 1000, kept to 2 decimals.',
+      '- Water scene: a scene with 0 info pushes is water.',
+      '- Overload: a scene with 4 or more pushes AND (density 30 or more per 1000 words OR hits squeezed into 2 lines or fewer) is overload; a beat-by-beat confrontation is not overload.',
+      '- Thirds: first-third end = max(1, ceil(total scenes / 3)); last-third start = total scenes minus the first-third end; a zone counts as pushed when any scene inside it has info.',
+      '- Rising progression: last third  >= first third, or mid third  >= first third; otherwise it is declining when total scenes are 4 or more.',
+      '- Deduction table: water ratio over 40% minus 15 (high), over 25% minus 8 (mid); each water scene of 15 words or more minus 5 (mid); each overload scene minus 3 (mid).',
+      '- Zone and volume: empty hook zone (first third) minus 10 (high); empty climax zone (last third) minus 10 (high); declining progression minus 5 (mid); total pushes below total scenes minus 8 (mid).',
+      '- Issue types: too_many_water_scenes (high or mid), water_scene (mid), info_overload (mid), no_info_in_hook_zone (high), no_info_in_climax_zone (high), no_rising_progression (mid), low_total_info (mid).',
+      '- Total score: 100 minus all deductions, then clamp(0, 100).',
+      '- Self-check: every scene pushes at least 1 new info; water ratio below 25%; never pack 4 or more pushes into 2 lines; both the first third and the last third must contain a reveal; info volume never declines from start to end.',
+    ].join('\n');
+  }
+  return [
+    '【信息密度前置教学（检测同源：informationDensityScore 七类信息 + 水戏/过载 + 八类扣分）】',
+    '- 场景切分：场头判定走 script-scenes 单一事实源；第一个场头之前的散行不计入任何场景；全篇无场头则整篇算 1 场。',
+    '- 检测范围：只在对白行与动作行中找信息；对白行 = 行首 1-6 字姓名（英文两种格式）+ 可选（情绪）+ 冒号 + 非空；动作行 = △▲*✦ 开头。',
+    '- 七类信息：identity 身份揭示 / motive 动机揭示 / truth 真相揭示 / relation 关系变化 / goal 目标转向 / reversal 反转信号 / evidence 实证揭示（录音·流水·账目·合同·律师·报案等硬物证）。',
+    '- 同一行可命中多个类型并分别计数，但同一类型在同一行只计一次；信息推进总数 = 各场命中数之和。',
+    '- 场次字数：中文按汉字数，英文按单词数 × 1.67 四舍五入。',
+    '- 信息密度值 = 该场信息推进数 ÷ 该场字数 × 1000，保留两位小数。',
+    '- 水戏判定：单场信息推进数为 0 即 water。',
+    '- 过载判定：单场 ≥4 条信息推进，且（密度 ≥30/千字 或 命中行数 ≤2 行）才算 overload；逐句摊牌的递进场不算过载。',
+    '- 三段切分：前 1/3 终点 = max(1, ceil(总场数 ÷ 3))；末 1/3 起点 = 总场数 − 前 1/3 终点；首末区各有任一场有信息即视为该区有推进。',
+    '- 渐进上升：后段信息数 ≥ 前段，或中段 ≥ 前段，即算渐进；否则在总场数 ≥4 时判递减。',
+    '- 扣分表：水戏占比 >40% 扣 15（high）、>25% 扣 8（mid）；每场水戏（字数 ≥15）扣 5（mid）；每场过载扣 3（mid）。',
+    '- 区间与总量扣分：前 1/3 无推进扣 10（high）；末 1/3 无推进扣 10（high）；渐进下降扣 5（mid）；总推进数 < 总场数扣 8（mid）。',
+    '- 问题类型：too_many_water_scenes（high 或 mid）/ water_scene（mid）/ info_overload（mid）/ no_info_in_hook_zone（high）/ no_info_in_climax_zone（high）/ no_rising_progression（mid）/ low_total_info（mid）。',
+    '- 总分：100 减去全部扣分后 clamp(0, 100)。',
+    '- 成稿自查：每场至少 1 条新信息；水戏占比 <25%；不让单场 4 条以上信息挤在 ≤2 行；前 1/3 与末 1/3 都必须有揭示；信息量从前往后不递减。',
+  ].join('\n');
+}
