@@ -148,3 +148,45 @@ export function dialogueAiTaste(draft: string): DialogueAiTasteResult {
   const score = Math.min(100, Math.round((issues.length / total) * 100));
   return { score, issues, breakdown };
 }
+
+/**
+ * v2.407 对白 AI 味前置教学（与 dialogueAiTaste 同源）
+ * ------------------------------------------------------------------
+ * 撰写师首轮即拿到检测口径，避免写完被 deai / craft 维度打低分。
+ */
+export function buildDialogueAiTasteDirective(_format: string = 'LIVE', lang: string = 'zh'): string {
+  if (lang === 'en') {
+    return [
+      '【Dialogue AI Taste Pre-Writing Briefing (same source as dialogueAiTaste: five signal types + priority chain + score formula + severity split)】',
+      '- Scan scope: dialogue lines only (1-12 char speaker name + colon); scene headers, title pages, day/night/flashback bare labels are excluded.',
+      '- Five signal types: lecturing / expository / aphorism / formal / parallelism.',
+      '- Priority chain: lecturing > expository > aphorism > formal > parallelism; each dialogue line counts only the first matched type.',
+      '- lecturing keywords: you must understand, you need to know, you should realize, let me tell you, remember that, listen carefully — length > 20 chars.',
+      '- expository keywords: because of this, this is why, the reason is that, due to the fact that.',
+      '- aphorism keywords: the true meaning of, life is like, only by can we, no matter what, as long as we.',
+      '- formal keywords: therefore, however, thus, hence, consequently, as we all know, in conclusion.',
+      '- parallelism: at least 3 comma-separated clauses starting with the same word (Chinese: first two chars identical / English: first word identical).',
+      '- Score formula: round(issue count / total dialogue count x 100) capped at 100; empty script = 0.',
+      '- severity split: lecturing and expository are high; the other three are medium.',
+      '- Rewrite direction: lecturing → action/subtext; expository → hide info in action/conflict; aphorism → character unique voice; formal → colloquial; parallelism → vary rhythm, keep one punch.',
+      '- Pipeline consumption: craft dialogue dimension uses (100 - score) as a quality input; deai dimension adds (100 - score) x 0.02 as negative weight.',
+      '- Self-check: every speech ≥20 chars — does it sound like a lecture? is information hidden in action or just dumped? replace any aphorism with character-specific phrasing.',
+    ].join('\n');
+  }
+  return [
+    '【对白 AI 味前置教学（检测同源：dialogueAiTaste 五维度 + 优先级链 + score 公式 + severity 分级）】',
+    '- 检测范围：只扫对白行（1-12 字姓名 + 冒号 + 台词），场头 / 剧名页 / 日·夜·闪回纯标签行一律排除。',
+    '- 五维度 AI 味：lecturing 说教腔 / expository 解释性 / aphorism 万能金句 / formal 书面语 / parallelism 排比堆砌。',
+    '- 优先级链：lecturing > expository > aphorism > formal > parallelism；单条台词只记第一命中的类型。',
+    '- lecturing 说教腔：关键词 8 个「你要知道 / 你必须明白 / 你应该懂得 / 你听我说 / 记住 / 听好了 / 我告诉你 / 你给我记着」，长度 >20 字才算命中。',
+    '- expository 解释性台词：关键词 5 个「因为所以 / 是因为 / 这就是为什么 / 之所以是因为 / 由于因此」。',
+    '- aphorism 万能金句：关键词 6 个「真正的是 / 人生就像 / 只有才能 / 不管都 / 只要就一定 / 没有就没有」。',
+    '- formal 书面语：关键词 8 个「因此 / 然而 / 倘若 / 故此 / 众所周知 / 综上所述 / 由此可见 / 毋庸置疑」。',
+    '- parallelism 排比堆砌：同一句对白被逗号分割后，≥3 个短句以相同词开头（中文按前两字相同 / 英文按首个词相同）；典型形态「你不…你不…你不…」。',
+    '- 得分公式：round(问题数 / 总对白数 ×100) 封顶 100；空稿 0 分；台词越少，出现 1 句 AI 味台词的扣分占比越高。',
+    '- severity 分级：lecturing 和 expository 为 high（教腔 / 说明书最伤）；aphorism / formal / parallelism 为 medium。',
+    '- 改写方向：lecturing 改说教为行动/潜台词；expository 拆解释、把信息藏进动作或冲突；aphorism 删万能金句、用角色独有的表达；formal 把书面语换成口语、对白必须能说出口；parallelism 拆解排比、保留一句点睛即可。',
+    '- pipeline 消费：craft dialogue 维度以 (100 - score) 作为质量输入；deai 维度以 (100 - score) × 0.02 作为负向权重。',
+    '- 成稿自查：每条 ≥20 字的对白 —— 会不会听起来像上课？信息是藏进了动作/冲突还是被直接讲解？万能金句都换成角色独有的表达？是否有 ≥3 句相同词开头的排比？对白能不能用嘴说出来？',
+  ].join('\n');
+}
