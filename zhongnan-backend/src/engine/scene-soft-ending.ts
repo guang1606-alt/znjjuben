@@ -172,3 +172,49 @@ export function sceneSoftEndingDigest(res: SceneSoftEndingResult | null | undefi
 export function sceneSoftEndingForStorage(draft: string): SceneSoftEndingDigest {
   return sceneSoftEndingDigest(sceneSoftEnding(draft));
 }
+
+/**
+ * 前置教学：buildSceneSoftEndingDirective(_format='LIVE', lang='zh')
+ * ----------------------------------------------------------------
+ * 同源铁律：教学函数与检测器 sceneSoftEnding 同文件；format 不门控（LIVE/AIGC/缺省一致）。
+ * 目的：撰写师/润色师首轮即拿到"内场末拍泄气"的检测口径，
+ *       避免写完被 prePolish softEndHint 与 craft/deai 复评打回。
+ */
+export function buildSceneSoftEndingDirective(_format: string = 'LIVE', lang: string = 'zh'): string {
+  if (lang === 'en') {
+    return [
+      '【Scene Soft Ending Pre-Writing Briefing (same source as sceneSoftEnding: last beat of every non-final scene; 9 points per hit; floor 20)】',
+      '- Scope: split scenes by scene headers; check only non-final scenes (the final scene belongs to cliffhanger); skip any scene with fewer than 3 lines.',
+      '- Precondition: the scene must contain at least one energy signal (slam / shouted / grabbed / slapped / divorce / fired / police / evidence / recording / dna / will / truth / pregnant / crash / kidnap / betray / exposed / how dare you / no way); no energy means no exhale to judge.',
+      '- Last beat: take the final non-empty line; if it is dialogue (speaker + colon) skip the scene entirely; judge on the merged text of the last two lines.',
+      '- Soft endings (must carry silence / turning away / sighing; a bare "walked" does not count): sighed / turned and walked away / shuffled off / disappeared into the night / closed the door softly / shook his head / fell into silence / the room went quiet / sat down slowly / slumped back / said nothing.',
+      '- Exemption 1: a strong-energy move in the last two lines (stormed out / slammed the door / marched / whipped around) is not an exhale.',
+      '- Exemption 2: a hook, decision or new information in the last line (a question mark, phone, text message, report, door burst open, you will pay, last chance, countdown, blood, will, recording, camera) is not an exhale.',
+      '- Score: max(20, 100 - hits x 9); empty draft = 100.',
+      '- Rewrite: leave the knife on the table - cut on evidence, an unanswered question, a new threat or a half-finished move; delete sighing, retreating backs and soft door closes.',
+      '- Division: scene-padding draggyTail covers the last 15% of the episode; this engine covers the exhale tail of every internal scene.',
+      '- Division: cliffhanger covers only the final scene of the episode; this engine skips it explicitly.',
+      '- Division: hollow-action covers hollow action density inside a scene; this engine only judges what the last beat lands on.',
+      '- Diagnostics: sceneCount and checkedScenes are display-only and never charged.',
+      '- Pipeline consumption: prePolish lists every hit into the polisher hint (softEndHint); craft initial, craft re-eval and deai rescan the same result.',
+      '- Self-check: what is the last image of this scene? If it is a back walking away or a sigh, replace it with a half-asked question or something just pushed onto the table.',
+    ].join('\n');
+  }
+  return [
+    '【场景软收尾·前置教学（检测同源：sceneSoftEnding 逐内场末拍，每条命中扣 9 分，20 分封底）】',
+    '- 检测对象：按场头切场，只查除末场外的所有内场（末场归 cliffhanger/收尾评分，本引擎不管）；单场有效行 <3 直接跳过。',
+    '- 背景条件：该场必须先出现过至少一次高能信号（摔/拍桌/怒吼/夺门/跪/一巴掌/撕/泼/撞/拽/拦住/质问/离婚/签字/辞职/开除/报警/证据/录音/亲子鉴定/遗嘱/真相/怀孕/车祸/绑架/反转/崩溃/大哭/冷笑/羞辱/复仇/陷害/揭穿/掏出/下令/赶出/断绝关系/你凭什么/给我滚/我不信/不可能）——没提过气就不谈泄气。',
+    '- 末拍口径：取该场最后一个非空行；末拍是台词（1-12 字说话人 + 冒号）直接不判；判定取「倒数第二行 + 最后一行」两行合并文本。',
+    '- 软收尾词表（必须带沉默/转身/叹气质感，裸「走」不算）：长长地叹了口气/叹息/转身离开/扭头走开/默默离开/悄悄走开/静静离去/缓缓离开/失魂落魄地离开/消失在夜色/背影消失/轻轻关上房门/摇了摇头/沉默不语/陷入死寂/房间里只剩/空气凝固/呆坐/瘫坐/怔怔地/久久没说话。',
+    '- 豁免一：末拍两行内出现强能量动作（摔门/夺门/拍桌/猛地/转身就走/拂袖/撞门/踹）→ 不算泄气。',
+    '- 豁免二：末拍行含钩子/决定/新信息（问号、手机、短信、屏幕亮、化验单、报告、鉴定、门被推开、你到底是谁、等着瞧、不会放过、明天就、最后通牒、倒计时、血、遗嘱、录音键、摄像头、红灯闪）→ 不判。',
+    '- 得分：score = max(20, 100 - 命中场数 × 9)；空稿 100。',
+    '- 改写方向：把刀留在桌上——硬切在物证、未答的问题、新威胁或半截动作上；删掉叹气、背影、关门这类散场调度。',
+    '- 与 scene-padding 分工：它的 draggyTail 管全集末段 15% 的「岁月静好」，本引擎管每个内场冲突后的泄气尾巴。',
+    '- 与 cliffhanger 分工：cliffhanger 只管全集最后一场；本引擎显式跳过末场。',
+    '- 与 hollow-action 分界：hollow-action 管场内空心动作密度；本引擎只看末拍落点。',
+    '- 诊断字段：sceneCount（总场数）与 checkedScenes（受检内场数）只做展示，不参与扣分。',
+    '- pipeline 消费：prePolish 逐场注入润色师（softEndHint）；craft 初评、craft 复评、deai 复扫同一结果。',
+    '- 成稿自查：本场最后一个画面是什么？如果是背对镜头走远或一声叹息，换成一句没答完的话，或一件刚被推上桌的东西。',
+  ].join('\n');
+}
