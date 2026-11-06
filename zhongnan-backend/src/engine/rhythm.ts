@@ -58,3 +58,65 @@ export function rhythmScan(text: string): RhythmReport {
   score -= issues.filter((i) => i.severity === 'high').length * 0; // 已体现在节拍分
   return { arc: { hook, conflict, turn, blank }, dialogueLines, actionLines, actionRatio, issues, score: Math.max(0, Math.min(100, score)) };
 }
+
+/**
+ * v2.398 节奏曲线前置教学（与 rhythmScan 检测口径 100% 同源）
+ * 全制式生效，format 不设门控，仅保留签名。
+ * 只教单集四节拍与呼吸占比；憋爽节奏归 payoff-rhythm，节拍策划归 beat-system。
+ */
+export function buildRhythmDirective(_format: string = 'LIVE', lang: 'zh' | 'en' = 'zh'): string {
+  if (lang === 'en') {
+    return [
+      '[Rhythm guardrail — same source as rhythmScan (four-beat arc + breathing ratio)]',
+      'Input: one episode script. This check only scores the four-beat arc and the action/dialogue breathing ratio; suppression-release pacing belongs to payoff-rhythm, beat planning belongs to beat-system.',
+      '',
+      'Statistics:',
+      '- total = max(1, dialogue lines + action lines). A line starting with the action marker (triangle) counts as an action line; a dialogue line is a line-start name of 1-6 chars plus optional parenthesized emotion plus colon.',
+      '- actionRatio = action lines divided by total, rounded to 2 decimals.',
+      '- Opening window: skip scene headers and the title page, join the first 6 body lines, then take the first 120 chars.',
+      '- Ending window: join the last 6 body lines, then take the last 140 chars.',
+      '',
+      'Four beats and breathing (each beat is worth 20 points):',
+      '- flat_open (high, lose 20 points): the opening 120 chars contain no conflict or suspense signal. Hook signals: question mark, exclamation mark, throw, kick, rush, kneel, tear, roll, divorce, betrayal, suddenly, unexpectedly, to my surprise, a slap, crash, overturn, fling, glare, sneer, pregnancy, affair, fire, dismiss, will, inheritance.',
+      '- no_conflict (high, lose 20 points): fewer than 2 conflict-signal hits across the whole script. Conflict signals: quarrel, argue, curse, retort, no, on what grounds, how dare you, stop, block, push, grab, anger, roar, sneer, wishful thinking, dream on, standoff, slam.',
+      '- no_turn (mid, lose 20 points): no turn or reversal signal anywhere in the script. Turn signals: did not expect, who knew, just then, however, next second, suddenly, turn around, unexpectedly, so it turns out, as it happens, at that very moment, who would have thought, as a result, the moment the words landed.',
+      '- no_blank (mid, lose 20 points): the last 140 chars carry no blank space or hook. Blank signals: question mark, ellipsis, never looked back, silence, freeze, stunned, abruptly, suspense, end of episode, black screen, want to know, after all, still not, to be continued.',
+      '- no_breath (mid): actionRatio below 0.15 means the whole episode is a dialogue wall with no breathing room; insert action, expression and environment lines.',
+      '- over_describe (low): actionRatio above 0.7 means description drags the pace; push the plot with dialogue. Breathing still adds 8 points in this case.',
+      '',
+      'Scoring:',
+      '- score = four beats x 20 points + breathing 20 points; breathing adds 20 when actionRatio is within 0.15-0.7, and 8 when it is above 0.7.',
+      '- Final score = clamp(0, 100). Issues are not deducted again; every missed beat simply loses its own 20 points.',
+      '- Self-check: put one conflict or abnormal image in the opening 120 chars; keep at least 2 conflict hits; place one turn in the middle or late section; leave a hook in the last 140 chars; keep actionRatio within 0.15-0.7.',
+    ].join('\n');
+  }
+  return [
+    '【节奏曲线前置教学（检测同源：rhythmScan 四节拍 + 呼吸占比）】',
+    '输入：单集正文。只评四节拍完整度与动作/台词呼吸比；憋爽节奏归 payoff-rhythm，节拍策划归 beat-system。',
+    '',
+    '统计口径：',
+    '- total = max(1, 台词行 + 动作行)；△ 开头计动作行；台词行 = 行首 1-6 字符姓名 + 可选「（情绪）」+ 冒号。',
+    '- 动作行占比 actionRatio = 动作行 ÷ total，保留两位小数。',
+    '- 开场窗口：跳过场头与剧名页，取正文前 6 行拼接后截前 120 字。',
+    '- 结尾窗口：取正文后 6 行拼接后截后 140 字。',
+    '',
+    '四节拍与呼吸（每节拍各 20 分）：',
+    '- flat_open（high，失 20 分）：开场前 120 字没有任何冲突/悬念信号。钩子信号：？/！/摔/踹/冲/跪/撕/滚/离婚/背叛/突然/竟然/居然/一巴掌/撞/掀/甩/瞪/冷笑/怀孕/出轨/解雇/开除/遗嘱/遗产。',
+    '- no_conflict（high，失 20 分）：全片对抗信号需 ≥ 2 处，累计 < 2 处即报。对抗信号：吵/争/骂/怼/反驳/不/凭什么/你敢/凭/拦/挡/推/抢/怒/吼/冷笑/凭什么/休想/做梦/对峙/摔；同一条信号出现多次逐次计数。',
+    '- no_turn（mid，失 20 分）：全片任意位置都没有转折/反转信号。转折信号：没想到/谁知/就在这时/然而/下一秒/突然/转身/竟然/原来/偏偏/就在此刻/岂料/结果/谁知道/话音刚落。',
+    '- no_blank（mid，失 20 分）：最后 140 字没有留白或钩子。留白信号：？/…/没再回头/沉默/愣住/僵住/戛然/悬念/本集完/黑屏/欲知/到底/究竟/还没/未完。',
+    '- no_breath（mid）：动作行占比 < 0.15，全程对词没有呼吸；插入动作、神态、环境行。',
+    '- over_describe（low）：动作行占比 > 0.7，描述拖节奏；用台词推进冲突；此时呼吸分只 +8 分。',
+    '',
+    '评分：',
+    '- 四节拍各 20 分 + 呼吸 20 分；动作行占比落在 0.15-0.7 加满 20，> 0.7 只加 +8 分。',
+    '- 最终分 = clamp(0, 100)；问题不再额外扣分，缺哪个节拍就失该节拍的 20 分。',
+    '',
+    '成稿自查：',
+    '- 开场前 120 字内落一个冲突或反常画面，别用铺垫开场。',
+    '- 全片至少 2 处对抗，让角色正面顶起来。',
+    '- 中后段安排一次转折，避免一条直线讲到底。',
+    '- 结尾 140 字留钩：悬念、未解或动作收束。',
+    '- 动作行占比压进 0.15-0.7：低于下限是对词墙，高于上限是描述墙。',
+  ].join('\n');
+}
