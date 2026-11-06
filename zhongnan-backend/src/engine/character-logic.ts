@@ -112,3 +112,51 @@ export function characterLogicScan(cast: CastMap, text: string): { issues: Logic
   const deduct = issues.reduce((s, i) => s + (i.severity === 'high' ? 18 : i.severity === 'mid' ? 9 : 4), 0);
   return { issues, score: Math.max(0, 100 - deduct) };
 }
+
+/**
+ * v2.396 人物行为逻辑前置教学（与 characterLogicScan 检测口径 100% 同源）
+ * 全制式生效，format 不设门控，仅保留签名。
+ * 五类硬伤 + 扣分表 + 台词提取口径 + 无卡豁免，详见正文。
+ */
+export function buildCharacterLogicDirective(_format: string = 'LIVE', lang: 'zh' | 'en' = 'zh'): string {
+  if (lang === 'en') {
+    return [
+      '[Character logic guardrail — same source as characterLogicScan (five hard failures)]',
+      'Input: cast card + episode script. The checker only diagnoses and advises; it never rewrites. Without a cast card none of the five classes fire.',
+      '',
+      'Five hard limits (thresholds mirror the checker):',
+      '1) missing (high, 18 points): a main character declared in the cast card never appears in this episode (the name never occurs in the text). Either bring them on screen or remove them from this episode cast.',
+      '2) background (mid, 9 points): a declared character is only mentioned in action/description and has zero dialogue lines. Give at least one reaction with a personal stance.',
+      '3) voice_break (mid, 9 points per line): the declared voice tag contradicts the actual line. A tag containing "terse / silent / few words" plus a line longer than 30 chars after removing commas, periods, enumeration marks and ellipses; or a tag containing "rough / street / colloquial / down-to-earth" plus written connectives (therefore, however, not only, moreover, in summary, in other words, meanwhile, the reason is, due to, obviously).',
+      '4) emotion_jump (low, 4 points per case): two adjacent lines by the same character flip from positive to negative polarity with no action, pause or inner buffer between them. Positive markers: smile, happy, gentle, relaxed, proud, relieved, sweet, warm. Negative markers: angry, cry, roar, cold, hate, tremble, afraid, anxious, harsh, bitter, choke, bite, glare.',
+      '5) tool_support (low, 4 points): the character name equals or contains a tool-name (passerby, waiter, receptionist, guard, nurse, clerk, driver, cleaner, assistant, secretary, neighbor), has exactly 1 dialogue line, and no action line (triangle marker) gives them an independent action in that line.',
+      '',
+      'Calibration:',
+      '- Penalty: 18 / 9 / 4 points by severity, summed per issue; final score = max(0, 100 - penalty), no bonus, no upsampling.',
+      '- Polarity: a line carrying both positive and negative markers counts as 0 (mixed emotion) and is not a hard flip; a 0-polarity line neither breaks nor updates the reference, so keep the last non-zero polarity.',
+      '- Voice: judged only from the cast voice tag, never guessed; the long-line threshold is > 30 chars after removing commas, periods, enumeration marks and ellipses.',
+      '- Dialogue parsing: 2-6 char name at line start + optional parenthesized emotion + colon; lines starting with the action marker and scene headers are not dialogue.',
+      '- Without a cast card all five classes are skipped and the score is a full 100; with a cast card and zero dialogue, missing/background still apply.',
+      '- Self-check: every main character gets at least one line; a terse character keeps each line at 30 chars or fewer; a rough character avoids written connectives; add an action or pause before an emotional flip; a single-line tool-name character needs an action of their own.',
+    ].join('\n');
+  }
+  return [
+    '【人物行为逻辑前置教学（检测同源：characterLogicScan 五类硬伤）】',
+    '输入：人物卡 cast + 本集正文；本检测只做可解释诊断，不替用户改稿。',
+    '',
+    '五类硬线（与检测阈值同源）：',
+    '1) missing 悬空人物（high，扣 18 分）：人物卡里的主要角色本集完全未出场（正文连名字都没出现）。要么让他本集出场，要么从本集人物表移除。',
+    '2) background 背景板（mid，扣 9 分）：人物卡角色只在动作/叙述里被提及，一句台词都没有。至少给一次带个人立场的反应。',
+    '3) voice_break 人设崩塌（mid，扣 9 分，逐句计）：声口标签与台词矛盾——标签含「寡言/少言/沉默/话少」却出现去掉「，。、…」后 > 30 字的长句；标签含「粗犷/市井/大老粗/口语/接地气」却出现书面词（因此/然而/不仅/而且/综上所述/换言之/与此同时/之所以/由于/显然）。',
+    '4) emotion_jump 情绪硬切（low，扣 4 分，逐处计）：同一角色相邻台词情绪正负极直接翻转，中间没有任何动作/停顿/心理缓冲。',
+    '   - 正极词：笑/喜/开心/温柔/轻松/得意/释然/娇/甜/暖；负极词：怒/哭/吼/冷/恨/颤/怕/急/厉/酸/哽咽/咬/瞪。',
+    '   - 同一句同时命中正负极视为 0（情绪复杂）不算硬切；0 极性台词不打断也不更新参照，沿用上一个非 0 极性。',
+    '5) tool_support 单句龙套（low，扣 4 分）：角色名等于或包含工具名（路人/服务员/前台/保安/护士/店员/司机/保洁/助理/秘书/邻居），且只有 1 句台词，正文 △ 动作行里也没有该角色的独立动作。',
+    '',
+    '口径：',
+    '- 扣分：high 18 分 / mid 9 分 / low 4 分，逐条累加；最终分 = max(0, 100 - 扣分)，无 bonus、不设上采样。',
+    '- 台词提取：行首 2-6 字符姓名 + 可选「（情绪）」+ 冒号；△ 开头与场头行不计台词。',
+    '- 无 cast 时五类都不触发（情绪跳变也按人物卡条目遍历），直接满分 100；有 cast 但正文无对白时 missing/background 仍然报。',
+    '- 成稿自查：每个主要角色至少一句台词；寡言者一句不超过 30 字；粗犷者不用书面连接词；情绪翻转前补一个动作或停顿；工具名角色单句必须配自己的动作。',
+  ].join('\n');
+}
