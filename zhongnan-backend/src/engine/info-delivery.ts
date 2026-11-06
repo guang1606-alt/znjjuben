@@ -133,3 +133,48 @@ export function infoDelivery(draft: string): InfoDeliveryResult {
 
   return { score, narrationLines, hits, issues, advice };
 }
+
+/**
+ * 前置教学：buildInfoDeliveryDirective(_format='LIVE', lang='zh')
+ * ---------------------------------------------------------------
+ * 同源铁律：教学函数与检测器 infoDelivery 同文件；format 不门控（LIVE/AIGC/缺省一致）。
+ * 目的：撰写师/润色师首轮即拿到"渠道 + 投递标记 + 事件词三要素同现"的检测口径，
+ *       避免写完被 prePolish deliveryHint 与 craft/deai 复评打回。
+ */
+export function buildInfoDeliveryDirective(_format: string = 'LIVE', lang: string = 'zh'): string {
+  if (lang === 'en') {
+    return [
+      '【Passive Info Delivery Pre-Writing Briefing (same source as infoDelivery: three elements in one window; 11 points per hit, floor 25)】',
+      '- Scan scope: narration lines only. Skip scene headers and dialogue lines (a 1-4 char speaker prefix or a Capitalized name plus colon); bracketed action lines count as narration.',
+      '- Three elements must co-occur in the same window, or nothing is flagged:',
+      '  1) channel: phone / text / voicemail / missed call / notification; news / broadcast / breaking news; assistant / bodyguard / maid / butler / chauffeur / driver / nurse / aide / subordinate plus report / announce / inform / whisper.',
+      '  2) content marker: a colon followed by content, or read / said / saying / announced / reported / informed / notified / showed / revealed / voicemail said.',
+      '  3) event word: dead / died / killed / ran away / escaped / missing / arrested / the truth / address / location / contract / DNA test / will / recording / footage / evidence / identity / pregnant / hospital / car crash / kidnapped / dropped the charges / divorce / wedding called off / stake / bankrupt / acquisition / fired / list / password / CCTV / cheating / affair / betrayal / framed / exposed / silenced / real identity.',
+      '- Window rule: from 8 chars before the channel hit through 34 chars after it (120 chars after for English); all three elements must sit inside it - a later sentence does not count.',
+      '- Exemption: active acquisition (grabbed / snatched / demanded answers / interrogated / dug through / hacked into / tracked / staked out / broke into / eavesdropped / set a trap / ambushed / pretended / verified) means the information was seized, not fed.',
+      '- Exemption: an object without content (a missed call, a screen lighting up) belongs to cliffhanger; a person bringing the news face to face belongs to supporting-character; crowd retelling belongs to crowd-reaction; one-sided phone echo belongs to phone-relay.',
+      '- Division of labor: hollow-action owns lines that are nothing but blocking; this engine owns narration where a channel pushes the event to the character.',
+      '- Score: max(25, 100 - hits x 11); empty draft = 100.',
+      '- Rewrite direction: a phone should only make things harder (ringing at the worst moment, content of uncertain truth); never advance the plot for the character. If news must arrive, let the messenger bring it face to face with their own agenda and withhold half so the character has to seize the rest.',
+      '- Pipeline consumption: prePolish lists every hit into the polisher hint (deliveryHint); craft initial, craft re-eval and deai rescan the same result.',
+      '- Self-check: was this turn hunted, stumbled on, or waited for? Remove the channel - would the character still get here?',
+    ].join('\n');
+  }
+  return [
+    '【被动信息投喂·前置教学（检测同源：infoDelivery 三要素同现，每条命中扣 11 分，25 分封底）】',
+    '- 检测范围：只扫叙述行。跳过场头与台词行（中文说话人前缀 1-4 字 + 可选短括号 + 冒号）；括号动作行算叙述。',
+    '- 三要素必须在同一窗口同现，缺一不判：',
+    '  ① 渠道：手机/短信/电话/微信/消息提示/未接来电/语音留言；新闻/广播/热搜播报；助理/秘书/手下/保镖/佣人/保姆/管家/司机/护士/下属/随从/探子 + 进来/上前/低声 + 汇报/禀报/报告/来报/通报/传话/耳语。',
+    '  ② 内容投递标记：冒号后带内容 / 显示 / 写着 / 传来…声音 / 开口 / 说， / 播报 / 报道 / 告知 / 汇报 / 通知 / 发来 / 留言 / 字幕。',
+    '  ③ 剧情事件词：病危/去世/死亡/跑了/逃了/失踪/被抓/真相/地址/下落/合同/亲子鉴定/遗嘱/录音/证据/身份/怀孕/住院/车祸/绑架/撤诉/起诉/离婚/婚礼取消/股权/破产/收购/开除/名单/密码/监控/出轨/私情/背叛/陷害/曝光/灭口/追杀/身世。',
+    '- 窗口：中文渠道命中点前 8 字到命中点后 34 字；英文前 8 字符到后 120 字符。三要素必须落在同一窗口内，隔句不算。',
+    '- 豁免：主角主动取证（抢过/夺过/一把夺/追问/逼问/套话/翻查/查到/黑进/跟踪/蹲守/撬开/偷听/偷看/录下/设局/埋伏/假装/冒充/比对/核实/当面戳穿）——信息是抢来的不算投喂。',
+    '- 只给物件：未接来电、屏幕亮一下，是悬念钩子归 cliffhanger，不判投喂。',
+    '- 纸片人：当面亲口送情报的信息播报员归 supporting-character；群体转述归 crowd-reaction；单边电话复读归 phone-relay（本引擎不判台词）。',
+    '- 与空心动作分界：hollow-action 管整行只有站坐叹气；本引擎管叙述里渠道把事件送到眼前。',
+    '- 得分：score = max(25, 100 - 命中条数 × 11)；空稿 100。',
+    '- 改写方向：手机只负责让事情更麻烦（最不该响时响、内容真假难辨），不替她推进；必须送的信息让送信人带着自己的立场当面给、扣住一半逼主角出手。',
+    '- pipeline 消费：prePolish 逐条列命中行注入润色师（deliveryHint）；craft 初评、craft 复评、deai 复扫同一结果。',
+    '- 成稿自查：这条转折是主角追来的、撞破的，还是等来的？删掉渠道，她还会不会走到这一步？',
+  ].join('\n');
+}
