@@ -300,3 +300,41 @@ export function conflictEscalationCheck(text: string, lang: CeLang): ConflictEsc
     issues,
   };
 }
+
+/**
+ * v2.390 前置教学函数：与 conflictEscalationCheck 同源
+ * 五类结构病的 severity / 触发阈值 / 扣分 100% 对齐引擎源码
+ * 撰写师+润色师首轮注入，让阈值口径前置而不是写完再打回
+ */
+export function buildConflictEscalationDirective(_format: 'LIVE' | 'AIGC' = 'LIVE', lang: CeLang = 'zh'): string {
+  if (lang === 'en') {
+    return [
+      '【Pre-writing rule · conflict escalation ladder (sibling to conflictEscalationCheck)】',
+      'Conflict must climb a severity ladder, never jog in place. Five structural diseases — severity, trigger, penalty all mirror the detector:',
+      '',
+      'flat_conflict | high | ≥ 3 conflict windows all plateau at L2 mid-tier → -16 points',
+      'no_peak | mid | maxLevel === 1 — entire episode stays at bickering → -12 points',
+      'front_loaded | mid | firstWindowLevel ≥ 2 and laterMax < opening tier → -10 points',
+      'abrupt_escalation | mid | mid/late window jumps from bickering straight to life-or-death → -8 points',
+      'narrow_methods | low | heavyActionTotal ≥ 6 but actionKinds ≤ 2 → -6 points',
+      '',
+      'Exemption: windows < 3 or totalHits < 4 — skip structure grading for very short fragments',
+      'Score formula: score = clamp(100 - penalty, 0, 100)',
+      'Severity tiers: L1 bickering (argue/question/glare) → L2 break (slam/slap/blacklist) → L3 life-death (police/knife/bankrupt)',
+    ].join('\n');
+  }
+  return [
+    '【前置教学·冲突升级阶梯（ConflictEscalationCheck 同源·v2.390）】',
+    '冲突必须沿烈度阶梯爬坡，不能原地踏步。五类结构病——severity / 触发阈值 / 扣分与引擎 100% 对齐：',
+    '',
+    'flat_conflict | high | ≥ 3 个冲突窗口全部停中档 L2 → 扣 16 分',
+    'no_peak | mid | maxLevel === 1 全程只有口角档 → 扣 12 分',
+    'front_loaded | mid | firstWindowLevel ≥ 2 且 laterMax < 首档 → 扣 10 分',
+    'abrupt_escalation | mid | 中后段从口角档直跳生死档 → 扣 8 分',
+    'narrow_methods | low | heavyActionTotal ≥ 6 且 actionKinds ≤ 2 → 扣 6 分',
+    '',
+    '豁免：windows < 3 或 totalHits < 4 不评结构（极短片段跳过）',
+    '评分公式：score = clamp(100 - penalty, 0, 100)',
+    '烈度三档：L1 口角（争吵/质问/瞪眼）→ L2 决裂（摔门/拍桌/拉黑）→ L3 生死（报警/拿刀/破产）',
+  ].join('\n');
+}
