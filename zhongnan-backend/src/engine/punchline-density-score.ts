@@ -559,3 +559,49 @@ export function punchlineDensityScore(text: string, lang: PdLang = 'zh'): Punchl
     issues,
   };
 }
+
+/**
+ * v2.406 金句密度前置教学（与 punchlineDensityScore 同源）
+ * ------------------------------------------------------------------
+ * 撰写师/润色师首轮即拿到检测口径，避免写完被 craftPass 打回。
+ */
+export function buildPunchlineDensityDirective(_format: string = 'LIVE', lang: PdLang = 'zh'): string {
+  if (lang === 'en') {
+    return [
+      '【Punchline Density Pre-Writing Briefing (same source as punchlineDensityScore: nine signal types + strong-only rule + six checks + score formula + deduction table)】',
+      '- Scan scope: dialogue lines only (speaker name 1-6 chars + optional emotion parenthesis + colon); scene headers, title pages, episode titles, FADE OUT and △ action lines are excluded.',
+      '- Position: line index divided by total lines, rounded to two decimals; below 0.33 is head, below 0.66 is mid, the rest is tail.',
+      '- Nine signal types: reversal 95 / declarative 90 / contrast 85 / resolution 80 / threat 75 / question 70 / parallel 65 / metaphor 60 / weak 35.',
+      '- Dedup rule: when one dialogue line matches several types keep only the strongest; same speaker within 0.005 position counts as one line.',
+      '- Weak downgrade: weak does not count when the same line already hit a strong type; a bare "we will see" threat carries no rhetorical tension.',
+      '- Count gate: at least 2 punchlines per episode to pass, 3 or more is excellent; 0 triggers no_punchline (high), 1 triggers low_density (high), 2 triggers insufficient_density (mid).',
+      '- Strength gate: with 2 or more punchlines, a max strength below 80 triggers weak_punchline (mid).',
+      '- Distribution gate: with 2 or more punchlines, two empty segments among head/mid/tail triggers uneven_distribution (mid).',
+      '- Variety gate: with 3 or more punchlines, a single type triggers monotone (low).',
+      '- Climax gate: with 2 or more punchlines, no punchline at strength ≥80 in the closing segment (position ≥0.66) triggers no_climax_punch (mid).',
+      '- Weak ratio: with 2 or more punchlines, weak lines above half triggers too_many_weak (low).',
+      '- Score formula: count score min(35, count x 12) + strength score round(max /95 x 25) + distribution score filled segments x 5 + variety score min(10, types x 2) + closing climax 15.',
+      '- Deduction table: high costs 10 each, mid costs 5 each, low costs 2 each; final score is base score minus deductions then clamp(0, 100).',
+      '- Issue types: no_punchline (high) / low_density (high) / insufficient_density (mid) / weak_punchline (mid) / uneven_distribution (mid) / no_climax_punch (mid) / monotone (low) / too_many_weak (low).',
+      '- Self-check: at least 3 punchlines; at least one at strength ≥80; head, mid and tail each covered; a ≥80 punchline in the closing segment; weak lines no more than half; at least two distinct types.',
+    ].join('\n');
+  }
+  return [
+    '【金句密度前置教学（检测同源：punchlineDensityScore 九类信号 + 去重口径 + 六项评估 + 得分公式 + 扣分表）】',
+    '- 检测范围：只扫对白行（角色名 1-6 字 + 可选情绪括号 + 冒号），场头、剧名页、集标题、FADE OUT 与 △ 动作行一律排除。',
+    '- 位置口径：行号 ÷ 总行数保留两位小数；<0.33 算开头、<0.66 算中段、其余算结尾。',
+    '- 九类金句信号：reversal 反转点睛 95 / declarative 强势宣言 90 / contrast 对比反差 85 / resolution 决心表态 80 / threat 威胁压制 75 / question 灵魂拷问 70 / parallel 排比强化 65 / metaphor 比喻生动 60 / weak 弱金句 35。',
+    '- 去重口径：同一对白命中多种类型只取最强；位置差 <0.005 且同一说话人视为同一句。',
+    '- 弱金句降级：同一对白已命中强类型时 weak 不计入；「走着瞧」这类只有狠话没有张力。',
+    '- 数量门槛：每集至少 2 个金句及格、3 个以上优秀；0 个判 no_punchline（high），1 个判 low_density（high），2 个判 insufficient_density（mid）。',
+    '- 强度门槛：已有 2 个金句时，最高强度 <80 判 weak_punchline（mid）。',
+    '- 分布门槛：已有 2 个金句时，开头/中段/结尾有 2 段为空判 uneven_distribution（mid）。',
+    '- 多样性门槛：已有 3 个金句时只有一种类型判 monotone（low）。',
+    '- 结尾高潮：已有 2 个金句时，结尾段（位置 ≥0.66）没有强度 ≥80 的金句判 no_climax_punch（mid）。',
+    '- 弱金句占比：已有 2 个金句时，weak 占比超过一半判 too_many_weak（low）。',
+    '- 得分公式：数量分 min(35, 金句数 ×12) + 强度分 round(最高强度 /95 ×25) + 分布分 已填充段数 ×5 + 多样性分 min(10, 类型数 ×2) + 结尾高潮分 15。',
+    '- 扣分表：high 每项扣 10 / mid 每项扣 5 / low 每项扣 2；总分 = 基础分减扣分后 clamp(0, 100)。',
+    '- 问题类型：no_punchline（high）/ low_density（high）/ insufficient_density（mid）/ weak_punchline（mid）/ uneven_distribution（mid）/ no_climax_punch（mid）/ monotone（low）/ too_many_weak（low）。',
+    '- 成稿自查：金句 ≥3 个；至少一个 ≥80；开头/中段/结尾都有金句；结尾段必须有 ≥80 点睛；弱金句不超过一半；至少两种修辞类型。',
+  ].join('\n');
+}
