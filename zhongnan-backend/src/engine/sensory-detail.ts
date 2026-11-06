@@ -138,3 +138,51 @@ export function sensoryDetail(draft: string): SensoryResult {
 
   return { score, covered, missing, counts, nonVisualCount, narrationSentences: sentences.length, issues, advice };
 }
+
+/**
+ * 前置教学：buildSensoryDetailDirective(_format='LIVE', lang='zh')
+ * ----------------------------------------------------------------
+ * 同源铁律：教学函数与检测器 sensoryDetail 同文件；format 不门控（LIVE/AIGC/缺省一致）。
+ * 目的：撰写师/润色师首轮即拿到"叙述要可听可闻可触"的检测口径，避免写完被
+ *       prePolish sensoryHint 与 craft/deai 复评打回。
+ */
+export function buildSensoryDetailDirective(_format: string = 'LIVE', lang: string = 'zh'): string {
+  if (lang === 'en') {
+    return [
+      '【Sensory Detail Pre-Writing Briefing (same source as sensoryDetail: five senses + coverage 60 + non-visual density 40)】',
+      '- Scan scope: narration lines only. Skip scene headers and dialogue lines ("speaker 1-12 chars + colon"); bracketed action lines count as narration after stripping leading ( [ △ and trailing ) ].',
+      '- Five sense dimensions and example imagery:',
+      '  sight: light/shadow/glow/flash/silhouette/color.',
+      '  sound: creak/thud/hum/rustle/bang/whisper/howl.',
+      '  touch: hot/cold/rough/smooth/sticky/burning/freezing/itch.',
+      '  smell: smell/scent/stench/musty/pungent/aroma.',
+      '  taste: sweet/bitter/sour/spicy/salty/metallic/savory.',
+      '- Counting rule: each distinct lexicon word counts once per dimension, not per occurrence.',
+      '- Sentence split: narration split on 。！？!?；; and newlines; keep trimmed segments of length >= 4; sentence count 0 counts as 1.',
+      '- Coverage score (60): sight hit = 12, plus 12 for each non-visual dimension hit (sound/touch/smell/taste).',
+      '- Non-visual density score (40): min(40, round(nonVisualCount / sentenceCount x 120)) — one non-visual word every 3 sentences already maxes it.',
+      '- Final score = clamp(coverage + density, 0, 100); empty draft = 100.',
+      '- Division of labor: narrative-craft removes filter words (saw/heard/felt); this engine ADDS direct imagery. show-dont-tell handles stated emotion.',
+      '- Pipeline consumption: prePolish injects a sensory enrichment hint when any non-visual dimension is missing; craft/deai rescan the same result.',
+      '- Self-check: per key scene - is there an ambient sound, a temperature/texture, a smell or taste? Are they concrete nouns+verbs rather than filter words?',
+    ].join('\n');
+  }
+  return [
+    '【感官细节·前置教学（检测同源：sensoryDetail 五感覆盖 60 分 + 非视觉密度 40 分）】',
+    '- 检测范围：只扫叙述行。跳过场头与「1-12 字说话人 + 冒号」台词行；括号动作行算叙述，先剥掉行首（(△ 与行尾 )）。',
+    '- 五感维度与例词：',
+    '  视觉 sight：光/影/红/蓝/亮/暗/闪/刺眼/斑驳/轮廓。',
+    '  听觉 sound：响/声/轰/嗡/咔/吱/砰/哗/嘶/呜咽/呼啸。',
+    '  触觉 touch：烫/冰/冷/热/凉/粗糙/光滑/湿/黏/硬/软/麻/疼/硌/痒。',
+    '  嗅觉 smell：香/臭/腥/气味/味道/焦/呛/霉/腐。',
+    '  味觉 taste：甜/苦/酸/辣/咸/涩/鲜/甘/味蕾。',
+    '- 计数口径：同一维度内每个词表词只计 1 次（按命中词种数，不按出现次数）。',
+    '- 断句口径：叙述按 。！？!?；; 与换行切句，去空白后长度 ≥4 才计入句数；句数为 0 时按 1 计。',
+    '- 覆盖分（60）：视觉命中给 12；四个非视觉维度每命中一个再给 12（听/触/嗅/味）。',
+    '- 非视觉密度分（40）：min(40, round(非视觉词总数 ÷ 叙述句数 × 120)) —— 平均每 3 句有 1 个非视觉词即满分。',
+    '- 总分 = clamp(覆盖分 + 密度分, 0, 100)；空稿满分 100。',
+    '- 分工：narrative-craft 要求删「看到/听到/感觉到」滤镜词，本引擎要求加直接意象，一删一加不冲突；show-dont-tell 管情绪直说。',
+    '- pipeline 消费：prePolish 在任一非视觉维度缺失时注入感官补写提示；craft/deai 用同一结果复评。',
+    '- 成稿自查：每个关键场景 —— 有没有环境声？温度或质感？气味或味道？是不是具体名词+动词而不是滤镜词？',
+  ].join('\n');
+}
