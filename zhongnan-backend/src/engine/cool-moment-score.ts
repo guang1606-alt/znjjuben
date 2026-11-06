@@ -295,3 +295,49 @@ export function coolMomentScore(text: string, lang: CmLang = 'zh'): CoolMomentSc
 
   return { score, hits: deduped, count, variety, distribution, hasBuildup, issues };
 }
+
+/**
+ * v2.405 爽点密度前置教学（与 coolMomentScore 同源）
+ * ------------------------------------------------------------------
+ * 撰写师/润色师首轮即拿到检测口径，避免写完被 craftPass 打回。
+ */
+export function buildCoolMomentDirective(_format: string = 'LIVE', lang: CmLang = 'zh'): string {
+  if (lang === 'en') {
+    return [
+      '【Cool Moment Pre-Writing Briefing (same source as coolMomentScore: eight signal types + dedup + five checks + score formula + deduction table)】',
+      '- Scan unit: scan the whole script; dialogue and action lines count equally; within the same position ±0.02 keep only the highest-strength moment (dedup rule).',
+      '- Eight signal types: face_slap 95 / counterattack 92 / reveal 88 / flex 85 / punish 82 / protect 80 / wealth 78 / weak 40.',
+      '- Weak downgrade: weak only counts when the whole script has no strong moment; a lone threat line such as "just you wait" can never carry an episode.',
+      '- Three-segment distribution: position below 0.33 is head, below 0.66 is mid, the rest is tail.',
+      '- Buildup to payoff: the script must contain suppression signals (suppressed / enduring / humiliated / swallowing pride); the payoff only feels earned after a downbeat.',
+      '- Variety: count distinct moment types; a single type across the episode is monotone.',
+      '- Hard minimum: at least 3 cool moments per episode; 0 triggers no_cool_moment (high), 1-2 triggers low_density (high).',
+      '- Distribution gate: with 3 or more moments, two empty segments among head/mid/tail triggers uneven_distribution (mid).',
+      '- Strength gate: with 3 or more moments, moments at strength ≥80 must reach ceil(total x 0.5), otherwise weak_moments (mid).',
+      '- Buildup gate: with 3 or more moments, a script without any suppression signal triggers no_buildup (low).',
+      '- Variety gate: with 3 or more moments, a single type triggers monotone (low).',
+      '- Score formula: count score min(40, count x 13) + distribution score filled segments x 7 + strength score round(strong ratio x 20) + buildup score 10 + variety score min(10, types x 2).',
+      '- Deduction table: high costs 10 each, mid costs 5 each, low costs 2 each; final score is base score minus deductions then clamp(0, 100).',
+      '- Issue types: no_cool_moment (high) / low_density (high) / uneven_distribution (mid) / weak_moments (mid) / no_buildup (low) / monotone (low).',
+      '- Self-check: at least 3 cool moments; at least half of them at strength ≥80; head, mid and tail each carry one; at least one suppression buildup; at least two distinct types.',
+    ].join('\n');
+  }
+  return [
+    '【爽点密度前置教学（检测同源：coolMomentScore 八类信号 + 去重口径 + 五项评估 + 得分公式 + 扣分表）】',
+    '- 扫描单位：全文扫描爽点信号，台词与动作行同等计数；同一位置 ±0.02 内只保留强度最高的一个爽点（去重口径）。',
+    '- 八类爽点信号：face_slap 打脸爽 95 / counterattack 逆袭爽 92 / reveal 揭露爽 88 / flex 装逼爽 85 / punish 虐渣爽 82 / protect 护短爽 80 / wealth 财富炫耀爽 78 / weak 弱爽点 40。',
+    '- 弱爽点降级：全文没有强爽点时 weak 才计入总数；「你给我等着」这类狠话单独一个永远撑不起一集。',
+    '- 三段分布：位置 <0.33 算开头、<0.66 算中段、其余算结尾。',
+    '- 蓄力-爆发：全文必须出现憋屈/压抑/忍/屈辱/忍气吞声等蓄力信号，爽点前先抑后扬才算有来头。',
+    '- 多样性：爽点类型去重计数，全篇只有一种类型即单调。',
+    '- 数量硬门槛：每集至少 3 个爽点；0 个判 no_cool_moment（high），1-2 个判 low_density（high）。',
+    '- 分布门槛：已有 3 个爽点时，开头/中段/结尾有 2 段为空判 uneven_distribution（mid）。',
+    '- 强度门槛：已有 3 个爽点时，强度 ≥80 的爽点必须达到 ceil(总数 ×0.5)，否则判 weak_moments（mid）。',
+    '- 蓄力门槛：已有 3 个爽点时全篇无蓄力信号判 no_buildup（low）。',
+    '- 多样性门槛：已有 3 个爽点时只有一种类型判 monotone（low）。',
+    '- 得分公式：数量分 min(40, 爽点数 ×13) + 分布分 已填充段数 ×7 + 强度分 round(强爽点占比 ×20) + 蓄力分 10 + 多样性分 min(10, 类型数 ×2)。',
+    '- 扣分表：high 每项扣 10 / mid 每项扣 5 / low 每项扣 2；总分 = 基础分减扣分后 clamp(0, 100)。',
+    '- 问题类型：no_cool_moment（high）/ low_density（high）/ uneven_distribution（mid）/ weak_moments（mid）/ no_buildup（low）/ monotone（low）。',
+    '- 成稿自查：爽点 ≥3 个；强度 ≥80 的占一半以上；开头/中段/结尾都有爽点；至少一处憋屈蓄力；至少两种爽点类型。',
+  ].join('\n');
+}
