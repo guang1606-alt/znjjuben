@@ -154,3 +154,51 @@ export function rhetoricalBarrage(draft: string): BarrageResult {
 
   return { score, dialogueLines, hits, issues, advice };
 }
+
+/**
+ * 前置教学：buildRhetoricalBarrageDirective(_format='LIVE', lang='zh')
+ * -----------------------------------------------------------------
+ * 同源铁律：教学函数与检测器 rhetoricalBarrage 同文件；format 不门控（LIVE/AIGC/缺省一致）。
+ * 目的：撰写师/润色师首轮即拿到"同一人反问连珠、气势代替事实"的检测口径，
+ *       避免写完被 prePolish barrageHint 与 craft/deai 复评打回。
+ */
+export function buildRhetoricalBarrageDirective(_format: string = 'LIVE', lang: string = 'zh'): string {
+  if (lang === 'en') {
+    return [
+      '【Rhetorical Barrage Pre-Writing Briefing (same source as rhetoricalBarrage: one speaker firing questions instead of facts; 12 points per hit; floor 20)】',
+      '- Scope: only "speaker: line" dialogue lines (speaker 1-12 chars, optional parenthetical action); scene headers split scenes; the opening block is labeled "(opening)".',
+      '- Rule one — single line: 3 or more question marks in one dialogue line AND at least one rhetorical frame phrase in the same line.',
+      '- Rule two — chain: the same speaker fires 3 or more question-bearing lines in a row inside one scene, with at most one short reply from the other side in between (8 characters or fewer in Chinese, 5 words or fewer in English); the chain is capped at 6 lines and at least one line must carry a frame phrase.',
+      '- Frame phrases in English: who do you think / how dare / do you even / why should I / what gives you the right / how could you / are you kidding or serious / you know what / do not you dare or care / what kind of / since when.',
+      '- The two rules are judged independently and may both fire on the same stretch of dialogue.',
+      '- Short scenes and empty drafts: no dialogue line means no hit; empty draft = 100.',
+      '- Hit fields: sceneHeader, speaker, startLine / endLine, questionCount and up to 4 evidence lines are returned so the polisher can locate the barrage.',
+      '- Score: max(20, 100 - hits x 12); empty draft = 100.',
+      '- Diagnostics: dialogueLines is display-only and never charged.',
+      '- Rewrite: keep the single hardest question, turn the rest into statements, actions or silence; every question must pin a new fact or force the other side to pick a position; delete any question that cannot surface new information.',
+      '- Division: dialogue-pingpong covers the cross-speaker question-to-direct-answer chain, where a rhetorical question counts as healthy non-receipt; this engine only judges one speaker barraging.',
+      '- Division: self-pity-litany covers inward self-pity litany; this engine only judges outward attack by questions.',
+      '- Pipeline consumption: prePolish lists the barrage into the polisher hint (barrageHint); craft initial, craft re-eval and deai rescan the same result.',
+      '- Self-check: how many question marks sit on one line? If a question can be deleted without losing information or a position change, it is volume, not drama.',
+    ].join('\n');
+  }
+  return [
+    '【反问连珠·前置教学（检测同源：rhetoricalBarrage 同一人连发问句、气势代替事实，每条命中扣 12 分，20 分封底）】',
+    '- 场景切分：按场头切场（isSceneHeaderLine 同源），开场段记作「(开场)」；每场独立判定，命中按处计。',
+    '- 检测范围：只扫「说话人：台词」行（说话人 1-12 字，可带（括号）动作提示，全/半角冒号均可）；场头与无冒号动作行不参与。',
+    '- 口径一·单句：同一句台词出现 ≥3 个问号（？/?），且该句至少含 1 个反问框架词 → 记一条。',
+    '- 口径二·链式：同一说话人在同一场连续 ≥3 句带问号的台词，中间至多夹 1 句对方的短回应（中文去标点 ≤8 字、英文 ≤5 词），链条上限 6 句，且至少 1 句带反问框架词 → 记一条。',
+    '- 框架词（中文）：凭什么/有什么资格/你配/难道/至于吗/你是不是/你知不知道/你知道…吗/还想/还要脸/讲不讲/有没有良心/算什么/当我…吗/你管得着。',
+    '- 框架词（英文）：who do you think / how dare / do you even / why should i / what gives you the right / how could you / are you kidding 或 serious / you know what / do not you dare 或 care / what kind of / since when。',
+    '- 两口径独立：单句判与链式判互不排斥，同一处可以各记一条。',
+    '- 短场跳过：没有台词行的场次不判；空稿 100。',
+    '- 命中字段：sceneHeader（场头）、speaker（连问者）、startLine/endLine（起止行）、questionCount（问句数）、evidence（至多 4 句样本）随命中返回，供润色师定位。',
+    '- 得分：score = max(20, 100 - 命中处数 × 12)；空稿 100。',
+    '- 诊断字段：dialogueLines（台词行数）只做展示，不参与扣分。',
+    '- 改写方向：只留最狠的那一问，其余改成陈述、动作或静场；每一问必须钉出一个新事实或逼对方选边，答不出新东西的问号删掉。',
+    '- 与 dialogue-pingpong 分界：它管跨说话人「问→直答」接球链，反问在那里算健康的不接球；本引擎只判同一人质问倾泻。',
+    '- 与 self-pity-litany 分界：它管向内自怜的排比诉苦；本引擎只判向外攻击的反问连珠。',
+    '- pipeline 消费：prePolish 把命中逐条注入润色师（barrageHint）；craft 初评、craft 复评、deai 复扫同一结果。',
+    '- 成稿自查：同一句里有几个问号？哪一问删掉后信息量和立场都没变？那一问就是气势不是戏，删掉换成动作或具体指控。',
+  ].join('\n');
+}
