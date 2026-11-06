@@ -245,3 +245,41 @@ export function scenePaddingCheck(text: string, lang: PaddingLang): ScenePadding
     issues,
   };
 }
+
+/**
+ * v2.391 前置教学函数：与 scenePaddingCheck 同源
+ * 五类注水的 severity / 触发阈值 / 扣分 100% 对齐引擎源码
+ * 撰写师+润色师首轮注入，让阈值口径前置而不是写完再打回
+ */
+export function buildScenePaddingDirective(_format: 'LIVE' | 'AIGC' = 'LIVE', lang: PaddingLang = 'zh'): string {
+  if (lang === 'en') {
+    return [
+      '[Pre-writing rule · scene padding detection (sibling to scenePaddingCheck)]',
+      'Vertical rhythm survival line — every 30 seconds must deliver new info / conflict / relationship change. Five padding diseases; severity, trigger and penalty all mirror the detector:',
+      '',
+      'dead_scene | high | a whole scene with no conflict + no new info + no relationship change, and filler cues ≥ 2 → first scene -18 points, then -6 each, capped at 30',
+      'recap_dump | mid | recap phrases ≥ 2, or a "previously on" in the first 5% → -12 points',
+      'redundant_flashback | low | flashbacks ≥ 2 with zero new reveals → -8 points',
+      'slow_open | mid | zero progress cues in the first 15% and filler cues ≥ 3 → -10 points',
+      'draggy_tail | mid | zero progress cues in the last 15% and coda tropes ≥ 2 → -10 points',
+      '',
+      'Exemption: skip when text < 20 chars; a dead-scene body < 40 chars (en < 30) counts as a transition and is skipped; the first scene already scored as slow_open is not double-counted as dead_scene',
+      'Score formula: score = clamp(100 - penalty, 0, 100)',
+      'Every scene must deliver at least one: a plot-moving action / new information the audience did not have / a change between two characters',
+    ].join('\n');
+  }
+  return [
+    '【前置教学·场景注水空转（ScenePaddingCheck 同源·v2.391）】',
+    '竖屏节奏生死线：每 30 秒必须有新信息/冲突/关系变化。五类注水——severity / 触发阈值 / 扣分与引擎 100% 对齐：',
+    '',
+    'dead_scene | high | 整场无冲突+无新信息+无关系推进，且空转信号 ≥ 2 处 → 首场扣 18 分，第 2 场起每场 +6，封顶 30 分',
+    'recap_dump | mid | 复述话术 ≥ 2 处 或 前 5% 出现前情提要 → 扣 12 分',
+    'redundant_flashback | low | 闪回 ≥ 2 处 且 新信息 0 处 → 扣 8 分',
+    'slow_open | mid | 前 15% 推进信号 = 0 且 空转信号 ≥ 3 处 → 扣 10 分',
+    'draggy_tail | mid | 末 15% 推进信号 = 0 且 收尾套路 ≥ 2 处 → 扣 10 分',
+    '',
+    '豁免：正文 < 20 字不评；死场正文 < 40 字（en < 30）视为纯转场跳过；首场若已计 slow_open 不重复记 dead_scene',
+    '评分公式：score = clamp(100 - penalty, 0, 100)',
+    '一场戏必须至少交付一样：推动剧情的动作 / 观众不知道的新信息 / 两人关系的变化',
+  ].join('\n');
+}
