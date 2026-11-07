@@ -40,11 +40,14 @@ describe('v2.246 a11y：authModal 字段错误关联', () => {
     assert.match(region, /\$\(['"]authPwd['"]\)\.setAttribute\(['"]aria-invalid['"],\s*['"]true['"]\)/, 'showAuthErr 未给 authPwd 加 aria-invalid');
   });
 
-  it('closeAuth 清除 authPhone/authPwd 的 aria-invalid', () => {
-    const region = sliceBetween(appSrc, 'function closeAuth()', 'function syncAuthTabs');
-    assert.ok(region.length > 0, '应定位到 closeAuth');
-    assert.match(region, /\$\(['"]authPhone['"]\)\.removeAttribute\(['"]aria-invalid['"]\)/, 'closeAuth 未清 authPhone aria-invalid');
-    assert.match(region, /\$\(['"]authPwd['"]\)\.removeAttribute\(['"]aria-invalid['"]\)/, 'closeAuth 未清 authPwd aria-invalid');
+  it('关闭弹窗清 authPhone/authPwd 的 aria-invalid', () => {
+    // v2.451 起清理收口到 resetAuthForm，并挂在模态关闭钩子上（X/遮罩/Esc/data-close 全覆盖），
+    // 所以锚点从 closeAuth 移到 resetAuthForm（closeAuth 现在只负责走统一关闭出口）。
+    const region = sliceBetween(appSrc, 'function resetAuthForm()', 'function closeAuth');
+    assert.ok(region.length > 0, '应定位到 resetAuthForm');
+    assert.match(region, /\$\(['"]authPhone['"]\)\.removeAttribute\(['"]aria-invalid['"]\)/, 'resetAuthForm 未清 authPhone aria-invalid');
+    assert.match(region, /\$\(['"]authPwd['"]\)\.removeAttribute\(['"]aria-invalid['"]\)/, 'resetAuthForm 未清 authPwd aria-invalid');
+    assert.match(appSrc, /setModalCloseHook\('authModal',\s*resetAuthForm\)/, '清理必须挂在关闭钩子上，否则 Esc 关闭不生效');
   });
 
   it('authPhone/authPwd 绑定 input 事件清 aria-invalid（用户改错时立即解除标记）', () => {

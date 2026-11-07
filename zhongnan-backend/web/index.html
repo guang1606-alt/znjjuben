@@ -686,9 +686,12 @@
           <button class="btn-primary" id="saveProfileBtn" data-i="save"></button>
           <div class="pw-section" style="margin-top:14px;border-top:1px solid var(--line);padding-top:12px">
             <div style="font-weight:600;margin-bottom:8px" data-i="pwSection"></div>
-            <div class="field" style="margin-bottom:8px"><label data-i="curPw" for="inCurPw"></label><input type="password" id="inCurPw" autocomplete="current-password" /></div>
-            <div class="field" style="margin-bottom:10px"><label data-i="newPw" for="inNewPw"></label><input type="password" id="inNewPw" autocomplete="new-password" maxlength="64" /></div>
-            <button class="btn-ghost" id="changePwBtn" data-i="changePwBtn"></button>
+            <!-- v2.451 同 v2.449 一族：改密是密码管理器识别「更新凭据」的标准场景，必须有 form + submit -->
+            <form id="chgPwForm" novalidate>
+              <div class="field" style="margin-bottom:8px"><label data-i="curPw" for="inCurPw"></label><input type="password" id="inCurPw" autocomplete="current-password" /></div>
+              <div class="field" style="margin-bottom:10px"><label data-i="newPw" for="inNewPw"></label><input type="password" id="inNewPw" autocomplete="new-password" maxlength="64" /></div>
+              <button class="btn-ghost" id="changePwBtn" type="submit" data-i="changePwBtn"></button>
+            </form>
           </div>
         </div>
       </section>

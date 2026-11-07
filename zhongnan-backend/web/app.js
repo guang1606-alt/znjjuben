@@ -3115,13 +3115,17 @@
       }
     }
   }
-  function closeAuth() {
-    closeModalEl($('authModal'));
+  // v2.451 关闭清理从 closeAuth 抽成 resetAuthForm，并挂在 v2.220 的模态关闭钩子上：
+  // X 按钮/遮罩走 closeAuth，但 Esc 与通用 data-close 走的是 closeModalEl —— 清理若只写在
+  // closeAuth 里，Esc 关闭就会把密码留在 DOM（同页脚本可读，密码管理器也可能记成新凭据）。
+  function resetAuthForm() {
     $('authErr').classList.add('hidden');
+    $('authPwd').value = '';
     // v2.246 a11y：清除字段错误标记（用户关闭后重开时不残留无效状态）
     $('authPhone').removeAttribute('aria-invalid');
     $('authPwd').removeAttribute('aria-invalid');
   }
+  function closeAuth() { closeModalEl($('authModal')); }
   function syncAuthTabs() {
     $('tabLogin').classList.toggle('on', authMode === 'login');
     $('tabRegister').classList.toggle('on', authMode === 'register');
@@ -3685,7 +3689,9 @@
     } catch (e) { xnSay(e.message); }
   };
   // v2.214 自助修改密码：客户端预校验与后端统一密码策略一致；成功后清会话，旧密码即刻失效，强制用新密码重新登录
-  $('changePwBtn').onclick = async () => {
+  // v2.451 提交逻辑收成 doChangePw()，由 #chgPwForm.onsubmit 统一触发：回车与点击同一套校验，
+  // 密码管理器也能按 form + current/new-password 识别「更新凭据」。
+  async function doChangePw() {
     const cur = $('inCurPw').value, nw = $('inNewPw').value;
     if (!cur) { xnSay(t('curPw')); return; }
     if (nw.length < 8 || !/[a-zA-Z]/.test(nw) || !/[0-9]/.test(nw)) { xnSay(t('pwClientErr')); return; }
@@ -3698,6 +3704,11 @@
       xnSay(t('pwChangeOk'));
       setTimeout(() => openAuth('login'), 1000);
     } catch (e) { xnSay(e.message); }
+  }
+  $('chgPwForm').onsubmit = (e) => {
+    // 拦住原生导航：否则回车会把当前密码与新密码拼进 query 刷新整页（密码进 URL 等同泄露）
+    e.preventDefault();
+    doChangePw();
   };
   function fmtBytes(n) { if (!n) return '0 MB'; const mb = n / (1024 * 1024); return mb >= 1 ? mb.toFixed(1) + ' MB' : (n / 1024).toFixed(0) + ' KB'; }
 
@@ -3792,6 +3803,9 @@
      openModal/closeModalEl 单一出入口 + setModalCloseHook 清理钩子（关闭只 hidden，清理归各模块）。 */
   const _modalCloseHooks = new Map();
   function setModalCloseHook(id, fn) { _modalCloseHooks.set(id, fn); }
+  // v2.451 登录弹窗的所有关闭路径（X / 遮罩 / Esc / 通用 data-close）都经 closeModalEl，
+  // 在这里挂清理钩子，保证「关掉就不残留密码」不依赖用户点了哪个按钮。
+  setModalCloseHook('authModal', resetAuthForm);
   // 语义补齐（幂等）：屏幕阅读器按对话框朗读
   document.querySelectorAll('.modal-mask').forEach((m) => {
     if (!m.getAttribute('role')) m.setAttribute('role', 'dialog');
