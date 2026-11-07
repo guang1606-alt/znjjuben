@@ -131,6 +131,33 @@
       } catch { /* 浏览器改版安装弹层 API 行为时不阻断其它交互 */ }
     });
   }
+  // v2.445 全局异常兜底：漏 catch 的 Promise 与运行时异常过去是纯静默失败——
+  // 用户只看到「点了没反应」。这里给一个可读出口，同类异常 5s 内只提示一次，
+  // 免得住循环报错刷屏；网络层已由 api.js 统一 toast，不重复打扰。
+  function initGlobalErrorGuard() {
+    if (window._znErrGuard) return;
+    window._znErrGuard = true;
+    const report = (kind, err) => {
+      const now = Date.now();
+      if (now - (initGlobalErrorGuard._last || 0) < 5000) return;
+      initGlobalErrorGuard._last = now;
+      try { console.error('[zn:' + kind + ']', err); } catch { /* console 不可用也不影响提示 */ }
+      toastInfo(t('globalErrorHint'));
+    };
+    addEventListener('unhandledrejection', (e) => {
+      const reason = e && e.reason;
+      if (reason && (reason.name === 'AbortError' || reason.name === 'NetworkError')) return;
+      const msg = String((reason && (reason.message || reason)) || '');
+      // 断网/请求失败由 api.js 的 onNetworkError 统一提示，这里跳过避免双 toast
+      if (/Failed to fetch|NetworkError|Load failed/i.test(msg)) return;
+      report('unhandledrejection', reason);
+    });
+    addEventListener('error', (e) => {
+      // 资源加载失败（离线时的图片/字体）不弹，避免一次断网刷出一串提示
+      if (e && e.target && e.target !== window && e.target.tagName) return;
+      report('error', e && e.error);
+    });
+  }
   function applyLang() {
     // c204 复盘修复：localStorage 可能是脏值（旧版本/手滑/带引号的 '"en"'），直接拿去索引双语表
     // 会让 renderSelects 等在每次加载时抛 TypeError、页面半崩；入口白名单归一并自愈写回。
@@ -10883,5 +10910,6 @@
   /* ---------- 启动 ---------- */
   applyTheme(); applyLang(); renderAuthButton(); initHookConsole(); wireFormatSelector();
   initNetWatch(); initInstallPrompt(); // v2.442 网络韧性横幅 + 安装引导（失败不影响主流程）
+  initGlobalErrorGuard(); // v2.445 全局异常兜底，先于业务请求接线
   if (Api.isAuthed()) loadMe();
 })();

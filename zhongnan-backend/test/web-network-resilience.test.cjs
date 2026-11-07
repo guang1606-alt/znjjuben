@@ -84,3 +84,22 @@ test('新增文案中英齐备', () => {
     assert.strictEqual(hits.length, 2, `${k} 必须中英各一条，当前 ${hits.length} 条`);
   });
 });
+
+test('v2.445 全局异常兜底：漏 catch 的异常要有可读出口', () => {
+  const fn = appJs.match(/function initGlobalErrorGuard\(\)[\s\S]*?\n  \}/);
+  assert.ok(fn, '缺 initGlobalErrorGuard');
+  assert.match(fn[0], /addEventListener\('unhandledrejection'/, '需接住未处理的 Promise 拒绝');
+  assert.match(fn[0], /addEventListener\('error'/, '需接住运行时异常');
+  assert.match(fn[0], /window\._znErrGuard/, '需幂等守卫，重复接线不叠加监听');
+  assert.match(fn[0], /_last/, '需节流，避免循环报错刷屏');
+  assert.match(fn[0], /5000/, '同类异常 5s 内只提示一次');
+  assert.match(fn[0], /toastInfo\(t\('globalErrorHint'\)\)/, '必须给用户可读提示');
+  assert.match(fn[0], /Failed to fetch\|NetworkError\|Load failed/i, '网络失败由 api.js 统一提示，需跳过避免双 toast');
+  assert.match(fn[0], /AbortError/, '主动取消不应打扰用户');
+  assert.match(fn[0], /e\.target\.tagName/, '资源加载失败（离线图片）不应弹提示');
+  const boot = appJs.match(/initNetWatch\(\); initInstallPrompt\(\);[\s\S]{0,200}if \(Api\.isAuthed\(\)\) loadMe\(\);/);
+  assert.ok(boot, '缺启动段');
+  assert.match(boot[0], /initGlobalErrorGuard\(\)/, '必须在启动时接线');
+  const hits = i18nJs.match(/\bglobalErrorHint:/g) || [];
+  assert.strictEqual(hits.length, 2, `globalErrorHint 必须中英各一条，当前 ${hits.length} 条`);
+});
