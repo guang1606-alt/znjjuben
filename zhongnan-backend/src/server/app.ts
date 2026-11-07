@@ -5,6 +5,7 @@
 import express, { Express, Router } from 'express';
 import cors from 'cors';
 import compression from 'compression';
+import fs from 'fs';
 import path from 'path';
 import { authRouter as defaultAuth } from '../routes/auth';
 import { generateRouter as defaultGenerate } from '../routes/generate';
@@ -164,6 +165,39 @@ export function createApp(routers: AppRouters = {}, preErrorRouter?: Router | Ro
   // v2.265 静态资源短缓存：零构建站点无指纹，JS/CSS 给 5 分钟短缓存 + ETag（默认开启），
   // 命中则 304 零字节回包（重复访问省 100% 传输）；index.html 必须 no-cache 每次回源验证（入口版本正确性优先）。
   const webDir = path.join(__dirname, '../../web');
+  // v2.447 发版即生效：零构建站点没有内容指纹，JS/CSS 只能靠 5 分钟短缓存兜版本时效——
+  // 发版后 5 分钟内刷新仍可能拿到旧 app.js，与新接口错位时用户只看到「点了没反应」。
+  // 这里在入口 HTML 上给同源 .js/.css 加 ?v=<package.version>：每次升版换 URL，
+  // 浏览器按完整 URL 命中缓存，新版本立即生效；未升版发版的最坏情况仍与今天相同（5 分钟）。
+  const assetVersion = (() => {
+    try {
+      return String(JSON.parse(fs.readFileSync(path.join(__dirname, '../../package.json'), 'utf8')).version || '0');
+    } catch { return '0'; }
+  })();
+  let indexCache: { mtimeMs: number; html: string } = { mtimeMs: 0, html: '' };
+  function renderIndexHtml(): string | null {
+    try {
+      const file = path.join(webDir, 'index.html');
+      const { mtimeMs } = fs.statSync(file);
+      if (indexCache.mtimeMs !== mtimeMs) {
+        const html = fs.readFileSync(file, 'utf8');
+        indexCache = {
+          mtimeMs,
+          // 只动本地相对引用的 .js/.css；外链、CDN、已带 ?query 的写法一律不碰
+          html: html.replace(/((?:src|href)="\.\/[^"?]+\.(?:js|css))"/g, `$1?v=${assetVersion}"`),
+        };
+      }
+      return indexCache.html;
+    } catch { return null; }
+  }
+  const sendIndex = (res: express.Response) => {
+    const html = renderIndexHtml();
+    if (html === null) return false;
+    res.setHeader('Cache-Control', 'no-cache'); // 入口版本正确性优先，与 v2.265 口径一致
+    res.type('html').send(html);
+    return true;
+  };
+  app.get(['/', '/index.html'], (_req, res) => { if (!sendIndex(res)) res.status(404).end(); });
   app.use(express.static(webDir, {
     maxAge: '5m',
     setHeaders: (res, filePath) => {
@@ -175,9 +209,8 @@ export function createApp(routers: AppRouters = {}, preErrorRouter?: Router | Ro
   app.get(/^(?!\/api(?:\/|$)|\/health$).*/, (req, res, next) => {
     // 只对浏览器导航（地址栏/刷新，Accept 含 text/html）回退单页；程序化 fetch（*/*）与后置路由放行
     if (!/text\/html/.test(req.headers.accept || '')) return next();
-    // sendFile 不走 static 的 setHeaders：index.html 显式 no-cache（入口版本正确性优先）
-    res.setHeader('Cache-Control', 'no-cache');
-    res.sendFile(path.join(webDir, 'index.html'), (err) => err && next());
+    // SPA 回退与入口同源渲染：同样带 ?v=，否则地址栏深链刷新会退回无版本号的老资源
+    if (!sendIndex(res)) next();
   });
   // 注意：此处不再加终局 404 —— 测试/扩展会在 createApp 返回后追加注册路由（如 /_test/*），
   // 终局 catch-all 会抢在它们之前吞掉请求；非 API 未知路径维持 Express 默认 404 即可。
