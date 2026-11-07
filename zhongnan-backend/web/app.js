@@ -63,6 +63,60 @@
     syncThemeColor(eff);
     syncPrefsA11y();
   }
+  // v2.442 网络韧性：断网是「持续状态」，toast 会自动消失不可靠——用常驻横幅承接；
+  // 只在「由断到通」时弹一次恢复提示，避免网络抖动时反复打扰。
+  // 文案走 i18n（netOffline/netOnline），role=status + aria-live 由 index.html 提供，读屏可感知。
+  let _wasOffline = false;
+  function syncNetBanner() {
+    const el = $('netBanner');
+    const off = typeof navigator !== 'undefined' && navigator.onLine === false;
+    if (el) {
+      el.classList.toggle('hidden', !off);
+      if (off) el.textContent = t('netOffline');
+    }
+    return off;
+  }
+  function initNetWatch() {
+    _wasOffline = syncNetBanner();
+    addEventListener('offline', () => { _wasOffline = true; syncNetBanner(); });
+    addEventListener('online', () => {
+      const was = _wasOffline;
+      _wasOffline = false;
+      syncNetBanner();
+      if (was) toastOk(t('netOnline'));
+    });
+  }
+  // v2.442 安装引导：仅 Chromium 系触发 beforeinstallprompt；已在独立窗口运行时不重复引导。
+  // iOS Safari 不触发该事件、Apple 也未提供编程式安装入口——不臆造一个点了没反应的按钮。
+  let _installEvt = null;
+  function initInstallPrompt() {
+    const btn = $('installBtn');
+    if (!btn) return;
+    const standalone = (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches)
+      || window.navigator.standalone === true;
+    if (standalone) return;
+    addEventListener('beforeinstallprompt', (e) => {
+      e.preventDefault(); // 暂缓浏览器自带气泡，改用顶栏入口，避免打断创作流程
+      _installEvt = e;
+      btn.classList.remove('hidden');
+    });
+    addEventListener('appinstalled', () => {
+      _installEvt = null;
+      btn.classList.add('hidden');
+      toastOk(t('installDone'));
+    });
+    btn.addEventListener('click', async () => {
+      const evt = _installEvt;
+      _installEvt = null;
+      btn.classList.add('hidden');
+      if (!evt) return;
+      try {
+        evt.prompt();
+        const res = await evt.userChoice;
+        if (res && res.outcome === 'dismissed') toastInfo(t('installDismissed'));
+      } catch { /* 浏览器改版安装弹层 API 行为时不阻断其它交互 */ }
+    });
+  }
   function applyLang() {
     // c204 复盘修复：localStorage 可能是脏值（旧版本/手滑/带引号的 '"en"'），直接拿去索引双语表
     // 会让 renderSelects 等在每次加载时抛 TypeError、页面半崩；入口白名单归一并自愈写回。
@@ -74,6 +128,7 @@
     document.documentElement.setAttribute('lang', lang === 'en' ? 'en' : 'zh-CN');
     document.title = lang === 'en' ? 'ZhongnanJi · AGI Screenwriting Master' : '终南集 · 人工通用智能（AGI）编剧大师';
     syncPrefsA11y(); // v2.441 顶栏「主题 / 中 EN」按钮的无障碍标签必须随语言切换重刷
+    syncNetBanner(); // v2.442 断网横幅文案随语言切换重刷
     renderStaticText(); renderModes(); renderHome(); renderSelects(); renderScriptTypes(); renderAuthButton();
     _applyToolboxHints(); // A3 工具箱卡片分层：静态卡注入方法论一句话提示行（随语言刷新）
     // v2.188 初始化同步守卫：applyLang 期间 syncTagBench/syncModeBrief 不主动调 openWorkbench（避免 layer 自动展开覆盖 12 模式主页）
@@ -10796,5 +10851,6 @@
   // ═══ MODULE: bootstrap (5行, 0fn) ═══ 启动
   /* ---------- 启动 ---------- */
   applyTheme(); applyLang(); renderAuthButton(); initHookConsole(); wireFormatSelector();
+  initNetWatch(); initInstallPrompt(); // v2.442 网络韧性横幅 + 安装引导（失败不影响主流程）
   if (Api.isAuthed()) loadMe();
 })();

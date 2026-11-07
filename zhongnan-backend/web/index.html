@@ -34,6 +34,7 @@
     <nav class="breadcrumb" id="breadcrumb" aria-label="面包屑" data-i-aria="breadcrumbAria"></nav>
     <div class="spacer"></div>
     <div class="ctl">
+      <button class="chip hidden" id="installBtn" data-i="installApp">安装到桌面</button>
       <button class="chip" id="langBtn" title="中文 / English">中 / EN</button>
       <button class="chip" id="themeBtn" data-i="theme"></button>
       <button class="chip" id="feedbackEntryBtn" data-i="feedbackEntry"></button>
@@ -42,6 +43,8 @@
   </header>
 
   <main class="wrap" id="mainContent" tabindex="-1">
+    <!-- v2.442 断网常驻提示：toast 会自动消失，持续状态需要常驻承接；role=status 让读屏也能感知 -->
+    <div class="net-banner hidden" id="netBanner" role="status" aria-live="polite"></div>
     <!-- v2.190 清爽首页：品牌主张 + 快捷创作入口 + 工具箱 + 最新动态 -->
     <div id="view-home">
       <section class="home-hero">

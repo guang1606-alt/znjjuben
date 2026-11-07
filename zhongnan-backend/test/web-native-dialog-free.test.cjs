@@ -13,8 +13,10 @@ const path = require('node:path');
 const WEB = path.join(__dirname, '..', 'web');
 const src = fs.readFileSync(path.join(WEB, 'app.js'), 'utf8');
 
-// 匹配裸调用与 window. 前缀调用（window.alert( / alert( / confirm( / prompt( 等）
-const NATIVE_RE = /\b(?:window\.)?(?:alert|confirm|prompt)\s*\(/g;
+// 匹配裸调用与 window. 前缀调用（window.alert( / alert( / confirm( / prompt( 等）。
+// v2.442 精确化：前置断言排除成员方法调用——`evt.prompt()` 是 BeforeInstallPromptEvent 的
+// 安装弹层 API，不是原生 window.prompt 对话框，不应被本守卫误判；真正的原生调用仍全部命中。
+const NATIVE_RE = /(?<![.\w])(?:window\.)?(?:alert|confirm|prompt)\s*\(/g;
 
 function extractMarkedRegion(name) {
   const start = src.indexOf(`/* ---------- ${name} ---------- */`);
