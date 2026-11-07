@@ -190,6 +190,9 @@
     document.title = lang === 'en' ? 'ZhongnanJi · AGI Screenwriting Master' : '终南集 · 人工通用智能（AGI）编剧大师';
     syncPrefsA11y(); // v2.441 顶栏「主题 / 中 EN」按钮的无障碍标签必须随语言切换重刷
     syncNetBanner(); // v2.442 断网横幅文案随语言切换重刷
+    // v2.469 快速跳转遮罩的可访问名称随语言重刷（元素由 wireQuickSwitcher 异步挂载，取不到就跳过）
+    const qsMaskEl = $('qsMask');
+    if (qsMaskEl) qsMaskEl.setAttribute('aria-label', t('qsDialog'));
     renderStaticText(); renderModes(); renderHome(); renderSelects(); renderScriptTypes(); renderAuthButton();
     _applyToolboxHints(); // A3 工具箱卡片分层：静态卡注入方法论一句话提示行（随语言刷新）
     // v2.188 初始化同步守卫：applyLang 期间 syncTagBench/syncModeBrief 不主动调 openWorkbench（避免 layer 自动展开覆盖 12 模式主页）
@@ -1939,8 +1942,8 @@
     return new Promise((resolve) => {
       const backdrop = document.createElement('div');
       backdrop.className = 'zn-ask-backdrop';
-      backdrop.innerHTML = `<div class="zn-ask" role="dialog" aria-modal="true">
-        <label class="zn-ask-label" for="znAskInput"></label>
+      backdrop.innerHTML = `<div class="zn-ask" role="dialog" aria-modal="true" aria-labelledby="znAskLabel">
+        <label class="zn-ask-label" id="znAskLabel" for="znAskInput"></label>
         <input class="zn-ask-input" id="znAskInput" type="text" />
         <div class="zn-ask-btns"><button type="button" class="btn-ghost zn-ask-cancel"></button><button type="button" class="btn-primary zn-ask-ok"></button></div>
       </div>`;
@@ -2207,6 +2210,11 @@
   // uiConfirm(opts) -> Promise<boolean>；uiPrompt(opts) -> Promise<string|null>
   // 全部用 DOM API 构建（不走 HTML 字符串拼接，杜绝用户内容注入），Esc / 遮罩点击 / 按钮统一 resolve 后清理 DOM。
   function _uiLangEn() { return typeof lang === 'string' && lang === 'en'; }
+  // v2.469 对话框可访问名称：uiConfirm / uiPrompt 造出来的外壳有 role/aria-modal，
+  // 却从不接名称——屏幕阅读器只念「对话框」，不说是确认还是输入。这里给标题/正文分配唯一 id 再挂上去，
+  // 无标题时用 aria-label 兜底，正文一律接 aria-describedby，让「标题 + 正文」一起被念出来。
+  let _uiIdSeq = 0;
+  function _uiNextId(prefix) { _uiIdSeq += 1; return `${prefix}-${_uiIdSeq}`; }
   function _uiModalShell(o) {
     const overlay = document.createElement('div');
     // v2.206 标识类：供顶层 ESC 返回上一级的 hasOverlay 检测识别，避免对话框打开时 ESC 同时弹回上一视图
@@ -2218,16 +2226,23 @@
     modal.style.cssText = 'background:var(--bg,#fff);color:var(--fg,#222);border-radius:12px;box-shadow:0 8px 32px rgba(0,0,0,0.3);padding:18px;max-width:420px;width:100%;max-height:80vh;overflow-y:auto';
     if (o.title) {
       const h = document.createElement('h3');
+      h.id = _uiNextId('uiDlgTitle');
       h.style.cssText = 'margin:0 0 8px;font-size:16px';
       h.textContent = String(o.title);
       modal.appendChild(h);
+      modal.setAttribute('aria-labelledby', h.id);
+    } else {
+      // 无标题也要有名字，否则读屏只报「对话框」
+      modal.setAttribute('aria-label', _uiLangEn() ? 'Dialog' : '对话框');
     }
     let bodyEl = null;
     if (o.body) {
       bodyEl = document.createElement('div');
+      bodyEl.id = _uiNextId('uiDlgBody');
       bodyEl.style.cssText = 'font-size:13px;line-height:1.7;margin-bottom:14px;white-space:pre-wrap;word-break:break-word';
       bodyEl.textContent = String(o.body);
       modal.appendChild(bodyEl);
+      modal.setAttribute('aria-describedby', bodyEl.id);
     }
     const row = document.createElement('div');
     row.style.cssText = 'display:flex;gap:8px;justify-content:flex-end';
@@ -2965,6 +2980,9 @@
   (function wireQuickSwitcher() {
     const mask = document.createElement('div');
     mask.className = 'modal-mask hidden'; mask.id = 'qsMask';
+    // v2.469 可访问名称：这层只有 role=dialog（下面统一补语义）却从无名称，读屏只念「对话框」。
+    // 名称走 i18n（applyLang 里随语言重刷），不写死中文字面量。
+    mask.setAttribute('aria-label', t('qsDialog'));
     mask.innerHTML = `<div class="modal" style="max-width:460px">
       <input id="qsInput" class="mini-input" aria-label="搜索页面或创作模式" style="width:100%;margin-bottom:8px" placeholder="搜索页面/创作模式，回车直达（Esc 关闭）" />
       <div id="qsList" class="qs-list"></div></div>`;

@@ -25,6 +25,8 @@
       installDone: '已添加到桌面，可从应用图标直接打开。',
       installDismissed: '已取消安装，可随时在浏览器菜单里再次安装。',
       installIosHint: 'iPhone / iPad：点 Safari 底部的「分享」按钮，选「添加到主屏幕」，之后就能像 App 一样打开终南集。',
+      // v2.469 快速跳转遮罩的可访问名称（读屏只念「对话框」等于没名字）
+      qsDialog: '快速跳转',
       homeTitle: '把一个灵感，交给一整支 AI 编剧团队',
       homeSub: '十大岗位智能体协同创作，分级把关、去 AI 化、贴合市场，进度全程可见。',
       homeQuickTitle: '快捷创作', homeAllModes: '全部 8 种模式 + 自动匹配 →',
@@ -208,6 +210,8 @@
       installDone: 'Added to your desktop — open it from the app icon anytime.',
       installDismissed: 'Installation cancelled. You can install again from the browser menu.',
       installIosHint: 'On iPhone / iPad: tap Share at the bottom of Safari, then Add to Home Screen — ZhongnanJi will open like an app.',
+      // v2.469 accessible name for the quick-jump overlay
+      qsDialog: 'Quick jump',
       homeTitle: 'Hand one idea to a whole AI writers’ room',
       homeSub: 'Ten agent roles collaborate — rated gating, de-AI-ified, market-aware, with full progress visibility.',
       homeQuickTitle: 'Quick create', homeAllModes: 'All 8 modes + Auto →',
