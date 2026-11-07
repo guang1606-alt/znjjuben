@@ -73,11 +73,21 @@ export function createAuthRouter(prisma: PrismaLike | any) {
     const p = loginSchema.safeParse(req.body);
     if (!p.success) return res.status(400).json({ error: '参数错误' });
     const throttleKey = `${req.ip ?? 'unknown'}:${p.data.phone}`;
-    if (loginThrottle.isLocked(throttleKey)) return res.status(429).json({ error: '尝试过于频繁，请稍后再试' });
+    // v2.452 锁定不再是「请稍后再试」的黑盒：滑动窗口下解锁时刻可算，直接给秒数与 Retry-After 头
+    if (loginThrottle.isLocked(throttleKey)) {
+      const sec = Math.max(1, Math.ceil(loginThrottle.retryAfterMs(throttleKey) / 1000));
+      const human = sec >= 60 ? `${Math.ceil(sec / 60)} 分钟` : `${sec} 秒`;
+      res.setHeader('Retry-After', String(sec));
+      return res.status(429).json({ error: `尝试过于频繁，请 ${human}后再试`, retryAfter: sec });
+    }
     const user = await prisma.user.findUnique({ where: { phone: p.data.phone } });
     if (!user || !user.passwordHash || !(await verifyPassword(user.passwordHash, p.data.password))) {
       loginThrottle.recordFailure(throttleKey);
-      return res.status(401).json({ error: '手机号或密码错误' }); // 不区分“用户不存在/密码错”，防枚举
+      // v2.452 失败提示带剩余次数：用户在被锁前知道还有几次机会，而不是第 6 次突然被拒。
+      // 计数按 IP+手机号组合，与账号是否存在无关，不引入枚举面。
+      const left = loginThrottle.remaining(throttleKey);
+      const tip = left > 0 ? `（还可尝试 ${left} 次）` : '（已达上限，下次尝试将被临时锁定）';
+      return res.status(401).json({ error: '手机号或密码错误' + tip, attemptsLeft: left }); // 不区分“用户不存在/密码错”，防枚举
     }
     if (user.banned) return res.status(403).json({ error: '账号已封禁' });
     loginThrottle.clear(throttleKey);

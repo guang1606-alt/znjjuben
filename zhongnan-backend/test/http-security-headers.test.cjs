@@ -115,7 +115,10 @@ test('登录限流：同手机号连续 5 次失败后第 6 次被 429 锁定', 
   }
   const locked = await post(throttleBase, '/api/auth/login', { phone, password });
   assert.strictEqual(locked.status, 429);
-  assert.strictEqual((await locked.json()).error, '尝试过于频繁，请稍后再试');
+  // v2.452 起 429 不再给「请稍后再试」黑盒：滑动窗口解锁时刻可算，必须给真实时长 + Retry-After 头
+  const body = await locked.json();
+  assert.match(body.error, /^尝试过于频繁，请 .+(秒|分钟)后再试$/, `应给真实解锁时长，实际：${JSON.stringify(body.error)}`);
+  assert.ok(Number(locked.headers.get('retry-after')) >= 1, '429 必须带 Retry-After 头');
 });
 
 test('登录限流：不同手机号不受同一 IP 上他人锁定影响', async () => {
