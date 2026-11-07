@@ -3115,12 +3115,17 @@
       }
     }
   }
+  // v2.454 锁定倒计时状态（声明上移到 resetAuthForm 之前：关闭钩子可能在模块后段的
+  // startAuthLock 之前被触发，let 留在后面会造成 TDZ）
+  let _authLockLeft = 0, _authLockTimer = 0;
   // v2.451 关闭清理从 closeAuth 抽成 resetAuthForm，并挂在 v2.220 的模态关闭钩子上：
   // X 按钮/遮罩走 closeAuth，但 Esc 与通用 data-close 走的是 closeModalEl —— 清理若只写在
   // closeAuth 里，Esc 关闭就会把密码留在 DOM（同页脚本可读，密码管理器也可能记成新凭据）。
   function resetAuthForm() {
     $('authErr').classList.add('hidden');
     $('authPwd').value = '';
+    // v2.454 关掉弹窗即停倒计时：否则隔几分钟重开，按钮还是禁用态，名实不符
+    stopAuthLock();
     // v2.246 a11y：清除字段错误标记（用户关闭后重开时不残留无效状态）
     $('authPhone').removeAttribute('aria-invalid');
     $('authPwd').removeAttribute('aria-invalid');
@@ -3152,6 +3157,32 @@
   $('tabRegister').onclick = () => { authMode = 'register'; syncAuthTabs(); };
   $('authClose').onclick = closeAuth;
   $('authModal').onclick = (e) => { if (e.target.id === 'authModal') closeAuth(); };
+  // v2.454 锁定倒计时：后端 429 已给出真实解锁秒数（retryAfter），前端必须接住并保持按钮禁用。
+  // 否则用户看到「点了没反应」会反复点，每次都打后端、每次都失败，等待感知更差。
+  function stopAuthLock() {
+    if (_authLockTimer) { clearInterval(_authLockTimer); _authLockTimer = 0; }
+    _authLockLeft = 0;
+    const btn = $('authSubmit');
+    if (btn) btn.disabled = false;
+  }
+  function startAuthLock(sec) {
+    stopAuthLock();
+    _authLockLeft = Math.max(1, Math.ceil(sec));
+    const btn = $('authSubmit');
+    const paint = () => {
+      if (_authLockLeft > 0) {
+        if (btn) btn.disabled = true;
+        showAuthErr(t('authLockedTip', { n: _authLockLeft }));
+        _authLockLeft -= 1;
+        return;
+      }
+      // 归零即恢复：隐藏提示、解除禁用，用户可以立刻重试（后端此时也已解锁）
+      stopAuthLock();
+      $('authErr').classList.add('hidden');
+    };
+    paint();
+    _authLockTimer = setInterval(paint, 1000);
+  }
   // v2.449 提交逻辑从按钮 onclick 收成单一入口：按钮是 form 内的 type=submit，
   // Enter 与点击走同一条路径，校验/禁用态/错误提示不会出现两套。
   async function doAuthSubmit() {
@@ -3169,7 +3200,14 @@
       closeAuth(); renderAuthButton(); loadMe();
       if (!$('view-works').classList.contains('hidden')) loadWorks().catch((e) => { if (e.code !== 'SESSION_CHANGED') toastError(e.message); });
       xnSay(authMode === 'register' ? t('regOk') : t('loginOk'));
-    } catch (e) { showAuthErr(e.message); } finally { $('authSubmit').disabled = false; }
+    } catch (e) {
+      // v2.454 429 带 retryAfter：进入倒计时由它接管禁用态，这里不再只弹一句了事
+      if (e && e.retryAfter) startAuthLock(e.retryAfter);
+      else showAuthErr(e.message);
+    } finally {
+      // 锁定期必须保持禁用，否则 finally 会把倒计时刚设的 disabled 覆盖掉
+      if (!_authLockTimer) $('authSubmit').disabled = false;
+    }
   }
   $('authForm').onsubmit = (e) => {
     // 回车提交必须拦住原生导航：否则浏览器会把手机号/密码拼进 query 刷新整页（密码进 URL 是安全事故）
