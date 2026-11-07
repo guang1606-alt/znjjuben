@@ -325,3 +325,75 @@ export function witnessGratuity(draft: string): WitnessGratuityResult {
 
   return { score, dialogueLines, hits, issues, advice };
 }
+
+/**
+ * v2.440 前置教学：把证人无动机倾倒的判定口径同源写给撰写师/润色师。
+ * 与 witnessGratuity 共用同一套族类、窗口、豁免与计分；
+ * format 不门控（LIVE/AIGC 同一套规则），lang 只切换语言层。
+ */
+export function buildWitnessGratuityDirective(_format = 'LIVE', lang = 'zh'): string {
+  if (lang === 'en') {
+    return [
+      'Witness Free Intel Bundle - pre-writing directive (witness-gratuity v2.80, format-agnostic, one ruleset for zh/en)',
+      '',
+      'No witness hands the protagonist a free intel bundle. A secret kept for years is paid for in fear, pressure, a bargain, protection or blood - never volunteered five facts in one breath.',
+      '',
+      'Scope: dialogue lines only, with consecutive lines by the same speaker merged into one turn (blank lines do not break it; scene headers, narration and another speaker do); a turn under 12 characters (zh) or 10 words (en) is ignored.',
+      '',
+      'First person confession is excluded here: "I killed him" belongs to villain-overconfession. The turn must name the perpetrator in third person (he/she/the boss/Mr./the old man).',
+      '',
+      'Families: deed (a crime), evidence (where the proof is: ledger, recording, safe, password), whenWhere (time and place of the next move), next (his next step), accomplice (an inside man, a bribe, a mistress, an inheritance motive).',
+      '',
+      'Bundle rule: a turn is flagged only when it carries two or more families and must include deed or evidence; one stray fact is not a bundle.',
+      '',
+      'Rescue window: scan the ten lines before the turn and the three lines after it for the extraction cost.',
+      '',
+      'Rescue: motive (old debt, revenge, self-preservation, dying), extract (the protagonist pressed, paid or cornered first), promise (safety was negotiated), duty (police, prosecutor, lawyer, sworn testimony), riskAfter (talking costs him immediately) - any one rescues the turn.',
+      '',
+      'Reluctance exception: fear and hesitation alone rescue only a slip carrying two families; a larger bundle is still a giveaway, no matter how scared the witness looks.',
+      '',
+      'Cheap pressure (evidence only, never changes rescue): bundle (three or more families), volunteer (no other speaker in the previous six lines), emptyAsk (the nearest other line is a hollow "what happened / tell me").',
+      '',
+      'Scoring: start at 100, each unrescued hit -28, bundle -6, volunteer -4, floor 20; no hit is always 100.',
+      '',
+      'Hit fields: line, endLine, speaker, families, prompted, boosters, snippet (40 characters), rescued, rescueLine, reason.',
+      '',
+      'Neighbors: villain-overconfession is a first-person confession; eavesdrop-dump is a speaker unaware of a third listener; info-delivery is a device, broadcast or messenger announcing the fact; exposition-dialogue is two present characters retelling what both already know - this engine needs a new crime or evidence family told face to face.',
+      '',
+      'Pipeline: when issues are non-empty a gratuityHint is injected (zh/en), and the writer and polisher see it on their first pass; craft scoring runs it at first and second review, and deai re-scans as a backstop.',
+      '',
+      'Self-check: make the witness hide, fear or bargain first; the protagonist pays with pressure, a trade or protection; give one fact at a time and keep the rest for the next price paid; every line of intel must cost someone something.',
+    ].join('\n');
+  }
+  return [
+    '【证人无动机倾倒 · 情报套餐 · 前置教学】（witness-gratuity v2.80 同源；format 不门控，中英同一套规则）',
+    '',
+    '知情人不会把守了多年的秘密免费端上桌：情报必须有取证成本——先躲、怕、还价，主角付出施压、交换或保护，证人才肯开口。',
+    '',
+    '检测范围：只扫台词行；同人连续发言合并为一个 turn（空行不断，场头、叙述行、他人台词断）；中文 turn 不足 12 字、英文不足 10 词不判。',
+    '',
+    '第一人称认罪排除：人是我杀的 / 是我换的药 归 villain-overconfession，本引擎不收；turn 必须用第三人称指认加害者（他/她/老板/老爷/Mr.）。',
+    '',
+    '套餐判定：同一 turn 命中 ≥2 类情报族，且必须含 deed（罪行）或 evidence（证据）之一；只漏一条不算套餐。',
+    '',
+    '五族：deed 罪行 / evidence 证据位置 / whenWhere 时间地点 / next 下一步 / accomplice 同伙动机（含买通、内应、情妇、私生子、为遗产）。',
+    '',
+    '取证成本核验：扫 turn 前 10 行与 turn 后 3 行，找开口的代价与理由。',
+    '',
+    '豁免通道：motive（旧债/复仇/自保/将死）、extract（主角先逼问/亮证据/塞钱/堵门）、promise（先给安全承诺）、duty（警察/检察官/律师/法庭作证）、riskAfter（说完即被跟踪/开除/灭口）——任一成立即豁免。',
+    '',
+    'reluctance 例外：只有"仅 2 族小漏口"时，害怕迟疑才能豁免；大套餐不豁免——光害怕最后还是把五样货全说了，照样是白给。',
+    '',
+    '廉价加压（只作证据，不改变豁免）：bundle ≥3 族；volunteer 前 6 行没有别的角色台词、自己主动开讲；emptyAsk 前 6 行最近一句他人台词是空问（怎么回事/告诉我/what happened）。',
+    '',
+    '计分：100 起，每个未豁免 hit -28，bundle 额外 -6，volunteer 额外 -4，最低 20；无命中恒为 100。',
+    '',
+    '命中字段：line / endLine / speaker / families / prompted / boosters / snippet（40 字截断）/ rescued / rescueLine / reason。',
+    '',
+    '邻居分界：villain-overconfession 是反派第一人称自爆；eavesdrop-dump 是说话人不知有第三者；info-delivery 是手机/广播/信使把通知送到；exposition-dialogue 是两个在场人互讲已知背景——本引擎要求新情报含罪行或证据族，且是面对面口述。',
+    '',
+    'pipeline 消费（v2.80 起）：issues 非空时注入 gratuityHint（中英双语），撰写师与润色师首轮即见；craft 初评/复评扣分，deai 重扫兜底。',
+    '',
+    '成稿自查：让证人先躲、怕、还价；主角用施压、交易或保护换；分批吐口，一次只给当下必需的一条，其余留到下一次付代价；每一句情报都要有人付出点什么。',
+  ].join('\n');
+}
