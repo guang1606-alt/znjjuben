@@ -1360,11 +1360,16 @@
         <button class="on" id="tabLogin" data-i="login"></button>
         <button id="tabRegister"></button>
       </div>
-      <div class="field"><label for="authPhone">手机号</label><input id="authPhone" inputmode="numeric" placeholder="11 位手机号" maxlength="11" aria-required="true" aria-describedby="authErr" /></div>
-      <div class="field"><label for="authPwd">密码</label><input id="authPwd" type="password" placeholder="至少 8 位，需含字母和数字" maxlength="64" aria-required="true" aria-describedby="authErr" /></div>
-      <div class="field hidden" id="inviteWrap"><label for="authInvite">邀请码（选填）</label><input id="authInvite" maxlength="20" /></div>
-      <div class="notice err hidden" id="authErr" role="alert"></div>
-      <button class="btn-primary" id="authSubmit" style="width:100%;margin-top:12px"></button>
+      <!-- v2.449 真表单：密码管理器与移动端「前往/登录」键都按 form + autocomplete 识别登录入口，
+           原先是 div 拼的 + 按钮 onclick，Chrome 报 Password field is not contained in a form，
+           Enter 也不生效。novalidate 因为校验口径统一在 app.js（与后端同规则，避免双源漂移）。 -->
+      <form id="authForm" novalidate>
+        <div class="field"><label for="authPhone">手机号</label><input id="authPhone" type="tel" inputmode="numeric" autocomplete="tel" placeholder="11 位手机号" maxlength="11" aria-required="true" aria-describedby="authErr" /></div>
+        <div class="field"><label for="authPwd">密码</label><input id="authPwd" type="password" autocomplete="current-password" placeholder="至少 8 位，需含字母和数字" maxlength="64" aria-required="true" aria-describedby="authErr" /></div>
+        <div class="field hidden" id="inviteWrap"><label for="authInvite">邀请码（选填）</label><input id="authInvite" maxlength="20" autocomplete="off" /></div>
+        <div class="notice err hidden" id="authErr" role="alert"></div>
+        <button class="btn-primary" id="authSubmit" type="submit" style="width:100%;margin-top:12px"></button>
+      </form>
     </div>
   </div>
 

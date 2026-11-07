@@ -12,7 +12,9 @@ const html = fs.readFileSync(path.join(root, 'web/index.html'), 'utf8');
 const i18n = fs.readFileSync(path.join(root, 'web/i18n.js'), 'utf8');
 
 describe('register form validation matches backend unified password policy (v2.212)', () => {
-  const seg = app.slice(app.indexOf("$('authSubmit').onclick"), app.indexOf('$(' + "'authSubmit').onclick") + 900);
+  // v2.449 起提交逻辑从 #authSubmit.onclick 收成单一入口 doAuthSubmit()（form onsubmit 与按钮共用）
+  const anchor = app.indexOf('async function doAuthSubmit');
+  const seg = app.slice(anchor, anchor + 900);
   it('注册分支校验 8 位下限', () => {
     assert.ok(/pwd\.length < 8/.test(seg), 'authSubmit 应校验密码至少 8 位');
   });

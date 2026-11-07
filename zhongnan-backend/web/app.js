@@ -3128,6 +3128,9 @@
     $('tabRegister').textContent = t('register');
     $('inviteWrap').classList.toggle('hidden', authMode !== 'register');
     $('authSubmit').textContent = authMode === 'login' ? t('login') : t('register');
+    // v2.449 autocomplete 随模式切换：登录用 current-password（浏览器才会填充已存凭据），
+    // 注册用 new-password（否则密码管理器会把新密码当成旧密码去覆盖）。
+    $('authPwd').autocomplete = authMode === 'register' ? 'new-password' : 'current-password';
   }
   function showAuthErr(msg) {
     const e = $('authErr');
@@ -3145,7 +3148,9 @@
   $('tabRegister').onclick = () => { authMode = 'register'; syncAuthTabs(); };
   $('authClose').onclick = closeAuth;
   $('authModal').onclick = (e) => { if (e.target.id === 'authModal') closeAuth(); };
-  $('authSubmit').onclick = async () => {
+  // v2.449 提交逻辑从按钮 onclick 收成单一入口：按钮是 form 内的 type=submit，
+  // Enter 与点击走同一条路径，校验/禁用态/错误提示不会出现两套。
+  async function doAuthSubmit() {
     const phone = $('authPhone').value.trim(), pwd = $('authPwd').value, invite = $('authInvite').value.trim();
     const isPhone = /^1[3-9]\d{9}$/.test(phone);
     const isAdminAcct = /^[A-Za-z0-9_]{6,20}$/.test(phone); // 允许字母数字的管理员账号
@@ -3161,6 +3166,11 @@
       if (!$('view-works').classList.contains('hidden')) loadWorks().catch((e) => { if (e.code !== 'SESSION_CHANGED') toastError(e.message); });
       xnSay(authMode === 'register' ? t('regOk') : t('loginOk'));
     } catch (e) { showAuthErr(e.message); } finally { $('authSubmit').disabled = false; }
+  }
+  $('authForm').onsubmit = (e) => {
+    // 回车提交必须拦住原生导航：否则浏览器会把手机号/密码拼进 query 刷新整页（密码进 URL 是安全事故）
+    e.preventDefault();
+    doAuthSubmit();
   };
 
   // ═══ MODULE: works (435行, 11fn) ═══ 作品库
