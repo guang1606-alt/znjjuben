@@ -339,9 +339,18 @@
       }
     },
     async changePassword(currentPassword, newPassword) {
-      // v2.214 自助改密：后端复用统一密码策略；成功后由调用方清会话强制重新登录
-      const res = await request('/api/auth/change-password', { method: 'POST', body: JSON.stringify({ currentPassword, newPassword }) });
-      return jsonOrThrow(res);
+      // v2.214 自助改密：后端复用统一密码策略
+      // v2.457 改密即换凭据：上报当前 refreshToken（服务端当场吊销旧凭据），成功后原地替换令牌——
+      // 用户留在原会话，不再被迫用刚设置的新密码重登。
+      const res = await request('/api/auth/change-password', {
+        method: 'POST',
+        body: JSON.stringify({ currentPassword, newPassword, refreshToken: getRefreshToken() || undefined }),
+      });
+      const data = await jsonOrThrow(res);
+      if (data && data.accessToken && data.refreshToken) {
+        setSession({ accessToken: data.accessToken, refreshToken: data.refreshToken });
+      }
+      return data;
     },
   };
 

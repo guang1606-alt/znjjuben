@@ -3734,7 +3734,9 @@
       await Api.jsonOrThrow(res); $('profileEdit').classList.add('hidden'); xnSay(t('editOk')); loadMe(); renderAuthButton();
     } catch (e) { xnSay(e.message); }
   };
-  // v2.214 自助修改密码：客户端预校验与后端统一密码策略一致；成功后清会话，旧密码即刻失效，强制用新密码重新登录
+  // v2.214 自助修改密码：客户端预校验与后端统一密码策略一致
+  // v2.457 改密后保持登录态：服务端返回新令牌（api.js 已原地替换），会话不变——不再清会话、
+  // 不再弹登录框要求重输刚设置的新密码；被吊销的是本地旧 refresh token（服务端已消费）。
   // v2.451 提交逻辑收成 doChangePw()，由 #chgPwForm.onsubmit 统一触发：回车与点击同一套校验，
   // 密码管理器也能按 form + current/new-password 识别「更新凭据」。
   // v2.455 改密错误常驻化：xnSay 的 toast 3 秒消失，用户错过就不知道失败原因；
@@ -3765,14 +3767,11 @@
     if (nw.length < 8 || !/[a-zA-Z]/.test(nw) || !/[0-9]/.test(nw)) { showChgPwErr(t('pwClientErr'), 'inNewPw'); return; }
     try {
       await Api.auth.changePassword(cur, nw);
-      Api.clearSession();
-      meCache = null; capsCache = null; refreshAdminNav(); renderAuthButton();
       $('inCurPw').value = ''; $('inNewPw').value = '';
       $('profileEdit').classList.add('hidden');
       $('chgPwErr').classList.add('hidden');
       $('inCurPw').removeAttribute('aria-invalid'); $('inNewPw').removeAttribute('aria-invalid');
       xnSay(t('pwChangeOk'));
-      setTimeout(() => openAuth('login'), 1000);
     } catch (e) {
       // 429：交给倒计时接管禁用态；其它错误写常驻错误区（不再只弹一次就消失）
       if (e && e.retryAfter) startLockCountdown(e.retryAfter, 'changePwBtn', 'chgPwErr');

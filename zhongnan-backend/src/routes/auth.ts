@@ -1,7 +1,8 @@
 import { asyncRouter } from '../lib/async-router';
+import { createHash } from 'crypto';
 import { z } from 'zod';
 import { prisma as defaultPrisma } from '../lib/prisma';
-import { hashPassword, verifyPassword, signAccess, signRefresh, genInviteCode } from '../lib/auth';
+import { hashPassword, verifyPassword, signAccess, signRefresh, verifyRefresh, genInviteCode } from '../lib/auth';
 import { passwordStrength } from '../lib/auth-policy';
 import { grantBonus } from '../lib/billing';
 import { withBillingTransaction } from '../lib/prisma-tx';
@@ -10,6 +11,7 @@ import { authRequired } from '../middleware/auth';
 import type { AuthRequest } from '../middleware/auth';
 import { isAdminUser, isSuperAdminUser, SUPER_ADMIN_PHONE } from '../middleware/admin';
 import { createLoginThrottle } from '../lib/login-throttle';
+import { consumeRefreshToken } from '../lib/refresh-rotate';
 import { AGE_BAND_IDS, GENDERS, PROFILE_REGIONS } from '../lib/profile-mapping';
 
 /** 工厂化：生产用默认 prisma 单例，测试可注入内存桩（HTTP 层端到端，不依赖真实数据库） */
@@ -31,6 +33,11 @@ export function createAuthRouter(prisma: PrismaLike | any) {
     const human = sec >= 60 ? `${Math.ceil(sec / 60)} 分钟` : `${sec} 秒`;
     res.setHeader('Retry-After', String(sec));
     return res.status(429).json({ error: `${label}，请 ${human}后再试`, retryAfter: sec });
+  }
+  // v2.457 统一 refresh token 的一次性消费键：新格式用 jti；旧格式无 jti 用 token 摘要兜底。
+  // 三处（续期/登出/改密）必须同口径——口径漂移会让吊销静默失效，故收敛成一个函数。
+  function refreshKey(data: { jti?: string; exp?: number }, raw: string): string {
+    return data.jti ?? `legacy:${createHash('sha256').update(String(raw)).digest('hex')}`;
   }
   const phoneSchema = z.object({
     phone: z.string().regex(/^1[3-9]\d{9}$/, '手机号格式不正确'),
@@ -101,12 +108,11 @@ export function createAuthRouter(prisma: PrismaLike | any) {
     try {
       const { verifyRefresh, signRefresh } = await import('../lib/auth');
       const { withRefreshFlight } = await import('../lib/refresh-rotate');
-      const { createHash } = await import('crypto');
       const data = verifyRefresh(req.body?.refreshToken);
       // 一次性消费（重放防护）：新格式 token 用 jti；旧格式无 jti 用 token 摘要兜底，同样只放行一次，刷完即升级为轮换 token
       // v2.291 在途单飞：同 rt 并发续期（双标签页 access 同时到期）共享首个 flight 结果，
       // 次个请求不再被判 REFRESH_REUSED 误踢全端；flight 完成后重放仍 401（重放防护不破）。
-      const key = data.jti ?? `legacy:${createHash('sha256').update(String(req.body?.refreshToken)).digest('hex')}`;
+      const key = refreshKey(data, req.body?.refreshToken);
       const flight = await withRefreshFlight(key, data.exp ?? Math.floor(Date.now() / 1000) + 86400, async () => {
         const user = await prisma.user.findUnique({ where: { id: data.sub } });
         if (!user || user.banned) return null;
@@ -127,12 +133,10 @@ export function createAuthRouter(prisma: PrismaLike | any) {
     try {
       const { verifyRefresh } = await import('../lib/auth');
       const { consumeRefreshToken } = await import('../lib/refresh-rotate');
-      const { createHash } = await import('crypto');
       const rt = req.body?.refreshToken;
       if (rt) {
         const data = verifyRefresh(rt);
-        const key = data.jti ?? `legacy:${createHash('sha256').update(String(rt)).digest('hex')}`;
-        consumeRefreshToken(key, data.exp ?? Math.floor(Date.now() / 1000) + 86400);
+        consumeRefreshToken(refreshKey(data, rt), data.exp ?? Math.floor(Date.now() / 1000) + 86400);
       }
     } catch { /* 无效 token 静默：保持幂等 200 */ }
     res.json({ ok: true });
@@ -195,11 +199,14 @@ export function createAuthRouter(prisma: PrismaLike | any) {
     });
   });
   // v2.214 自助修改密码：验证当前密码 → 新密码过统一强度策略（v2.212）→ 重哈希落库。
-  // 成功后前端清空本地会话、用新密码重新登录；其他设备存量 refresh token 由 TTL 自然过期
-  // （不引入 passwordChangedAt 字段，避免迁移依赖；access token 本身短时效，风险可控）。
+  // v2.457 改密即换凭据：成功后签发新 access/refresh 并消费调用方上报的旧 refresh token——
+  // 用户留在当前会话（不再被强制重输刚设的新密码），被窃的旧 refresh token 也当场失效。
+  // 取舍（已知边界）：没有 token 版本号机制，其他设备的存量 refresh token 仍靠 TTL 自然过期；
+  // access token 短时效（默认 15 分钟），引入 passwordChangedAt/authEpoch 需迁移与每请求查库，另开轮次评估。
   const changePwSchema = z.object({
     currentPassword: z.string().min(1, '请输入当前密码').max(64),
     newPassword: z.string().min(8, '新密码至少8位').max(64),
+    refreshToken: z.string().optional(), // 调用方当前 refresh token：上报即当场吊销（轮换语义）
   });
   authRouter.post('/change-password', authRequired, async (req: AuthRequest, res) => {
     const p = changePwSchema.safeParse(req.body);
@@ -217,7 +224,16 @@ export function createAuthRouter(prisma: PrismaLike | any) {
     if (!pw.ok) return res.status(400).json({ error: `新密码${pw.problems[0]}` });
     await prisma.user.update({ where: { id: u.id }, data: { passwordHash: await hashPassword(p.data.newPassword) } });
     pwThrottle.clear(pwKey); // v2.217 成功改密清零
-    res.json({ ok: true });
+    // 吊销调用方当前 refresh token（若已上报）：改密后旧凭据立即作废，新令牌由本次签发
+    const oldRt = p.data.refreshToken;
+    if (oldRt) {
+      try {
+        const rtData = verifyRefresh(oldRt);
+        consumeRefreshToken(refreshKey(rtData, oldRt), rtData.exp ?? Math.floor(Date.now() / 1000) + 86400);
+      } catch { /* 旧 refresh token 无效/已过期：无需处理，不影响本次改密 */ }
+    }
+    const payload = { sub: u.id, level: u.level };
+    res.json({ ok: true, accessToken: signAccess(payload), refreshToken: signRefresh(payload) });
   });
   return authRouter;
 }
