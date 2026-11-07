@@ -21,6 +21,10 @@
    * 深紫 #4527a0 在 tech 主题只有 1.73:1、棕 #5d4037 只有 1.90:1（正文小字需 4.5），等于字消失了。
    * 这里给出四主题各自的取值，浅色与护眼用压深的墨色，深色两套用提亮的粉彩。 */
   --danger-text: #a3241b; --warn-text: #8a5a00; --ok-text: #2e6512; --info-text: #4527a0; --gold-text: #7a5c1a;
+  /* v2.467 质检四档色令牌：评分条填充（图形需 3:1）与分数/严重度文字（小字需 4.5:1）同源。
+   * 旧实现 diagColor() 写死 #3fb67a/#7c9cff/#e0a23a/#e06a5b，在浅色/护眼主题下仅 1.98~3.15:1，
+   * 文字与进度条一起糊掉；这里按「对 panel 与 panel-2 均 ≥4.5」取深色值，图形自然达标。 */
+  --grade-good: #176b43; --grade-mid: #2454b8; --grade-warn: #7d4f00; --grade-bad: #96271d;
   /* 形制 */
   --radius: 16px; --radius-sm: 10px; --fs: 15px;
   /* 字体：标题用衬线（卷宗/片头字幕感），正文用现代黑体 */
@@ -41,6 +45,7 @@
   --shadow: 0 12px 32px -18px rgba(40, 32, 16, .26), 0 2px 6px rgba(40, 32, 16, .06);
   --shadow-lg: 0 30px 60px -28px rgba(40, 32, 16, .34), 0 6px 14px rgba(40, 32, 16, .08);
   --grid: #e9e1cd;
+  --grade-good: #176b43; --grade-mid: #2454b8; --grade-warn: #7d4f00; --grade-bad: #96271d;
 }
 /* ---------- 深色：影院墨 ---------- */
 [data-theme='dark'] {
@@ -51,6 +56,7 @@
   --cinnabar: #b8554a; --danger: #b8554a; --ok: #5aa57c;
   --on-accent: #08110f; /* v2.463 浅青底配深墨字（7.7:1），纸白只有 2.3:1 */
   --danger-text: #ff9481; --warn-text: #e8b45c; --ok-text: #86d5a4; --info-text: #c0b0ff; --gold-text: #d9b06a;
+  --grade-good: #3fb67a; --grade-mid: #7c9cff; --grade-warn: #e0a23a; --grade-bad: #e06a5b;
   --ring: rgba(74, 181, 168, .24);
   --shadow: 0 12px 32px -16px rgba(0, 0, 0, .5), 0 2px 6px rgba(0, 0, 0, .3);
   --shadow-lg: 0 30px 60px -24px rgba(0, 0, 0, .66), 0 6px 14px rgba(0, 0, 0, .36);
@@ -66,6 +72,7 @@
   --ring: rgba(74, 107, 48, .18);
   --grid: #ddd4ba;
   --danger-text: #96271d; --warn-text: #7d4f00; --ok-text: #2e6512; --info-text: #4a2a9a; --gold-text: #6f5117;
+  --grade-good: #176b43; --grade-mid: #2454b8; --grade-warn: #7d4f00; --grade-bad: #96271d;
 }
 /* 旧变量别名：让历史组件自动随主题换色（原代码到处 fallback 的 --card/--muted/--border 等） */
 :root, [data-theme='light'], [data-theme='dark'], [data-theme='eye'] {
@@ -1084,7 +1091,7 @@ textarea { box-sizing: border-box; max-width: 100%; resize: vertical; background
 .wave-legend{display:flex;gap:14px;flex-wrap:wrap;align-items:center;font-size:12px;color:var(--text-2);margin-top:4px}
 .wave-legend span{display:inline-flex;align-items:center;gap:5px}.wave-legend i{width:9px;height:9px;border-radius:50%;display:inline-block}
 .wave-legend small{margin-left:auto}
-.wave-dot{cursor:pointer;transition:r .15s}.wave-dot:hover{stroke:#fff;stroke-width:1.5}
+.wave-dot{cursor:pointer;transition:r .15s}.wave-dot:hover{stroke:var(--text);stroke-width:1.5}
 .wave-advice{margin:8px 0 2px;padding:10px 12px;border:1px solid var(--line);border-radius:var(--radius-sm);background:var(--panel)}
 .wave-advice em{font-style:normal;font-size:12px;font-weight:700;border-radius:4px;padding:1px 7px;margin-right:6px}
 .wave-adv-p1{color:var(--cinnabar);background:color-mix(in srgb,var(--cinnabar) 12%,transparent)}.wave-adv-p2{color:var(--gold-deep);background:color-mix(in srgb,var(--gold) 13%,transparent)}.wave-adv-ok{color:var(--ok)}
@@ -1929,6 +1936,7 @@ summary:hover{color:var(--accent-strong)}
   --ok: #5aa57c;
   --on-accent: #08110f; /* v2.463 浅蓝底配深墨字（8.6:1），纸白只有 2.1:1 */
   --danger-text: #ff9a88; --warn-text: #f0bd66; --ok-text: #8fd9ab; --info-text: #c8b8ff; --gold-text: #e0bb78;
+  --grade-good: #3fb67a; --grade-mid: #7c9cff; --grade-warn: #e0a23a; --grade-bad: #e06a5b;
   --ring: rgba(139, 175, 239, .32);
   --shadow: 0 12px 36px -16px rgba(0, 0, 0, .6), 0 2px 8px rgba(0, 0, 0, .4);
   --shadow-lg: 0 30px 80px -28px rgba(0, 0, 0, .72), 0 8px 20px rgba(0, 0, 0, .42);

@@ -148,7 +148,7 @@
       <div class="br-fld"><b>${t.linkTo}</b><select id="brLinkSel" aria-label="${t.linkTo}">${others.map((o) => `<option value="${esc(o)}">${esc(graph.nodes[o].label || o)}</option>`).join('')}</select>
         <button class="chip" id="brLinkBtn">${t.link}</button></div>
       <ul class="br-outlist">${out}</ul>
-      <button class="chip" id="brDel" style="color:#d4473b">${t.delNode}</button>`;
+      <button class="chip" id="brDel" style="color:var(--danger-text)">${t.delNode}</button>`;
     $('brInLabel').onchange = () => mutate({ op: 'relabel', id, label: $('brInLabel').value });
     $('brInType').onchange = () => mutate({ op: 'setType', id, nodeType: $('brInType').value, endingType: $('brInEnd') ? $('brInEnd').value : undefined });
     if ($('brInEnd')) $('brInEnd').onchange = () => mutate({ op: 'setType', id, nodeType: 'ending', endingType: $('brInEnd').value });
@@ -174,7 +174,7 @@
     const head = `<div class="dv-row" style="margin-top:8px"><div class="dv-row-head"><b>${t.score(report.score)}${report.closedLoop ? t.closed : t.notClosed}</b></div>
       <div class="muted">${t.reach(report.reachableCount, report.totalCount)}${report.choiceCount}${t.endCount(0, e.main || 0, e.hidden || 0, e.bad || 0)}</div></div>`;
     const list = issues.length ? `<ul class="plan-perks" style="margin-top:6px">${issues.map((i) => {
-      const c = i.severity === 'high' ? '#d4473b' : i.severity === 'mid' ? '#d98a16' : '#7a8790';
+      const c = i.severity === 'high' ? 'var(--grade-bad)' : i.severity === 'mid' ? 'var(--grade-warn)' : 'var(--text-2)';
       const sev = i.severity === 'high' ? t.sevHigh : i.severity === 'mid' ? t.sevMid : t.sevLow;
       return `<li><b style="color:${c}">[${sev}${i.node ? '·' + esc(i.node) : ''}]</b> ${esc(i.evidence)} <span class="muted">→ ${esc(i.advice)}</span></li>`;
     }).join('')}</ul>` : `<div class="tag-report ok" style="margin-top:8px">${t.structOk}</div>`;
@@ -183,7 +183,7 @@
     if (cluePayload()) {
       clueBlock = lastClueIssues.length
         ? `<div class="muted" style="margin-top:10px"><b>${t.clueHead}</b></div><ul class="plan-perks" style="margin-top:6px">${lastClueIssues.map((i) => {
-          const c = i.severity === 'high' ? '#d4473b' : '#d98a16';
+          const c = i.severity === 'high' ? 'var(--grade-bad)' : 'var(--grade-warn)';
           const sev = i.severity === 'high' ? t.sevHigh : t.sevMid;
           return `<li><b style="color:${c}">[${sev}·${esc(i.clue)}]</b> ${esc(i.evidence)} <span class="muted">→ ${esc(i.advice)}</span></li>`;
         }).join('')}</ul>`

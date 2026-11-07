@@ -5506,7 +5506,7 @@
       let rangeRect = '';
       if (patch) rangeRect = `<rect x="${x(patch.from - 1)}" y="${padT}" width="${Math.max(2, x(patch.to - 1) - x(patch.from - 1))}" height="${Hpx - padT - padB}" class="wave-dir-range-rect"/>`;
       const main = after || before;
-      const dots = main.points.map((p, i) => `<circle class="wave-dot${patch && i + 1 >= patch.from && i + 1 <= patch.to ? ' wave-dot-hit' : ''}" data-ep="${p.ep}" cx="${x(i).toFixed(1)}" cy="${y(p.intensity).toFixed(1)}" r="${n > 60 ? 1.5 : 3}" fill="${p.intensity >= 80 ? '#e06a5b' : p.intensity >= 60 ? '#e0a23a' : '#10b981'}"><title>${escapeHtml(lang === 'en' ? `Ep${p.ep} tension ${p.intensity}` : `第${p.ep}集 张力${p.intensity}`)}</title></circle>`).join('');
+      const dots = main.points.map((p, i) => `<circle class="wave-dot${patch && i + 1 >= patch.from && i + 1 <= patch.to ? ' wave-dot-hit' : ''}" data-ep="${p.ep}" cx="${x(i).toFixed(1)}" cy="${y(p.intensity).toFixed(1)}" r="${n > 60 ? 1.5 : 3}" fill="${p.intensity >= 80 ? 'var(--grade-bad)' : p.intensity >= 60 ? 'var(--grade-warn)' : 'var(--grade-mid)'}"><title>${escapeHtml(lang === 'en' ? `Ep${p.ep} tension ${p.intensity}` : `第${p.ep}集 张力${p.intensity}`)}</title></circle>`).join('');
       const xLabels = n <= 30 ? main.points.map((p) => (p.ep === 1 || p.ep === n || p.ep % 5 === 0) ? `<text x="${x(p.ep - 1).toFixed(1)}" y="${Hpx - 6}" text-anchor="middle" class="wave-axis">${p.ep}</text>` : '').join('') : '';
       const beforeLine = after ? `<path d="${pathOf(before.points)}" class="wave-dir-before"/>` : '';
       svgBox.innerHTML = `<svg viewBox="0 0 ${Wpx} ${Hpx}" preserveAspectRatio="xMidYMid meet" role="img" class="wave-svg wave-dir-svg-el">${grid}${rangeRect}${beforeLine}<path d="${pathOf(main.points)}" class="${after ? 'wave-dir-after' : 'wave-dir-main'}"/>${dots}${xLabels}</svg>`;
@@ -8128,7 +8128,9 @@
       bars.innerHTML = znErrorHtml((e && e.message) || t('loadFail'));
     }
   }
-  function diagColor(s) { return s >= 85 ? '#3fb67a' : s >= 70 ? '#7c9cff' : s >= 60 ? '#e0a23a' : '#e06a5b'; }
+  // v2.467 四档色统一走主题令牌：这组色同时用于进度条填充（图形 3:1）与分数/严重度文字（4.5:1），
+  // 旧硬编码在浅色/护眼主题只有 1.98~3.15:1，条和字一起糊掉。
+  function diagColor(s) { return s >= 85 ? 'var(--grade-good)' : s >= 70 ? 'var(--grade-mid)' : s >= 60 ? 'var(--grade-warn)' : 'var(--grade-bad)'; }
   // v2.38 全剧情绪曲线波形（确定性，与创作管线同源；免费可视化）
   let lastWave = null, waveProjectId = null;
   async function loadEmotionWave(projectId) {
@@ -8171,7 +8173,7 @@
       const pay = p.payoffs.length ? `${wl[0]}${p.payoffs.map((q) => (wloc === 'en' ? q.nameEn : q.name)).join('/')}` : '';
       const rev = p.reversal ? `${wl[1]}${wloc === 'en' ? p.reversal.nameEn : p.reversal.name}` : '';
       const label = wl[2](p.ep, p.intensity) + `｜${names}${pay}${rev}`;
-      return `<circle class="wave-dot" data-ep="${p.ep}" cx="${x(i).toFixed(1)}" cy="${y(p.intensity).toFixed(1)}" r="${pts.length > 60 ? 1.6 : 3.4}" fill="${p.intensity >= 80 ? '#e06a5b' : p.intensity >= 60 ? '#e0a23a' : '#7c9cff'}"><title>${escapeHtml(label)}</title></circle>`;
+      return `<circle class="wave-dot" data-ep="${p.ep}" cx="${x(i).toFixed(1)}" cy="${y(p.intensity).toFixed(1)}" r="${pts.length > 60 ? 1.6 : 3.4}" fill="${p.intensity >= 80 ? 'var(--grade-bad)' : p.intensity >= 60 ? 'var(--grade-warn)' : 'var(--grade-mid)'}"><title>${escapeHtml(label)}</title></circle>`;
     }).join('');
     const grid = [20, 40, 60, 80].map((v) => `<line x1="${padL}" y1="${y(v)}" x2="${Wpx - padR}" y2="${y(v)}" class="wave-grid"/><text x="4" y="${y(v) + 3}" class="wave-axis">${v}</text>`).join('');
     const xLabels = pts.length <= 30 ? pts.filter((_, i) => i === 0 || i === pts.length - 1 || (i + 1) % Math.ceil(pts.length / 8) === 0)
@@ -8180,8 +8182,8 @@
       <path d="${area}" class="wave-area"/>
       <path d="${line}" class="wave-line"/>${dots}${xLabels}</svg>`;
     $('waveLegend').innerHTML = lang === 'en'
-      ? '<span><i style="background:#e06a5b"></i>High (≥80)</span><span><i style="background:#e0a23a"></i>Mid (60-79)</span><span><i style="background:#7c9cff"></i>Breathing (&lt;60)</span><small>Click a dot for diagnosis · this director page is embedded in docx/pdf/txt downloads</small>'
-      : '<span><i style="background:#e06a5b"></i>高能（≥80）</span><span><i style="background:#e0a23a"></i>推进（60-79）</span><span><i style="background:#7c9cff"></i>呼吸（&lt;60）</span><small>点击圆点看诊断 · 本导演节奏页会内嵌进 docx/pdf/txt 下载文件</small>';
+      ? '<span><i style="background:var(--grade-bad)"></i>High (≥80)</span><span><i style="background:var(--grade-warn)"></i>Mid (60-79)</span><span><i style="background:var(--grade-mid)"></i>Breathing (&lt;60)</span><small>Click a dot for diagnosis · this director page is embedded in docx/pdf/txt downloads</small>'
+      : '<span><i style="background:var(--grade-bad)"></i>高能（≥80）</span><span><i style="background:var(--grade-warn)"></i>推进（60-79）</span><span><i style="background:var(--grade-mid)"></i>呼吸（&lt;60）</span><small>点击圆点看诊断 · 本导演节奏页会内嵌进 docx/pdf/txt 下载文件</small>';
     const adv = $('waveAdvice'); if (adv) { adv.classList.add('hidden'); adv.innerHTML = ''; }
   }
   // v2.39 波形点集→诊断→增值改稿闭环
