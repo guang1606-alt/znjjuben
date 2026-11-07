@@ -1888,6 +1888,16 @@
     const host = typeof el === 'string' ? $(el) : el;
     if (host) host.innerHTML = znSkeletonHtml(kind);
   }
+  /* v2.465 空态高度占位：慢网下网格先铺 6 张骨架卡（804px），响应回来若为空则整块换成
+     约 113px 的空态，页面骤缩 691px，页脚/浮动按钮被拽进视口（实测 CLS 0.114）。
+     修法：在清空容器之前量一次骨架高度，交给空态当 min-height；高度必须实测，不写死像素。 */
+  function reserveEmptyHeight(emptyEl, measuredHeight, isEmpty) {
+    const host = typeof emptyEl === 'string' ? $(emptyEl) : emptyEl;
+    if (!host) return;
+    const on = !!(isEmpty && measuredHeight > 0);
+    host.style.minHeight = on ? measuredHeight + 'px' : '';
+    host.classList.toggle('zn-empty-reserve', on);
+  }
   function znEmptyHtml(text, hint) {
     return `<div class="zn-empty" role="status"><span class="zn-empty-ico" aria-hidden="true">◌</span>`
       + `<span class="zn-empty-txt">${_znEsc(text)}</span>`
@@ -4254,8 +4264,10 @@
     } catch { failed = true; }
     if (seq !== feedReqSeq) return; // v2.259：过期响应不得写 sqEmpty/sqFeed
     const empty = $('sqEmpty'), feed = $('sqFeed');
+    const skelH = feed.offsetHeight; // v2.465 先量骨架高度，再清空（清空后只能量到 0）
     empty.innerHTML = failed ? znErrorHtml(t('loadFail')) + znRetryHtml('sq-retry') : znEmptyHtml(t('sqEmpty'));
     empty.classList.toggle('hidden', list.length > 0); feed.innerHTML = '';
+    reserveEmptyHeight(empty, skelH, !failed && list.length === 0);
     const sqRetry = empty.querySelector('.sq-retry');
     if (sqRetry) sqRetry.onclick = () => loadFeed();
     list.forEach((p) => {
@@ -4361,8 +4373,10 @@
     try { const res = await fetch('/api/market/listings?sort=' + sort + '&page=' + mkPage + '&pageSize=' + MK_PAGE_SIZE); if (!res.ok) failed = true; else { const j = await res.json(); if (Array.isArray(j.items)) { list = j.items; total = Number(j.total) || list.length; } } } catch { failed = true; }
     if (seq !== mkReqSeq) return; // 期间又翻页/切排序/切榜单：旧响应作废
     const grid = $('mkGrid'), empty = $('mkEmpty');
+    const skelH = grid.offsetHeight; // v2.465 先量骨架高度，再清空（清空后只能量到 0）
     empty.innerHTML = failed ? znErrorHtml(t('loadFail')) + znRetryHtml('mk-retry') : znEmptyHtml(t('mkEmpty'));
     empty.classList.toggle('hidden', list.length > 0); grid.innerHTML = '';
+    reserveEmptyHeight(empty, skelH, !failed && list.length === 0);
     const mkRetry = empty.querySelector('.mk-retry');
     if (mkRetry) mkRetry.onclick = () => loadListings();
     list.forEach((l) => {
@@ -4463,9 +4477,11 @@
       ? t('boardTotal', { total }) + (total > list.length ? ' · ' + t('boardTrunc', { shown: list.length }) : '')
       : '';
     const grid = $('mkGrid'), empty = $('mkEmpty');
+    const skelH = grid.offsetHeight; // v2.465 先量骨架高度，再清空（清空后只能量到 0）
     empty.innerHTML = failed ? znErrorHtml(t('loadFail')) + znRetryHtml('board-retry') : znEmptyHtml(t('mkEmpty'));
     $('mkPager').classList.add('hidden');
     empty.classList.toggle('hidden', list.length > 0); grid.innerHTML = '';
+    reserveEmptyHeight(empty, skelH, !failed && list.length === 0);
     const boardRetry = empty.querySelector('.board-retry');
     if (boardRetry) boardRetry.onclick = () => loadBoard(curBoard);
     list.forEach((l) => {

@@ -1741,6 +1741,8 @@ summary:hover{color:var(--accent-strong)}
 .zn-empty-ico { font-size: 1.7rem; line-height: 1; opacity: .45; }
 .zn-empty-txt { font-size: .9rem; }
 .zn-empty-hint { font-size: .8rem; opacity: .75; max-width: 32em; }
+/* v2.465 空态高度占位：骨架换成空态时保留实测高度，文字在预留区里居中（贴顶会像页面坏了） */
+.zn-empty-reserve { display: flex; align-items: center; justify-content: center; }
 /* v2.223 错误态：与 .zn-empty 同构，--danger 主题令牌（三主题各自定义） */
 .zn-error { display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 28px 14px; text-align: center; color: var(--danger, #b1443a); }
 .zn-error-ico { font-size: 1.7rem; line-height: 1; opacity: .7; }
