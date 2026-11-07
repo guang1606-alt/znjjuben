@@ -69,9 +69,19 @@
       <section class="home-section">
         <div class="home-section-head">
           <h2 data-i="homeQuickTitle">快捷创作</h2>
-          <button class="chip home-more" data-view-go="studio" data-i="homeAllModes">全部 12 种模式 →</button>
+          <button class="chip home-more" data-view-go="studio" data-i="homeAllModes">全部 8 种模式 + 自动匹配 →</button>
         </div>
-        <div class="home-quick-grid" id="homeQuickGrid"></div>
+        <!-- v2.461 首屏零位移：卡片直接静态输出（与 renderHome 生成的 DOM/文案逐字一致），
+             app.js 迟到执行时重建不会改变任何尺寸；同时兜住 JS 失败/离线时的可读性。
+             文案必须与 i18n zh 的 mode/modeDesc 逐字一致（守卫见 test/web-home-first-paint-static.test.cjs）。 -->
+        <div class="home-quick-grid" id="homeQuickGrid">
+          <button type="button" class="home-quick-card"><b>标签创建</b><span>标签组合，快速定向出本（最低算力）</span><em class="home-go">开始 →</em></button>
+          <button type="button" class="home-quick-card"><b>采访式创作</b><span>对话式引导，把模糊创意聊成剧本</span><em class="home-go">开始 →</em></button>
+          <button type="button" class="home-quick-card"><b>日记式创作</b><span>写下真实日记，经你授权后梳理成剧本（摘要/指定段落/全部三档授权，可撤回）</span><em class="home-go">开始 →</em></button>
+          <button type="button" class="home-quick-card"><b>灵感式创作</b><span>一句话灵感或已有素材：AI 提案 → 多轮对话 → 你确认才落稿（含素材改编/名场面/爆款逆向轨道）</span><em class="home-go">开始 →</em></button>
+          <button type="button" class="home-quick-card"><b>实时热点</b><span>借势全网热点快速出本（生成前给合规与时效提示）</span><em class="home-go">开始 →</em></button>
+          <button type="button" class="home-quick-card"><b>双人对撞式</b><span>两个立场对立的角色轮流出招，逐轮加码直到一方无法再退</span><em class="home-go">开始 →</em></button>
+        </div>
       </section>
 
       <section class="home-section">
@@ -79,7 +89,12 @@
           <h2 data-i="homeToolsTitle">创作工具箱</h2>
           <span class="muted" data-i="homeToolsSub">像真实编剧团队一样开会、判断、围读改稿</span>
         </div>
-        <div class="home-tool-grid" id="homeToolGrid"></div>
+        <div class="home-tool-grid" id="homeToolGrid">
+          <button type="button" class="home-tool-card"><h3 data-i="tbCardPitch">选题会</h3><p data-i="tbCardPitchP">和小南开创作会：市场/故事/制作/观众四席位评估“人物关系·冲突空间·拍摄难度”，给立项/缓议/否决决议</p><span class="tool-cost" data-i="tbCostPitch">20 积分/轮</span></button>
+          <button type="button" class="home-tool-card"><h3 data-i="tbCardRead">剧本围读</h3><p data-i="tbCardReadP">责编/导演/制片/观众逐立场挑问题，形成修改清单；支持我+小南、用户+用户、我+别人的小南、小南+小南自动围读</p><span class="tool-cost" data-i="tbCostRead">30 积分/次围读</span></button>
+          <button type="button" class="home-tool-card"><h3 data-i="tbCardTd">拆爆款</h3><p data-i="tbCardTdP">粘贴爆款剧本/字幕或链接，拆出“为什么好、为什么爆、可取技法”，提炼多标签与改编方向、大纲，确认即进入改编创作</p><span class="tool-cost" data-i="tbCostTd">拆解30·大纲20积分</span></button>
+          <button type="button" class="home-tool-card"><h3 data-i="tbCardDv">多版本去重体检</h3><p data-i="tbCardDvP">同一创意出多版时，写前领正交差异化种子（主角原型×冲突×反转×基调），写后两两比对，揪出“换汤不换药”的伪多版本并给改法</p><span class="tool-cost" data-i="tbCostDv">免费 · 反同质化</span></button>
+        </div>
       </section>
 
       <!-- A2 v2.200 首页瘦身：最新动态折叠为 details（默认收起，点标题展开） -->

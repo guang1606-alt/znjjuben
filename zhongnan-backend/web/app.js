@@ -439,7 +439,7 @@
         const studioSample = $('sampleEntryBtn');
         sampleBtn.onclick = () => { if (studioSample) studioSample.click(); else openModal('sampleModal'); };
       }
-      // "全部 12 种模式" 链接
+      // 「全部模式」链接（文案随 i18n 更新，数量与 I18N.MODES 一致）
       document.querySelectorAll('[data-view-go]').forEach((b) => {
         b.onclick = () => switchView(b.getAttribute('data-view-go'));
       });
