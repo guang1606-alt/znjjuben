@@ -29,7 +29,7 @@ describe('v2.241 a11y：导航语义（aria-label 地标区分 + aria-current �
   });
 
   it('switchView 激活循环同步 aria-current：激活 setAttribute page，未激活 removeAttribute', () => {
-    const region = sliceBetween(appSrc, 'function switchView(v)', '// v2.200');
+    const region = sliceBetween(appSrc, 'function switchView(v, opts)', '// v2.200');
     assert.ok(region.length > 0, '应定位到 switchView 函数体');
     assert.match(region, /setAttribute\('aria-current', 'page'\)/, 'switchView 激活分支缺 setAttribute aria-current page');
     assert.match(region, /removeAttribute\('aria-current'\)/, 'switchView 未激活分支缺 removeAttribute aria-current');

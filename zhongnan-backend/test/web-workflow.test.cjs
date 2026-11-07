@@ -37,6 +37,9 @@ function setup(names, extra = {}) {
     t: x => x, escapeHtml: x => String(x ?? ''), toastError() {}, xnSay() {},
     renderTaskQueue() {}, renderProgress() {}, resetPanels() {}, refreshListenBtn() {},
     loadMe() {}, loadWorks() {}, loadCatalog() {}, loadFeed() {}, loadListings() {}, enterAdmin() {},
+    // v2.446 switchView 内同步 #/<view>；本 harness 不提供 location/history，地址栏契约由
+    // test/web-view-router.test.cjs 覆盖，这里置空只验证视图与面板切换
+    writeRoute() {},
     VIEWS: ['studio', 'works', 'vip', 'square', 'market', 'admin'], _switchAnimToken: 0, _workbenchHideTimer: null,
     // v2.242 焦点进出：_hideWorkbenchLayer 的 setTimeout 回调读取该变量
     _workbenchPrevFocus: null,

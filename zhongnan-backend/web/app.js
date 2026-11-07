@@ -2035,8 +2035,45 @@
     // 父级显示控制：根视图（仅 1 层）时隐藏面包屑条，避免首页冗余
     el.style.display = _navStack.canPop() ? '' : 'none';
   }
-  function switchView(v) {
+  // v2.446 视图路由：过去切视图只改 DOM，刷新一律回首页、浏览器后退退不到上一视图，
+  // 也没法把「我的作品 / 剧本交易」这类页面链接直接发给别人。这里把 view 落到 #/<view>，
+  // 只登记白名单内的 8 个视图（弹层如编剧室/递招/素材库不是页面，不写 hash）。
+  const ROUTE_PREFIX = '#/';
+  function viewFromHash() {
+    const raw = String(location.hash || '');
+    if (raw.indexOf(ROUTE_PREFIX) !== 0) return null;
+    const v = raw.slice(ROUTE_PREFIX.length);
+    // 白名单校验：任意 hash 不得把用户带进未知分支
+    return VIEWS.indexOf(v) >= 0 ? v : null;
+  }
+  function currentView() {
+    const cur = document.querySelector('.nav .nav-item.active');
+    return (cur && cur.getAttribute('data-view')) || 'home';
+  }
+  function writeRoute(v, replace) {
+    const next = ROUTE_PREFIX + v;
+    if (location.hash === next) return;
+    const url = location.pathname + location.search + next; // 保留 ?query，不能因为切视图把它抹掉
+    try {
+      if (replace) history.replaceState(null, '', url);
+      else history.pushState(null, '', url);
+    } catch { /* file:// 或受限 WebView 下 history 可能抛错：降级为纯视图切换，不阻断主流程 */ }
+  }
+  function initViewRouter() {
+    const initial = viewFromHash();
+    // 管理后台是权限页：未登录时不从 URL 恢复，否则刷新即弹登录框
+    const restore = initial && (initial !== 'admin' || Api.isAuthed()) ? initial : 'home';
+    writeRoute(restore, true); // 启动一律 replace，避免刷新本身制造一条历史记录
+    if (restore !== currentView()) switchView(restore, { fromRoute: true });
+    addEventListener('popstate', () => {
+      const v = viewFromHash() || 'home';
+      if (v === currentView()) return;
+      switchView(v, { fromRoute: true }); // 后退/前进不再写历史，否则每按一次后退就自增一条
+    });
+  }
+  function switchView(v, opts) {
     if (!VIEWS.includes(v)) return;
+    const o = opts || {};
     if (v !== 'studio') closeWorkbench();
     const cur = document.querySelector('.nav-item.active');
     const sameView = cur && cur.getAttribute('data-view') === v;
@@ -2052,6 +2089,8 @@
       b.classList.toggle('active', on);
       if (on) b.setAttribute('aria-current', 'page'); else b.removeAttribute('aria-current');
     });
+    // 路由同步：用户点击走 push（可后退），权限回退等程序化替换走 replace（不堆历史）
+    if (!o.fromRoute) writeRoute(v, !!o.replace);
     // 新视图淡入：先 hidden 移除后强制 reflow，再加 view-in 动画类
     const newEl = $('view-' + v);
     if (newEl && !sameView) {
@@ -9817,16 +9856,16 @@
     } catch { xnSay('下载失败，请重试'); }
   }
   function enterAdmin() {
-    if (!Api.isAuthed()) { openAuth('login'); switchView('studio'); return; }
+    if (!Api.isAuthed()) { openAuth('login'); switchView('studio', { replace: true }); return; }
     // 入口虽只对管理员显示，仍做一次服务端口径校验
     const ensure = meCache ? Promise.resolve(meCache) : Api.request('/api/auth/me').then((r) => r.json()).then((m) => { meCache = m; return m; });
     ensure.then((me) => {
-      if (!me || !me.isAdmin) { xnSay(lang === 'en' ? 'Admin only.' : '仅超级管理员可进入后台'); switchView('studio'); return; }
+      if (!me || !me.isAdmin) { xnSay(lang === 'en' ? 'Admin only.' : '仅超级管理员可进入后台'); switchView('studio', { replace: true }); return; }
       if (!admInited) { initAdmin(); admInited = true; }
       // c199 「开设账号」仅主账号可见（isSuperAdmin 由服务端口径判定，副管理员不可见此入口）
       const createBox = $('admCreateBox'); if (createBox) createBox.classList.toggle('hidden', !me.isSuperAdmin);
       renderAdmTabs(); loadAdmTab();
-    }).catch(() => switchView('studio'));
+    }).catch(() => switchView('studio', { replace: true }));
   }
   function renderAdmTabs() {
     $('admTabs').innerHTML = ADM_TABS.map((k) =>
@@ -10911,5 +10950,6 @@
   applyTheme(); applyLang(); renderAuthButton(); initHookConsole(); wireFormatSelector();
   initNetWatch(); initInstallPrompt(); // v2.442 网络韧性横幅 + 安装引导（失败不影响主流程）
   initGlobalErrorGuard(); // v2.445 全局异常兜底，先于业务请求接线
+  initViewRouter(); // v2.446 视图路由恢复：刷新/直链/后退落在同一页，先于业务取数
   if (Api.isAuthed()) loadMe();
 })();

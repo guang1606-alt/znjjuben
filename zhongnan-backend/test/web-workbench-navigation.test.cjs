@@ -76,6 +76,9 @@ function setup() {
     clearTimeout: id => timers.delete(id),
     Api: { request: async url => { urls.push(url); return scriptsResponse; }, jsonOrThrow: async response => response },
     t: text => text, escapeHtml: text => String(text ?? ''), toastError: text => errors.push(text), xnSay() {},
+    // v2.446 switchView 内会同步 #/<view>；本 harness 只验证工作台与视图切换，地址栏写回由
+    // test/web-view-router.test.cjs 的静态契约覆盖，这里置空避免依赖 location/history。
+    writeRoute() {},
     loadMe() {}, loadWorks() {}, loadCatalog() {}, loadFeed() {}, loadListings() {}, enterAdmin() {},
     currentWorksProject: null, currentWorksDiagnosis: null, currentProjectId: null,
     pendingWarnings: null, lastFiling: null, progress: null, abortCtrl: null, lastDone: null,
