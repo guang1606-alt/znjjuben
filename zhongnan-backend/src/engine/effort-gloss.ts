@@ -124,3 +124,48 @@ export function effortGloss(draft: string): EffortGlossResult {
 
   return { score, narrationLines, hits, issues, advice };
 }
+
+/**
+ * 前置教学：buildEffortGlossDirective(_format='LIVE', lang='zh')
+ * -------------------------------------------------------------------
+ * 同源铁律：教学函数与检测器 effortGloss 同文件；format 不门控（LIVE/AIGC/缺省一致）。
+ * 目的：撰写师/润色师首轮即拿到"努力打包成成语、结果当场兑付"的同句共现口径，
+ *       避免写完被 prePolish glossHint 与 craft/deai 复评打回。
+ */
+export function buildEffortGlossDirective(_format: string = 'LIVE', lang: string = 'zh'): string {
+  if (lang === 'en') {
+    return [
+      '【Effort Gloss Pre-Writing Briefing (same source as effortGloss: the struggle is shrink-wrapped into an idiom while the result is cashed in; 11 points per hit; floor 25)】',
+      '- Scope: narration lines only, split into sentences (Chinese 。！？；and English .!?); scene headers and "speaker: line" dialogue lines are skipped, and the rest count as narration lines for diagnostics.',
+      '- Judgement: the effort phrase and the result verb must co-occur inside the same sentence; the window runs from 10 characters before the effort phrase to 26 characters after it in Chinese (100 characters in English), and cross-sentence matches do not count.',
+      '- Effort phrases: after much effort / with great difficulty / eventually managed to / somehow managed to / managed to convince / after a lot of back and forth / after much persuasion / after repeated pleas / begged and pleaded / cajoled him into / relentlessly / finally talked him into / after hours or days of negotiation.',
+      '- Result verbs: convince / persuade / talked him into / agreed / signed / got him to / secured / obtained / tracked down / found / escaped / rescued / recovered / won him over / gave in / relented.',
+      '- One hit per line: when several sentences on one line match, only the first is kept so a line is never double-charged.',
+      '- Bare-result exemption: "she signed the contract" carries no effort phrase and is a normal on-screen result, so it is not judged.',
+      '- Neighbour divisions: a bare process phrase (after an argument) belongs to show-dont-tell; a bare time jump (three days later) belongs to timeline-consistency; a whole empty scene belongs to scene-padding.',
+      '- Inversion allowed: the result verb may come before the effort phrase (he agreed, after much persuasion) and still judges inside the same sentence window.',
+      '- Hit fields: line, phrase, result, snippet (first 30 characters of the sentence) and reason are returned so the polisher can locate the packaging.',
+      '- Score: max(25, 100 - hits x 11); empty draft = 100.',
+      '- Rewrite: cut the effort idiom and stage the hardest exchange head-on — the pen set down, the contract pushed back, the door shut in her face — and let the result happen inside the action.',
+      '- Pipeline consumption: prePolish injects hits into the polisher as glossHint; craft initial, craft re-eval and deai rescan consume the same result, and the deai dimension carries 0.01 weight.',
+      '- Self-check: behind this "finally", has the audience watched the hardest exchange? If not, cut the result and build the process.',
+    ].join('\n');
+  }
+  return [
+    '【努力概述·前置教学（检测同源：effortGloss 把对抗打包成"几经周折终于"，每条命中扣 11 分，25 分封底）】',
+    '- 检测范围：只扫叙述行，并按句切分（。！？；与英文 .!?）；场头与「说话人：台词」行跳过，其余行计入 narrationLines（仅诊断）。',
+    '- 判定口径：努力词与达成结果词必须在同一句内近距离共现才判；努力词前 10 字、后 26 字（英文后 100 字符）为共现窗口，跨句不算。',
+    '- 努力词表：几经周折/几经辗转/费尽周折/一番周折/好说歹说/费尽口舌/软硬兼施/连哄带骗/死缠烂打/软磨硬泡/磨破嘴皮/好不容易才/不懈努力/再三恳求/反复沟通/一再坚持/多番交涉/苦苦哀求/一哭二闹/三寸不烂之舌。',
+    '- 结果词表：签下/签成/答应/同意/松口/点头/拿到/拿下/搞定/查到/找到/找回/说服/逃出/借到/凑齐/摆平/救下/追回/要回/夺回/获得/批准/原谅/求来/劝回。',
+    '- 一行最多记一处：同一行多句命中，只取第一处，避免重复扣分。',
+    '- 裸结果豁免："她签下了合同"没有努力词，是场内正常结果交代，不判。',
+    '- 邻居分界：裸过程短语（经过一番争辩）归 show-dont-tell；裸时间跳（三天后）归 timeline-consistency；整场空转归 scene-padding。',
+    '- 倒装允许：结果词可出现在努力词之前（"他答应了——好说歹说才有用"），同一句窗口内仍判。',
+    '- 命中字段：line（行号）、phrase（努力词）、result（结果词）、snippet（本句前 30 字）、reason 随命中返回。',
+    '- 得分：score = max(25, 100 - 命中条数 × 11)；空稿 100。',
+    '- 改写方向：删掉努力成语，挑阻力最大的那一次交锋正面拍——对方把笔放下、把合同推回来、门在面前关上，让结果在动作里发生。',
+    '- pipeline 消费：prePolish 把命中注入润色师（glossHint）；craft 初评、craft 复评、deai 复扫同一结果，deai 维度占 0.01 权重，并随管线返回值透出。',
+    '- 成稿自查：这句的"终于"背后，观众看过那场最难的交锋吗？没看过就删结果、补过程。',
+    '- 中英一致：中英同口径（同句共现、一行一处、11 分封底 25），英文努力词表含 after much effort / managed to convince / after much persuasion。',
+  ].join('\n');
+}
