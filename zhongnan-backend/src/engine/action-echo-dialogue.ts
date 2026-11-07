@@ -319,3 +319,56 @@ export function actionEchoDialogue(draft: string): ActionEchoResult {
 
   return { score, dialogueLines, hits, issues, advice };
 }
+
+/**
+ * 前置教学：buildActionEchoDirective(_format='LIVE', lang='zh')
+ * -------------------------------------------------------------------
+ * 同源铁律：教学函数与检测器 actionEchoDialogue 同文件；format 不门控（LIVE/AIGC/缺省一致）。
+ * 目的：撰写师/润色师首轮即拿到"只扫台词行 / 长台词豁免 / 三型 / 强宽家族与 ±10 cue /
+ *       假朋友 / 道具映射 / 全片第 2 次起 charged / rescue 双通道 / 只算 bad"的口径，
+ *       避免写完被 prePolish actionEchoHint 与 craft/deai 复评打回。
+ */
+export function buildActionEchoDirective(_format: string = 'LIVE', lang: string = 'zh'): string {
+  if (lang === 'en') {
+    return [
+      '[Action-Echo Dialogue Pre-Writing Briefing (same source as actionEchoDialogue: never read the action back; one reality-check beat is allowed, charged from the second)]',
+      '- Scope: dialogue lines only (speaker of up to 4 characters plus a colon); a dialogue line is checked only when it directly follows a narration line, and the next scene header clears lastNarration while blank lines do not.',
+      '- Long-line pass: a Chinese line longer than 22 characters after punctuation is stripped, or an English line over 16 words, is treated as a point being argued and skipped.',
+      '- Three kinds: question (question mark), confirm (12 characters or fewer in Chinese, 8 words or fewer in English), and prop (prop-to-event mapping); question and confirm both require the same action family in the line and in the previous narration.',
+      '- Chinese families: strike (hit/slap/punch), tear, throw, push, kiss, burn, splash, choke, bite, kneel and remove are strong; hold, sign, divorce, lock, delete, take away, cancel and sue are weak and need a cue within a window of plus or minus 10 characters (ring, contract, papers, evidence, cheek, door, desk, wrist).',
+      '- False friends: phone call, pushed the door open, took it personally, left the room, told me and similar compounds are not actions; the character must perform the act itself.',
+      '- Prop mapping: divorce papers, resignation letter, subpoena, termination notice and paternity test pushed onto the table, followed by "Divorce? / You resigned? / You are suing me? / A paternity test?", count as an echo of the prop kind.',
+      '- English families: strike/tear/throw/push/kiss/burn/strangle/bite/drag/grab are strong and matched directly; kneel/lock/leave/divorce/cancel/sign/take are weak and need a cue within plus or minus 40 characters (across the face, cheek, fist, ring, contract, papers, door, desk, wrist).',
+      '- English rules: a question needs a subject opener (you/he/she/they/we/i) and a shared family with the previous narration; a confirm line has 8 words or fewer and actually/really/did/just; props cover divorce papers, resignation letter, subpoena or summons, termination notice and paternity test.',
+      '- Charged rule: the first echo in the whole script is a legitimate beat and stays uncharged; from the second echo onward every hit is charged. This is a script-wide count, not a third-use rule for one family.',
+      '- Rescue in the line: a demand or new fact the picture cannot show marks the hit rescued — lawyer, police, custody, board, shares, settlement, court, sue, evidence, recording, inheritance, tomorrow, next week, alimony, press, exposure, restraining order, frozen account, paternity test. Restating plus demanding is real conflict; restating alone is the disease.',
+      '- Rescue on the next line: the next non-empty line before the next scene header that acts on the decision — picked up the phone, called the cops, dialed his lawyer, signed the papers, turned and walked out, slammed the door, without looking back — also marks the hit rescued.',
+      '- Score: bad = charged and not rescued; 0 bad = 100; 1 bad = 80; 2 or more = max(30, 100 - n x 22).',
+      '- Hit fields: line / speaker / kind (question, confirm, prop) / action / narration (30 characters) / dialogue (30 characters) / charged / rescued / reason; issues lists bad hits only.',
+      '- Neighbours: mirror-visual handles statement lines that restate a static object with this/that, while this engine handles questions and confirmations echoing an action that just played (mirror explicitly exempts "You hit me?"); echo-dialogue handles narration restating dialogue, the opposite direction; empty-threat handles threats that never pay off and is orthogonal.',
+      '- Pipeline: prePolish emits actionEchoHint, craft first and second passes plus the return field are kept, and the deai weight has been retired since v2.105, so the engine is diagnostic and batch-rescan only.',
+      '- Self-check: when a line asks "You hit me? / You tore up the contract? / You are really divorcing him?", look back one beat; if the action just played, cut the confirmation or spend the line on a demand or the next move.',
+      '- Same families, charged and rescue rules across languages, with separate word lists; this briefing lives in the same file as the detector and is never gated by format.',
+    ].join('\n');
+  }
+  return [
+    '[动作回声台词 前置教学（同源 actionEchoDialogue：动作不复读；全片最多留一次现实确认节拍，第 2 次起 charged）]',
+    '- 检测范围：只扫台词行（话者 ≤4 字 + 冒号）；台词必须紧跟在一条叙述行之后，换场（场头）清空 lastNarration，空白行不清空。',
+    '- 长台词豁免：中文去标点后超过 22 字、英文超过 16 词，默认在表达观点/控诉，放行不判。',
+    '- 三型回声：question（首个句段含问号）、confirm（≤12 字确认句）、prop（道具→事件映射）；question 与 confirm 都要求台词动作家族与上一拍叙述动作家族同一个。',
+    '- question 型：问号后接要价仍算回声问；句首为主语引导（你/你们/他/她/我们…可带竟然/居然/真的/把/将等），且上一拍叙述行确实落地同族动作。',
+    '- 中文动作家族：strike 打/扇/抽/捶/砸、tear 撕/扯、throw 扔/摔、push 推/拽、kiss 亲/吻、burn 烧、splash 泼、choke 掐、bite 咬、kneel 跪、remove 摘（强家族）；hold 抱、sign 签、divorce 离、lock 锁、del 删、takeaway 带走、cancel 取消、sue 告（宽家族）。',
+    '- 宽家族：叙述行必须在该动作字 ±10 字窗口内带物理/决裂语境（当场/戒指/合同/协议/证据/录音/脸上/门/地上/桌上/怀里/公章/账户…），否则不算落地。',
+    '- 假朋友排除：打电话/打招呼/推门/推开/亲自/离开/离职/扯皮/咬牙/摘菜/告诉/告别/告白 等复合词不算动作，命中字必须做真实动作才算。',
+    '- 道具映射：叙述行推来离婚协议/辞职信/传票/律师函/解约通知/亲子鉴定，台词问"离婚？/辞职？/告我？/解约？/孩子不是你的？"也算回声（prop 型）。',
+    '- charged 判定：全片第一次回声是合法节拍，不罚（charged=false）；第 2 次起每次 charged=true——是整片累计，不是同族第 3 次。',
+    '- rescue·本句：台词本身带画面之外的新信息即 rescued——律师/警察/报警/董事会/股权/抚养权/净身出户/法院/起诉/遗产/证据/录音/明天/后天/下周/分手费/赔偿/曝光/媒体/监护权/财产/账户/冻结/亲子鉴定；复述+要价是真冲突，只复述才是病。',
+    '- rescue·下一非空行：回声后的下一条非空行（换场即止）若立刻落实决定——拿起电话/拨通/当场签/当场宣布/转身就走/甩门/摔门/头也不回，也记 rescued。',
+    '- 得分：bad = charged 且未 rescued；0 次 100；1 次 80；≥2 次 max(30, 100 - n × 22)。',
+    '- 命中字段：line / speaker / kind（question|confirm|prop）/ action / narration（30 字截断）/ dialogue（30 字截断）/ charged / rescued / reason；issues 只列 bad。',
+    '- 邻居分界：mirror-visual 管"陈述句 + 这/那开头"复述眼前静物，本引擎管疑问/确认句回声刚发生的动作（mirror 明确豁免"你居然打我？"）；echo-dialogue 管叙述行复述台词，方向相反；empty-threat 管不兑现的狠话，正交。',
+    '- pipeline 消费：prePolish 生成 actionEchoHint，craft 初评/复评与 return 字段保留；deai 加权自 v2.105 起已退役，仅作诊断与批量重扫（creative-batch-rescan）。',
+    '- 成稿自查：台词出现"你打我？/你把合同撕了？/你真要跟他离婚？"时，回看上一拍是否刚演过同一动作——演过就删掉确认句，或把台词改说要价/下一步。',
+    '- 中英一致：同一套家族与 charged/rescue 规则，中英词表各自独立；教学文本与检测器同文件同源，format 不门控。',
+  ].join('\n');
+}
