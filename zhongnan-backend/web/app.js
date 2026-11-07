@@ -87,14 +87,26 @@
     });
   }
   // v2.442 安装引导：仅 Chromium 系触发 beforeinstallprompt；已在独立窗口运行时不重复引导。
-  // iOS Safari 不触发该事件、Apple 也未提供编程式安装入口——不臆造一个点了没反应的按钮。
+  // v2.443 iOS 补齐：iOS 不触发该事件、也不提供编程式安装接口，但「分享 → 添加到主屏幕」是可走通的路径，
+  // 因此入口照常露出、点击给操作指引，而不是留一个点了没反应的按钮或干脆不给入口。
   let _installEvt = null;
+  let _iosInstallHint = false;
+  // iPadOS 13+ 默认伪装成 Mac 桌面 UA，仅靠 iPad/iPhone 字样会漏判，需再看 MacIntel + 多点触控。
+  function isIOSDevice() {
+    const nav = typeof navigator === 'undefined' ? null : navigator;
+    if (!nav) return false;
+    const ua = nav.userAgent || '';
+    if (/iPad|iPhone|iPod/.test(ua)) return true;
+    return nav.platform === 'MacIntel' && (nav.maxTouchPoints || 0) > 1;
+  }
   function initInstallPrompt() {
     const btn = $('installBtn');
     if (!btn) return;
     const standalone = (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches)
       || window.navigator.standalone === true;
     if (standalone) return;
+    _iosInstallHint = isIOSDevice();
+    if (_iosInstallHint) btn.classList.remove('hidden');
     addEventListener('beforeinstallprompt', (e) => {
       e.preventDefault(); // 暂缓浏览器自带气泡，改用顶栏入口，避免打断创作流程
       _installEvt = e;
@@ -106,6 +118,8 @@
       toastOk(t('installDone'));
     });
     btn.addEventListener('click', async () => {
+      // iOS 无安装事件：只给路径，不隐藏入口（用户可能装完回来还要再看一次）
+      if (_iosInstallHint) { toastInfo(t('installIosHint')); return; }
       const evt = _installEvt;
       _installEvt = null;
       btn.classList.add('hidden');

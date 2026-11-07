@@ -42,9 +42,9 @@ test('断网状态机：常驻横幅 + 仅恢复时弹一次 toast', () => {
   assert.match(appJs.match(/function applyLang\(\)[\s\S]*?\n  \}/)[0], /syncNetBanner\(\)/, '切语言后横幅文案需重刷');
 });
 
-test('安装引导：只在可安装时露出，且不臆造 iOS 入口', () => {
+test('安装引导：Chromium 走安装事件，iOS 给可走通的路径', () => {
   const btn = indexHtml.match(/<button class="chip hidden" id="installBtn"[^>]*>/);
-  assert.ok(btn, '安装入口必须默认隐藏，等浏览器事件再露出');
+  assert.ok(btn, '安装入口必须默认隐藏，等浏览器事件或设备判定再露出');
   assert.match(btn[0], /data-i="installApp"/, '入口文案需走 i18n');
   const fn = appJs.match(/function initInstallPrompt\(\)[\s\S]*?\n  \}/);
   assert.ok(fn, '缺 initInstallPrompt');
@@ -55,8 +55,31 @@ test('安装引导：只在可安装时露出，且不臆造 iOS 入口', () => 
   assert.match(appJs, /initInstallPrompt\(\)/, '必须在启动时接线');
 });
 
+test('iOS 安装路径：判定到位、入口露出、点击给指引而非死按钮', () => {
+  const detect = appJs.match(/function isIOSDevice\(\)[\s\S]*?\n  \}/);
+  assert.ok(detect, '缺 isIOSDevice 判定');
+  assert.match(detect[0], /iPad\|iPhone\|iPod/, '需按 UA 识别 iPhone/iPad/iPod');
+  assert.match(detect[0], /MacIntel[\s\S]*maxTouchPoints/, 'iPadOS 13+ 伪装桌面 UA，需补 MacIntel + 多点触控判定');
+  const fn = appJs.match(/function initInstallPrompt\(\)[\s\S]*?\n  \}/)[0];
+  assert.match(fn, /_iosInstallHint = isIOSDevice\(\)/, '需在初始化时判定设备');
+  assert.match(fn, /if \(_iosInstallHint\) btn\.classList\.remove\('hidden'\)/, 'iOS 无安装事件，入口要主动露出');
+  // 点击分支：iOS 先返回指引，不隐藏入口、不依赖 _installEvt
+  const clickBody = fn.slice(fn.indexOf("btn.addEventListener('click'"));
+  assert.match(clickBody, /if \(_iosInstallHint\) \{ toastInfo\(t\('installIosHint'\)\); return; \}/, 'iOS 点击应给「分享 → 添加到主屏幕」指引');
+  const iosReturnIdx = clickBody.indexOf('toastInfo(t(\'installIosHint\'))');
+  const hideIdx = clickBody.indexOf("btn.classList.add('hidden')");
+  assert.ok(iosReturnIdx > 0 && iosReturnIdx < hideIdx, 'iOS 分支必须在隐藏入口之前返回');
+});
+
+test('iOS 主屏元信息齐备（manifest 的 display 在旧版 iOS 不生效）', () => {
+  assert.match(indexHtml, /name="apple-mobile-web-app-capable" content="yes"/, '缺 apple-mobile-web-app-capable，旧版 iOS 无法独立窗口运行');
+  assert.match(indexHtml, /name="mobile-web-app-capable" content="yes"/, '缺标准前缀的 mobile-web-app-capable');
+  assert.match(indexHtml, /name="apple-mobile-web-app-title" content="终南集"/, '主屏名称需用短名，否则完整 <title> 被截断');
+  assert.doesNotMatch(indexHtml, /<meta name="apple-mobile-web-app-status-bar-style"/, '不得设 status-bar-style：black-translucent 会把顶栏压到刘海下');
+});
+
 test('新增文案中英齐备', () => {
-  ['netOffline', 'netOnline', 'installApp', 'installDone', 'installDismissed'].forEach((k) => {
+  ['netOffline', 'netOnline', 'installApp', 'installDone', 'installDismissed', 'installIosHint'].forEach((k) => {
     const hits = i18nJs.match(new RegExp(`\\b${k}:`, 'g')) || [];
     assert.strictEqual(hits.length, 2, `${k} 必须中英各一条，当前 ${hits.length} 条`);
   });
