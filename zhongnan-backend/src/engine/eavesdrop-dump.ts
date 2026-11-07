@@ -180,3 +180,55 @@ export function eavesdropDump(draft: string): EavesdropDumpResult {
 }
 
 const stripLen = (s: string): number => s.replace(/[，。！？、…：；""''（）()【】《》\s,.!?:;'"()\[\]<>\n-]/g, '').length;
+
+/**
+ * 前置教学：buildEavesdropDirective(_format='LIVE', lang='zh')
+ * -------------------------------------------------------------------
+ * 同源铁律：教学函数与检测器 eavesdropDump 同文件；format 不门控（LIVE/AIGC/缺省一致）。
+ * 目的：撰写师/润色师首轮即拿到"只扫叙述行 / 位置帧与路径帧同行共现 / 21 类机密词 /
+ *       repeat 第 2 次起 / package ≥2 类且够长单次即罚 / ±2 行 rescue / 只算 bad"的口径，
+ *       避免写完被 prePolish eavesdropHint 与 craft/deai 复评打回。
+ */
+export function buildEavesdropDirective(_format: string = 'LIVE', lang: string = 'zh'): string {
+  if (lang === 'en') {
+    return [
+      '[Eavesdrop Dump Pre-Writing Briefing (same source as eavesdropDump: truth must cost something; the first overheard secret is legal, charged from the second, and a single conspiracy package is charged at once)]',
+      '- Scope: narration lines only; speaker lines and scene headers are skipped, and narrationLines counts narration lines only.',
+      '- Position frame: a hiding spot (outside the door, behind the door, at the doorway, the door gap, the half-open door, around the corner, down the hallway, the stairwell, behind the wall, next door, outside the window, on the balcony) and a hearing verb (heard, overheard, came voices, the sound of voices) must co-occur on the same line within a short window; rain outside the door is not a frame.',
+      '- Path frame: walked past, passed by, stopped at, stepped up to plus a room word (study, bedroom, office, meeting room, ward, private room, living room, doorway) plus heard, overheard or came voices, also on the same line only.',
+      '- Secret content: the frame line or the immediate next non-empty line before the next scene header must contain a secret term; there are 21 categories — truth, contract, will or inheritance, shares or asset transfer, paternity or not his child, framing, poison, silencing or killing, kidnapping, affair, collusion or conspiracy, plan or trap, timing or move on him, address or hideout, ledger, evidence or recording or USB, seizing control, fire, car crash, real parentage, dropping charges or hush money, pregnancy.',
+      '- Repeat rule: the first overheard secret in the whole script is a legitimate device and stays uncharged; from the second hit onward it is charged, based on the running hit count, not the second time in one segment.',
+      '- Package rule: two or more secret categories in one segment plus a long enough segment (22 Chinese characters after punctuation is stripped, or 16 English words) is a conspiracy package and is charged on the first occurrence — the villain reading out plan, method and timetable like a product manual is the clearest symptom.',
+      '- Charged merge: charged = package or at least one earlier hit; a package is penalized on first sight, a plain overhear only from the second time.',
+      '- Rescue window: a setup, risk or recording signal within plus or minus 2 lines uncharges the hit — held her breath, did not dare breathe, tiptoed, pressed her ear against the door, staked out, waited in advance, set a trap, risked it, almost caught, nearly seen, ducked back, footsteps approaching, the door suddenly opened, pulled out her phone to record, hit record, quietly recorded.',
+      '- Rescue standard: an overheard secret is a scene only when it costs something — prior setup, near exposure or a risky recording; walking to the door with zero setup and zero risk and receiving the full secret is the disease.',
+      '- Bad only: bad = charged and not rescued; rescued hits do not count, and issues lists bad hits only.',
+      '- Score: 0 bad = 100; 1 bad = 78; 2 or more = max(25, 100 - n x 24).',
+      '- Hit fields: line / kind (repeat or package) / snippet (36 characters) / events (deduplicated category labels) / charged / rescued / reason; narrationLines counts narration lines only.',
+      '- Neighbours: causal-logic catches the conveniently and coincidence adverbs plus a coincidence-resolved ending; info-delivery covers devices, broadcasts and messengers and exempts overhearing wholesale as active evidence gathering, while this engine targets the water inside that exemption; exposition-dialogue covers people in the room telling each other known background (as you know), while this engine covers speakers who do not know a third person is listening.',
+      '- Pipeline: prePolish emits eavesdropHint, craft first and second passes plus the return field are kept, and the deai weight has been retired since v2.99, so the engine is diagnostic and batch-rescan only.',
+      '- Self-check: when the protagonist hears a complete conspiracy the moment she reaches the door, cut the free briefing — make her stake it out, hold her breath, nearly get caught or record at risk, or let the conspirators speak in half-sentences and force her to bluff, trade or gamble for the rest.',
+      '- Same frame, event, charged and rescue rules across languages, with separate word lists; this briefing lives in the same file as the detector and is never gated by format.',
+    ].join('\n');
+  }
+  return [
+    '[撞听秘密 前置教学（同源 eavesdropDump：真相必须有代价；首次偷听合法，第 2 次起 charged，套餐单次即 charged）]',
+    '- 检测范围：只扫叙述行；台词行（话者 + 冒号）与场头跳过，narrationLines 只统计叙述行。',
+    '- 位置帧：藏身位（门外/门后/门口/门边/门缝/虚掩的门/拐角/转角/走廊/楼道/楼梯口/楼梯间/墙根/墙后/柱子后/隔壁/窗外/窗台/阳台）与听觉动词（听见/听到/传来…声音）必须同一行短窗口共现；"门外下雨了"不算。',
+    '- 路径帧：路过/经过/刚走到/走到/走近/踱到/来到/上了楼/拐过 + 房间词（书房/卧室/办公室/会议室/房间/病房/包厢/包间/客厅/门口/门边）+ 听见/听到/传来，同样只认同一行。',
+    '- 秘密内容：位置帧所在行或紧邻下一非空行（遇场头即止）必须含机密词，共 21 类——真相/合同协议/遗嘱遗产/股权转让/亲子鉴定/陷害嫁祸/下毒/灭口/绑架/偷情/勾结合谋/计划陷阱/动手时机/地址下落/账本/证据录音U盘/夺权/火灾/车祸/身世/撤诉封口/怀孕。',
+    '- repeat 判定：全片第一次撞听是合法手法，不罚（charged=false）；第 2 次起 charged=true——按 hits 累计，不是同段第 2 次。',
+    '- package 判定：单段机密词 ≥2 类且整段够长（中文去标点 ≥22 字 / 英文 ≥16 词）即密谋套餐，单次即 charged——反派把计划+手法+时间表说成产品说明书是最典型症状。',
+    '- charged 合并：charged = package 或此前已有 ≥1 条 hit；package 首犯就罚，plain 从第 2 次罚。',
+    '- rescued 通道：±2 行窗口内出现布置/风险/留证信号即不扣分——屏住呼吸/大气不敢出/蹑手蹑脚/贴在门上/耳朵贴门/提前守候/蹲守/埋伏/故意设局/冒险/差点被发现/赶紧躲/脚步声逼近/门突然开了/掏出手机录音/按下录音/偷偷录。',
+    '- rescue 口径：偷听有成本或被利用才算戏——提前布置、差点暴露、冒险录音三者任一；零布置零风险走到门口就拿到完整秘密，才是病。',
+    '- 只算 bad：bad = charged 且未 rescued；rescued 命中不参与扣分，issues 只列 bad。',
+    '- 得分：0 次 100；1 次 78；≥2 次 max(25, 100 - n × 24)。',
+    '- 命中字段：line / kind（repeat|package）/ snippet（36 字截断）/ events（去重词类标签）/ charged / rescued / reason；narrationLines 只计叙述行。',
+    '- 邻居分界：causal-logic 抓"恰好/碰巧/conveniently"副词与尾段巧合解局；info-delivery 管设备/广播/信使投喂并把偷听整体豁免为主动取证，本引擎专抓豁免里的水分；exposition-dialogue 管在场人互讲已知背景（as you know），本引擎管说话人不知道有第三者在场。',
+    '- pipeline 消费：prePolish 生成 eavesdropHint，craft 初评/复评与 return 字段保留；deai 加权自 v2.99 起已退役，仅作诊断与批量重扫（creative-batch-rescan eavesdropDump）。',
+    '- 成稿自查：主角"走到门口就听见"完整密谋时，删掉免费宣讲——改成提前蹲守、屏息、差点被发现、冒险录音，或让屋里只说半句黑话，剩下靠她去诈去换去赌。',
+    '- 中英一致：同一套帧/事件/charged/rescue 规则，中英词表各自独立；教学与检测器同文件同源，format 不门控。',
+  ].join('\n');
+}
+
