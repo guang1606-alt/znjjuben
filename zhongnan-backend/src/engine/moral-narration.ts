@@ -158,3 +158,50 @@ export function moralNarration(draft: string): MoralNarrationResult {
 
   return { score, narrationLines, hits, issues, advice };
 }
+
+/**
+ * 前置教学：buildMoralNarrationDirective(_format='LIVE', lang='zh')
+ * -------------------------------------------------------------------
+ * 同源铁律：教学函数与检测器 moralNarration 同文件；format 不门控（LIVE/AIGC/缺省一致）。
+ * 目的：撰写师/润色师首轮即拿到"只扫叙述行 / A 领悟宣告 + B 格言起句 / 后 2 行 rescue /
+ *       0-1-≥2 只算未兑现"的口径，避免写完被 prePolish moralHint 与 craft/deai 复评打回。
+ */
+export function buildMoralNarrationDirective(_format: string = 'LIVE', lang: string = 'zh'): string {
+  if (lang === 'en') {
+    return [
+      '【Moral Narration Pre-Writing Briefing (same source as moralNarration: announced realizations and aphorism narration; 1 hit = 75, 2+ hits = max(25, 100 - n x 25))】',
+      '- Scope: every non-empty line is scanned, scene headers are skipped, dialogue lines are skipped whole (a speaker prefix of up to four characters marks a line as dialogue) and lines opening with a quotation mark are skipped; only narration lines are counted into narrationLines.',
+      '- Channel A realization: a realization verb (finally understood / realized / learned / saw / knew / taught her / learned a lesson) plus an abstract theme noun (love / men / women / marriage / money / power / family / kindness / trust / dignity / the world / life / human nature / fate / betrayal / status) on the same line.',
+      '- Channel B aphorism: a stand-alone aphorism opening such as "life is / love was / men are / the world always", or "in the end it had always been", or "that is the price / the lesson".',
+      '- Order: channel A is tested first; channel B is tested only if A misses; one line counts once and kind records whichever channel hit first.',
+      '- Same-line co-occurrence: the signal and the abstract noun must share one line; a signal on one line and the theme noun on the next line are never merged.',
+      '- Rescue exemption: if a concrete decisive action (blocked / slammed the door / tore it up / hung up / pulled off the ring / handed in a resignation / marched out / walked out without looking back / deleted the number) appears within the next 2 non-empty lines and before the next scene, the hit is rescued and not charged.',
+      '- Rescue boundary: blank lines are skipped, a scene header stops the scan, a dialogue line is skipped, and at most the next 2 non-empty lines are inspected.',
+      '- Score: 0 unrescued hits = 100; 1 unrescued hit = 75; 2 or more = max(25, 100 - n x 25); only unrescued hits are counted.',
+      '- Hit fields: line, kind (realization / aphorism), phrase, snippet (first 30 characters in Chinese and 48 characters in English), rescued, rescueLine and reason are returned.',
+      '- Neighbour divisions: omniscient-tease covers forward omniscient foreshadowing ("she did not know that / the wheel of fate"); this engine covers backward realizations and aphorisms. show-dont-tell covers emotion adjectives; scene-soft-ending covers a deflated last beat; wake-up-call covers moralizing spoken inside dialogue.',
+      '- Factual discovery exemption: "she found out he had been cheating" or "the contract was fake" carries only a fact and no abstract theme noun, so it is not judged.',
+      '- Rewrite: cut the aphorism and translate the realization into one unstoppable physical action (block, slam, tear up the agreement, pull off the ring) so the next action carries the theme.',
+      '- Pipeline consumption: prePolish injects the unrescued hits into the polisher as moralHint; craft initial, craft re-eval and deai rescan consume the same result and surface it in the pipeline return; it is diagnostic only and carries no weight.',
+      '- Self-check: is this narration summarizing life for the audience? Parity: narration-only scanning, the next 2 lines rescue, the 0/1/2+ scoring and the 30/48-character snippet match the Chinese layer.',
+    ].join('\n');
+  }
+  return [
+    '【道理升华旁白·前置教学（检测同源：moralNarration 管领悟宣告与格言起句；1 次未兑现 75 分，≥2 次 max(25, 100 - n × 25)）】',
+    '- 检测范围：所有非空行参与，场头跳过，台词行整行跳过（话者前缀 ≤4 字即判为台词），引号起句整行跳过，只有叙述行计入 narrationLines。',
+    '- 判定 A·领悟宣告：领悟动词（明白/懂得/领悟/醒悟/学会/看清/看透/弄懂/教会她/上了一课）+ 抽象道理名词（心软/善良/感情/爱情/婚姻/男人/女人/人性/人心/世界/命运/钱/权势/豪门/尊严/信任/承诺…）在同一行同屏。',
+    '- 判定 B·格言起句：原来……从来都是/向来都是/不过是；这就是……道理/代价/报应/人生/现实/规矩/宿命；世人都说/人人都说/所有人知道。',
+    '- 判定顺序：先查 A 领悟宣告，A 不中才查 B 格言起句；一行只记一次，kind 取先命中的通道。',
+    '- 同句共现：信号与抽象道理词必须在同一行内共现，上一行写领悟、下一行写主题词跨行不合并。',
+    '- rescue 豁免：命中行之后 2 个非空行内、换场之前出现具体决断动作（拉黑/删掉/挂断/摔门/撕碎/摘戒指/辞职/转头就走/甩在/按下删除…）→ 记 rescued，不扣分。',
+    '- rescue 边界：空行跳过继续看，遇场头即中止，遇话者行跳过，最多只看后 2 个非空行。',
+    '- 得分：0 次未兑现 100；1 次 75；≥2 次 max(25, 100 - n × 25)；只统计未 rescued 的命中。',
+    '- 命中字段：line / kind（realization / aphorism）/ phrase / snippet（中文前 30 字，英文前 48 字符）/ rescued / rescueLine / reason。',
+    '- 邻居分界：omniscient-tease 管前瞻全知预告（她不知道的是/命运的齿轮），本引擎管后顾式领悟格言；show-dont-tell 管情绪形容词；scene-soft-ending 管末拍泄气调度；wake-up-call 管台词层说教。',
+    '- 具体事实豁免：「原来他早就出轨了」「原来合同是假的」只有事实没有抽象道理词，不判。',
+    '- 改写方向：删掉金句，把领悟翻译成一个拦不住的具体动作——拉黑、摔门、撕协议、摘戒指，让下一个动作点题。',
+    '- pipeline 消费：prePolish 把未兑现命中注入润色师（moralHint）；craft 初评、craft 复评、deai 复扫同一结果并随管线返回值透出，仅作诊断不计加权。',
+    '- 成稿自查：这段旁白是在替观众总结人生吗？是就删掉，换成一个现在就能看见的动作。',
+    '- 中英一致：只扫叙述行、后 2 行 rescue、0/1/≥2 计分、30/48 字符截断与中文层一致。',
+  ].join('\n');
+}
