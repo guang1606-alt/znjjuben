@@ -425,3 +425,77 @@ function findSpecificApology(parsed: Parsed[], lo: number, hi: number): number {
 }
 
 const isZhLine = (t: string): boolean => /[一-鿿]/.test(t);
+
+/**
+ * v2.438 前置教学：把检测器的判定口径同源写给撰写师/润色师。
+ * 与 detectCheapForgiveness 共用同一套阈值、窗口与豁免通道；
+ * format 不门控（LIVE/AIGC 同一套规则），lang 只切换语言层。
+ */
+export function buildCheapForgivenessDirective(_format = 'LIVE', lang = 'zh'): string {
+  if (lang === 'en') {
+    return [
+      'Cheap Forgiveness - pre-writing directive (cheap-forgiveness v2.80, format-agnostic, one ruleset for zh/en)',
+      '',
+      'Every serious harm needs a payment before reconciliation: the wrongdoer pays (surrender, arrest, restitution, signing away the gains), or the victim earns the forgiveness back after a real refusal.',
+      '',
+      'Scan range: look back 120 lines from the pardon beat (inclusive) for the nearest harm; dialogue lines count as speaker turns, and a scene header breaks the cluster.',
+      '',
+      'Severity: grave = life, wrongful imprisonment, blood, violence (killed, drove to death, let die, sold the child, domestic violence, beat, behind bars, took the fall); heavy = other principled harm (betrayal, framing, affair, embezzlement, abandonment, kicking out, seizing the estate). An apology with no prior serious harm is ordinary courtesy - pass.',
+      '',
+      'Pardon types: grant = explicit forgiveness (I forgive you / let it go / water under the bridge); accept = physical or familial return (hug, nod, calling him dad, going home), and it needs an apology, excuse, outside pressure or explicit forgiveness within the previous six lines, so everyday hugs are not flagged; coerce = bystander pressure (he is still your father / blood is thicker), valid only if an accept beat appears within three lines - if the victim walks away it is not reconciliation.',
+      '',
+      'Cluster dedupe: inside plus or minus 4 lines keep only the earliest pardon; a new harm between clusters splits them.',
+      '',
+      'Cost check (window [f-14, f+3]): consequence = surrender, police, sentence, leaving with nothing, full restitution, dropping the inheritance, public confession - exempts any severity; self-liberation = "I am not forgiving you, I am letting go for me" - exempts any severity; it is the victim healing, not a free pass for the wrongdoer.',
+      'Exemption channels: time = years later plus a specific apology (grave needs year scale, heavy may use months); earned = explicit refusal, a gap of at least eight lines, then real payment or a specific apology; heavy-only = a named, excuse-free apology that states the deed can settle principled harm on its own.',
+      '',
+      'Grave cannot be waived: life, wrongful imprisonment, blood and violence never clear on a bare sorry - graveyard (apology only) is an automatic fail.',
+      '',
+      'Aggravators (they do not change exemption, only add penalty): excuse = excuse-style apology (I had no choice / one moment of weakness / for the family) +10; pressure = bystanders forcing the pardon +10; instant = the only apology or excuse sits within 2 lines of pardoning with no earlier cost beat +10.',
+      '',
+      'Scoring: start at 100, each unexempted hit costs 35 (heavy) or 45 (grave), excuse and pressure add 10 each, floor 20.',
+      '',
+      'Hit fields: harmLine, line, kind (grant|accept|coerce), severity (grave|heavy), boosters (excuse|pressure|instant), snippet (40 characters), rescued, rescueLine, reason.',
+      '',
+      'Neighbors: relationship-progression-check owns the romance escalation economy; emotional-aftermath-check owns emotional aftermath; misunderstanding-drag-check owns dragged-out misunderstandings and passes on a clean explanation; payoff-rhythm and humiliation-ledger own public-humiliation revenge IOUs - this engine only judges a private, one-shot pardon of real harm.',
+      '',
+      'Pipeline: when issues are non-empty a cheapForgiveHint is injected (zh/en), and the writer and polisher see it on their first pass; craft scoring runs it at first and second review, and deai re-scans as a backstop.',
+      '',
+      'Self-check: reconciliation must cost something - make the wrongdoer pay, or pay in installments (return part now, confess one deed publicly, keep the rest owed), or let the victim refuse and earn it back across time and cost; or let her say "I am not forgiving you, I am letting go for me". Cut the "one mistake + he is still your father + water under the bridge" triple.',
+    ].join('\n');
+  }
+  return [
+    '【廉价原谅 · 前置教学】（cheap-forgiveness v2.80 同源；format 不门控，中英同一套规则）',
+    '',
+    '你在写"伤害—和解"的兑付。观众攒了一整集的火气，必须有人付账：加害者伏法、赔偿，',
+    '或受害者在拒绝之后重新挣回原谅。最忌讳三行之内血海深仇一键清零：一句"我也是一时糊涂"，',
+    '一句"算了都过去了"，旁边人再补一句"他毕竟是你爸"，人命账当场免单。',
+    '',
+    '检测范围：赦免点向前回溯 120 行（含同行）取最近一桩重伤；只对 dialogue 台词行做配对，场景头断簇。',
+    '',
+    '重伤判定：grave = 人命/冤狱/骨肉/暴力（害死、逼死、见死不救、卖孩子、家暴、打断打残、坐牢顶罪、冤狱）；heavy = 其余原则性伤害（背叛、陷害、出轨、卷款、抛妻弃子、扫地出门、夺家产）。没有重伤前提的"对不起/没关系"是日常客气，放行。',
+    '',
+    '赦免点三型：grant = 明示原谅（我原谅你 / 算了都过去了 / 翻篇）；',
+    'accept = 身体或名分回归（抱住 / 点头 / 喊爸妈 / 一起回家），需前 6 行内有道歉、借口、旁人施压或明示原谅，防日常拥抱误伤；',
+    'coerce = 旁人按头（他毕竟是你爸 / 血浓于水），必须 3 行内出现 accept 才成立，受害者转身走开不算和解。',
+    '',
+    '簇去重：同一和解簇 ±4 行内只保留最前赦免点，簇间出现新重伤则切簇分开计。',
+    '',
+    '代价核验（窗口 [f-14, f+3]）：consequence = 自首/报警/判刑/净身出户/全数退还/放弃继承/公开认罪，任何等级豁免；self_liberation = "我不是原谅你，我是放过我自己"，任何等级豁免——那是受害者的自救，不是给加害者的免单。',
+    '豁免通道：time = 多年后 + 具体道歉（grave 需年级，heavy 月级亦可）；earned = 先拒绝、间隔 ≥8 行、之后有实际代价或具体道歉；heavy-only = 不找借口、说清罪行的具名道歉可单独豁免原则性伤害。',
+    '',
+    'grave 不可免单：人命、冤狱、骨肉、暴力级伤害，单纯一句 sorry 永不豁免——必须 consequence，或 time/earned 再叠加实际代价；graveyard（只靠道歉）直接判死。',
+    '',
+    '加压项（不改变豁免，只加重扣分）：excuse = 借口式道歉（一时糊涂 / 我也是没办法 / 为了这个家）+10；pressure = 旁人按头 +10；instant = 唯一道歉或借口距赦免 ≤2 行且之前无任何代价节拍 +10。',
+    '',
+    '计分：100 起，每未豁免 hit heavy −35 / grave −45，再加 excuse/pressure 各 +10，floor 20。',
+    '',
+    '命中字段：harmLine / line / kind（grant|accept|coerce）/ severity（grave|heavy）/ boosters（excuse|pressure|instant）/ snippet（40 字截断）/ rescued / rescueLine / reason。',
+    '',
+    '邻居分界：relationship-progression-check 管恋爱递进经济；emotional-aftermath-check 管强情绪余波；misunderstanding-drag-check 管误会拖太久且"一场误会一场解"放行；payoff-rhythm / humiliation-ledger 管当众受辱的同场加倍复仇 IOUs——本引擎只管真实重伤被一次性私人赦免，不要求同场同众。',
+    '',
+    'pipeline 消费（v2.80 起）：issues 非空时注入 cheapForgiveHint（中英双语），撰写师与润色师首轮即见；craft 初评/复评各跑一次并入扣分，deai 重扫兜底。',
+    '',
+    '成稿自查：和解必须有价——让加害者付代价（伏法/自首/净身出户/全数退赔），或分期兑付（先还一部分、当众认一件、余账留到后面），或让受害者先拒绝、经时间与代价后重新挣回；也可以让受害者说"我不原谅，我只是放过自己"。删掉"一时糊涂 + 他毕竟是你爸 + 算了都过去了"三连。',
+  ].join('\n');
+}
