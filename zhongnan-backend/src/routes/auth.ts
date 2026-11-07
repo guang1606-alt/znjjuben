@@ -2,7 +2,7 @@ import { asyncRouter } from '../lib/async-router';
 import { createHash } from 'crypto';
 import { z } from 'zod';
 import { prisma as defaultPrisma } from '../lib/prisma';
-import { hashPassword, verifyPassword, signAccess, signRefresh, verifyRefresh, genInviteCode } from '../lib/auth';
+import { hashPassword, verifyPassword, signAccess, signRefresh, verifyRefresh, genInviteCode, passwordVersion } from '../lib/auth';
 import { passwordStrength } from '../lib/auth-policy';
 import { grantBonus } from '../lib/billing';
 import { withBillingTransaction } from '../lib/prisma-tx';
@@ -80,7 +80,7 @@ export function createAuthRouter(prisma: PrismaLike | any) {
       await withBillingTransaction(prisma, inviter.id, (t) =>
         grantBonus(t, inviter.id, INVITE.BOTH_REWARD_POINTS, 'INVITE_REGISTER', `invreg:${inviter.id}:${user.id}`));
     }
-    const payload = { sub: user.id, level: user.level };
+    const payload = { sub: user.id, level: user.level, pv: passwordVersion((user as any).passwordHash) };
     res.json({ accessToken: signAccess(payload), refreshToken: signRefresh(payload), user: { id: user.id, level: user.level, isAdmin: isAdminUser(user), staff: isAdminUser(user), isSuperAdmin: isSuperAdminUser(user) } });
   });
   const loginSchema = z.object({ phone: z.string(), password: z.string() });
@@ -101,7 +101,7 @@ export function createAuthRouter(prisma: PrismaLike | any) {
     }
     if (user.banned) return res.status(403).json({ error: '账号已封禁' });
     loginThrottle.clear(throttleKey);
-    const payload = { sub: user.id, level: user.level };
+    const payload = { sub: user.id, level: user.level, pv: passwordVersion((user as any).passwordHash) };
     res.json({ accessToken: signAccess(payload), refreshToken: signRefresh(payload), user: { id: user.id, level: user.level, isAdmin: isAdminUser(user), staff: isAdminUser(user), isSuperAdmin: isSuperAdminUser(user) } });
   });
   authRouter.post('/refresh', async (req, res) => {
@@ -116,12 +116,16 @@ export function createAuthRouter(prisma: PrismaLike | any) {
       const flight = await withRefreshFlight(key, data.exp ?? Math.floor(Date.now() / 1000) + 86400, async () => {
         const user = await prisma.user.findUnique({ where: { id: data.sub } });
         if (!user || user.banned) return null;
-        const payload = { sub: user.id, level: user.level };
+        // v2.458 密码版本校验：密码已变更则旧 refresh token 一律作废（其他设备/失窃令牌立即失去续期能力）。
+        // 无 pv 的历史令牌（升级前签发）按兼容放行，避免上线即踢掉全部存量会话。
+        if (data.pv && data.pv !== passwordVersion(user.passwordHash)) return { revoked: true } as any;
+        const payload = { sub: user.id, level: user.level, pv: passwordVersion(user.passwordHash) };
         // 轮换：每次刷新同时下发新 refreshToken，旧 token 即刻作废
         return { accessToken: signAccess(payload), refreshToken: signRefresh(payload) };
       });
       if (!flight.ok) return res.status(401).json({ error: 'REFRESH_REUSED' });
       if (!flight.value) return res.status(401).json({ error: '无效凭证' });
+      if ((flight.value as any).revoked) return res.status(401).json({ error: 'SESSION_REVOKED' });
       res.json(flight.value);
     } catch {
       res.status(401).json({ error: 'REFRESH_INVALID' });
@@ -222,7 +226,8 @@ export function createAuthRouter(prisma: PrismaLike | any) {
     }
     const pw = passwordStrength(p.data.newPassword);
     if (!pw.ok) return res.status(400).json({ error: `新密码${pw.problems[0]}` });
-    await prisma.user.update({ where: { id: u.id }, data: { passwordHash: await hashPassword(p.data.newPassword) } });
+    const newHash = await hashPassword(p.data.newPassword);
+    await prisma.user.update({ where: { id: u.id }, data: { passwordHash: newHash } });
     pwThrottle.clear(pwKey); // v2.217 成功改密清零
     // 吊销调用方当前 refresh token（若已上报）：改密后旧凭据立即作废，新令牌由本次签发
     const oldRt = p.data.refreshToken;
@@ -232,7 +237,7 @@ export function createAuthRouter(prisma: PrismaLike | any) {
         consumeRefreshToken(refreshKey(rtData, oldRt), rtData.exp ?? Math.floor(Date.now() / 1000) + 86400);
       } catch { /* 旧 refresh token 无效/已过期：无需处理，不影响本次改密 */ }
     }
-    const payload = { sub: u.id, level: u.level };
+    const payload = { sub: u.id, level: u.level, pv: passwordVersion(newHash) }; // 新令牌带新 pv，本机继续可用
     res.json({ ok: true, accessToken: signAccess(payload), refreshToken: signRefresh(payload) });
   });
   return authRouter;

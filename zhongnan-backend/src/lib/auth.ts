@@ -1,6 +1,6 @@
 import argon2 from 'argon2';
 import jwt from 'jsonwebtoken';
-import { randomBytes } from 'crypto';
+import { randomBytes, createHash } from 'crypto';
 
 /**
  * JWT 密钥取值（签发与校验唯一来源，middleware 也必须复用这里，禁止两处各写默认值）。
@@ -32,7 +32,17 @@ export async function verifyPassword(hash: string, pw: string): Promise<boolean>
   try { return await argon2.verify(hash, pw); } catch { return false; }
 }
 
-export interface JwtPayload { sub: string; level: string; jti?: string; exp?: number }
+export interface JwtPayload { sub: string; level: string; jti?: string; exp?: number; pv?: string }
+
+/**
+ * v2.458 密码版本指纹：passwordHash 的 sha256 前 12 位，签发令牌时写入 pv 声明。
+ * 密码一变 hash 就变 → pv 变 → 旧 refresh token 在 /refresh 校验时被拒（SESSION_REVOKED）。
+ * 只取摘要片段，不暴露 hash 本身；无 pv 的历史令牌按兼容放行（见 auth 路由）。
+ */
+export function passwordVersion(passwordHash?: string | null): string {
+  if (!passwordHash) return '';
+  return createHash('sha256').update(String(passwordHash)).digest('hex').slice(0, 12);
+}
 
 export function signAccess(p: JwtPayload): string {
   return jwt.sign(p, ACCESS_SECRET(), { expiresIn: Number(process.env.JWT_ACCESS_TTL) || 900 });
