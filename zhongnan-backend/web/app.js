@@ -168,9 +168,26 @@
   if (mq && mq.addEventListener) mq.addEventListener('change', () => theme === 'auto' && applyTheme());
 
   /* ---------- 静态文案 ---------- */
+  // v2.444 表单可访问名：placeholder 只是提示，不能当可访问名（读屏聚焦后无处可读）。
+  // data-ph 承载的本来就是人写的中英双语短句，缺名时直接复用，避免再维护一套同义 key。
+  function hasAccessibleName(el) {
+    if (el.getAttribute('aria-label') || el.getAttribute('aria-labelledby')) return true;
+    if (el.closest && el.closest('label')) return true;
+    if (el.id) {
+      const sel = window.CSS && CSS.escape ? `label[for="${CSS.escape(el.id)}"]` : `label[for="${el.id}"]`;
+      if (document.querySelector(sel)) return true;
+    }
+    return false;
+  }
+  function syncPhA11y() {
+    document.querySelectorAll('[data-ph]').forEach((el) => {
+      el.setAttribute('placeholder', t(el.getAttribute('data-ph')));
+      if (!hasAccessibleName(el)) el.setAttribute('aria-label', t(el.getAttribute('data-ph')));
+    });
+  }
   function renderStaticText() {
     document.querySelectorAll('[data-i]').forEach((el) => { el.textContent = t(el.getAttribute('data-i')); });
-    document.querySelectorAll('[data-ph]').forEach((el) => { el.setAttribute('placeholder', t(el.getAttribute('data-ph'))); });
+    syncPhA11y();
     document.querySelectorAll('[data-i-aria]').forEach((el) => { el.setAttribute('aria-label', t(el.getAttribute('data-i-aria'))); });
     $('brandSlogan').textContent = lang === 'en' ? 'Human-grade, AI-undetectable vertical short-drama studio' : '人类级、无AI感的竖屏短剧创作工作台';
     $('heroTitle').textContent = lang === 'en' ? 'Turn one idea into a full AI writers’ room' : '把一个灵感，交给一整支AI编剧团队';
@@ -1866,8 +1883,8 @@
       const backdrop = document.createElement('div');
       backdrop.className = 'zn-ask-backdrop';
       backdrop.innerHTML = `<div class="zn-ask" role="dialog" aria-modal="true">
-        <div class="zn-ask-label"></div>
-        <input class="zn-ask-input" type="text" />
+        <label class="zn-ask-label" for="znAskInput"></label>
+        <input class="zn-ask-input" id="znAskInput" type="text" />
         <div class="zn-ask-btns"><button type="button" class="btn-ghost zn-ask-cancel"></button><button type="button" class="btn-primary zn-ask-ok"></button></div>
       </div>`;
     // @module ui
@@ -2783,7 +2800,7 @@
       mv.className = 'dyn-mode-block mode-section';
       mv.innerHTML = `
         <div class="mode-section-title"><span>关键选择 + 世界线分叉</span><em class="muted">2-4 条线，每条写清路线和代价</em></div>
-        <div class="field"><label>那个关键选择是</label><textarea id="mvChoice" rows="2" placeholder="女主发现丈夫的保险单受益人不是她"></textarea></div>
+        <div class="field"><label>那个关键选择是</label><textarea id="mvChoice" aria-label="那个关键选择是" rows="2" placeholder="女主发现丈夫的保险单受益人不是她"></textarea></div>
         <div class="multiverse-choices" id="mvChoices"></div>
         <button type="button" class="chip" id="mvAddLineBtn">+ 再加一条世界线（2-4 条）</button>`;
       const choicesEl = mv.querySelector('#mvChoices');
@@ -2792,8 +2809,8 @@
         wrap.className = 'multiverse-choice';
         wrap.innerHTML = `
           <h4>世界线 ${String.fromCharCode(64 + i)}</h4>
-          <label><span>走哪条路</span><input class="mv-line-route" placeholder="女主假装不知道，继续过日子"></label>
-          <label><span>代价是什么</span><textarea class="mv-line-cost" rows="2" placeholder="三年后发现丈夫一直在转移资产，自己已成弃子"></textarea></label>`;
+          <label><span>走哪条路</span><input class="mv-line-route" name="mvRoute" placeholder="女主假装不知道，继续过日子"></label>
+          <label><span>代价是什么</span><textarea class="mv-line-cost" name="mvCost" rows="2" placeholder="三年后发现丈夫一直在转移资产，自己已成弃子"></textarea></label>`;
         return wrap;
       };
       for (let i = 1; i <= 3; i++) choicesEl.appendChild(_mkLine(i));
@@ -2851,7 +2868,7 @@
     const mask = document.createElement('div');
     mask.className = 'modal-mask hidden'; mask.id = 'qsMask';
     mask.innerHTML = `<div class="modal" style="max-width:460px">
-      <input id="qsInput" class="mini-input" style="width:100%;margin-bottom:8px" placeholder="搜索页面/创作模式，回车直达（Esc 关闭）" />
+      <input id="qsInput" class="mini-input" aria-label="搜索页面或创作模式" style="width:100%;margin-bottom:8px" placeholder="搜索页面/创作模式，回车直达（Esc 关闭）" />
       <div id="qsList" class="qs-list"></div></div>`;
     document.body.appendChild(mask);
     const input = mask.querySelector('#qsInput'), list = mask.querySelector('#qsList');
@@ -6202,12 +6219,12 @@
     box.classList.remove('hidden');
     box.innerHTML = `
       ${libSourceRow(a.sourceProjectTitle)}
-      <div class="field"><label>${t('castLibName')}</label><input id="castLibEditName" value="${escapeHtml(a.name)}" maxlength="20" /></div>
-      <div class="field"><label>${t('castLibPersona')}</label><textarea id="castLibEditPersona" rows="2" maxlength="200">${escapeHtml(a.persona || '')}</textarea></div>
-      <div class="field"><label>${t('castLibVoice')}</label><input id="castLibEditVoice" value="${escapeHtml(a.voice || '')}" maxlength="200" /></div>
-      <div class="field"><label>${t('castLibAnchor')}</label><input id="castLibEditAnchor" value="${escapeHtml(a.visualAnchor || '')}" maxlength="200" /></div>
-      <div class="field"><label>${t('castLibSig')}</label><textarea id="castLibEditSigs" rows="2" maxlength="320" placeholder="${lang === 'en' ? 'One line each (≤60 chars), max 5' : '每行一条（≤60字），最多 5 条'}">${escapeHtml((a.signatureLines || []).join('\n'))}</textarea></div>
-      <div class="field"><label>${t('castLibTags')}</label><input id="castLibEditTags" value="${escapeHtml((a.tags || []).join('，'))}" maxlength="200" placeholder="${lang === 'en' ? 'Comma separated, max 8 × 20 chars' : '逗号分隔，最多 8 个 × 20 字'}" /></div>
+      <div class="field"><label for="castLibEditName">${t('castLibName')}</label><input id="castLibEditName" value="${escapeHtml(a.name)}" maxlength="20" /></div>
+      <div class="field"><label for="castLibEditPersona">${t('castLibPersona')}</label><textarea id="castLibEditPersona" rows="2" maxlength="200">${escapeHtml(a.persona || '')}</textarea></div>
+      <div class="field"><label for="castLibEditVoice">${t('castLibVoice')}</label><input id="castLibEditVoice" value="${escapeHtml(a.voice || '')}" maxlength="200" /></div>
+      <div class="field"><label for="castLibEditAnchor">${t('castLibAnchor')}</label><input id="castLibEditAnchor" value="${escapeHtml(a.visualAnchor || '')}" maxlength="200" /></div>
+      <div class="field"><label for="castLibEditSigs">${t('castLibSig')}</label><textarea id="castLibEditSigs" rows="2" maxlength="320" placeholder="${lang === 'en' ? 'One line each (≤60 chars), max 5' : '每行一条（≤60字），最多 5 条'}">${escapeHtml((a.signatureLines || []).join('\n'))}</textarea></div>
+      <div class="field"><label for="castLibEditTags">${t('castLibTags')}</label><input id="castLibEditTags" value="${escapeHtml((a.tags || []).join('，'))}" maxlength="200" placeholder="${lang === 'en' ? 'Comma separated, max 8 × 20 chars' : '逗号分隔，最多 8 个 × 20 字'}" /></div>
       <div class="row-actions" style="margin-top:6px">
         <button class="btn-primary" id="castLibEditSave">${t('castLibSave')}</button>
         <button class="btn-ghost" id="castLibEditCancel" style="margin-left:8px">${t('castLibCancel')}</button>
@@ -6439,13 +6456,13 @@
     box.classList.remove('hidden');
     box.innerHTML = `
       ${libSourceRow(a.sourceProjectTitle)}
-      <div class="field"><label>${t('propLibName')}</label><input id="propLibEditName" value="${escapeHtml(a.name)}" maxlength="30" /></div>
-      <div class="field"><label>${t('propLibMeaning')}</label><textarea id="propLibEditMeaning" rows="2" maxlength="200">${escapeHtml(a.meaning || '')}</textarea></div>
-      <div class="field"><label>${t('propLibTaboo')}</label><input id="propLibEditTaboo" value="${escapeHtml(a.taboo || '')}" maxlength="200" placeholder="${lang === 'en' ? 'Usage taboo (optional)' : '使用禁忌(选填)'}" /></div>
-      <div class="field"><label>${t('propLibEps')}</label><input id="propLibEditEps" value="${escapeHtml((a.eps || []).join(','))}" placeholder="${lang === 'en' ? 'e.g. 1,3,5' : '如 1,3,5'}" /></div>
-      <div class="field"><label>${t('propLibClosedEps')}</label><input id="propLibEditClosedEps" value="${escapeHtml((a.closedEps || []).join(','))}" placeholder="${lang === 'en' ? 'e.g. 8' : '如 8'}" /></div>
-      <div class="field"><label>${t('propLibAnchor')}</label><input id="propLibEditAnchor" value="${escapeHtml(a.visualAnchor || '')}" maxlength="200" /></div>
-      <div class="field"><label>${t('propLibTags')}</label><input id="propLibEditTags" value="${escapeHtml((a.tags || []).join('，'))}" maxlength="200" placeholder="${lang === 'en' ? 'Comma separated, max 8 × 20 chars' : '逗号分隔，最多 8 个 × 20 字'}" /></div>
+      <div class="field"><label>${t('propLibName')}</label><input id="propLibEditName" aria-label="${t('propLibName')}" value="${escapeHtml(a.name)}" maxlength="30" /></div>
+      <div class="field"><label for="propLibEditMeaning">${t('propLibMeaning')}</label><textarea id="propLibEditMeaning" rows="2" maxlength="200">${escapeHtml(a.meaning || '')}</textarea></div>
+      <div class="field"><label for="propLibEditTaboo">${t('propLibTaboo')}</label><input id="propLibEditTaboo" value="${escapeHtml(a.taboo || '')}" maxlength="200" placeholder="${lang === 'en' ? 'Usage taboo (optional)' : '使用禁忌(选填)'}" /></div>
+      <div class="field"><label for="propLibEditEps">${t('propLibEps')}</label><input id="propLibEditEps" value="${escapeHtml((a.eps || []).join(','))}" placeholder="${lang === 'en' ? 'e.g. 1,3,5' : '如 1,3,5'}" /></div>
+      <div class="field"><label for="propLibEditClosedEps">${t('propLibClosedEps')}</label><input id="propLibEditClosedEps" value="${escapeHtml((a.closedEps || []).join(','))}" placeholder="${lang === 'en' ? 'e.g. 8' : '如 8'}" /></div>
+      <div class="field"><label for="propLibEditAnchor">${t('propLibAnchor')}</label><input id="propLibEditAnchor" value="${escapeHtml(a.visualAnchor || '')}" maxlength="200" /></div>
+      <div class="field"><label for="propLibEditTags">${t('propLibTags')}</label><input id="propLibEditTags" value="${escapeHtml((a.tags || []).join('，'))}" maxlength="200" placeholder="${lang === 'en' ? 'Comma separated, max 8 × 20 chars' : '逗号分隔，最多 8 个 × 20 字'}" /></div>
       <div class="row-actions" style="margin-top:6px">
         <button class="btn-primary" id="propLibEditSave">${t('propLibSave')}</button>
         <button class="btn-ghost" id="propLibEditCancel" style="margin-left:8px">${t('propLibCancel')}</button>
@@ -6679,13 +6696,13 @@
     box.classList.remove('hidden');
     box.innerHTML = `
       ${libSourceRow(a.sourceProjectTitle)}
-      <div class="field"><label>${t('sceneLibName')}</label><input id="sceneLibEditName" value="${escapeHtml(a.name)}" maxlength="30" /></div>
-      <div class="field"><label>${t('sceneLibMeaning')}</label><textarea id="sceneLibEditMeaning" rows="2" maxlength="200">${escapeHtml(a.meaning || '')}</textarea></div>
-      <div class="field"><label>${t('sceneLibMood')}</label><input id="sceneLibEditMood" value="${escapeHtml(a.mood || '')}" maxlength="100" placeholder="${lang === 'en' ? 'Mood/tone (optional)' : '氛围基调(选填)'}" /></div>
-      <div class="field"><label>${t('sceneLibTaboo')}</label><input id="sceneLibEditTaboo" value="${escapeHtml(a.taboo || '')}" maxlength="200" placeholder="${lang === 'en' ? 'State taboo (optional)' : '状态禁忌(选填)'}" /></div>
-      <div class="field"><label>${t('sceneLibEps')}</label><input id="sceneLibEditEps" value="${escapeHtml((a.eps || []).join(','))}" placeholder="${lang === 'en' ? 'e.g. 1,3,5' : '如 1,3,5'}" /></div>
-      <div class="field"><label>${t('sceneLibAnchor')}</label><input id="sceneLibEditAnchor" value="${escapeHtml(a.visualAnchor || '')}" maxlength="200" /></div>
-      <div class="field"><label>${t('sceneLibTags')}</label><input id="sceneLibEditTags" value="${escapeHtml((a.tags || []).join('，'))}" maxlength="200" placeholder="${lang === 'en' ? 'Comma separated, max 8 × 20 chars' : '逗号分隔，最多 8 个 × 20 字'}" /></div>
+      <div class="field"><label>${t('sceneLibName')}</label><input id="sceneLibEditName" aria-label="${t('sceneLibName')}" value="${escapeHtml(a.name)}" maxlength="30" /></div>
+      <div class="field"><label for="sceneLibEditMeaning">${t('sceneLibMeaning')}</label><textarea id="sceneLibEditMeaning" rows="2" maxlength="200">${escapeHtml(a.meaning || '')}</textarea></div>
+      <div class="field"><label for="sceneLibEditMood">${t('sceneLibMood')}</label><input id="sceneLibEditMood" value="${escapeHtml(a.mood || '')}" maxlength="100" placeholder="${lang === 'en' ? 'Mood/tone (optional)' : '氛围基调(选填)'}" /></div>
+      <div class="field"><label for="sceneLibEditTaboo">${t('sceneLibTaboo')}</label><input id="sceneLibEditTaboo" value="${escapeHtml(a.taboo || '')}" maxlength="200" placeholder="${lang === 'en' ? 'State taboo (optional)' : '状态禁忌(选填)'}" /></div>
+      <div class="field"><label for="sceneLibEditEps">${t('sceneLibEps')}</label><input id="sceneLibEditEps" value="${escapeHtml((a.eps || []).join(','))}" placeholder="${lang === 'en' ? 'e.g. 1,3,5' : '如 1,3,5'}" /></div>
+      <div class="field"><label for="sceneLibEditAnchor">${t('sceneLibAnchor')}</label><input id="sceneLibEditAnchor" value="${escapeHtml(a.visualAnchor || '')}" maxlength="200" /></div>
+      <div class="field"><label for="sceneLibEditTags">${t('sceneLibTags')}</label><input id="sceneLibEditTags" value="${escapeHtml((a.tags || []).join('，'))}" maxlength="200" placeholder="${lang === 'en' ? 'Comma separated, max 8 × 20 chars' : '逗号分隔，最多 8 个 × 20 字'}" /></div>
       <div class="row-actions" style="margin-top:6px">
         <button class="btn-primary" id="sceneLibEditSave">${t('sceneLibSave')}</button>
         <button class="btn-ghost" id="sceneLibEditCancel" style="margin-left:8px">${t('sceneLibCancel')}</button>
@@ -10182,11 +10199,11 @@
       const phone = `<div class="muted">${escapeHtml(u.phone || '—')}${u.banned ? ` <b style="color:var(--danger,#e5484d)">${t('admBanned')}</b>` : ''}</div>`;
       return `<tr data-uid="${u.id}">
         <td>${name}${phone}</td>
-        <td><select data-act="level">${opts}</select></td>
+        <td><select data-act="level" name="level" aria-label="${t('admCreateLevelAria')}">${opts}</select></td>
         <td>${u.balance}</td>
         <td>${u.projectCount}</td>
         <td class="adm-acts">
-          <input data-act="delta" type="number" step="1" placeholder="±${t('points')}" class="mini-num" />
+          <input data-act="delta" type="number" step="1" name="delta" aria-label="${t('admAdjust')}" placeholder="±${t('points')}" class="mini-num" />
           <button data-act="points" class="btn-ghost">${t('admAdjust')}</button>
           <button data-act="ban" class="btn-ghost">${u.banned ? t('admUnban') : t('admBan')}</button>
           <button data-act="resetpw" class="btn-ghost">${t('admResetPw')}</button>
@@ -10311,9 +10328,9 @@
           <div class="model-tier">${lang === 'en' ? tt.en : tt.zh}
             ${c.hasKey ? `<span class="badge ok">${escapeHtml(c.keyMask || '')}</span>` : `<span class="badge">${lang==='en'?'no key':'未配置'}</span>`}</div>
           <div class="model-fields">
-            <input data-f="baseUrl" value="${escapeHtml(c.baseUrl || '')}" placeholder="${lang === 'en' ? 'Base URL (e.g. https://api.openai.com/v1)' : 'Base URL（如 https://api.openai.com/v1）'}" />
-            <input data-f="model" value="${escapeHtml(c.model || '')}" placeholder="${lang === 'en' ? 'Model (e.g. gpt-4.1-mini / gpt-image-1)' : 'Model（如 gpt-4.1-mini / gpt-image-1）'}" />
-            <input data-f="apiKey" type="password" autocomplete="new-password" placeholder="${c.hasKey ? (lang==='en'?'Leave blank to keep current key':'留空表示不修改已加密密钥') : 'API Key'}" />
+            <input data-f="baseUrl" name="baseUrl" aria-label="Base URL" value="${escapeHtml(c.baseUrl || '')}" placeholder="${lang === 'en' ? 'Base URL (e.g. https://api.openai.com/v1)' : 'Base URL（如 https://api.openai.com/v1）'}" />
+            <input data-f="model" name="model" aria-label="Model" value="${escapeHtml(c.model || '')}" placeholder="${lang === 'en' ? 'Model (e.g. gpt-4.1-mini / gpt-image-1)' : 'Model（如 gpt-4.1-mini / gpt-image-1）'}" />
+            <input data-f="apiKey" name="apiKey" aria-label="API Key" type="password" autocomplete="new-password" placeholder="${c.hasKey ? (lang==='en'?'Leave blank to keep current key':'留空表示不修改已加密密钥') : 'API Key'}" />
           </div></div>`;
       }).join('');
       return `<div class="model-group"><h4>${lang === 'en' ? g.label.en : g.label.zh}</h4>${rows}</div>`;
@@ -10438,7 +10455,7 @@
     const opt = (sel) => '<option value="">回退引擎档位</option>' + ids.map((p) => `<option value="${p.id}" ${sel === p.id ? 'selected' : ''}>${escapeHtml(p.name)}</option>`).join('');
     const roles = pfCache ? pfCache.order.filter((s) => s.kind === 'llm').map((s) => ({ key: s.key === 'market_pre' || s.key === 'market_post' ? 'market' : s.key, label: s.label })) : [];
     const uniq = []; for (const r of roles) if (!uniq.some((x) => x.key === r.key)) uniq.push(r);
-    $('routeList').innerHTML = uniq.map((r) => `<div class="field"><label>${r.label}</label><select data-role="${r.key}" class="mini-select">${opt(pvCache.routing[r.key])}</select></div>`).join('');
+    $('routeList').innerHTML = uniq.map((r) => `<div class="field"><label>${r.label}</label><select data-role="${r.key}" name="route" class="mini-select" aria-label="${escapeHtml(r.label)}">${opt(pvCache.routing[r.key])}</select></div>`).join('');
   }
   async function savePv() {
     const body = {
@@ -10649,7 +10666,7 @@
           <button class="btn-primary" data-fb="execute">${lang === 'en' ? 'Execute' : '一键执行'}</button>
           <button class="btn-ghost" data-fb="todo">${lang === 'en' ? 'To-do' : '加入待办'}</button>
           <button class="btn-ghost" data-fb="reject">${lang === 'en' ? 'Decline' : '否定'}</button>
-          <input data-role="manual" class="fb-manual" placeholder="${lang === 'en' ? 'Optional custom reply to user' : '可手改给用户的小南回复（留空用暖心模板）'}" />
+          <input data-role="manual" name="manualReply" class="fb-manual" aria-label="${lang === 'en' ? 'Optional custom reply to user' : '可手改给用户的小南回复'}" placeholder="${lang === 'en' ? 'Optional custom reply to user' : '可手改给用户的小南回复（留空用暖心模板）'}" />
         </div></div>`;
     }).join('') || znEmptyHtml(lang === 'en' ? 'No tickets.' : '暂无工单');
     $('admFbList').querySelectorAll('.fb-card').forEach((card) => bindFbCard(card));
@@ -10828,7 +10845,7 @@
       </div>
       <div class="update-banner-title"></div>
       <div class="update-banner-body"></div>
-      <label class="update-banner-mute"><input type="checkbox" class="update-banner-mute-input" /><span class="update-banner-mute-label"></span></label>
+      <label class="update-banner-mute"><input type="checkbox" name="muteUpdate" class="update-banner-mute-input" /><span class="update-banner-mute-label"></span></label>
       <div class="update-banner-actions">
         <button type="button" class="btn-primary update-banner-ok"></button>
       </div>

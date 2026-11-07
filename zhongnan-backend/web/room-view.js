@@ -351,6 +351,7 @@
   function setupReadPicker() {
     const anchor = $('readScript') && $('readScript').closest('.field');
     if (!anchor || anchor.parentNode.querySelector('#readPickField')) return;
+    const t = T();
     const wrap = document.createElement('div');
     wrap.className = 'field';
     wrap.id = 'readPickField';
@@ -358,8 +359,8 @@
       <div class="row-actions"><button type="button" class="btn-ghost" id="readPickBtn"></button></div>
       <div class="notice" id="readPickedBar" style="display:none"></div>
       <div class="diag-panel" id="readPickPanel" style="display:none;margin-top:8px">
-        <select id="readPickProject" style="width:100%;margin-bottom:6px"></select>
-        <select id="readPickEp" style="width:100%;display:none"></select>
+        <select id="readPickProject" aria-label="${esc(t.pickLbl)}" style="width:100%;margin-bottom:6px"></select>
+        <select id="readPickEp" aria-label="${esc(t.pickEpPh)}" style="width:100%;display:none"></select>
         <div class="muted" id="readPickHint" style="font-size:12px"></div>
       </div>`;
     anchor.parentNode.insertBefore(wrap, anchor);

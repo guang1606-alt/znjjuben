@@ -59,11 +59,11 @@
     div.innerHTML = `
       <div class="dv-row-head"><b>${t.version} <span class="dv-no"></span></b><span class="spacer" style="flex:1"></span>
         <button type="button" class="chip dv-del">${t.remove}</button></div>
-      <textarea class="dv-logline" rows="2" placeholder="${t.phLog}"></textarea>
+      <textarea class="dv-logline" name="dvLogline" rows="2" aria-label="${t.phLog}" placeholder="${t.phLog}"></textarea>
       <div class="dv-tagline">
-        <input class="dv-arch" placeholder="${t.phArch}" />
-        <input class="dv-conf" placeholder="${t.phConf}" />
-        <input class="dv-plot" placeholder="${t.phPlot}" />
+        <input class="dv-arch" name="dvArch" aria-label="${t.phArch}" placeholder="${t.phArch}" />
+        <input class="dv-conf" name="dvConf" aria-label="${t.phConf}" placeholder="${t.phConf}" />
+        <input class="dv-plot" name="dvPlot" aria-label="${t.phPlot}" placeholder="${t.phPlot}" />
       </div>`;
     wrap.appendChild(div);
     div.querySelector('.dv-del').onclick = () => {

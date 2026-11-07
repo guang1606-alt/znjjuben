@@ -160,7 +160,7 @@
         </div>
         <div class="tag-search-row">
           <input id="tagSearch" type="search" autocomplete="off" data-ph="tagSearchPh" placeholder="搜索标签，如 穿书 / 文旅 / 复仇" />
-          <select id="tagDim"></select>
+          <select id="tagDim" data-i-aria="tagDimAria" aria-label="标签维度"></select>
         </div>
         <div class="tag-pool" id="tagPool"></div>
         <div class="tag-chosen-head"><span data-i="tagChosen">已选标签（确认后据此出本，可点 × 移除）</span><span id="tagCount"></span></div>
@@ -183,7 +183,7 @@
         <div class="craft-loading hidden" id="craftLoading"></div>
         <div class="craft-block">
           <div class="craft-block-head"><b data-i="craftHooks">选用钩子</b>
-            <select id="craftHookAdd"><option value="" data-i="craftAddHook">＋ 从全部钩子添加</option></select></div>
+            <select id="craftHookAdd" data-i-aria="craftHooks" aria-label="选用钩子"><option value="" data-i="craftAddHook">＋ 从全部钩子添加</option></select></div>
           <div class="tag-chosen" id="craftHooks"></div>
         </div>
         <div class="craft-block">
@@ -238,12 +238,12 @@
         </div>
         <details style="margin-top:8px">
           <summary class="muted" style="cursor:pointer" data-i="tbBrClues">线索链（选填 · 与节点联合校验）</summary>
-          <textarea id="brCluesG" rows="4" style="width:100%;font-family:monospace;font-size:12.5px;margin-top:6px" placeholder="锈钥匙 | 真 | 老管家在杂物间递出 | 选择点3,支线B | 隐藏结局1 | | | 隐藏结局1"></textarea>
+          <textarea id="brCluesG" data-i-aria="tbBrClues" aria-label="线索链" rows="4" style="width:100%;font-family:monospace;font-size:12.5px;margin-top:6px" placeholder="锈钥匙 | 真 | 老管家在杂物间递出 | 选择点3,支线B | 隐藏结局1 | | | 隐藏结局1"></textarea>
           <div class="muted" style="font-size:12px;margin-top:4px" data-i="tbBrCluesTip">每行一条：名称 | 真假 | 来源 | 可得处 | 可解锁的门控或结局 | 前置线索 | 拆穿点 | 必需此线索的结局。校验会核对：可得处是否真的在图里、是否从起点可达、声明必需的结局能否绕过该线索。</div>
         </details>
         <details style="margin-top:8px">
           <summary class="muted" style="cursor:pointer" data-i="tbBrJson">JSON 视图（可粘贴导入 / 复制导出）</summary>
-          <textarea id="brGraph" rows="7" style="width:100%;font-family:monospace;font-size:12.5px;margin-top:6px" placeholder='{"start":"start","nodes":{...}}'></textarea>
+          <textarea id="brGraph" data-i-aria="tbBrJson" aria-label="分支 JSON 视图" rows="7" style="width:100%;font-family:monospace;font-size:12.5px;margin-top:6px" placeholder='{"start":"start","nodes":{...}}'></textarea>
           <div style="margin-top:4px">
             <button class="chip" id="brImport" data-i="tbBrImport">从JSON导入</button>
             <button class="chip" id="brCopy" data-i="tbBrCopy">复制JSON</button>
@@ -372,11 +372,11 @@
       <section class="panel hidden" id="modeBriefPanel">
         <div id="draftProjectNotice" class="notice hidden" role="status"></div>
         <div class="field" style="margin:0">
-          <label id="modeBriefLabel">故事创意</label>
+          <label id="modeBriefLabel" for="modeBrief">故事创意</label>
           <div class="track-switch hidden" id="hitLabTracks" style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px"></div>
           <textarea id="modeBrief" rows="4" placeholder=""></textarea>
           <div class="brief-upload hidden" id="briefUpload">
-            <input type="file" id="briefFile" accept=".txt,.md,.markdown,.docx,.epub,.pdf">
+            <input type="file" id="briefFile" data-i-aria="briefFileAria" aria-label="上传故事创意文件" accept=".txt,.md,.markdown,.docx,.epub,.pdf">
             <span id="briefUploadStatus" class="muted"></span>
           </div>
           <div class="muted" id="modeBriefTip"></div>
@@ -392,7 +392,7 @@
         <div id="ivTranscript" style="display:flex;flex-direction:column;gap:8px;max-height:300px;overflow:auto;margin:10px 0;padding:2px"></div>
         <div id="ivGaps" class="muted" style="margin-bottom:8px"></div>
         <div style="display:flex;gap:8px;align-items:flex-start;flex-wrap:wrap">
-          <textarea id="ivAnswer" rows="2" style="flex:1;min-width:220px"></textarea>
+          <textarea id="ivAnswer" data-i-aria="ivAnswerAria" aria-label="访谈回答" rows="2" style="flex:1;min-width:220px"></textarea>
           <button class="btn-primary" id="ivSendBtn">回答并继续</button>
         </div>
         <div style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap;align-items:center">
@@ -732,7 +732,7 @@
       <div class="section-title">
         <h2 data-i="market"></h2><small data-i="marketSub"></small>
         <span class="spacer"></span>
-        <select id="mkSort" class="mini-select">
+        <select id="mkSort" class="mini-select" data-i-aria="mkSortAria" aria-label="排序方式">
           <option value="new" data-i="sortNew"></option>
           <option value="price_asc" data-i="sortPrice"></option>
         </select>
@@ -1090,7 +1090,7 @@
             <input id="admCreatePhone" class="adm-input" data-ph="admCreatePhonePh" placeholder="手机号（11 位）" />
             <input id="admCreatePw" class="adm-input" data-ph="admCreatePwPh" placeholder="初始密码（至少 8 位）" />
             <input id="admCreateNick" class="adm-input" data-ph="admCreateNickPh" placeholder="昵称（选填）" />
-            <select id="admCreateLevel" class="adm-input"></select>
+            <select id="admCreateLevel" class="adm-input" data-i-aria="admCreateLevelAria" aria-label="账号等级"></select>
             <label class="adm-create-admin"><input type="checkbox" id="admCreateIsAdmin" /><span data-i="admCreateAdmin">设为副管理员</span></label>
             <button class="btn-primary" id="admCreateBtn" data-i="admCreateBtn">开设账号</button>
           </div>
@@ -1108,7 +1108,7 @@
       </section>
       <section class="panel hidden" id="admPostsPane">
         <div class="adm-toolbar">
-          <select id="admPostFilter" class="mini-select">
+          <select id="admPostFilter" class="mini-select" data-i-aria="admPostFilterAria" aria-label="投稿状态筛选">
             <option value="all" data-i="admPostAll"></option>
             <option value="visible" data-i="admPostVisible"></option>
             <option value="hidden" data-i="admPostHidden"></option>
@@ -1172,7 +1172,7 @@
           </div>
           <div class="subpanel">
             <div class="adm-toolbar">
-              <select id="knFilter" class="mini-select">
+              <select id="knFilter" class="mini-select" data-i-aria="knFilterAria" aria-label="知识条目状态筛选">
                 <option value="" data-i="admPostAll"></option>
                 <option value="PENDING">PENDING</option><option value="APPROVED">APPROVED</option><option value="REJECTED">REJECTED</option>
               </select>
@@ -1193,12 +1193,12 @@
       <!-- 反馈/Bug 处置：梳理诉求、预判修复路径、三态处置并经小南暖心回复 -->
       <section class="panel hidden" id="admFeedbackPane">
         <div class="adm-toolbar">
-          <select id="fbStatus" class="mini-select">
+          <select id="fbStatus" class="mini-select" data-i-aria="fbStatusAria" aria-label="反馈状态筛选">
             <option value="" data-i="admPostAll"></option>
             <option value="PENDING">PENDING</option><option value="EXECUTING">EXECUTING</option>
             <option value="TODO">TODO</option><option value="REJECTED">REJECTED</option>
           </select>
-          <select id="fbType" class="mini-select">
+          <select id="fbType" class="mini-select" data-i-aria="fbTypeAria" aria-label="反馈类型筛选">
             <option value="" data-i="admFbAllType"></option>
             <option value="BUG">BUG</option><option value="SUGGESTION" data-i="admFbSuggest"></option>
           </select>
@@ -1206,7 +1206,7 @@
           <button class="btn-ghost" id="fbExportBtn" data-i="admFbExport"></button>
           <span class="spacer"></span>
           <button class="btn-ghost" id="fbTodoBtn" data-i="admFbTodoView"></button>
-          <select id="fbTodoSort" class="mini-select">
+          <select id="fbTodoSort" class="mini-select" data-i-aria="fbTodoSortAria" aria-label="待办排序方式">
             <option value="time" data-i="admFbSortTime"></option>
             <option value="level" data-i="admFbSortLevel"></option>
           </select>
@@ -1247,10 +1247,10 @@
       </section>
       <section class="panel hidden" id="admSafetyPane">
         <div class="adm-toolbar" style="flex-wrap:wrap;gap:8px">
-          <select id="sfSeverity" class="mini-select"><option value="BLOCK">BLOCK 硬拦截</option><option value="WARN">WARN 预警</option></select>
-          <input id="sfLabel" class="mini-input" maxlength="40" placeholder="规则名称(如:新型违规词)" style="min-width:130px"/>
-          <input id="sfPatterns" class="mini-input" maxlength="300" placeholder="命中词,逗号分隔,至少2字" style="min-width:180px"/>
-          <input id="sfAdvice" class="mini-input" maxlength="300" placeholder="修改建议(可选)" style="min-width:180px"/>
+          <select id="sfSeverity" class="mini-select" data-i-aria="sfSeverityAria" aria-label="规则级别"><option value="BLOCK">BLOCK 硬拦截</option><option value="WARN">WARN 预警</option></select>
+          <input id="sfLabel" class="mini-input" data-i-aria="sfLabelAria" aria-label="规则名称" maxlength="40" placeholder="规则名称(如:新型违规词)" style="min-width:130px"/>
+          <input id="sfPatterns" class="mini-input" data-i-aria="sfPatternsAria" aria-label="命中词列表" maxlength="300" placeholder="命中词,逗号分隔,至少2字" style="min-width:180px"/>
+          <input id="sfAdvice" class="mini-input" data-i-aria="sfAdviceAria" aria-label="修改建议" maxlength="300" placeholder="修改建议(可选)" style="min-width:180px"/>
           <button class="btn-primary" id="sfAdd">新增规则</button>
           <span class="spacer"></span>
           <button class="btn-ghost" id="sfReset">恢复默认</button>
@@ -1285,7 +1285,7 @@
             <div class="field"><label for="hdNext">下一轮计划</label><textarea id="hdNext" rows="4"></textarea></div>
             <div class="field"><label for="hdNotes">其他备注</label><textarea id="hdNotes" rows="4"></textarea></div>
             <div class="field"><label>追加迭代日志（保存时一并写入；版本号相同自动覆盖）</label>
-              <div style="display:flex;gap:6px"><input id="hdLogVer" class="mini-input" maxlength="20" placeholder="版本 v2.43" style="max-width:110px"/><input id="hdLogSum" class="mini-input" maxlength="2000" placeholder="本版做了什么（一句话）"/><button class="btn-ghost" id="hdAppend">追加</button></div>
+              <div style="display:flex;gap:6px"><input id="hdLogVer" class="mini-input" data-i-aria="hdLogVerAria" aria-label="迭代日志版本号" maxlength="20" placeholder="版本 v2.43" style="max-width:110px"/><input id="hdLogSum" class="mini-input" data-i-aria="hdLogSumAria" aria-label="迭代日志摘要" maxlength="2000" placeholder="本版做了什么（一句话）"/><button class="btn-ghost" id="hdAppend">追加</button></div>
             </div>
             <div class="field"><label for="hdBrief">接续口令预览（新对话窗口整段粘贴即可继续）</label><textarea id="hdBrief" rows="10" readonly style="font-family:monospace;font-size:12px"></textarea></div>
           </div>
@@ -1374,7 +1374,7 @@
       <button class="modal-x" data-close="xnChatModal">×</button>
       <h3 style="margin:0 0 8px" id="xnAskTitle">🐼 小南深度共创</h3>
       <p class="muted" style="margin:0 0 10px" id="xnAskHint">编剧策划 1 对 1 答疑：题材定位、结构卡点、钩子设计、投稿策略都可以问。<b>10 积分/次</b>（内部账户免费），实际扣积分以后端结算为准。</p>
-      <div class="field"><textarea id="xnAskInput" rows="4" maxlength="2000" placeholder="写下你的问题，越具体小南答得越准（2000 字以内）… Ctrl/⌘+Enter 发送"></textarea></div>
+      <div class="field"><textarea id="xnAskInput" data-i-aria="xnAskInputAria" aria-label="向小南提问" rows="4" maxlength="2000" placeholder="写下你的问题，越具体小南答得越准（2000 字以内）… Ctrl/⌘+Enter 发送"></textarea></div>
       <div id="xnAskAnswer" class="hidden"></div>
       <button class="btn-primary" id="xnAskBtn" style="width:100%;margin-top:12px">发送 · 10 积分</button>
     </div>
