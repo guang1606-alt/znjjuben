@@ -7,7 +7,7 @@ import { passwordStrength } from '../lib/auth-policy';
 import { grantBonus } from '../lib/billing';
 import { withBillingTransaction } from '../lib/prisma-tx';
 import { INVITE, MEMBERSHIP, MemberLevel } from '../config/pricing';
-import { authRequired } from '../middleware/auth';
+import { authRequired, invalidateSessionCache } from '../middleware/auth';
 import type { AuthRequest } from '../middleware/auth';
 import { isAdminUser, isSuperAdminUser, SUPER_ADMIN_PHONE } from '../middleware/admin';
 import { createLoginThrottle } from '../lib/login-throttle';
@@ -228,6 +228,9 @@ export function createAuthRouter(prisma: PrismaLike | any) {
     if (!pw.ok) return res.status(400).json({ error: `新密码${pw.problems[0]}` });
     const newHash = await hashPassword(p.data.newPassword);
     await prisma.user.update({ where: { id: u.id }, data: { passwordHash: newHash } });
+    // v2.459 主动失效会话缓存：本请求进来时守卫缓存的是旧 pv，不清掉会让紧接着用新令牌的请求撞上
+    // 旧缓存被判 SESSION_REVOKED（前端清会话跳登录 = v2.457 修掉的回归）。
+    invalidateSessionCache(u.id);
     pwThrottle.clear(pwKey); // v2.217 成功改密清零
     // 吊销调用方当前 refresh token（若已上报）：改密后旧凭据立即作废，新令牌由本次签发
     const oldRt = p.data.refreshToken;
