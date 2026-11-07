@@ -4328,6 +4328,10 @@
   let mkReqSeq = 0; // v2.258：市场网格（列表/榜单共用 mkGrid）请求序号，过期响应丢弃
   const MK_PAGE_SIZE = 50;
   const BOARD_LIMIT = 50; // v2.231 榜单页大小对齐后端 maxLimit（此前不传 limit 吃默认 20）
+  // v2.464 等级徽章底色收敛到 CSS 类：此前详情弹窗用内联 background、列表徽章干脆没有底色，
+  // 纸白字落在宣纸面板上不可见。未知等级一律回落到 NA 灰，避免再出现「无底色 + 纸白」。
+  const GRADE_CLASSES = ['S', 'A', 'B', 'C', 'NA'];
+  function gradeCls(g) { return 'lv-grade-' + (GRADE_CLASSES.includes(g) ? g : 'NA'); }
   function znPagerState(total, page, pageSize) {
     const pages = Math.max(1, Math.ceil((Number(total) || 0) / pageSize));
     return { pages, hasPrev: page > 1, hasNext: page < pages };
@@ -4364,7 +4368,7 @@
     list.forEach((l) => {
       const c = document.createElement('div'); c.className = 'listing-card';
       const gradeBadge = l.valueGrade && l.valueGrade !== 'NA'
-        ? `<span class="lv-grade lv-grade-sm" title="${lang === 'en' ? 'Value certified at listing' : '上架时价值认证'}">${l.valueGrade}${l.valueIndex != null ? '·' + Math.round(l.valueIndex) : ''}</span>` : '';
+        ? `<span class="lv-grade lv-grade-sm ${gradeCls(l.valueGrade)}" title="${lang === 'en' ? 'Value certified at listing' : '上架时价值认证'}">${l.valueGrade}${l.valueIndex != null ? '·' + Math.round(l.valueIndex) : ''}</span>` : '';
       c.innerHTML = `<h4>${escapeHtml(l.title)} ${gradeBadge}</h4>
         <div class="muted">${t('seller')}：${escapeHtml(l.seller?.nickname || '—')}</div>
         <div class="listing-sample">${escapeHtml(l.sample || (lang==='en'?'No sample':'暂无样章'))}</div>
@@ -4400,7 +4404,6 @@
       // v2.249 a11y：数据到达后同步 dialog 可访问名为具体作品名（读屏器报「作品详情：<标题>」）
       dlg.setAttribute('aria-label', (lang === 'en' ? 'Listing detail: ' : '作品详情：') + d.title);
       const v = d.value; const snap = d.valueSnapshot;
-      const gradeColor = { S: '#d4a017', A: '#c0392b', B: '#2e7d32', C: '#5d6d7e', NA: '#888' }[(v && v.grade) || (snap && snap.grade) || 'NA'] || '#888';
     // @module market
       const grade = (v && v.grade) || (snap && snap.grade) || 'NA';
       const idx = v ? v.valueIndex : (snap ? snap.index : null);
@@ -4415,7 +4418,7 @@
       const band = v && v.band ? `¥${v.band.perEpLow}–${v.band.perEpHigh}/集` : (snap ? `¥${snap.bandLow}–${snap.bandHigh}/集` : '—');
       body.innerHTML = `
         <div class="d-head">
-          <span class="lv-grade" style="background:${gradeColor}">${grade}</span>
+          <span class="lv-grade ${gradeCls(grade)}">${grade}</span>
           <div><h3 style="margin:0">${escapeHtml(d.title)}</h3>
             <div class="muted">${lang === 'en' ? 'Seller' : '卖家'}：${escapeHtml(d.seller?.nickname || '—')} · ${lang === 'en' ? 'Value index' : '价值指数'} ${idx != null ? idx : '—'}</div></div>
         </div>
@@ -4468,7 +4471,7 @@
     list.forEach((l) => {
       const c = document.createElement('div'); c.className = 'listing-card';
       const gradeBadge = l.valueGrade && l.valueGrade !== 'NA'
-        ? `<span class="lv-grade lv-grade-sm">${l.valueGrade}${l.valueIndex != null ? '·' + Math.round(l.valueIndex) : ''}</span>` : '';
+        ? `<span class="lv-grade lv-grade-sm ${gradeCls(l.valueGrade)}">${l.valueGrade}${l.valueIndex != null ? '·' + Math.round(l.valueIndex) : ''}</span>` : '';
       const soldBadge = l.status === 'SOLD' ? `<span class="sold-badge">${lang === 'en' ? 'Sold' : '已成交'}</span>` : '';
       const foot = l.status === 'SOLD'
         ? `<div class="listing-foot"><span class="price-tag">${l.pricePoints} ${t('points')}</span><span class="muted">${lang === 'en' ? 'Just sold' : '刚刚成交'}</span></div>`
@@ -4512,12 +4515,11 @@
         return;
       }
       const v = d.value, s = d.suggested;
-      const gradeColor = { S: '#d4a017', A: '#c0392b', B: '#2e7d32', C: '#5d6d7e', NA: '#888' }[v.grade] || '#888';
       const range = s ? `${s.totalLowYuan}–${s.totalHighYuan}` : '—';
       const perEp = s ? `${s.perEpLowYuan}–${s.perEpHighYuan}` : '—';
       box.innerHTML = `
         <div class="lv-head">
-          <span class="lv-grade" style="background:${gradeColor}">${v.grade}</span>
+          <span class="lv-grade ${gradeCls(v.grade)}">${v.grade}</span>
           <div><b>${lang === 'en' ? 'Value index' : '价值指数'} ${v.valueIndex}</b>
             <div class="muted">${lang === 'en' ? 'Algorithmic reference, not a deal promise' : '算法参考，非成交承诺'}</div></div>
         </div>
@@ -4650,7 +4652,7 @@
     // @module market
       const statCard = (label, val, cls) => `<div class="seller-stat ${cls || ''}"><b>${val}</b><span>${label}</span></div>`;
       const listingRows = dash.items.length ? dash.items.map((l) => {
-        const grade = l.valueGrade && l.valueGrade !== 'NA' ? `<span class="lv-grade lv-grade-sm">${l.valueGrade}${l.valueIndex != null ? '·' + Math.round(l.valueIndex) : ''}</span>` : '';
+        const grade = l.valueGrade && l.valueGrade !== 'NA' ? `<span class="lv-grade lv-grade-sm ${gradeCls(l.valueGrade)}">${l.valueGrade}${l.valueIndex != null ? '·' + Math.round(l.valueIndex) : ''}</span>` : '';
         const statusText = l.status === 'ON_SHELF' ? t('onShelf') : l.status === 'SOLD' ? t('soldOut') : l.status === 'OFF_SHELF' ? (lang === 'en' ? 'Delisted' : '已下架') : t('escrow');
         const gain = l.sellerGainPoints != null ? ` · ${lang === 'en' ? 'earned' : '实得'} ${l.sellerGainPoints}${t('points')}` : '';
         const delistBtn = l.status === 'ON_SHELF' ? `<button class="btn-ghost" data-delist="${l.id}">${lang === 'en' ? 'Delist' : '下架'}</button>` : '';

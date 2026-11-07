@@ -641,7 +641,9 @@ textarea { box-sizing: border-box; max-width: 100%; resize: vertical; background
 .plan-perks li::before{content:'✓';color:var(--gold);margin-right:7px;font-weight:700}
 .plan-actions{display:flex;flex-direction:column;gap:8px;margin-top:auto}
 .plan-year{font-size:12.5px;width:100%}
-.pack-bonus{background:linear-gradient(135deg,var(--gold),var(--cinnabar));color:#fbf7ec;font-size:11px;margin-left:6px;border:0}
+/* v2.464 纸白字压 4.5:1：原渐变取主题原色，light 只有 4.48、tech 2.40、dark 2.88；
+ * 金/朱砂各自向黑压 66%/86% 后四套主题分别 ≥8.07 / 5.79 / 9.49 / 5.00，仍是金→朱砂的渐变观感。 */
+.pack-bonus{background:linear-gradient(135deg,color-mix(in srgb,var(--gold) 66%,#000),color-mix(in srgb,var(--cinnabar) 86%,#000));color:#fbf7ec;font-size:11px;margin-left:6px;border:0}
 @media(max-width:900px){.plans-grid{grid-template-columns:repeat(2,1fr)}}
 @media(max-width:560px){.plans-grid{grid-template-columns:1fr}.profile-stats{grid-template-columns:1fr 1fr}}
 
@@ -1353,11 +1355,13 @@ summary:hover{color:var(--accent-strong)}
 [data-theme='dark'] .vc-cert::before{border-color:color-mix(in srgb,var(--gold) 30%,transparent)}
 .vc-head{display:flex;align-items:center;gap:14px;margin-bottom:10px;position:relative}
 .vc-grade{width:58px;height:58px;flex:none;border-radius:14px;display:flex;align-items:center;justify-content:center;font-family:var(--serif);font-size:1.6rem;font-weight:800;color:#fbf7ec;box-shadow:0 4px 12px rgba(0,0,0,.14)}
-.vc-g-S{background:linear-gradient(135deg,var(--gold),var(--cinnabar))}
-.vc-g-A{background:linear-gradient(135deg,var(--accent),var(--accent-strong))}
-.vc-g-B{background:linear-gradient(135deg,var(--gold),var(--gold-deep))}
-.vc-g-C{background:linear-gradient(135deg,#9aa6a0,#6f7a75)}
-.vc-g-NA{background:#9aa6a0}
+/* v2.464 58px 粗体属大字号（3:1 即可），但 tech/dark 的金色是浅色，纸白只有 2.40/2.88；
+ * 金色向黑压 66% 后最低 3.83（tech 的 gold-deep），灰色压到 #666e6a 得 4.90。 */
+.vc-g-S{background:linear-gradient(135deg,color-mix(in srgb,var(--gold) 66%,#000),color-mix(in srgb,var(--cinnabar) 86%,#000))}
+.vc-g-A{background:linear-gradient(135deg,var(--accent),var(--accent-strong));color:var(--on-accent)}
+.vc-g-B{background:linear-gradient(135deg,color-mix(in srgb,var(--gold) 66%,#000),color-mix(in srgb,var(--gold-deep) 66%,#000))}
+.vc-g-C{background:linear-gradient(135deg,#666e6a,#4a534f)}
+.vc-g-NA{background:#666e6a}
 .vc-head-meta{flex:1;min-width:0}
 .vc-title{font-family:var(--serif);font-weight:700;font-size:1.02rem;word-break:break-all}
 .vc-grade-label{font-size:.82rem;color:var(--text-2);margin-top:2px}
@@ -1407,6 +1411,13 @@ summary:hover{color:var(--accent-strong)}
 .lv-head{display:flex;align-items:center;gap:10px;margin-bottom:8px}
 .lv-grade{display:inline-flex;align-items:center;justify-content:center;width:34px;height:34px;border-radius:8px;color:#fbf7ec;font-weight:800;font-size:16px;flex-shrink:0}
 .lv-grade-sm{width:auto;height:20px;padding:0 7px;font-size:11px;border-radius:6px;vertical-align:middle;margin-left:6px}
+/* v2.464 等级底色统一由 CSS 类提供（JS 不再内联）：此前 lv-grade-sm 完全没有底色，
+ * 纸白字落在宣纸面板上等于不可见；S 级金 #d4a017 也只有 2.22，压到 #8c6a0f 得 4.69。 */
+.lv-grade-S{background:#8c6a0f}
+.lv-grade-A{background:#c0392b}
+.lv-grade-B{background:#2e7d32}
+.lv-grade-C{background:#5d6d7e}
+.lv-grade-NA{background:#6f6f6f}
 .lv-row{display:flex;justify-content:space-between;padding:3px 0;border-top:1px dashed #e3d7b4}
 .lv-row b{color:#332d17}
 .list-value .btn-ghost{margin-top:8px;background:#fff;border:1px solid #d8cfae;color:#8a6d1f;border-radius:8px;padding:6px 11px;font-size:12px;cursor:pointer}
