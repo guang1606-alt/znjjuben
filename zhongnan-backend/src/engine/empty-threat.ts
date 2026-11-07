@@ -134,3 +134,49 @@ export function emptyThreat(draft: string): EmptyThreatResult {
 
   return { score, sceneCount, hits, issues, advice };
 }
+
+/**
+ * 前置教学：buildEmptyThreatDirective(_format='LIVE', lang='zh')
+ * -------------------------------------------------------------------
+ * 同源铁律：教学函数与检测器 emptyThreat 同文件；format 不门控（LIVE/AIGC/缺省一致）。
+ * 目的：撰写师/润色师首轮即拿到"台词叙述都扫 / 本句后果与后 2 行动手两通道 rescue /
+ *       一行多短语多条 / 只算未兑现"的口径，避免写完被 prePolish threatHint 与 craft/deai 复评打回。
+ */
+export function buildEmptyThreatDirective(_format: string = 'LIVE', lang: string = 'zh'): string {
+  if (lang === 'en') {
+    return [
+      '【Empty Threat Pre-Writing Briefing (same source as emptyThreat: bare threats with no on-screen enforcement; 1 hit = 75, 2+ hits = max(25, 100 - n x 25))】',
+      '- Scope: both dialogue and narration lines are scanned; scene headers are skipped and counted into sceneCount; every non-empty line is eligible and the whole draft is scanned.',
+      '- Threat phrases: you will regret this / you are gonna regret / you will pay for this / mark my words / this is not over / it is not over / we are not done / you are dead meat / you are finished / I will destroy you / you have not seen the last of me / watch your back.',
+      '- Inline payoff: if the same line already carries a concrete consequence (right now / on the spot / immediately plus cancel / freeze / fire / divorce / call the cops, or cancel the wedding / freeze your accounts / divorce papers / you are fired tonight), the hit is rescued and not charged.',
+      '- Action rescue: if the threatener strikes within the next 2 non-empty lines before the scene changes (a wave of the hand, a signal to the guards, guards lunging, a slap, a phone call, an order, tearing up a contract), the hit is rescued; the scan stops at the next scene and never crosses it.',
+      '- Multiple phrase matches: one line that carries several threat phrases is recorded once per phrase, each becoming its own hit entry.',
+      '- Unrescued only: rescued hits stay in hits for traceability but are excluded from scoring and from issues; only unrescued hits are charged.',
+      '- Score: 0 unrescued hits = 100; 1 unrescued hit = 75; 2 or more = max(25, 100 - n x 25).',
+      '- Hit fields: line, phrase, snippet (first 30 characters in Chinese and 48 characters in English), rescued, rescueLine and reason are returned.',
+      '- Neighbour divisions: villain-threat is the cross-episode ledger that reads episode summaries and tracks pressure escalation; confrontation-dodge covers an external signal braking a confrontation; antagonist-quality covers an absent, stupid or unmotivated villain; this engine judges only a single scene where the threatener talks but never acts.',
+      '- Single scene: enforcement is looked for only inside the same scene; nothing is carried to the next episode and no later payoff excuses an empty threat.',
+      '- Rewrite: either the threatener moves in the same beat (guards lunge, a slap lands, a call is made), or the threat names an exact consequence and a deadline (wedding cancelled today, accounts frozen tonight).',
+      '- Pipeline consumption: prePolish injects the unrescued hits into the polisher as threatHint; craft initial, craft re-eval and deai rescan consume the same result and surface it in the pipeline return; it is diagnostic only and carries no weight.',
+      '- Self-check: after the threat, did anyone actually move? If the answer is no, the line is an IOU and must be cut or paid on screen.',
+      '- Parity: dialogue and narration both scanned, the next 2 lines rescue, multiple phrase matches per line and the 30/48-character snippet match the Chinese layer.',
+    ].join('\n');
+  }
+  return [
+    '【空口威胁·前置教学（检测同源：emptyThreat 管狠话放完不兑现；1 次未兑现 75 分，≥2 次 max(25, 100 - n × 25)）】',
+    '- 检测范围：台词与叙述都扫（叙述里写"他撂下狠话"也算），场头跳过并计入 sceneCount，所有非空行都参与，全稿扫描。',
+    '- 威胁套话：你给我等着/给我等着/走着瞧/咱们走着瞧/你会后悔的/后悔来找我/不会放过你/让你付出代价/付出代价/你完了/你死定了/咱们没完/这事没完/有你好果子吃/好果子吃/信不信我…滚死弄废/我要你好看/给我小心点/别怪我不客气/迟早让你…。',
+    '- 本句后果：同一行已带具体后果（现在就/当场/立刻/马上 + 取消/冻结/开除/滚/离婚/报警/收回/停掉/撤掉/封杀；净身出户/滚出公司/取消婚礼/冻结账户/收回股份/明天就滚蛋）→ 记 rescued，不扣分。',
+    '- 动手 rescue：威胁行之后 2 个非空行内、换场即止（一挥手/使眼色/保镖扑上/一记耳光/掏出手机/打电话/吩咐/下令/甩出合同/撕碎/夺过/揪住/踹翻）→ 记 rescued；遇场头即中止，绝不跨场。',
+    '- 一行多短语：同一行命中多个威胁套话时按短语逐个记录，各记一条，分别落进 hits。',
+    '- 只算未兑现：rescued 命中仍留在 hits 里可追溯，但不计入得分、不进 issues；只有未兑现命中参与扣分。',
+    '- 得分：0 次 100；1 次 75；≥2 次 max(25, 100 - n × 25)。',
+    '- 命中字段：line / phrase / snippet（中文前 30 字，英文前 48 字符）/ rescued / rescueLine / reason。',
+    '- 邻居分界：villain-threat 是跨集账本（吃每集摘要，管压迫感升级）；confrontation-dodge 管外部信号替双方踩刹车；antagonist-quality 管反派缺席/蠢/无动机；本引擎只管单场里威胁方只动嘴不动手。',
+    '- 单场判定：兑现只在本场找，不跨集、不查下一集，后集补动作也不能豁免本场的空放。',
+    '- 改写方向：要么威胁出口当场就让人动手（保镖扑上/耳光落下/电话拨出），要么把具体后果与死线写死（今天就取消婚礼、今晚冻结你账户）。',
+    '- pipeline 消费：prePolish 把未兑现命中注入润色师（threatHint）；craft 初评、craft 复评、deai 复扫同一结果并随管线返回值透出，仅作诊断不计加权。',
+    '- 成稿自查：狠话之后有没有人真的动手？没有就是欠条，删掉或当场兑付。',
+    '- 中英一致：台词叙述都扫、后 2 行 rescue、一行多短语各记一条、30/48 字符截断与中文层一致。',
+  ].join('\n');
+}
