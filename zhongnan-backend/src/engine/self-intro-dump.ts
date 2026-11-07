@@ -152,3 +152,49 @@ export function selfIntroDump(draft: string): SelfIntroDumpResult {
 
   return { score, hits, issues, advice };
 }
+
+/**
+ * 前置教学：buildSelfIntroDumpDirective(_format='LIVE', lang='zh')
+ * -------------------------------------------------------------------
+ * 同源铁律：教学函数与检测器 selfIntroDump 同文件；format 不门控（LIVE/AIGC/缺省一致）。
+ * 目的：撰写师/润色师首轮即拿到"姓名×年龄×身份三要素 / 相邻两行打包边界 /
+ *       登记问诊豁免 / 0-1-≥2 计分"的口径，避免写完被 prePolish introHint 与 craft/deai 复评打回。
+ */
+export function buildSelfIntroDumpDirective(_format: string = 'LIVE', lang: string = 'zh'): string {
+  if (lang === 'en') {
+    return [
+      '【Résumé Intro Pre-Writing Briefing (same source as selfIntroDump: name, age and job title read out like a CV; 1 hit = 75, 2+ hits = max(25, 100 - n x 25))】',
+      '- Scope: every non-empty line is scanned, scene headers are skipped, and dialogue lines are scanned too because a character reading out her own bio is still a bio; there is no opening-only limit, the whole script is scanned, and all of it is diagnostic only.',
+      '- Name signals: my name is / I am / I am called / this is / meet, or a name-card opening such as "Lin Wan, 25, the new assistant".',
+      '- Age signals: this year / now / only / aged plus a number and years old, in digits or spelled-out numerals.',
+      '- Identity signals: a copula or serving-as verb (am / as / serves as / works as) plus a job title: CEO / chairman / heir / heiress / secretary / assistant / director / manager / lawyer / doctor / nurse / professor / teacher / student / bodyguard / driver.',
+      '- Cross-line packing: the name and the age or identity may pack across two adjacent lines ("My name is Lin Wan. / I am 25, the CEO\'s assistant."), but a line ending with a question mark, a speaker prefix line and a scene header are never crossed.',
+      '- Official-question exemption: if an official question or a colon-ended setup within the previous 2 lines asks for name, age or occupation, the field-by-field answer is a real registration, intake or interrogation exchange and is not judged.',
+      '- Score: 0 hits = 100; 1 hit = 75; 2 or more hits = max(25, 100 - n x 25).',
+      '- Hit fields: line, snippet (first 30 characters in Chinese and 48 characters in English), elements (name / age / identity) and reason are returned.',
+      '- Neighbour divisions: exposition-dialogue covers lines that tell both parties what they already know; info-delivery covers an external channel pushing the plot; show-dont-tell covers emotion adjectives; this engine reads only the opening bio packet with all three fields on screen.',
+      '- Rewrite: cut the bio packet; let the name leak through a page call, a badge or a colleague\'s mockery, and let the job grow out of the live trouble she is already handling.',
+      '- Single hit per span: two adjacent lines that pack into one hit are charged once, and the second line is marked consumed so it is never charged again.',
+      '- Pipeline consumption: prePolish injects the hits into the polisher as introHint; craft initial, craft re-eval and deai rescan consume the same result; the former 0.01 deai weight was retired at v2.103 and the detector now runs unweighted.',
+      '- Self-check: does the opening hand the audience a business card? Are name and job earned from live trouble instead?',
+      '- Parity: the 30/48-character snippet, two adjacent lines packing, the previous 2 lines exemption and the 0/1/2+ scoring match the Chinese layer.',
+    ].join('\n');
+  }
+  return [
+    '【简历式自我介绍·前置教学（检测同源：selfIntroDump 管姓名×年龄×身份三要素同屏报菜名；1 次 75 分，≥2 次 max(25, 100 - n × 25)）】',
+    '- 检测范围：所有非空行参与，场头跳过，台词行同样扫描（人物自己念履历也是念履历），不限开场（全片任何位置都算），仅作诊断。',
+    '- 三要素·姓名：我叫/我姓/我是/这位是/这就是/名叫/叫做/她叫/他叫，或名片式开场「林晚，25岁，……」。',
+    '- 三要素·年龄：今年/现年/年仅/年方/芳龄 + N 岁（阿拉伯数字或中文数字均可）。',
+    '- 三要素·身份：是/身为/担任/出任/作为 + 职业头衔（总裁/董事长/CEO/千金/少爷/小姐/秘书/助理/特助/总监/经理/律师/医生/护士/教授/老师/学生/保镖/司机…）。',
+    '- 跨行打包：姓名与本行之外补齐的年龄/身份可跨相邻两行打包（"我叫林晚。/今年25岁，是总裁助理。"），但问号结尾的提问行不许跨、话者前缀行不许跨、场头不许跨（不跨场）。',
+    '- 豁免·登记问答：命中行前 2 行内出现问号结尾或冒号结尾，且含姓名/名字/年龄/多大/几岁/职业/叫什么 → 分字段作答属真实登记/问诊/执法场景，不判。',
+    '- 得分：0 次 100；1 次 75；≥2 次 max(25, 100 - n × 25)。',
+    '- 命中字段：line / snippet（中文前 30 字，英文前 48 字符）/ elements（name / age / identity）/ reason。',
+    '- 邻居分界：exposition-dialogue 管"你我都知道的信息"式台词；info-delivery 管外部渠道替主角推剧情；show-dont-tell 管情绪形容词直述；本引擎只管开场履历包（姓名×年龄×身份三字段同屏）。',
+    '- 改写方向：删掉履历包，让名字从前台呼喊/工牌/同事嘲讽里漏出来，让身份从她正在处理的麻烦里长出来。',
+    '- 一次检定：相邻两行打包成一条命中只记一次，第二行记 consumed，不再重复扣分。',
+    '- pipeline 消费：prePolish 把命中注入润色师（introHint）；craft 初评、craft 复评、deai 复扫消费同一结果；deai 维度 0.01 加权已于 v2.103 退役，检测器保留运行仅退出加权。',
+    '- 成稿自查：开场是不是递了一张名片？名字和身份有没有从正在发生的麻烦里挣出来？',
+    '- 中英一致：snippet 30/48 字符、相邻两行打包、前 2 行豁免与 0/1/≥2 计分中英同口径。',
+  ].join('\n');
+}
