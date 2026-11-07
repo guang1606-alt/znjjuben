@@ -79,6 +79,10 @@ export function createApp(routers: AppRouters = {}, preErrorRouter?: Router | Ro
     res.setHeader('X-Frame-Options', 'DENY');
     res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
     res.setHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
+    // v2.441 HSTS 条件化：仅当请求确为 HTTPS（直连 TLS 或代理声明 X-Forwarded-Proto: https）时下发。
+    // 无条件下发会把 http://localhost 与内网 http 地址被浏览器永久升级为 https 后打不开；
+    // trust proxy 已按 TRUST_PROXY_HOPS 解析，req.secure 即网关真实协议。守卫：http-security-headers.test.cjs。
+    if (_req.secure) res.setHeader('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
     const isApi = _req.path === '/api' || _req.path.startsWith('/api/');
     if (isApi) res.setHeader('Cache-Control', 'no-store');
     else res.setHeader('Content-Security-Policy', CSP);

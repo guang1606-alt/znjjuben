@@ -32,10 +32,36 @@
   let theme = LS.g('zn_theme', 'tech');
   const mq = window.matchMedia ? window.matchMedia('(prefers-color-scheme: dark)') : null;
 
+  // v2.441 浏览器/系统 UI 跟随：每种主题给出与 --bg 一致的地址栏色，
+  // 移动端（iOS Safari / Android Chrome）切主题后状态栏与标题栏不再与页面割裂。
+  const THEME_META = { tech: '#060912', light: '#f4efe2', dark: '#0b1211', eye: '#ece5d0' };
+  function syncThemeColor(eff) {
+    const m = document.querySelector('meta[name="theme-color"]');
+    if (m) m.setAttribute('content', THEME_META[eff] || THEME_META.tech);
+  }
+  // v2.441 偏好控件无障碍：「主题」「中 / EN」两枚按钮只有可见文字，读屏读不出当前值；
+  // 统一写入 aria-label + title（含当前值与下一步动作），切语言后由 applyLang 重刷。
+  function syncPrefsA11y() {
+    const tb = $('themeBtn');
+    if (tb) {
+      const name = t(theme) || theme;
+      const label = lang === 'en' ? `Appearance: ${name}. Click to switch to the next theme` : `外观主题：${name}，点击切换到下一套主题`;
+      tb.setAttribute('aria-label', label);
+      tb.setAttribute('title', label);
+    }
+    const lb = $('langBtn');
+    if (lb) {
+      const label = lang === 'en' ? 'Switch interface language to 中文' : '切换界面语言为 English';
+      lb.setAttribute('aria-label', label);
+      lb.setAttribute('title', label);
+    }
+  }
   function applyTheme() {
     const eff = theme === 'auto' ? (mq && mq.matches ? 'dark' : 'light') : theme;
     document.documentElement.setAttribute('data-theme', eff);
     document.documentElement.setAttribute('data-theme-mode', theme);
+    syncThemeColor(eff);
+    syncPrefsA11y();
   }
   function applyLang() {
     // c204 复盘修复：localStorage 可能是脏值（旧版本/手滑/带引号的 '"en"'），直接拿去索引双语表
@@ -47,6 +73,7 @@
     document.documentElement.setAttribute('data-lang', lang);
     document.documentElement.setAttribute('lang', lang === 'en' ? 'en' : 'zh-CN');
     document.title = lang === 'en' ? 'ZhongnanJi · AGI Screenwriting Master' : '终南集 · 人工通用智能（AGI）编剧大师';
+    syncPrefsA11y(); // v2.441 顶栏「主题 / 中 EN」按钮的无障碍标签必须随语言切换重刷
     renderStaticText(); renderModes(); renderHome(); renderSelects(); renderScriptTypes(); renderAuthButton();
     _applyToolboxHints(); // A3 工具箱卡片分层：静态卡注入方法论一句话提示行（随语言刷新）
     // v2.188 初始化同步守卫：applyLang 期间 syncTagBench/syncModeBrief 不主动调 openWorkbench（避免 layer 自动展开覆盖 12 模式主页）

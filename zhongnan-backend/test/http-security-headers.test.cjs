@@ -68,6 +68,18 @@ test('安全响应头：/api 响应携带 Cache-Control: no-store，静态与健
   assert.notStrictEqual(health.headers.get('cache-control'), 'no-store');
 });
 
+// v2.441 HSTS：只在请求确为 HTTPS（直连或代理声明 X-Forwarded-Proto: https）时下发，
+// 纯 HTTP 下发会让浏览器把本地/内网 http 开发地址永久升级为 https 直接打不开。
+test('安全响应头：HTTPS 携带 HSTS，纯 HTTP 不下发', async () => {
+  const plain = await fetch(`${base}/health`);
+  assert.strictEqual(plain.headers.get('strict-transport-security'), null, '纯 HTTP 不得下发 HSTS');
+  const secure = await fetch(`${base}/health`, { headers: { 'X-Forwarded-Proto': 'https' } });
+  const hsts = secure.headers.get('strict-transport-security');
+  assert.ok(hsts, 'HTTPS 请求应下发 HSTS');
+  assert.match(hsts, /max-age=31536000/);
+  assert.match(hsts, /includeSubDomains/);
+});
+
 // v2.236 CSP：预期策略全文（改策略必须同步改这里与 app.ts 注释，防止静默放松）
 const EXPECTED_CSP = "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; "
   + 'img-src \'self\' data: https: blob:; connect-src \'self\'; font-src \'self\'; '
