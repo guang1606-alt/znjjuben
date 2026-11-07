@@ -51,7 +51,8 @@
     }
     const lb = $('langBtn');
     if (lb) {
-      const label = lang === 'en' ? 'Switch interface language to 中文' : '切换界面语言为 English';
+      // WCAG 2.5.3：无障碍名必须包含可见文字「中 / EN」，否则语音控制按可见文字喊不到这个按钮
+      const label = lang === 'en' ? '中 / EN，Switch interface language to 中文' : '中 / EN，切换界面语言为 English';
       lb.setAttribute('aria-label', label);
       lb.setAttribute('title', label);
     }
