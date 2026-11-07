@@ -280,3 +280,55 @@ export function villainOverconfession(draft: string): VillainOverconfessionResul
 
   return { score, dialogueLines, hits, issues, advice };
 }
+
+/**
+ * 前置教学：buildVillainOverconfessionDirective(_format='LIVE', lang='zh')
+ * -------------------------------------------------------------------
+ * 同源铁律：教学函数与检测器 villainOverconfession 同文件；format 不门控（LIVE/AIGC/缺省一致）。
+ * 目的：撰写师/润色师首轮即拿到"台词配对 / probe 短问句 / kind=confess|freebie / 机密五族 ≥2 /
+ *       单族短认放行 / 四 rescue 通道 / 只算 bad"的口径，
+ *       避免写完被 prePolish villainHint 与 craft 复评打回。
+ */
+export function buildVillainOverconfessionDirective(_format: string = 'LIVE', lang: string = 'zh'): string {
+  if (lang === 'en') {
+    return [
+      '[Villain Over-Confession Pre-Writing Briefing (same source as villainOverconfession: information asymmetry is the most expensive asset of suspense; truth must be earned, not donated)]',
+      '- Scope: dialogue-pair detection within consecutive turns of the same scene; scene headers break pairing; dialogueLines counts only speaker lines.',
+      '- Probe rule: a short vague question (at most 16 English words) pointing at a crime or betrayal, containing no concrete evidence — was it you / did you do it / why did you do it.',
+      '- Pairing: the confession must land on the next speaker turn from a different speaker; at most one narration line may sit between; blanks are skipped, a scene header or another dialogue breaks the pair.',
+      '- kind=confess: admission markers — it was me / I did it / that\'s right / I admit it.',
+      '- kind=freebie: voluntary extra-intel framing — might as well tell you / let you die knowing / what you don\'t know.',
+      '- Five secret families: method (switched the pills, forged the will, cut the brakes) / accomplice (your own husband, working for me) / coldcase (that night, ten years ago) / motive (all for the money, the inheritance) / next (tonight, the board meeting, you\'ll never leave).',
+      '- Bad rule: the confession carries two or more families of secrets and is long enough (at least 9 English words).',
+      '- Free pass: a single-family short admission ("I did it. So what?") is not charged.',
+      '- Rescue channels: evidence — proof (recording, records, witness) already on the table within the four lines before the probe, and the confession contains no next family (cornered confirmation is legal; volunteering the next move is still dumb); deal — confession traded for a condition; trap — marked as bluff or fishing within plus-minus two lines; legal — a confession inside a police or courtroom context.',
+      '- Bad only: bad = not rescued; rescued hits do not count against the score; issues list only bad hits.',
+      '- Score: 0 bad = 100; 1 bad = 75; two or more = max(25, 100 - n x 24).',
+      '- Hit fields: probeLine / line / speaker / kind / families / snippet (truncated to 40 characters) / rescued / rescueLine / reason.',
+      '- Neighbours: plot-armor.monologue_delay covers the four-piece hero-halo set (blade at throat + full control + monologue + escape window); exposition-dialogue.shared_memory covers as-you-know retelling of shared past; info-delivery covers device or messenger feeding; villain-stall covers execution-scene stalling; villain-threat and fate-ledger are ledger directives and do not overlap — this engine covers the information dump itself, with no physical control required.',
+      '- Pipeline: consumed in prePolish as villainHint; craft first-pass and second-pass reviews read it; deai rescans it after fixes; qcReport exposes it as villainConf.',
+      '- Self-check: after writing, if a vague probe buys a full confession, make him deny, deflect, or counter-attack instead; dole out truth one confirmed fact per piece of evidence the hero earned — and never hand over the next move for free.',
+      '- Same rule across languages: one set of pairing, family and rescue rules; format is not gated.',
+    ].join('\n');
+  }
+  return [
+    '【反派不打自招前置教学（与检测器 villainOverconfession 同源：信息差是悬疑戏最贵的资产，真相必须付代价，不是免费派送）】',
+    '- 检测范围：同场连续发言内的台词配对检测，场景头断配对，dialogueLines 只计台词行。',
+    '- probe 判定：短问句（中文 ≤24 字，英文 ≤16 词），指向罪行/背叛的空泛质问，不含具体证据事实——是不是你 / 是你干的 / 你为什么要这么做。',
+    '- confession 定位：probe 的下一发言行（须换话者），允许夹 1 行叙述；空行跳过，场景头或再一条台词断配对。',
+    '- kind=confess：承认词——是我 / 我干的 / 没错 / 我承认 / 不装了。',
+    '- kind=freebie：免费加料框架——我不妨再告诉你 / 让你死个明白 / 你不是一直想知道。',
+    '- 机密五族：method 手法（换药、伪造遗嘱、动刹车）/ accomplice 同伙（你老公是我的人、里应外合）/ coldcase 旧案时间（十年前、那天晚上）/ motive 动机（为了钱、为了遗产）/ next 下一步（明天董事会、今晚送你上路）。',
+    '- bad 判定：机密 ≥2 族共现，且长度达标（中文 ≥14 字，英文 ≥9 词）。',
+    '- 放行口径：单族短认不罚——"是我。你能怎样。"是允许的。',
+    '- rescue 四通道：evidence（probe 前 ≤4 行窗口已摆证据：录音/监控/鉴定/流水，或主角已说出具体事实；且 confession 不含 next 族——被逼到墙角的确认合法，主动交代下一步仍蠢）/ deal（附交换条件：你先放了她）/ trap（±2 行明示诈供/套话/将计就计）/ legal（警察/法庭/审讯语境下的供认）。',
+    '- evidence 窗口：probe 前 ≤4 行已摆证据，且不含 next 族；被逼到墙角的确认合法。',
+    '- 只算 bad：bad = 未 rescued；rescued 不参与扣分，issues 只列 bad。',
+    '- 得分：0 次 100；1 次 75；≥2 次 max(25, 100 - n × 24)。',
+    '- 命中字段：probeLine / line / speaker / kind / families / snippet（40 字截断）/ rescued / rescueLine / reason。',
+    '- 邻居分界：plot-armor.monologue_delay 管"刀架脖子+完全控制+自白+逃脱窗口"四件套主角光环；exposition-dialogue.shared_memory 管双方共知旧事互讲；info-delivery 管设备/广播/信使投喂；villain-stall 管处决临场拖延；villain-threat / fate-ledger 是账本 Directive 不冲突——本引擎管信息倾销本身，不要求物理控制。',
+    '- pipeline 消费：prePolish 以 villainHint 消费；craft 初评/复评同步消费；deai 修复后重扫；qcReport 以 villainConf 透出。',
+    '- 成稿自查：写完若一句空问换来全盘招供，让他抵赖、反问、倒打一耙；真相按主角付掉的代价分期兑付——证据拍到一件，他才认一件，且绝不主动交代下一步。',
+    '- 中英一致：同一套配对、五族与 rescue 口径，format 不门控。',
+  ].join('\n');
+}
