@@ -160,3 +160,51 @@ export function confrontationDodge(draft: string): ConfrontationDodgeResult {
 
   return { score, sceneCount, hits, issues, advice };
 }
+
+/**
+ * 前置教学：buildConfrontationDodgeDirective(_format='LIVE', lang='zh')
+ * -------------------------------------------------------------------
+ * 同源铁律：教学函数与检测器 confrontationDodge 同文件；format 不门控（LIVE/AIGC/缺省一致）。
+ * 目的：撰写师/润色师首轮即拿到"即将爆发×打断信号 / 集尾豁免 / 6 行捡回 /
+ *       0-1-≥2 三段计分"的口径，避免写完被 prePolish dodgeHint 与 craft/deai 复评打回。
+ */
+export function buildConfrontationDodgeDirective(_format: string = 'LIVE', lang: string = 'zh'): string {
+  if (lang === 'en') {
+    return [
+      '【Confrontation Dodge Pre-Writing Briefing (same source as confrontationDodge: an external cue kills a rising showdown; 1 hit = 70, 2+ hits = max(25, 100 - (n - 1) x 30))】',
+      '- Scope: every non-empty line is scanned; scene headers count sceneCount and dialogue lines are scanned too, because a character narrating "I was about to say it" is still the same dodge.',
+      '- Imminent signals: was just about to say / tell / ask / reveal / confront, opened his or her mouth to speak or protest, before he or she could finish, words were on the tip of his or her tongue, nearly blurted it out.',
+      '- Interrupt signals: a knock at the door, the doorbell, the door burst open, someone burst in or rushed in, the phone rang or buzzed, cut him or her short, interrupted, did not let him or her finish.',
+      '- Trigger distance: the imminent signal and the interrupt signal must land on the same line or the next non-empty line, and the match does not cross a scene.',
+      '- Rescue: the interrupted conflict is picked up again within the next 6 lines and before a scene change; the hit is then marked rescued and is not deducted.',
+      '- Rescue verbs: pressed on, went on, continued, finished the sentence, was not done, demanded again, asked again, insisted, blocked the door, refused to let it go, would not let him or her leave.',
+      '- Ending exemption: if the interrupt is the last beat of the whole script with no scene after it, it is a cliffhanger and is not judged.',
+      '- Score: 0 hits = 100; 1 hit = 70 as a single-scene reminder; 2 or more hits are structural dodge, max(25, 100 - (n - 1) x 30).',
+      '- Hit fields: line, imminent, interrupt, snippet (first 30 characters), rescued, rescueLine and reason are returned.',
+      '- Neighbour divisions: plot-armor covers a villain who confesses or goes easy with a blade at the hero\'s throat; misunderstanding-drag covers "I will not listen" walk-outs; cliffhanger covers the episode-end hook.',
+      '- Rewrite: let the intruder be waved off with one line ("Get out, we are talking"), or let the news they bring escalate the fight on the spot; an intrusion can only add fuel, never call timeout for the characters.',
+      '- Once per scene: a true pause may be used once per scene, and the beat must be picked up again before the scene ends.',
+      '- Pipeline consumption: prePolish injects unresolved hits into the polisher as dodgeHint; craft initial, craft re-eval and deai rescan consume the same result; the former 0.01 deai weight was retired at v2.102 and the detector now runs unweighted.',
+      '- Self-check: does the confrontation play out on screen? Does the interruption add fuel instead of putting on the brakes?',
+      '- Parity: 6-line rescue neighbourhood, 30-character snippet, ending-beat exemption and the 0-1-2+ scoring match the Chinese layer.',
+    ].join('\n');
+  }
+  return [
+    '【关键时刻打断逃场·前置教学（检测同源：confrontationDodge 用外部信号替对峙踩刹车；未回收 1 次 70 分，≥2 次 max(25, 100-(n-1)×30)）】',
+    '- 检测范围：所有非空行都参与，场头计 sceneCount，台词行同样扫描（人物说"我刚要说就被打断"也是同一种逃场），仅作诊断。',
+    '- 触发·即将爆发：刚要说/刚开口/正要质问/正要摊牌/话到嘴边/话还没说完/还没说完/准备说出/差点说出口/张开嘴刚要。',
+    '- 触发·打断信号：敲门声/门铃响/门被推开/有人闯进来/推门而入/推门进来/闯入/冲进来/电话响了/手机震动/被打断/打断话头/一阵急促的敲门或铃声。',
+    '- 判定距离：即将爆发与打断信号必须同行或下一非空行共现，且不跨场（换场即断）。',
+    '- rescue 豁免：打断后 6 行内、换场之前，人物把这场对话捡回来继续，记 rescued 不扣分。',
+    '- rescue 词表：继续质问/接着说/回到正题/我刚才说到/你先别走/不依不饶/不肯罢休/执意追问/追上去问/重新开口。',
+    '- 集尾豁免：打断点就是全稿最后一拍、其后无戏，归 cliffhanger，不判。',
+    '- 得分：0 次 100；1 次 70（单次提醒，可能是过场）；≥2 次结构性逃场 max(25, 100 - (n - 1) × 30)。',
+    '- 命中字段：line / imminent / interrupt / snippet（前 30 字）/ rescued / rescueLine / reason。',
+    '- 邻居分界：plot-armor 管反派刀架脖子自白放水（对手给窗口）；misunderstanding-drag 管"我不听我不听"拒听离场；cliffhanger 管集尾钩子；本引擎只管外部信号替对峙踩刹车。',
+    '- 改写方向：打断的人要么被一句话顶回去（"出去，没看见我在说话？"），要么带进来的新情报当场把冲突升级；闯入只能添柴，不能替人物喊停。',
+    '- 一场一次：真想留白，一场只准用一次，且打断后本场必须捡回来。',
+    '- pipeline 消费：prePolish 把未回收命中注入润色师（dodgeHint）；craft 初评、craft 复评、deai 复扫消费同一结果；deai 维度 0.01 加权已于 v2.102 退役，检测器保留运行仅退出加权。',
+    '- 成稿自查：这场对峙当场打满了吗？打断只添柴、没有踩刹车吗？',
+    '- 中英一致：rescue 6 行邻域、30 字符 snippet、集尾豁免与 0/1/≥2 三段计分中英同口径。',
+  ].join('\n');
+}
