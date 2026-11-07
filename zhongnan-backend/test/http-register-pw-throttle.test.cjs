@@ -52,7 +52,9 @@ test('注册限流：同 IP 成功注册 5 个后第 6 个被 429 锁定（防�
   }
   const locked = await post(regServer, '/api/auth/register', { phone: '13900000020', password: 'password123' });
   assert.strictEqual(locked.status, 429, '同 IP 第 6 个成功注册必须 429');
-  assert.strictEqual((await locked.json()).error, '注册过于频繁，请稍后再试');
+  // v2.453 限流口径统一：429 必须给真实解锁时长（不是固定「稍后再试」）
+  assert.match((await locked.json()).error, /^注册过于频繁，请 .+(秒|分钟)后再试$/);
+  assert.ok(Number(locked.headers.get('retry-after')) >= 1, '429 必须带 Retry-After 头');
 });
 
 test('改密节流：当前密码连续错 5 次后第 6 次即使密码正确也 429 锁定', async () => {
@@ -66,5 +68,7 @@ test('改密节流：当前密码连续错 5 次后第 6 次即使密码正确�
   }
   const locked = await post(pwServer, '/api/auth/change-password', { currentPassword: 'oldpass123', newPassword: 'newpass456' }, tok);
   assert.strictEqual(locked.status, 429, '5 次失败后锁定：正确密码也不放行');
-  assert.strictEqual((await locked.json()).error, '尝试过于频繁，请稍后再试');
+  // v2.453 改密 429 与注册/登录同口径：真实时长 + Retry-After 头
+  assert.match((await locked.json()).error, /^尝试过于频繁，请 .+(秒|分钟)后再试$/);
+  assert.ok(Number(locked.headers.get('retry-after')) >= 1, '429 必须带 Retry-After 头');
 });

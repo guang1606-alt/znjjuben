@@ -24,6 +24,14 @@ export function createAuthRouter(prisma: PrismaLike | any) {
   // v2.217 改密节流（防持有 access token 的攻击者暴力猜当前密码）：同用户 15 分钟内
   // 当前密码验证失败 5 次即锁定；成功改密清零。语义与登录限流一致。
   const pwThrottle = createLoginThrottle();
+  // v2.453 限流响应的统一出口：三处限流（注册/登录/改密）共用同一套 login-throttle，
+  // 429 的文案与头必须同口径——给真实解锁时长 + 标准 Retry-After，而不是固定「稍后再试」。
+  function sendThrottled(res: any, throttle: ReturnType<typeof createLoginThrottle>, key: string, label: string) {
+    const sec = Math.max(1, Math.ceil(throttle.retryAfterMs(key) / 1000));
+    const human = sec >= 60 ? `${Math.ceil(sec / 60)} 分钟` : `${sec} 秒`;
+    res.setHeader('Retry-After', String(sec));
+    return res.status(429).json({ error: `${label}，请 ${human}后再试`, retryAfter: sec });
+  }
   const phoneSchema = z.object({
     phone: z.string().regex(/^1[3-9]\d{9}$/, '手机号格式不正确'),
     password: z.string().min(8, '密码至少8位').max(64),
@@ -32,7 +40,7 @@ export function createAuthRouter(prisma: PrismaLike | any) {
   /** 手机号注册（密码登录版；微信/抖音走 oauth 回调，结构相同） */
   authRouter.post('/register', async (req, res) => {
     const ipKey = req.ip ?? 'unknown';
-    if (registerThrottle.isLocked(ipKey)) return res.status(429).json({ error: '注册过于频繁，请稍后再试' });
+    if (registerThrottle.isLocked(ipKey)) return sendThrottled(res, registerThrottle, ipKey, '注册过于频繁');
     const parsed = phoneSchema.safeParse(req.body);
     if (!parsed.success) return res.status(400).json({ error: parsed.error.issues[0].message });
     const { phone, password, inviteCode } = parsed.data;
@@ -74,12 +82,7 @@ export function createAuthRouter(prisma: PrismaLike | any) {
     if (!p.success) return res.status(400).json({ error: '参数错误' });
     const throttleKey = `${req.ip ?? 'unknown'}:${p.data.phone}`;
     // v2.452 锁定不再是「请稍后再试」的黑盒：滑动窗口下解锁时刻可算，直接给秒数与 Retry-After 头
-    if (loginThrottle.isLocked(throttleKey)) {
-      const sec = Math.max(1, Math.ceil(loginThrottle.retryAfterMs(throttleKey) / 1000));
-      const human = sec >= 60 ? `${Math.ceil(sec / 60)} 分钟` : `${sec} 秒`;
-      res.setHeader('Retry-After', String(sec));
-      return res.status(429).json({ error: `尝试过于频繁，请 ${human}后再试`, retryAfter: sec });
-    }
+    if (loginThrottle.isLocked(throttleKey)) return sendThrottled(res, loginThrottle, throttleKey, '尝试过于频繁');
     const user = await prisma.user.findUnique({ where: { phone: p.data.phone } });
     if (!user || !user.passwordHash || !(await verifyPassword(user.passwordHash, p.data.password))) {
       loginThrottle.recordFailure(throttleKey);
@@ -202,7 +205,7 @@ export function createAuthRouter(prisma: PrismaLike | any) {
     const p = changePwSchema.safeParse(req.body);
     if (!p.success) return res.status(400).json({ error: p.error.issues[0].message });
     const pwKey = `pw:${req.userId}`;
-    if (pwThrottle.isLocked(pwKey)) return res.status(429).json({ error: '尝试过于频繁，请稍后再试' });
+    if (pwThrottle.isLocked(pwKey)) return sendThrottled(res, pwThrottle, pwKey, '尝试过于频繁');
     const u = await prisma.user.findUnique({ where: { id: req.userId! } });
     if (!u) return res.status(404).json({ error: '用户不存在' });
     if (!u.passwordHash) return res.status(400).json({ error: '当前账号未设置密码，请使用第三方登录' });
