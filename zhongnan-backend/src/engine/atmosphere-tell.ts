@@ -134,3 +134,50 @@ export function atmosphereTell(draft: string): AtmosphereTellResult {
 
   return { score, narrationLines, hits, issues, advice };
 }
+
+/**
+ * 前置教学：buildAtmosphereTellDirective(_format='LIVE', lang='zh')
+ * -------------------------------------------------------------------
+ * 同源铁律：教学函数与检测器 atmosphereTell 同文件；format 不门控（LIVE/AIGC/缺省一致）。
+ * 目的：撰写师/润色师首轮即拿到"气氛主体+抽象结论 / 时间停摆 / 情绪弥漫"与 rescue 口径，
+ *       避免写完被 prePolish atmosphereHint 与 craft/deai 复评打回。
+ */
+export function buildAtmosphereTellDirective(_format: string = 'LIVE', lang: string = 'zh'): string {
+  if (lang === 'en') {
+    return [
+      '【Atmosphere Tell Pre-Writing Briefing (same source as atmosphereTell: one abstract verdict hands the whole scene its mood; 12 points per unrescued hit; floor 25)】',
+      '- Scope: narration and action lines only; scene headers and "speaker: line" dialogue lines are skipped, because a character saying the mood is dialogue, and the rest count as narration lines for diagnostics.',
+      '- A subject plus verdict: the atmosphere / the mood / the air / the vibe / the silence followed within 40 characters by a mood word is recorded.',
+      '- A mood words: awkward / tense / heavy / thick / stifling / oppressive / strained / weird / strange / frosty / frozen / froze / suffocating / electric.',
+      '- B time stops: time seemed to freeze / time appeared to stand still / the air froze, and an awkward / tense / heavy / dead / long silence phrase is recorded the same way.',
+      '- C mood spreads: awkwardness / tension / unease followed by hung / filled / thickened in / settled over / spread through is recorded.',
+      '- Rescue exemption: a comma followed by a concrete human action on the same line, or a concrete human action, physical beat or someone speaking within the next 2 lines (not crossing a scene), marks the hit rescued and it is not deducted.',
+      '- Rescue actions: chuckled / laughed / cleared his or her throat / coughed / picked up / set down / put down / stood up / rose / looked away / looked down / swallowed / clenched / tightened / stepped back / hesitated / opened his or her mouth / broke the silence / broke in / cut in / sighed / took a breath.',
+      '- Score: max(25, 100 - unrescued hits x 12); empty draft = 100; a scene change clears the rescue neighbourhood.',
+      '- Hit fields: line, subject, mood, snippet (first 28 characters), rescued, rescueLine and reason are returned.',
+      '- Neighbour divisions: weather or objects performing emotion belongs to pathetic-fallacy; collective silence (a collective gasp, the whole room froze) belongs to crowd-reaction; a character\'s own emotion stated outright belongs to show-dont-tell; this engine reads only the scene-level abstract verdict.',
+      '- Rewrite: cut the verdict and write one concrete beat from the least comfortable person — lifting a cup then setting it down, laughing first and looking away, covering the pause with the sound of keys.',
+      '- One hit per line: several mood subjects on one line still score a single hit, so a line is never double-charged.',
+      '- Pipeline consumption: prePolish injects unrescued hits into the polisher as atmosphereHint; craft initial, craft re-eval and deai rescan consume the same result; the former 0.01 deai weight is retired and the detector now runs unweighted.',
+      '- Self-check: what can the director actually film in this "mood" line? If nothing, cut it and keep one small human action.',
+    ].join('\n');
+  }
+  return [
+    '【气氛直述·前置教学（检测同源：atmosphereTell 用一句抽象判断替整场戏下情绪结论，未挽救每条扣 12 分，25 分封底）】',
+    '- 检测范围：只扫叙述/动作行；场头与「说话人：台词」行跳过（台词里说"气氛别这么僵"是人物语言，不算），其余计入 narrationLines（仅诊断）。',
+    '- A·主体+结论：气氛/氛围/空气/场面/满室/满屋/一室/周遭/周围 后 12 字内出现情绪结论即判。',
+    '- A·情绪结论词表：尴尬/紧张/凝重/压抑/沉重/暧昧/微妙/诡异/古怪/僵硬/凝滞/窒息/肃杀/焦灼/剑拔弩张/一触即发/凝固/紧绷/僵住/沉了下来。',
+    '- B·时间停摆：时间/空气 + 仿佛/似乎/好像/在这一刻/一瞬间 + 静止/停止/凝固/慢了下来/凝滞，同样记一条。',
+    '- C·情绪弥漫：沉默/寂静/尴尬/紧张/暧昧/压抑/恐慌 + 在…（或"的…在…"）+ 蔓延/扩散/流淌/弥漫/弥散，记一条。',
+    '- rescue 豁免：命中点之后同行出现逗号 + 具体人的动作，或之后 2 行内（不跨场）出现具体人的动作/生理细节/有人开口，即 rescued 不扣分。',
+    '- rescue 动作词表：先笑/笑了笑/失笑/笑出声/咳了一声/清了清嗓子/端起/放下/推开/站起身/起身/挪开/别过脸/转过头/低下头/喉结/指尖/攥/握紧/捏紧/收紧/后退/顿了顿/张了张嘴/开口/打破/岔开/圆场/叹气/吸了口气。',
+    '- 得分：score = max(25, 100 - 未挽救命中数 × 12)；空稿 100；换场清空 rescue 邻域。',
+    '- 命中字段：line、subject、mood、snippet（前 28 字）、rescued、rescueLine、reason 随命中返回。',
+    '- 邻居分界：天气景物替人演情绪归 pathetic-fallacy；群体静默（鸦雀无声/众人安静）归 crowd-reaction；人物自身情绪直述（她很伤心）归 show-dont-tell；本引擎只管整场戏的抽象情绪结论。',
+    '- 改写方向：删掉结论，写在场最不自在那个人的一个具体动作——端起茶杯又放下、假笑一声先移开视线、用钥匙声把话头盖过去。',
+    '- 一句一判：同一行命中多个气氛主体也只记一条，避免重复扣分。',
+    '- pipeline 消费：prePolish 把未挽救命中注入润色师（atmosphereHint）；craft 初评、craft 复评、deai 复扫同一结果；deai 维度 0.01 加权已退役，检测器保留运行仅退出加权。',
+    '- 成稿自查：这句"气氛"导演能拍什么？拍不到就删掉，换成某个人的一个小动作。',
+    '- 中英一致：中英同口径（只扫叙述行、未挽救 ×12、rescue 2 行、25 封底），英文主体后 40 字符窗口。',
+  ].join('\n');
+}
