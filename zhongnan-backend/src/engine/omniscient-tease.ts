@@ -142,3 +142,47 @@ export function omniscientTease(draft: string): OmniscientTeaseResult {
 
   return { score, narrationLines, hits, issues, advice };
 }
+
+/**
+ * 前置教学：buildOmniscientTeaseDirective(_format='LIVE', lang='zh')
+ * -------------------------------------------------------------------
+ * 同源铁律：教学函数与检测器 omniscientTease 同文件；format 不门控（LIVE/AIGC/缺省一致）。
+ * 目的：撰写师/润色师首轮即拿到"叙述者越权发预告"的三类判定与具体事实豁免口径，
+ *       避免写完被 prePolish teaseHint 与 craft/deai 复评打回。
+ */
+export function buildOmniscientTeaseDirective(_format: string = 'LIVE', lang: string = 'zh'): string {
+  if (lang === 'en') {
+    return [
+      '【Omniscient Tease Pre-Writing Briefing (same source as omniscientTease: the narrator jumps ahead to tease; 11 points per hit; floor 25)】',
+      '- Scope: narration lines only; scene headers and "speaker: line" dialogue lines are skipped, and the rest count as narration lines for diagnostics.',
+      '- Order of judgement: the chapter-end tail check runs first and independently, then the strong omniscient frame, then the weak cognition sentence plus suspense-word co-occurrence; the first match on a line wins, so each line scores at most one hit.',
+      '- A strong frame: little did she / he / they / I know, unbeknownst to her / him / them, or what she / he / they didn\'t know was, recorded as kind omniscient.',
+      '- B weak cognition: she / he had no idea followed within 30 characters by a suspense word is recorded as kind omniscient.',
+      '- B suspense words: a bigger storm / war / conspiracy / crisis / trap, what awaited / was coming / lay ahead, everything was about to change, about to unfold / begin / change, a storm brewing / coming, the truth that / which, her life about to, would soon regret / discover / learn.',
+      '- B concrete-fact exemption: when "had no idea" is followed by a filmable fact (her mother was coming / the password was wrong), it is a normal after-the-fact reaction, not a tease, and is not judged.',
+      '- C tail: the wheels of fate turned / this was only the beginning / had only just begun / a bigger storm brewing / what awaited her / everything was about to change, recorded as kind tail.',
+      '- Hit fields: line, kind (omniscient / tail), phrase, snippet (first 30 characters) and reason are returned so the polisher can locate the overreach.',
+      '- Score: max(25, 100 - hits x 11); empty draft = 100.',
+      '- Rewrite: trade future tense for present continuous — a hidden hand, a sentence cut off by the doorbell, a time that does not add up; the audience sees it now while the character misreads it.',
+      '- Division: cliffhanger and punchline recognize "little did" as a twist-device type word; this engine judges the narrator-overreach, no-image writing itself, a different dimension.',
+      '- Pipeline consumption: prePolish injects hits into the polisher as teaseHint; craft initial, craft re-eval and deai rescan consume the same result, and the deai dimension carries 0.01 weight.',
+      '- Self-check: can the camera film this line right now? If not, cut the tease and replace it with an unresolved action visible in the present.',
+    ].join('\n');
+  }
+  return [
+    '【全知预告·前置教学（检测同源：omniscientTease 让叙述者跳到未来发预告，每条命中扣 11 分，25 分封底）】',
+    '- 检测范围：只扫叙述行；场头与「说话人：台词」行跳过，其余行计入 narrationLines（仅诊断）。',
+    '- 判定顺序：先章末定调（C，独立判），再强全知框架（A），最后弱认知句+悬念空词（B）；一行命中即停，每行最多记一条。',
+    '- A·强全知框架：出现即判——她不知道的是/她哪里知道/她做梦也想不到/此刻的她还不知道/蒙在鼓里/浑然不知/一无所知 → 记 omniscient；英文 little did she know / unbeknownst to her / what she didn\'t know was。',
+    '- B·弱认知句：她/他 + 还不知道/没想到/不曾想到/想不到/没察觉 后接 24 字窗口（英文 she had no idea 后 30 字符），窗口内出现悬念空词才判，记 omniscient。',
+    '- B·悬念空词表：一场更大/更大的/风暴/战争/阴谋/危机/劫难/考验/陷阱/圈套/埋伏/等着她/等待着她/即将/就要来临/就在眼前/就在身后/命运/秘密/真相/这只是/才刚刚开始/将是/改变一生/改变命运/万劫不复/坠入/吞噬。',
+    '- B·具体事实豁免："她没想到"后接可拍的具体事实（母亲会来/密码是错的/门没锁）不算预告，是正常事后反应，不记命中。',
+    '- C·章末定调：命运的齿轮/这只是个开始/故事才刚刚开始/真正的风暴才/一场更大的风暴/等待她的将是/暴风雨即将来临 → 记 tail；英文 wheels of fate / this was only the beginning / had only just begun / a bigger storm / what awaited her / everything was about to change。',
+    '- 命中字段：line（行号）、kind（omniscient/tail）、phrase（命中短语）、snippet（前 30 字）、reason 随命中返回，供润色师定位。',
+    '- 得分：score = max(25, 100 - 命中条数 × 11)；空稿 100。',
+    '- 改写方向：把未来时改成正在进行时——一只被藏起来的手、一句被门铃打断的话、一个对不上的时间，观众此刻看见但角色没看懂。',
+    '- 与 cliffhanger/punchline 分界：它们把 little did 当反转装置类型词来识别；本引擎判的是该装置"叙述者越权、没有画面"的写法本身，维度不同。',
+    '- pipeline 消费：prePolish 把命中注入润色师（teaseHint）；craft 初评、craft 复评、deai 复扫同一结果，deai 维度占 0.01 权重，并随管线返回值透出。',
+    '- 成稿自查：这一句镜头此刻拍得到吗？拍不到就删掉预告，换成一个现在就能看见的未解动作。',
+  ].join('\n');
+}
