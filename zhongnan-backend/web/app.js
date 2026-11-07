@@ -3117,13 +3117,13 @@
     if (bar && typeof location !== 'undefined') {
       const port = location.port || (location.protocol === 'https:' ? 443 : 80);
       if (port === '8099') {
-        bar.style.cssText = 'font-size:12px;padding:8px 12px;border-radius:8px;margin-bottom:12px;line-height:1.6;background:#fff8e1;color:#8a6d00;border:1px solid #f0c800';
+        bar.style.cssText = 'font-size:12px;padding:8px 12px;border-radius:8px;margin-bottom:12px;line-height:1.6;background:var(--soft-warn);color:var(--warn-text);border:1px solid color-mix(in srgb, var(--warn-text) 45%, transparent)';
         bar.innerHTML = '🏠 <b>演示模式</b>（内存数据，重启即清空）<br>演示环境请自行注册账号试用';
       } else if (port === '8899') {
-        bar.style.cssText = 'font-size:12px;padding:8px 12px;border-radius:8px;margin-bottom:12px;line-height:1.6;background:#e8f5e9;color:#2e7d32;border:1px solid #66bb6a';
+        bar.style.cssText = 'font-size:12px;padding:8px 12px;border-radius:8px;margin-bottom:12px;line-height:1.6;background:var(--soft-ok);color:var(--ok-text);border:1px solid color-mix(in srgb, var(--ok-text) 45%, transparent)';
         bar.innerHTML = '🗄️ <b>生产模式</b>（真实 Postgres 数据）<br>请使用你的账号登录';
       } else {
-        bar.style.cssText = 'font-size:12px;padding:8px 12px;border-radius:8px;margin-bottom:12px;line-height:1.6;background:#e3f2fd;color:#1565c0;border:1px solid #42a5f5';
+        bar.style.cssText = 'font-size:12px;padding:8px 12px;border-radius:8px;margin-bottom:12px;line-height:1.6;background:var(--soft-info);color:var(--info-text);border:1px solid color-mix(in srgb, var(--info-text) 45%, transparent)';
         bar.innerHTML = `当前端口 <b>${port || '默认'}</b>，请确认使用正确的账号密码`;
       }
     }
@@ -8238,7 +8238,7 @@
         </div>`
       : '';
     const driftHtml = d.versionDrift
-      ? `<div style="margin:0 0 8px;padding:6px 10px;border-radius:6px;background:#fdf3e2;color:#7a5f2e;font-size:13px">
+      ? `<div style="margin:0 0 8px;padding:6px 10px;border-radius:6px;background:var(--soft-warn);color:var(--gold-text);font-size:13px">
           ${enLang
             ? `The read was run on v${d.roomVersion}; this episode now has v${d.currentVersion}. The rewrite will apply to the latest v${d.currentVersion}, and old notes may no longer match verbatim.`
             : `围读基于第${d.epNo}集 v${d.roomVersion}，该集现已更新到 v${d.currentVersion}。定点改写将作用于最新版 v${d.currentVersion}，旧意见可能与正文不再逐字对应。`}${reReadHtml}</div>`
@@ -9041,8 +9041,8 @@
     const list = $('submissionList'); if (!list) return;
     list.innerHTML = matches.map((c) => {
       const verifiedBadge = c.verified
-        ? `<span class="chip" style="background:#e8f5e9;color:#2e7d32">${lang === 'en' ? 'Verified' : '联系方式已核验'}</span>`
-        : `<span class="chip" style="background:#fff3e0;color:#b34700">${lang === 'en' ? 'Contact pending' : '联系方式待核验'}</span>`;
+        ? `<span class="chip" style="background:var(--soft-ok);color:var(--ok-text)">${lang === 'en' ? 'Verified' : '联系方式已核验'}</span>`
+        : `<span class="chip" style="background:var(--soft-warn);color:var(--warn-text)">${lang === 'en' ? 'Contact pending' : '联系方式待核验'}</span>`;
     // @module tags
       const kinds = (c.kinds || []).join('·');
     // @module tags
@@ -9085,8 +9085,8 @@
       const channels = d.channels || [];
       box.innerHTML = channels.map((c) => {
         const verifiedBadge = c.verified
-          ? `<span class="chip" style="background:#e8f5e9;color:#2e7d32">${lang === 'en' ? 'Verified' : '已核验'}</span>`
-          : `<span class="chip" style="background:#fff3e0;color:#b34700">${lang === 'en' ? 'Contact pending' : '待核验'}</span>`;
+          ? `<span class="chip" style="background:var(--soft-ok);color:var(--ok-text)">${lang === 'en' ? 'Verified' : '已核验'}</span>`
+          : `<span class="chip" style="background:var(--soft-warn);color:var(--warn-text)">${lang === 'en' ? 'Contact pending' : '待核验'}</span>`;
         return `<div class="sub-card">
           <div class="sub-head"><b>${escapeHtml(c.name)}</b><span class="muted">${escapeHtml(c.region === 'overseas' ? (lang === 'en' ? 'Overseas' : '海外') : (lang === 'en' ? 'Domestic' : '国内'))}</span>${verifiedBadge}</div>
           <div class="sub-meta"><span>${escapeHtml((c.kinds || []).join('·'))}</span></div>

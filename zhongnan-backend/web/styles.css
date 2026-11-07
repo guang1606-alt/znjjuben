@@ -25,6 +25,10 @@
    * 旧实现 diagColor() 写死 #3fb67a/#7c9cff/#e0a23a/#e06a5b，在浅色/护眼主题下仅 1.98~3.15:1，
    * 文字与进度条一起糊掉；这里按「对 panel 与 panel-2 均 ≥4.5」取深色值，图形自然达标。 */
   --grade-good: #176b43; --grade-mid: #2454b8; --grade-warn: #7d4f00; --grade-bad: #96271d;
+  /* v2.468 软底令牌：提示条 / 徽章 / 次要按钮的底色。过去写死浅米、浅绿、浅蓝这几种固定浅底，
+   * dark/tech 主题下与 --panel 差 14.8:1，成了暗界面里一块亮斑。这里统一为「只比 panel 轻微抬升」的软底，
+   * 暗主题换深色调，配 v2.466 的语义前景色使用。 */
+  --soft-ok: #e8f5e9; --soft-warn: #fff6d8; --soft-info: #e3f2fd; --surface-raised: #ffffff;
   /* 形制 */
   --radius: 16px; --radius-sm: 10px; --fs: 15px;
   /* 字体：标题用衬线（卷宗/片头字幕感），正文用现代黑体 */
@@ -46,6 +50,7 @@
   --shadow-lg: 0 30px 60px -28px rgba(40, 32, 16, .34), 0 6px 14px rgba(40, 32, 16, .08);
   --grid: #e9e1cd;
   --grade-good: #176b43; --grade-mid: #2454b8; --grade-warn: #7d4f00; --grade-bad: #96271d;
+  --soft-ok: #e8f5e9; --soft-warn: #fff6d8; --soft-info: #e3f2fd; --surface-raised: #ffffff;
 }
 /* ---------- 深色：影院墨 ---------- */
 [data-theme='dark'] {
@@ -57,6 +62,7 @@
   --on-accent: #08110f; /* v2.463 浅青底配深墨字（7.7:1），纸白只有 2.3:1 */
   --danger-text: #ff9481; --warn-text: #e8b45c; --ok-text: #86d5a4; --info-text: #c0b0ff; --gold-text: #d9b06a;
   --grade-good: #3fb67a; --grade-mid: #7c9cff; --grade-warn: #e0a23a; --grade-bad: #e06a5b;
+  --soft-ok: #122a1c; --soft-warn: #2a2211; --soft-info: #101f2e; --surface-raised: #16211f;
   --ring: rgba(74, 181, 168, .24);
   --shadow: 0 12px 32px -16px rgba(0, 0, 0, .5), 0 2px 6px rgba(0, 0, 0, .3);
   --shadow-lg: 0 30px 60px -24px rgba(0, 0, 0, .66), 0 6px 14px rgba(0, 0, 0, .36);
@@ -73,6 +79,7 @@
   --grid: #ddd4ba;
   --danger-text: #96271d; --warn-text: #7d4f00; --ok-text: #2e6512; --info-text: #4a2a9a; --gold-text: #6f5117;
   --grade-good: #176b43; --grade-mid: #2454b8; --grade-warn: #7d4f00; --grade-bad: #96271d;
+  --soft-ok: #dfe9d8; --soft-warn: #f6ecd0; --soft-info: #dde6ec; --surface-raised: #fbf6e8;
 }
 /* 旧变量别名：让历史组件自动随主题换色（原代码到处 fallback 的 --card/--muted/--border 等） */
 :root, [data-theme='light'], [data-theme='dark'], [data-theme='eye'] {
@@ -1436,8 +1443,8 @@ summary:hover{color:var(--accent-strong)}
 .lv-grade-NA{background:#6f6f6f}
 .lv-row{display:flex;justify-content:space-between;padding:3px 0;border-top:1px dashed #e3d7b4}
 .lv-row b{color:#332d17}
-.list-value .btn-ghost{margin-top:8px;background:#fff;border:1px solid #d8cfae;color:#8a6d1f;border-radius:8px;padding:6px 11px;font-size:12px;cursor:pointer}
-.list-value .btn-ghost:hover{background:#fbf4dd;border-color:var(--gold);color:var(--gold-deep)}
+.list-value .btn-ghost{margin-top:8px;background:var(--surface-raised);border:1px solid var(--line);color:var(--gold-text);border-radius:8px;padding:6px 11px;font-size:12px;cursor:pointer}
+.list-value .btn-ghost:hover{background:var(--soft-warn);border-color:var(--gold);color:var(--gold-deep)}
 [data-theme="dark"] .list-value,[data-theme="tech"] .list-value{background:linear-gradient(135deg,#241f14,#1b211c);border-color:#3d3620;color:#f0e6c8}
 [data-theme="dark"] .list-value .muted,[data-theme="tech"] .list-value .muted{color:#c5bda9}
 [data-theme="dark"] .lv-row,[data-theme="tech"] .lv-row{border-top-color:#3a3420}
@@ -1937,6 +1944,7 @@ summary:hover{color:var(--accent-strong)}
   --on-accent: #08110f; /* v2.463 浅蓝底配深墨字（8.6:1），纸白只有 2.1:1 */
   --danger-text: #ff9a88; --warn-text: #f0bd66; --ok-text: #8fd9ab; --info-text: #c8b8ff; --gold-text: #e0bb78;
   --grade-good: #3fb67a; --grade-mid: #7c9cff; --grade-warn: #e0a23a; --grade-bad: #e06a5b;
+  --soft-ok: #0f2a1e; --soft-warn: #2a2110; --soft-info: #0e2033; --surface-raised: #141d2c;
   --ring: rgba(139, 175, 239, .32);
   --shadow: 0 12px 36px -16px rgba(0, 0, 0, .6), 0 2px 8px rgba(0, 0, 0, .4);
   --shadow-lg: 0 30px 80px -28px rgba(0, 0, 0, .72), 0 8px 20px rgba(0, 0, 0, .42);

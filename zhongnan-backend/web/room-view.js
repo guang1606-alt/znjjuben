@@ -537,9 +537,9 @@
       ].filter(Boolean).join('｜');
       // c197：参与房与自己的房同列表展示，用角色徽标区分（老缓存无 role 字段时不显示）
       const badge = r.role === 'member'
-        ? `<span style="display:inline-block;font-size:11px;line-height:16px;padding:0 6px;border-radius:8px;margin-right:6px;background:#e3edf0;color:#3a6a78">${t.roleMember}</span>`
+        ? `<span style="display:inline-block;font-size:11px;line-height:16px;padding:0 6px;border-radius:8px;margin-right:6px;background:var(--soft-info);color:var(--info-text)">${t.roleMember}</span>`
         : r.role === 'owner'
-          ? `<span style="display:inline-block;font-size:11px;line-height:16px;padding:0 6px;border-radius:8px;margin-right:6px;background:#efe7d6;color:#7a5c2e">${t.roleOwner}</span>`
+          ? `<span style="display:inline-block;font-size:11px;line-height:16px;padding:0 6px;border-radius:8px;margin-right:6px;background:var(--soft-warn);color:var(--gold-text)">${t.roleOwner}</span>`
           : '';
       return `<div class="td-hist-card" data-rid="${esc(r.id)}">
         <div class="td-hist-main">
