@@ -22,21 +22,28 @@ function pick(fnName, asyncFn = false) {
 }
 
 test('① 倒计时期间按钮必须禁用并显示剩余秒数，结束才恢复', () => {
-  const fn = pick('startAuthLock');
+  // v2.455 倒计时泛化成 startLockCountdown(sec, btnId, errId)，具体目标由调用方传入；
+  // 登录侧 startAuthLock 保留为薄封装，必须把目标钉死在 authSubmit / authErr（不能漂到别的按钮）。
+  const fn = pick('startLockCountdown');
   assert.match(fn, /setInterval/, '倒计时要靠定时器逐秒推进');
-  assert.match(fn, /btn\s*=\s*\$\('authSubmit'\)/, '倒计时必须作用在提交按钮上');
+  assert.match(fn, /\$\(btnId\)/, '倒计时按钮必须按入参取');
+  assert.match(fn, /\$\(errId\)/, '倒计时错误区必须按入参取');
   assert.match(fn, /btn\.disabled\s*=\s*true/, '倒计时期间必须禁用提交按钮');
   assert.match(fn, /authLockedTip/, '提示文案走 i18n，且要带剩余秒数');
-  const stop = pick('stopAuthLock');
+  const wrap = pick('startAuthLock');
+  assert.match(wrap, /startLockCountdown\(sec,\s*'authSubmit',\s*'authErr'\)/, '登录侧必须委托泛化函数并固定自己的按钮/错误区');
+  const stop = pick('stopLockCountdown');
   assert.match(stop, /clearInterval/, '必须能清除定时器，否则关闭弹窗后仍在跑');
   assert.match(stop, /disabled\s*=\s*false/, '结束时必须恢复可用');
+  const stopWrap = pick('stopAuthLock');
+  assert.match(stopWrap, /stopLockCountdown\(\)/, '登录侧停止也要委托统一出口');
 });
 
 test('② 429 的 retryAfter 要真正被消费：走倒计时而不是只弹一句错误', () => {
   const fn = pick('doAuthSubmit', true);
   assert.match(fn, /e\s*&&\s*e\.retryAfter/, '必须识别后端给的 retryAfter');
   assert.match(fn, /startAuthLock\(/, '命中 retryAfter 时进入倒计时');
-  assert.match(fn, /if\s*\(!_authLockTimer\)/, 'finally 不能无条件恢复按钮：锁定期恢复等于让用户继续空点');
+  assert.match(fn, /if\s*\(!_lockTimer\)/, 'finally 不能无条件恢复按钮：锁定期恢复等于让用户继续空点');
 });
 
 test('③ 关闭弹窗要停掉倒计时（否则重开仍是禁用态，名实不符）', () => {

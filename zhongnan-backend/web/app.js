@@ -3117,7 +3117,8 @@
   }
   // v2.454 锁定倒计时状态（声明上移到 resetAuthForm 之前：关闭钩子可能在模块后段的
   // startAuthLock 之前被触发，let 留在后面会造成 TDZ）
-  let _authLockLeft = 0, _authLockTimer = 0;
+  // v2.455 泛化：记录当前倒计时作用的按钮/错误区，停止时才能还原子调用方
+  let _lockLeft = 0, _lockTimer = 0, _lockBtnId = '', _lockErrId = '';
   // v2.451 关闭清理从 closeAuth 抽成 resetAuthForm，并挂在 v2.220 的模态关闭钩子上：
   // X 按钮/遮罩走 closeAuth，但 Esc 与通用 data-close 走的是 closeModalEl —— 清理若只写在
   // closeAuth 里，Esc 关闭就会把密码留在 DOM（同页脚本可读，密码管理器也可能记成新凭据）。
@@ -3159,30 +3160,37 @@
   $('authModal').onclick = (e) => { if (e.target.id === 'authModal') closeAuth(); };
   // v2.454 锁定倒计时：后端 429 已给出真实解锁秒数（retryAfter），前端必须接住并保持按钮禁用。
   // 否则用户看到「点了没反应」会反复点，每次都打后端、每次都失败，等待感知更差。
-  function stopAuthLock() {
-    if (_authLockTimer) { clearInterval(_authLockTimer); _authLockTimer = 0; }
-    _authLockLeft = 0;
-    const btn = $('authSubmit');
+  // v2.455 泛化：登录与改密各有一套按钮/错误区，倒计时必须作用于调用方指定的元素，
+  // 写死 #authSubmit/#authErr 会让改密锁定时禁用错按钮、提示错位置。
+  function stopLockCountdown() {
+    if (_lockTimer) { clearInterval(_lockTimer); _lockTimer = 0; }
+    _lockLeft = 0;
+    const btn = _lockBtnId ? $(_lockBtnId) : null;
     if (btn) btn.disabled = false;
+    _lockBtnId = ''; _lockErrId = '';
   }
-  function startAuthLock(sec) {
-    stopAuthLock();
-    _authLockLeft = Math.max(1, Math.ceil(sec));
-    const btn = $('authSubmit');
+  function startLockCountdown(sec, btnId, errId) {
+    stopLockCountdown();
+    const btn = $(btnId), errEl = $(errId);
+    _lockBtnId = btnId; _lockErrId = errId;
+    _lockLeft = Math.max(1, Math.ceil(sec));
     const paint = () => {
-      if (_authLockLeft > 0) {
+      if (_lockLeft > 0) {
         if (btn) btn.disabled = true;
-        showAuthErr(t('authLockedTip', { n: _authLockLeft }));
-        _authLockLeft -= 1;
+        if (errEl) { errEl.textContent = t('authLockedTip', { n: _lockLeft }); errEl.classList.remove('hidden'); }
+        _lockLeft -= 1;
         return;
       }
       // 归零即恢复：隐藏提示、解除禁用，用户可以立刻重试（后端此时也已解锁）
-      stopAuthLock();
-      $('authErr').classList.add('hidden');
+      stopLockCountdown();
+      if (errEl) errEl.classList.add('hidden');
     };
     paint();
-    _authLockTimer = setInterval(paint, 1000);
+    _lockTimer = setInterval(paint, 1000);
   }
+  // 登录侧薄封装：保持 v2.454 的调用契约（resetAuthForm 与 doAuthSubmit 不用改）
+  function startAuthLock(sec) { startLockCountdown(sec, 'authSubmit', 'authErr'); }
+  function stopAuthLock() { stopLockCountdown(); }
   // v2.449 提交逻辑从按钮 onclick 收成单一入口：按钮是 form 内的 type=submit，
   // Enter 与点击走同一条路径，校验/禁用态/错误提示不会出现两套。
   async function doAuthSubmit() {
@@ -3206,7 +3214,7 @@
       else showAuthErr(e.message);
     } finally {
       // 锁定期必须保持禁用，否则 finally 会把倒计时刚设的 disabled 覆盖掉
-      if (!_authLockTimer) $('authSubmit').disabled = false;
+      if (!_lockTimer) $('authSubmit').disabled = false;
     }
   }
   $('authForm').onsubmit = (e) => {
@@ -3729,19 +3737,32 @@
   // v2.214 自助修改密码：客户端预校验与后端统一密码策略一致；成功后清会话，旧密码即刻失效，强制用新密码重新登录
   // v2.451 提交逻辑收成 doChangePw()，由 #chgPwForm.onsubmit 统一触发：回车与点击同一套校验，
   // 密码管理器也能按 form + current/new-password 识别「更新凭据」。
+  // v2.455 改密错误常驻化：xnSay 的 toast 3 秒消失，用户错过就不知道失败原因；
+  // 同时 429 要像登录那样进倒计时（按钮禁用 + 逐秒提示），不能让人空点。
+  function showChgPwErr(msg) {
+    const el = $('chgPwErr');
+    if (!el) return;
+    el.textContent = msg;
+    el.classList.remove('hidden');
+  }
   async function doChangePw() {
     const cur = $('inCurPw').value, nw = $('inNewPw').value;
-    if (!cur) { xnSay(t('curPw')); return; }
-    if (nw.length < 8 || !/[a-zA-Z]/.test(nw) || !/[0-9]/.test(nw)) { xnSay(t('pwClientErr')); return; }
+    if (!cur) { showChgPwErr(t('curPw')); return; }
+    if (nw.length < 8 || !/[a-zA-Z]/.test(nw) || !/[0-9]/.test(nw)) { showChgPwErr(t('pwClientErr')); return; }
     try {
       await Api.auth.changePassword(cur, nw);
       Api.clearSession();
       meCache = null; capsCache = null; refreshAdminNav(); renderAuthButton();
       $('inCurPw').value = ''; $('inNewPw').value = '';
       $('profileEdit').classList.add('hidden');
+      $('chgPwErr').classList.add('hidden');
       xnSay(t('pwChangeOk'));
       setTimeout(() => openAuth('login'), 1000);
-    } catch (e) { xnSay(e.message); }
+    } catch (e) {
+      // 429：交给倒计时接管禁用态；其它错误写常驻错误区（不再只弹一次就消失）
+      if (e && e.retryAfter) startLockCountdown(e.retryAfter, 'changePwBtn', 'chgPwErr');
+      else showChgPwErr(e.message);
+    }
   }
   $('chgPwForm').onsubmit = (e) => {
     // 拦住原生导航：否则回车会把当前密码与新密码拼进 query 刷新整页（密码进 URL 等同泄露）
