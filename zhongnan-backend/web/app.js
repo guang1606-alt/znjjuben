@@ -2602,8 +2602,12 @@
     // v2.243 焦点移入面板：键盘/读屏用户打开后立即可操作；焦点已在 layer 内（如面板重显）不偷焦
     try { if (!layer.contains(document.activeElement)) $('workbenchBack')?.focus(); } catch {}
   }
-  // v2.191 顶部留白统一同步：topbar 换行后高度不定，同步更新 workbench / toast / 模态框的顶部偏移，
-  // 避免 topbar 浮岛压住返回键、toast 压在导航上、高模态框顶部被挡
+  // v2.191 顶部留白统一同步：topbar 换行后高度不定，同步更新 workbench / toast 的顶部偏移，
+  // 避免 topbar 浮岛压住返回键、toast 压在导航上
+  // v2.462 模态框不再参与：遮罩 z-index(60) 本就高于 topbar(40)，卡片天然盖在浮岛之上，
+  //   而「把 topbar 底边写成 padding-top」在横屏（844×390，topbar 换行到约 127px）会写成 143px，
+  //   390 减去 143+8 留白后卡片可用高只剩 239，363 高的登录卡片被顶出视口（提交按钮底部 430 > 390），
+  //   滚动页面也推不动。顶部让位交给 CSS：.modal 用 max-height + overflow-y 自适应视口，任何高度都完整可达。
   function _syncTopbarOffset() {
     const tb = document.querySelector('.topbar');
     const tbBottom = tb ? tb.getBoundingClientRect().bottom : 78;
@@ -2614,8 +2618,6 @@
     // Toast 通知（v2.225 起 #toastStack 富版单体系接管；v2.191 该让位逻辑此前只覆盖旧 znToastHost，富版压顶缺口一并修复）
     const stack = document.getElementById('toastStack');
     if (stack) stack.style.top = Math.ceil(tbBottom) + 8 + 'px';
-    // 模态框：高模态框顶部需让开 topbar
-    document.querySelectorAll('.modal-mask').forEach((m) => { m.style.paddingTop = pad; });
   }
   window.addEventListener('resize', _syncTopbarOffset);
   document.addEventListener('zn-lang', _syncTopbarOffset);

@@ -570,7 +570,11 @@ textarea { box-sizing: border-box; max-width: 100%; resize: vertical; background
 /* ================= 登录 / 模态 ================= */
 .modal-mask{position:fixed;inset:0;background:rgba(38,32,18,.42);backdrop-filter:blur(4px);display:flex;align-items:center;justify-content:center;z-index:60;padding:20px}
 [data-theme='dark'] .modal-mask{background:rgba(4,9,8,.62)}
-.modal{position:relative;width:min(420px,100%);background:var(--panel);border:1px solid var(--line);border-top:3px solid var(--gold);border-radius:18px;padding:24px;box-shadow:var(--shadow-lg)}
+/* v2.462 低高度视口可达：此前 max-height 只写在 ≤560px 媒体查询里，横屏（如 844×390，宽度够但高度不够）
+   命中不到 → 卡片 396.8px 溢出 350px 可用高度，遮罩是 fixed、滚页面也推不动，登录提交按钮底部 40px
+   永久在视口外。基础样式直接给「视口高度 - 遮罩上下 padding」的上限并允许内部滚动，任何宽度都成立。
+   100dvh 跟随移动端地址栏收放，前面保留 100vh 作为旧内核回退。 */
+.modal{position:relative;width:min(420px,100%);background:var(--panel);border:1px solid var(--line);border-top:3px solid var(--gold);border-radius:18px;padding:24px;box-shadow:var(--shadow-lg);max-height:calc(100vh - 40px);max-height:calc(100dvh - 40px);overflow-y:auto;overscroll-behavior:contain}
 .modal-x{position:absolute;top:11px;right:15px;background:none;border:none;font-size:22px;color:var(--text-2);cursor:pointer;line-height:1}
 .modal-x:hover{color:var(--cinnabar)}
 /* v2.273 触摸热区外扩：视觉 × 仅 25×24，伪元素负向扩到 ≈43×44（.modal-x 已 absolute） */
@@ -583,6 +587,16 @@ textarea { box-sizing: border-box; max-width: 100%; resize: vertical; background
 .modal .field{margin-bottom:12px}
 .modal .field label{display:block;font-size:12px;color:var(--text-2);margin-bottom:5px;letter-spacing:.04em}
 .modal .field input{width:100%;box-sizing:border-box;padding:10px 12px;border-radius:10px;border:1px solid var(--line);background:var(--panel-2);color:var(--text);font-size:14px}
+/* v2.462 横屏压缩档：844×390 这类「宽度够、高度只有 390」的视口里，桌面 24px 内边距 + 20px 遮罩留白
+   会让登录表单差 40px 才放得下，必须滚动才能点到提交；这里收窄留白与字段间距，常见登录/改密表单
+   一屏完整可见，极端窄高时仍由 .modal 的 max-height + overflow-y 兜底滚动。
+   放在 .modal .field 基础规则之后，避免同特异性被后面的声明覆盖。 */
+@media(max-height:520px){
+  .modal-mask{padding:8px}
+  .modal{padding:14px 18px;max-height:calc(100vh - 16px);max-height:calc(100dvh - 16px)}
+  .modal .field{margin-bottom:8px}
+  .modal .auth-tabs{margin-bottom:10px}
+}
 
 /* ================= 作品库 / 个人资料 ================= */
 .work-card{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:17px;cursor:pointer;transition:.18s;display:flex;flex-direction:column;gap:8px}
