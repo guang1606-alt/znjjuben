@@ -172,3 +172,50 @@ export function reactionCliche(draft: string): ReactionClicheResult {
 
   return { score, narrationLines, hits, tokenCounts, overusedTokens, issues, advice };
 }
+
+/**
+ * 前置教学：buildReactionClicheDirective(_format='LIVE', lang='zh')
+ * -------------------------------------------------------------------
+ * 同源铁律：教学函数与检测器 reactionCliche 同文件；format 不门控（LIVE/AIGC/缺省一致）。
+ * 目的：撰写师/润色师首轮即拿到"反应连缀 ≥2 / 全片复用 ≥3 / 超量 ×3 扣分"的口径，
+ *       避免写完被 prePolish reactionHint 与 craft/deai 复评打回。
+ */
+export function buildReactionClicheDirective(_format: string = 'LIVE', lang: string = 'zh'): string {
+  if (lang === 'en') {
+    return [
+      '【Reaction Cliche Pre-Writing Briefing (same source as reactionCliche: the face treated as a parts bin; 12 points per chain, 3 per overused occurrence, floor 25)】',
+      '- Scope: narration lines only, split into sentences (Chinese 。！？；and English .!?); scene headers and "speaker: line" dialogue lines are skipped, and the rest count as narration lines for diagnostics.',
+      '- A chain: two or more different stock reaction tokens in the same sentence score one chain hit; a single token is never judged, because physiological externalization is positive layered evidence for emotion-craft.',
+      '- A stock tokens: pupils / froze / blinked / frowned / bit lip / mouth twitched / raised eyebrow / jaw clenched / eyes widened / narrowed eyes / swallowed hard / breath caught / hesitated / blank face.',
+      '- B repeat: the same token appearing three or more times across the whole script scores one repeat hit (line recorded as 0); exactly two occurrences are not penalized.',
+      '- B repeat penalty: each overused token costs (occurrences - 2) x 3, stacked on top of the 12 points per chain, with a floor of 25.',
+      '- Score: max(25, 100 - chains x 12 - repeat penalty); empty draft = 100.',
+      '- Hit fields: line (0 for repeat), kind (chain / repeat), tokens, snippet (first 30 characters of the sentence, empty for repeat) and reason are returned.',
+      '- Neighbour divisions: collective reactions (a collective gasp / the whole room froze) belong to crowd-reaction and this engine reads individual faces only; body blocking (standing, sitting, sighing) belongs to hollow-action; a single legitimate tell belongs to emotion-craft.',
+      '- Rewrite: give each stimulus one physiological beat that fits this character, then land a decision in action — a hand reaching for something, a line changed, an object hidden; reaction reveals character, action moves the scene.',
+      '- Distinct bodies: the veteran goes quiet with a prop, the rookie makes a physical slip, the powerful one simply pauses; some act with the face, some with the hands, some only with tone.',
+      '- Single-use exemption: a token that appears only once is legitimate externalization and is neither a chain nor a repeat.',
+      '- Repeat scope: the count is script-wide, not scene-wide, so occurrences accumulated across scenes still score.',
+      '- Pipeline consumption: prePolish injects hits into the polisher as reactionHint; craft initial, craft re-eval and deai rescan consume the same result; the former 0.01 deai weight is retired and the detector now runs unweighted.',
+      '- Self-check: would this face still work on another character? If yes, cut the parts and keep the one action only this person would take.',
+    ].join('\n');
+  }
+  return [
+    '【面部反应公式·前置教学（检测同源：reactionCliche 把脸当零件箱，连缀每条扣 12 分、万能复用按超量 ×3 扣，25 分封底）】',
+    '- 检测范围：只扫叙述行并按句切分（。！？；/ 英文 .!?）；场头与「说话人：台词」行跳过，其余行计入 narrationLines（仅诊断）。',
+    '- A·反应连缀（chain）：同一句命中 ≥2 个不同的标配反应词即记一条 chain；单个反应词不判——生理外化本身是 emotion-craft 的正向分层证据。',
+    '- A·标配反应词表：瞳孔一缩/愣/皱眉/咬唇/嘴角抽搐/挑眉/脸色一沉/眼神一暗/眸光一闪/心头一紧/呼吸一滞/眼眶红/勾起唇角/脸色标签（面无表情·神色复杂·意味深长）；英文 pupils / froze / blinked / frowned / bit lip / mouth twitched / raised eyebrow / jaw clenched / eyes widened / narrowed eyes / swallowed hard / breath caught / hesitated / blank face。',
+    '- B·万能复用（repeat）：同一个反应词全片出现 ≥3 次即记一条 repeat（line 记为 0）；恰好 2 次不罚。',
+    '- B·复用扣分：overusedTokens 按超量计罚——每个词（出现次数 - 2）× 3，与 A 的每条 12 分叠加封底 25。',
+    '- 得分：score = max(25, 100 - chain 条数 × 12 - 复用超量罚分)；空稿 100。',
+    '- 命中字段：line（repeat 为 0）、kind（chain/repeat）、tokens（命中的反应词）、snippet（本句前 30 字，repeat 为空）、reason 随命中返回。',
+    '- 邻居分界：群体「倒吸凉气/全场愣住」归 crowd-reaction，本引擎只看个体面部；站坐叹气等身体调度归 hollow-action；单个反应词的正当外化归 emotion-craft。',
+    '- 改写方向：每个刺激只留一个最贴此人物的生理瞬间，后面立刻接一个动作决定——手伸向什么、对谁改口、把什么藏起来；反应暴露性格，动作推进局面。',
+    '- 人物专属身体：老江湖用沉默和物件、年轻人用动作失误、上位者用停顿；有人动脸、有人动手、有人只动语气，别让全片共用同一套脸。',
+    '- 单次豁免：同一反应词只出现 1 次是正当外化，不记 chain 也不记 repeat。',
+    '- 全片口径：repeat 是全片统计而非单场统计，跨场景累计达到 3 次同样记。',
+    '- pipeline 消费：prePolish 把命中注入润色师（reactionHint）；craft 初评、craft 复评、deai 复扫同一结果；deai 维度的 0.01 加权已退役，检测器保留运行仅退出加权。',
+    '- 成稿自查：这句的脸换成另一个人还成立吗？成立就删掉零件，改成只有他会做的那一个动作。',
+    '- 中英一致：中英同口径（按句判定、连缀 ≥2、复用 ≥3、每条 12 分、超量 ×3），英文按 .!? 切句。',
+  ].join('\n');
+}
