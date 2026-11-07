@@ -216,3 +216,54 @@ export function selfPityLitany(draft: string): SelfPityResult {
 
   return { score, dialogueLines, hits, issues, advice };
 }
+
+/**
+ * 前置教学：buildSelfPityDirective(_format='LIVE', lang='zh')
+ * -------------------------------------------------------------------
+ * 同源铁律：教学函数与检测器 selfPityLitany 同文件；format 不门控（LIVE/AIGC/缺省一致）。
+ * 目的：撰写师/润色师首轮即拿到"只扫台词/心声行 / 四族信号 / charged ≥2 族或单族 ≥2 次且段长达标 /
+ *       单族单次放行 / rescue 段内或紧邻下一拍且必须自己转身 / 只算 bad"的口径，
+ *       避免写完被 prePolish selfPityHint 与 craft 复评打回。
+ */
+export function buildSelfPityDirective(_format: string = 'LIVE', lang: string = 'zh'): string {
+  if (lang === 'en') {
+    return [
+      '[Self-Pity Litany Pre-Writing Briefing (same source as selfPityLitany: pity is not a plot; suffering must be paid for, not reported)]',
+      '- Scope: dialogue and inner-voice lines only; scene headers and narration lines are skipped, and dialogueLines counts only speaker lines.',
+      '- Segmentation: consecutive lines from the same speaker merge into one speech segment; a scene header or another speaker breaks the segment and starts a new one.',
+      '- doom family: my whole life / all my life / ever since I was a child / born to suffer / never had it easy / why is my life so hard.',
+      '- heaven family: why me / why is this happening to me / god why / life is so unfair / the world is against me / what did I do to deserve this.',
+      '- blame family: what did I do wrong / what\'s wrong with me / maybe I deserve this / I don\'t deserve / I\'m not good enough / nobody loves me / nobody wants me / please love me / I\'m such a failure / I shouldn\'t be alive.',
+      '- list family: two or more suffering facts in one segment — orphaned / kicked out / homeless / starved / bullied / sold myself / lost the baby / owed money to loan sharks.',
+      '- Charged rule: two or more families in one segment, or one family repeated two or more times, and the segment is long enough (at least 10 English words).',
+      '- Free pass: a single-family single utterance is not charged — one sigh is allowed, one short "what sin did I commit" is fine.',
+      '- Rescue channel: a turn inside the segment or on the immediate next non-empty line (before another speaker or scene header) — wiped tears, stood up, lifted the chin, eyes hardened, a cold smile, just you wait, or a concrete decision like file, sue, quit, leave, report, take back.',
+      '- Rescue standard: the turn must come from the character; another character comforting or begging ("please do not leave me") is not a rescue.',
+      '- Bad only: bad = charged and not rescued; rescued hits do not count against the score; issues list only bad hits.',
+      '- Score: 0 bad = 100; 1 bad = 80; two or more = max(30, 100 - n x 22).',
+      '- Hit fields: startLine, endLine, speaker, families (doom|heaven|blame|list), snippet truncated to 36 characters, rescueLine, reason.',
+      '- Neighbours: show-dont-tell catches markers like "he thought" or "she was sad" outside speech; emotion-vent-cliche catches loud physical venting (crying, screaming, kneeling); rhetorical-barrage catches outward attack questions (why do you, how dare you); this engine catches the inward whine — what the character says while kneeling.',
+      '- Pipeline: consumed in prePolish as selfPityHint; craft first-pass and second-pass reviews also read it; deai weight retired since v2.95 (diagnostic only); creative-batch-rescan rescans it after fixes.',
+      '- Self-check: after writing, if a character delivers a three-line-or-longer "my life is so hard" report, cut it to one hardest fact and replace the rest with a costly action — wipe tears and decide, cold smile and turn, tomorrow I go find out.',
+    ].join('\n');
+  }
+  return [
+    '【自怜连祷前置教学（与检测器 selfPityLitany 同源：同情不是剧情，苦难必须付代价，不是开报告会）】',
+    '- 检测范围：只扫台词行与心声行，场头与叙述行跳过；同一话者连续发言合并为发言段，dialogueLines 只计台词行。',
+    '- doom 苦命陈述：我这辈子 / 我这一生 / 从小到大 / 命苦 / 贱命 / 我怎么这么苦。',
+    '- heaven 问天控诉：老天爷为什么 / 上天不公 / 凭什么是我 / 为什么是我。',
+    '- blame 自我定罪乞怜：我做错了什么 / 是不是我活该 / 可怜可怜我 / 我不配 / 没人爱我 / 我真是个废物。',
+    '- list 苦难罗列：同一发言段内出现 ≥2 个苦难事实短语——没爹没妈 / 被赶出门 / 睡桥洞 / 捡垃圾 / 被人打 / 卖血 / 丈夫出轨 / 欠高利贷。',
+    '- charged 判定：≥2 族共现，或任一族 ≥2 次，且段长达标（中文 ≥14 字，英文 ≥10 词）。',
+    '- 放行口径：单族单次的短口语不罚——人可以叹一口气，一句"我这是造的什么孽"是允许的。',
+    '- rescued 通道：段内或紧邻下一拍（遇场头或他人发言即止）出现行动转向——擦干泪 / 站起来 / 眼神变硬 / 冷笑 / 明天就去查 / 告 / 签 / 辞职 / 拿回。',
+    '- rescue 口径：转折必须人物自己给；"求求你别走"仍是乞怜，别人心软来哄也不算——别人递的纸巾不算脊梁。',
+    '- 只算 bad：bad = 未 rescued 的 charged；rescued 不参与扣分，issues 只列 bad。',
+    '- 得分：0 次 100；1 次 80；≥2 次 max(30, 100 - n × 22)。',
+    '- 命中字段：startLine / endLine / speaker / families（doom|heaven|blame|list）/ snippet（36 字截断）/ rescueLine / reason。',
+    '- 邻居分界：show-dont-tell 管"他心想/她很伤心"标记词；emotion-vent-cliche 管动作音量（痛哭嘶吼跪求）；rhetorical-barrage 管向外攻击反问；本引擎管跪着说什么——向内的问天与自我定罪；叙述行客观苦难（"她三岁丧母"）是事实不是自怜，不扫。',
+    '- pipeline 消费：prePolish 以 selfPityHint 消费；craft 初评/复评同步消费；deai 权重自 v2.95 起已退役（仅诊断）；creative-batch-rescan 修复后重扫。',
+    '- 成稿自查：写完若出现三连以上"我好苦"报告，删到只剩一个最硬的事实，把"为什么是我"换成一个带代价的动作——擦干泪做决定、冷笑转身、明天就去查。',
+    '- 中英一致：同一套四族信号与 charged 口径，format 不门控。',
+  ].join('\n');
+}
