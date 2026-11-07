@@ -178,3 +178,60 @@ export function emotionVentCliche(draft: string): EmotionVentResult {
 
   return { score, narrationLines, familyCounts: seen, hits, issues, advice };
 }
+
+/**
+ * 前置教学：buildEmotionVentDirective(_format='LIVE', lang='zh')
+ * -------------------------------------------------------------------
+ * 同源铁律：教学函数与检测器 emotionVentCliche 同文件；format 不门控（LIVE/AIGC/缺省一致）。
+ * 目的：撰写师/润色师首轮即拿到"只扫叙述行 / 四族 / A 复用第 3 次起罚 /
+ *       B 多族连用单次即罚 / rescue 后 2 行且他人心软不算 / 只算 bad"的口径，
+ *       避免写完被 prePolish ventHint 与 craft/deai 复评打回。
+ */
+export function buildEmotionVentDirective(_format: string = 'LIVE', lang: string = 'zh'): string {
+  if (lang === 'en') {
+    return [
+      '[Emotion-Vent Cliche Pre-Writing Briefing (same source as emotionVentCliche: maximum volume is rationed; eligible hits 1 = 75, 2+ = max(25, 100 - n x 25))]',
+      '- Scope: narration lines only; dialogue lines, speaker-prefix lines, quoted openers and scene headers are skipped, and narrationLines counts narration lines only.',
+      '- Families: cry (tears streaming down, bursting into tears, sobbing uncontrollably, crying her eyes out), shout (hysterical screaming, shouting at the top of her lungs, roaring with rage, shrieking), kneel (dropping to her knees, kneeling and begging, kowtowing), self-harm (slapping herself, pulling her own hair, punching the wall, biting her lip until it bleeds).',
+      '- Repeat rule: the first two uses of one family are allowed as a legitimate burst; from the third use the hit is charged.',
+      '- Chain rule: two or more different families in one line are charged on the first occurrence.',
+      '- Rescue: a self-driven decision in the same line, or within the next 2 non-empty lines before the next scene, marks the hit rescued and uncharged.',
+      '- Rescue phrases: wipes her tears and picks up the phone, signs the papers, calls the cops, slams down the evidence, turns and walks out, never begs again.',
+      '- Someone else softening is not rescue: a tissue handed over, being coaxed back, or a concession won by crying is a worse draft, not a rescue.',
+      '- Bad only: bad = charged and not rescued; rescued and uncharged hits are still returned for traceability and never lower the score.',
+      '- Score: 0 bad = 100; 1 = 75; 2 or more = max(25, 100 - n x 25).',
+      '- Hit fields: line, kind (repeat or chain), families, phrase, snippet (first 30 characters), charged, rescued, rescueLine, reason.',
+      '- Result fields: narrationLines and familyCounts are returned with the score.',
+      '- Neighbour divisions: reaction-cliche covers micro facial parts (freezing, frowning, biting a lip, reddened eyes); this engine covers peak-volume bursts.',
+      '- Neighbour divisions: emotion-prop-crutch covers smashing a glass, drinking or walking in rain; this engine covers body venting without props.',
+      '- Neighbour divisions: show-dont-tell covers labels such as "she was sad"; this engine covers the volume knob jammed at maximum.',
+      '- Objective physiology is not judged: a yawn or a wince of pain is not a vent, and the first two uses of one family are not judged either.',
+      '- Rewrite: allow one peak-volume vent per episode, then force an irreversible either-or action; the cruelest scenes are often quiet.',
+      '- Pipeline consumption: prePolish injects ventHint into the polisher; craft initial, craft re-eval and deai rescan consume the same result; this dimension is not in the deai weight table and stays diagnostic.',
+      '- Self-check: the third time she screams at the same pitch, has she made one more choice? If not, turn the volume down.',
+      '- Parity: the four families, the two-use allowance, the next 2 lines rescue, the 30-character snippet and the charged rule match the Chinese layer.',
+    ].join('\n');
+  }
+  return [
+    '【情绪宣泄套路·前置教学（检测同源：emotionVentCliche 管最大音量被拧死；合资格命中 1 次 75 分，≥2 次 max(25, 100 - n × 25)）】',
+    '- 检测范围：只扫叙述行；台词行、话者前缀行、引号起句、场头跳过，narrationLines 只统计叙述行。',
+    '- 四族表：cry 痛哭（眼泪夺眶而出/失声痛哭/嚎啕大哭/泣不成声/哭成泪人）、shout 嘶吼（歇斯底里/声嘶力竭/嘶吼/咆哮/尖叫）、kneel 跪求（扑通跪下/双膝跪地/磕头哀求/苦苦跪求）、selfharm 自虐（自扇耳光/扯头发/抓花脸/拿头撞墙/咬破嘴唇）。',
+    '- A 复用判定：同一族全片第 1、2 次不罚（正当爆发），第 3 次起 charged 才计入扣分。',
+    '- B 连用判定：同一行命中 ≥2 个不同族，单次即 charged（多档音量堆在一行，嚎得越响人物越没有选择）。',
+    '- rescue 通道：本句或后 2 个非空行、换场前人物自己做出主动决定即 rescued，不扣分。',
+    '- rescue 词表：擦掉泪拿起电话/签字/报警/甩出证据/录音/U盘/起身离开/再不求他/头也不回。',
+    '- 他人心软不算：递纸巾、被哄好、靠哭闹换来的让步不是 rescue，那是更糟的写法。',
+    '- 只算 bad：bad = charged 且未 rescued；rescued 与未 charged 的命中仍返回，只做追溯不扣分。',
+    '- 得分：0 次 100；1 次 75；≥2 次 max(25, 100 - n × 25)。',
+    '- 命中字段：line / kind（repeat 或 chain）/ families / phrase / snippet（前 30 字）/ charged / rescued / rescueLine / reason。',
+    '- 统计字段：narrationLines 与 familyCounts（四族各自次数）随结果透出。',
+    '- 邻居分界·微反应：reaction-cliche 管愣/皱眉/咬唇/眼眶红等微反应零件；本引擎管爆发档。',
+    '- 邻居分界·道具：emotion-prop-crutch 管摔杯/灌酒/淋雨等道具宣泄；本引擎管无道具的身体宣泄。',
+    '- 邻居分界·标签：show-dont-tell 管「她很伤心」式情绪标签；本引擎管音量键被拧死在最大档。',
+    '- 客观生理不判：打哈欠/疼得龇牙/喜极而泣不判；单族前两次与单次爆发也不罚。',
+    '- 改写方向：情绪最高档每集只准用一次，且必须换来一个不可逆的动作；真正狠的戏往往是安静的——她没有哭，只是把戒指放在桌上，轻轻带上门。',
+    '- pipeline 消费：prePolish 生成 ventHint 注入润色师；craft 初评、craft 复评、deai 重扫消费同一结果；该维度未进 deai 加权表，仅作诊断。',
+    '- 成稿自查：第三次嚎同一个音高时，人物有没有比上一次多做一个选择？没有就把音量降下来。',
+    '- 中英一致：四族、两次豁免、后 2 行 rescue、30 字 snippet、charged 口径一致。',
+  ].join('\n');
+}
