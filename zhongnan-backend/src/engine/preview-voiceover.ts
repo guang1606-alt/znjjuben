@@ -223,3 +223,65 @@ export function previewVoiceover(draft: string): PreviewVoiceoverResult {
     advice,
   };
 }
+
+/**
+ * v2.439 前置教学：把检测器的判定口径同源写给撰写师/润色师。
+ * 与 previewVoiceover 共用同一套标记、名单、窗口与计分；
+ * format 不门控（LIVE/AIGC 同一套规则），lang 只切换语言层。
+ */
+export function buildPreviewVoiceoverDirective(_format = 'LIVE', lang = 'zh'): string {
+  if (lang === 'en') {
+    return [
+      'TV-guide Voiceover - pre-writing directive (preview-voiceover v2.80, format-agnostic, one ruleset for zh/en)',
+      '',
+      'The script body is only the scene happening now, never a TV guide: cut every preview card, every follow/like pitch and every future-tense closing rundown.',
+      '',
+      'Scan range: marker and pitch are judged anywhere in the episode except scene header lines; future_dump only scans the last 12 non-empty lines.',
+      '',
+      'Kinds: marker = a guide card (next episode preview, to be continued, stay tuned, previously on, episode N preview) - judged on sight, even when written in the speaker slot (NARRATOR: next episode preview:); pitch = a host call (subscribe, like and subscribe, hit the bell, follow us, drop a comment, new episodes daily) - judged on sight, because no character in the scene can address the feed; future_dump = the closing narration announces next episode plot in future tense.',
+      '',
+      'Beat counting: split by clause punctuation and count at most one beat per clause; an auxiliary of the future (will, shall, is going to, would) plus a concrete filmable action within 30 characters counts one beat; a bare time anchor (tomorrow, the next day, days later) carries the time context to the next clause, where a concrete action also counts one beat; a single beat passes, only two beats or more in the same narration line are flagged.',
+      '',
+      'Concrete actions: sign, kneel down, pull out, announce, reveal, expose, confront, divorce, court hearing, call the police, show up, press conference, call off the wedding and other physical events; vague phrases like "change her fate" never count.',
+      '',
+      'future_dump speakers: narration or the narrator list only (NARRATOR, NARRATION, VOICE OVER, V.O., SUBTITLES, CAPTION); a plan spoken by a character in the scene belongs to the dialogue and info engines and is exempt.',
+      '',
+      'Scoring: start at 100, marker -45, pitch -20, future_dump -26, floor 20; no hit is always 100.',
+      '',
+      'Hit fields: line, kind (marker|pitch|future_dump), narrator, beats, snippet (42 characters), reason.',
+      '',
+      'Neighbors: omniscient-tease owns the abstract "what she does not know is a bigger storm is coming" tease with no action; cliffhanger-score rates the closing hook and never flags; witness-gratuity owns an informant dumping facts face to face - future_dump here only judges narration, so a character plan in the scene is exempt.',
+      '',
+      'Pipeline: when issues are non-empty a previewHint is injected (zh/en), and the writer and polisher see it on their first pass; craft scoring runs it at first and second review, and deai re-scans as a backstop.',
+      '',
+      'Self-check: delete every next episode card, to be continued card, stay tuned card and every follow/like/subscribe pitch; end on one filmable action happening now or an interrupted line, and let the audience wonder what happens next; any forward information must surface as a concrete object the characters see or hear right now.',
+    ].join('\n');
+  }
+  return [
+    '【集尾导视口播 · 前置教学】（preview-voiceover v2.80 同源；format 不门控，中英同一套规则）',
+    '',
+    '剧本正文只写"正在发生的戏"，不是节目导视：删掉所有预告卡、求关注口播与集尾将来时排播。',
+    '',
+    '检测范围：marker（预告标记）与 pitch（求关注口播）全片任意位置都判，场景头行除外；future_dump（集尾排播）只扫最后 12 个非空行。',
+    '',
+    'A. marker 预告标记：下集预告 / 精彩预告 / 未完待续 / 且听下回分解 / 下集见分晓 / 敬请期待 / 明天同一时间 / 第 N 集预告 等，出现即判，写在说话人位（旁白：下集预告：）也判；"待续"只有位于行尾才算。',
+    '',
+    'B. pitch 主播口播：关注我 / 点关注 / 点赞 / 双击 / 订阅 / 追更 / 别走开 / 记得来看 / 一键三连 / 每日更新 / subscribe / like and subscribe / hit the bell / new episodes daily 等，出现即判——成片里的人物不可能对观众喊话求关注。',
+    '',
+    'C. future_dump 集尾将来时排播：只扫最后 12 个非空行，说话人必须是旁白/解说/字幕/画外音（NARRATOR / VO / SUBTITLE 名单）；角色当场说出的计划归对白与情报引擎，不判。',
+    '',
+    '节拍口径：按句段（。！？，；）切分，每段最多计一拍；将来助词（将要/即将/就要/将会/会/将，英 will / shall / is going to / would）后 12 字（英 30 字符）内出现具体可拍动作计一拍；裸时间锚（第二天/次日/几日后/tomorrow/the next day）把时间语境带给下一段，下一段出现具体动作也计一拍；单拍放行，同一叙述行 ≥2 拍才判。',
+    '',
+    '具体动作：签字 / 跪下 / 拿出 / 宣布 / 揭穿 / 摊牌 / 结婚 / 离婚 / 开庭 / 报警 / 上门 / 带走 / 退婚 / 车祸等实体事件（英 sign / kneel / announce / reveal / expose / divorce / call the police / show up 等）；"改变命运"式空词不算。',
+    '',
+    '计分：100 起，marker -45 / pitch -20 / future_dump -26，最低 20；无命中恒为 100。',
+    '',
+    '命中字段：line / kind（marker|pitch|future_dump）/ narrator / beats / snippet（42 字截断）/ reason。',
+    '',
+    '邻居分界：omniscient-tease 管"她不知道的是+更大的风暴"式抽象全知悬念（无动作），本引擎管具体的将来时排播单；cliffhanger-score 只给集尾钩子打分、不判违规，本引擎只罚脱离场景的导视体；witness-gratuity 管知情者当面倒情报，本引擎 future_dump 只罚旁白叙述，角色当场计划豁免。',
+    '',
+    'pipeline 消费（v2.80 起）：issues 非空时注入 previewHint（中英双语），撰写师与润色师首轮即见；craft 初评/复评扣分，deai 重扫兜底。',
+    '',
+    '成稿自查：删掉"下集预告 / 未完待续 / 敬请期待"卡片与"关注点赞追更"口播；集尾停在一个正在发生、能拍的强动作或一句被打断的台词上，把"接下来会怎样"留给观众；必须交代的下一集信息，只能用本集人物此刻看到或听到的具体物件露出。',
+  ].join('\n');
+}
