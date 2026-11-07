@@ -189,3 +189,58 @@ export function emotionPropCrutch(draft: string): EmotionPropCrutchResult {
 
   return { score, narrationLines, familyCounts: seen, hits, issues, advice };
 }
+
+/**
+ * 前置教学：buildEmotionPropCrutchDirective(_format='LIVE', lang='zh')
+ * -------------------------------------------------------------------
+ * 同源铁律：教学函数与检测器 emotionPropCrutch 同文件；format 不门控（LIVE/AIGC/缺省一致）。
+ * 目的：撰写师/润色师首轮即拿到"只扫叙述行 / 五族道具 / A 复用第 3 次起罚 /
+ *       B 多族连用单次即罚 / rescue 后 2 行 / 只算 charged"的口径，
+ *       避免写完被 prePolish crutchHint 与 craft/deai 复评打回。
+ */
+export function buildEmotionPropCrutchDirective(_format: string = 'LIVE', lang: string = 'zh'): string {
+  if (lang === 'en') {
+    return [
+      '[Emotion-Prop Crutch Pre-Writing Briefing (same source as emotionPropCrutch: props must not cash out emotion; eligible hits 1 = 75, 2+ = max(25, 100 - n x 25))]',
+      '- Scope: narration lines only; dialogue lines, quoted openers and scene headers are skipped, and narrationLines counts narration lines only.',
+      '- Families: smash (cup / glass / vase / bottle / phone / shattered on the table), drink (downing drinks, one glass after another, chain-smoking), rain (walking into pouring rain, soaked to the bone, no umbrella), tear (tearing photos or contracts, pulling off a ring, throwing keys), grip (crumpling paper, nails into palms, white knuckles, clenched teeth).',
+      '- Repeat rule: the first two uses of one family are allowed as legitimate externalization; from the third use the hit is charged.',
+      '- Chain rule: two or more different families in one line are charged on the first occurrence, because stacking discharge fakes intensity.',
+      '- Rescue: a concrete decision or consequence in the same line, or within the next 2 non-empty lines before the next scene, marks the hit rescued and uncharged.',
+      '- Rescue phrases: announces, calls the cops, phones a lawyer, signs the papers, cancels the wedding, freezes the accounts, fires on the spot, slaps down evidence, hands the ring back, walks out and never looks back.',
+      '- Charged only: bad = charged and not rescued; rescued and uncharged hits are still returned for traceability and never lower the score.',
+      '- Score: 0 charged = 100; 1 = 75; 2 or more = max(25, 100 - n x 25).',
+      '- Hit fields: line, kind (repeat or chain), families, phrase, snippet (first 30 characters), charged, rescued, rescueLine, reason.',
+      '- Result fields: narrationLines and familyCounts are returned with the score.',
+      '- Neighbour divisions: reaction-cliche covers facial parts (freezing, frowning, biting a lip, pupils shrinking); this engine covers props in the character hands.',
+      '- Neighbour divisions: hollow-action exempts a single smash, slam or grab as a strong-energy verb; this engine only judges same-family reuse from the third use and multi-family stacking.',
+      '- Neighbour divisions: pathetic-fallacy covers rain weeping for people; this engine covers a person walking into the rain, and objective rainfall is not judged.',
+      '- Single-use exemption: the first two uses of one family, a single smash and objective rain are not judged; the loudest move of a weak character is often doing nothing.',
+      '- Rewrite: make the prop move change the situation (smash, then slap down evidence; take off the ring, hand it back and leave), or give this character a reaction only they would have.',
+      '- Pipeline consumption: prePolish injects crutchHint into the polisher; craft initial, craft re-eval and deai rescan consume the same result; this dimension is not in the deai weight table and stays diagnostic.',
+      '- Self-check: the third time a character smashes the same cup, is the situation more irreversible than last time? If not, change the move.',
+      '- Parity: the five families, the two-use allowance, the next 2 lines rescue, the 30-character snippet and the charged rule match the Chinese layer.',
+    ].join('\n');
+  }
+  return [
+    '【情绪道具拐杖·前置教学（检测同源：emotionPropCrutch 管道具替情绪充值；合资格命中 1 次 75 分，≥2 次 max(25, 100 - n × 25)）】',
+    '- 检测范围：只扫叙述行；台词行、引号起句、场景头（场头）跳过，narrationLines 只统计叙述行。',
+    '- 道具五族：smash 摔砸（杯/瓶/碗/花瓶/手机/拍碎）、drink 买醉抽烟（灌酒/一杯接一杯/买醉/烟蒂满缸）、rain 淋雨自虐（冲进暴雨/走进雨里/淋透/不打伞）、tear 撕毁扔弃信物（撕照片/撕合同/摘戒指扔/扔钥匙）、grip 捏碎掐掌（攥皱纸/掐进掌心/指节发白/咬紧牙关）。',
+    '- A 复用判定：同一族全片第 1、2 次不罚（正当外化），第 3 次起 charged 才计入扣分。',
+    '- B 连用判定：同一行命中 ≥2 个不同族，单次即 charged（宣泄堆叠冒充浓烈）。',
+    '- rescue 通道：本句或后 2 个非空行、换场前出现具体决定或后果即 rescued，不扣分。',
+    '- rescue 词表：宣布/通知/报警/叫律师/签字/退婚/取消婚礼/冻结/收回/开除/甩出证据/录音/U盘/把戒指扔还/当场滚蛋/再没回头。',
+    '- 只算 charged：bad = charged 且未 rescued；rescued 与未 charged 的命中仍返回，只做追溯不扣分。',
+    '- 得分：0 次 100；1 次 75；≥2 次 max(25, 100 - n × 25)。',
+    '- 命中字段：line / kind（repeat 或 chain）/ families / phrase / snippet（前 30 字）/ charged / rescued / rescueLine / reason。',
+    '- 统计字段：narrationLines 与 familyCounts（五族各自次数）随结果透出。',
+    '- 邻居分界·面部：reaction-cliche 管面部零件（愣/皱眉/咬唇/瞳孔一缩）；本引擎管人手里的道具。',
+    '- 邻居分界·动作：hollow-action 把单次摔/砸/夺当强能量词豁免；本引擎只判同族复用 ≥3 次与多族堆叠。',
+    '- 邻居分界·天气：pathetic-fallacy 管「雨在替人哭」的拟人；本引擎管「人走进雨里」的自虐，客观下雨不判。',
+    '- 单次豁免：单族前两次、单次摔砸、客观下雨都不判；弱者最响的动作往往是「不做什么」。',
+    '- 改写方向：让道具动作改变局势（摔完当场甩出证据/摘戒指就摔还并走人），或换成这个人物独有的反应。',
+    '- pipeline 消费：prePolish 生成 crutchHint 注入润色师；craft 初评、craft 复评、deai 重扫消费同一结果；该维度未进 deai 加权表，仅作诊断。',
+    '- 成稿自查：第三次摔同一个杯子时，局势有没有比上一次更不可逆？没有就换动作。',
+    '- 中英一致：五族、两次豁免、后 2 行 rescue、30 字 snippet、charged 口径一致。',
+  ].join('\n');
+}
