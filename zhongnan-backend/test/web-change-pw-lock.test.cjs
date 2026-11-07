@@ -51,6 +51,6 @@ test('③ 改密 429 要进入倒计时，非 429 才用常驻错误区', () => 
 
 test('④ 客户端预校验也走常驻错误区（同一处提示，口径一致）', () => {
   const fn = pick('doChangePw', true);
-  assert.match(fn, /showChgPwErr\(t\('curPw'\)\)/, '缺当前密码应写在错误区');
-  assert.match(fn, /showChgPwErr\(t\('pwClientErr'\)\)/, '弱新密码应写在错误区');
+  assert.match(fn, /showChgPwErr\(t\('curPw'\),\s*'inCurPw'\)/, '缺当前密码应写在错误区并定位到该字段');
+  assert.match(fn, /showChgPwErr\(t\('pwClientErr'\),\s*'inNewPw'\)/, '弱新密码应写在错误区并定位到该字段');
 });

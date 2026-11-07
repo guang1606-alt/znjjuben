@@ -688,8 +688,9 @@
             <div style="font-weight:600;margin-bottom:8px" data-i="pwSection"></div>
             <!-- v2.451 同 v2.449 一族：改密是密码管理器识别「更新凭据」的标准场景，必须有 form + submit -->
             <form id="chgPwForm" novalidate>
-              <div class="field" style="margin-bottom:8px"><label data-i="curPw" for="inCurPw"></label><input type="password" id="inCurPw" autocomplete="current-password" /></div>
-              <div class="field" style="margin-bottom:10px"><label data-i="newPw" for="inNewPw"></label><input type="password" id="inNewPw" autocomplete="new-password" maxlength="64" /></div>
+              <!-- v2.456 字段级可访问性：错误区挂成输入框的 aria-describedby，读屏在焦点处就能跟读错误 -->
+              <div class="field" style="margin-bottom:8px"><label data-i="curPw" for="inCurPw"></label><input type="password" id="inCurPw" autocomplete="current-password" aria-required="true" aria-describedby="chgPwErr" /></div>
+              <div class="field" style="margin-bottom:10px"><label data-i="newPw" for="inNewPw"></label><input type="password" id="inNewPw" autocomplete="new-password" maxlength="64" aria-required="true" aria-describedby="chgPwErr" /></div>
               <!-- v2.455 改密错误要常驻：原先只走 xnSay（3 秒消失），用户错过就不知道失败原因 -->
               <div class="notice err hidden" id="chgPwErr" role="alert"></div>
               <button class="btn-ghost" id="changePwBtn" type="submit" data-i="changePwBtn"></button>

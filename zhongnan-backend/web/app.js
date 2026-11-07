@@ -3739,16 +3739,30 @@
   // 密码管理器也能按 form + current/new-password 识别「更新凭据」。
   // v2.455 改密错误常驻化：xnSay 的 toast 3 秒消失，用户错过就不知道失败原因；
   // 同时 429 要像登录那样进倒计时（按钮禁用 + 逐秒提示），不能让人空点。
-  function showChgPwErr(msg) {
+  // v2.456 字段级可访问性：光有错误文字还不够——读屏聚焦输入框时要能跟读到错误（aria-describedby），
+  // 出错字段要标 aria-invalid 并拿到焦点，键盘/读屏用户才不用自己 Tab 回去找；429 这类非字段错误不带 fieldId。
+  function showChgPwErr(msg, fieldId) {
     const el = $('chgPwErr');
-    if (!el) return;
-    el.textContent = msg;
-    el.classList.remove('hidden');
+    if (el) { el.textContent = msg; el.classList.remove('hidden'); }
+    if (!fieldId) return;
+    const input = $(fieldId);
+    if (!input) return;
+    input.setAttribute('aria-invalid', 'true');
+    try { input.focus(); } catch { /* 不可聚焦环境忽略 */ }
   }
+  // 用户一改就不再红着（与登录表单 #authPhone/#authPwd 同口径）
+  ['inCurPw', 'inNewPw'].forEach((id) => {
+    const el = $(id);
+    if (el) el.addEventListener('input', () => el.removeAttribute('aria-invalid'));
+  });
   async function doChangePw() {
     const cur = $('inCurPw').value, nw = $('inNewPw').value;
-    if (!cur) { showChgPwErr(t('curPw')); return; }
-    if (nw.length < 8 || !/[a-zA-Z]/.test(nw) || !/[0-9]/.test(nw)) { showChgPwErr(t('pwClientErr')); return; }
+    // 每次提交先重置两个字段的无效态，由本次结果重新标记：否则上次「弱新密码」标红的 #inNewPw
+    // 会残留到这次「当前密码错误」，读屏同时听到两条矛盾提示（真机实测踩到）。
+    $('inCurPw').removeAttribute('aria-invalid');
+    $('inNewPw').removeAttribute('aria-invalid');
+    if (!cur) { showChgPwErr(t('curPw'), 'inCurPw'); return; }
+    if (nw.length < 8 || !/[a-zA-Z]/.test(nw) || !/[0-9]/.test(nw)) { showChgPwErr(t('pwClientErr'), 'inNewPw'); return; }
     try {
       await Api.auth.changePassword(cur, nw);
       Api.clearSession();
@@ -3756,12 +3770,13 @@
       $('inCurPw').value = ''; $('inNewPw').value = '';
       $('profileEdit').classList.add('hidden');
       $('chgPwErr').classList.add('hidden');
+      $('inCurPw').removeAttribute('aria-invalid'); $('inNewPw').removeAttribute('aria-invalid');
       xnSay(t('pwChangeOk'));
       setTimeout(() => openAuth('login'), 1000);
     } catch (e) {
       // 429：交给倒计时接管禁用态；其它错误写常驻错误区（不再只弹一次就消失）
       if (e && e.retryAfter) startLockCountdown(e.retryAfter, 'changePwBtn', 'chgPwErr');
-      else showChgPwErr(e.message);
+      else showChgPwErr(e.message, 'inCurPw');
     }
   }
   $('chgPwForm').onsubmit = (e) => {
