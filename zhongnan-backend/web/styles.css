@@ -17,6 +17,10 @@
    * tech/dark 的 --accent 是浅蓝/浅青，纸白字只有 1.6~2.3:1；这里默认纸白（浅色/护眼主题达标），
    * 两套暗主题各自覆盖成深墨。 */
   --on-accent: #fbf7ec;
+  /* v2.466 语义前景色令牌：错误/警告/成功/信息/金棕五类提示色过去写死在 app.js 内联样式里，
+   * 深紫 #4527a0 在 tech 主题只有 1.73:1、棕 #5d4037 只有 1.90:1（正文小字需 4.5），等于字消失了。
+   * 这里给出四主题各自的取值，浅色与护眼用压深的墨色，深色两套用提亮的粉彩。 */
+  --danger-text: #a3241b; --warn-text: #8a5a00; --ok-text: #2e6512; --info-text: #4527a0; --gold-text: #7a5c1a;
   /* 形制 */
   --radius: 16px; --radius-sm: 10px; --fs: 15px;
   /* 字体：标题用衬线（卷宗/片头字幕感），正文用现代黑体 */
@@ -46,6 +50,7 @@
   --gold: #b08e4c; --gold-deep: #c79a55; --gold-soft: #2a2415;
   --cinnabar: #b8554a; --danger: #b8554a; --ok: #5aa57c;
   --on-accent: #08110f; /* v2.463 浅青底配深墨字（7.7:1），纸白只有 2.3:1 */
+  --danger-text: #ff9481; --warn-text: #e8b45c; --ok-text: #86d5a4; --info-text: #c0b0ff; --gold-text: #d9b06a;
   --ring: rgba(74, 181, 168, .24);
   --shadow: 0 12px 32px -16px rgba(0, 0, 0, .5), 0 2px 6px rgba(0, 0, 0, .3);
   --shadow-lg: 0 30px 60px -24px rgba(0, 0, 0, .66), 0 6px 14px rgba(0, 0, 0, .36);
@@ -60,6 +65,7 @@
   --cinnabar: #8c3a2e; --danger: #8c3a2e; --ok: #4d7a45;
   --ring: rgba(74, 107, 48, .18);
   --grid: #ddd4ba;
+  --danger-text: #96271d; --warn-text: #7d4f00; --ok-text: #2e6512; --info-text: #4a2a9a; --gold-text: #6f5117;
 }
 /* 旧变量别名：让历史组件自动随主题换色（原代码到处 fallback 的 --card/--muted/--border 等） */
 :root, [data-theme='light'], [data-theme='dark'], [data-theme='eye'] {
@@ -571,6 +577,9 @@ textarea { box-sizing: border-box; max-width: 100%; resize: vertical; background
 .notice.warn { background: color-mix(in srgb, var(--gold) 12%, var(--panel)); border-left-color: var(--gold); color: var(--gold-deep); }
 .notice.err { background: color-mix(in srgb, var(--cinnabar) 10%, var(--panel)); border-left-color: var(--cinnabar); color: var(--cinnabar); }
 .notice.ok { background: color-mix(in srgb, var(--ok) 11%, var(--panel)); border-left-color: var(--ok); color: var(--ok); }
+/* v2.466 冲突提示：三处资产库冲突条原为内联 style="border-color:var(--danger-text)" 的 hack，
+ * 与「颜色归 CSS」的方向相悖，收成类名（仅换左边框色，不改背景与文字）。 */
+.notice.conflict { border-left-color: var(--cinnabar); }
 
 /* ================= 登录 / 模态 ================= */
 .modal-mask{position:fixed;inset:0;background:rgba(38,32,18,.42);backdrop-filter:blur(4px);display:flex;align-items:center;justify-content:center;z-index:60;padding:20px}
@@ -1919,6 +1928,7 @@ summary:hover{color:var(--accent-strong)}
   --danger: #b8554a;
   --ok: #5aa57c;
   --on-accent: #08110f; /* v2.463 浅蓝底配深墨字（8.6:1），纸白只有 2.1:1 */
+  --danger-text: #ff9a88; --warn-text: #f0bd66; --ok-text: #8fd9ab; --info-text: #c8b8ff; --gold-text: #e0bb78;
   --ring: rgba(139, 175, 239, .32);
   --shadow: 0 12px 36px -16px rgba(0, 0, 0, .6), 0 2px 8px rgba(0, 0, 0, .4);
   --shadow-lg: 0 30px 80px -28px rgba(0, 0, 0, .72), 0 8px 20px rgba(0, 0, 0, .42);
@@ -2222,7 +2232,6 @@ summary:hover{color:var(--accent-strong)}
   display: inline-block;
   padding: 2px 8px;
   border-radius: 10px;
-  color: #fff;
   font-size: 11px;
   font-weight: 600;
   letter-spacing: 0.5px;
@@ -2230,10 +2239,12 @@ summary:hover{color:var(--accent-strong)}
   text-shadow: 0 1px 1px rgba(0,0,0,0.15);
   vertical-align: middle;
 }
-.bal-normal   { background: #16a34a; }
-.bal-low      { background: #eab308; color: #1f2937; text-shadow: none; }
-.bal-critical { background: #dc2626; }
-.bal-unknown  { background: #6b7280; }
+/* v2.466 每档自带前景色：底色是固定浅色，全站统一的 #fff 在 NORMAL 绿上只有 3.30:1；
+ * 浅色底（绿/黄）配深墨，深色底（红/灰）配纸白。 */
+.bal-badge.bal-normal   { background: #16a34a; color: #08110f; text-shadow: none; }
+.bal-badge.bal-low      { background: #eab308; color: #1f2937; text-shadow: none; }
+.bal-badge.bal-critical { background: #dc2626; color: #fff; }
+.bal-badge.bal-unknown  { background: #6b7280; color: #fff; }
 
 /* v2.190 mobile hierarchy and workbench isolation */
 .xn-float.workbench-hidden { display: none; }

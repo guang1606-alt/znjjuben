@@ -2240,7 +2240,7 @@
     okBtn.type = 'button';
     okBtn.className = 'ui-dlg-ok';
     okBtn.textContent = String(o.okText || (_uiLangEn() ? 'OK' : '确定'));
-    okBtn.style.cssText = 'font-size:13px;padding:8px 16px;border:none;border-radius:6px;cursor:pointer;color:#fff;background:' + (o.danger ? '#c62828' : 'var(--jade,#2e7d32)');
+    okBtn.style.cssText = 'font-size:13px;padding:8px 16px;border:none;border-radius:6px;cursor:pointer;color:#fff;background:' + (o.danger ? 'var(--danger-text)' : 'var(--jade,#2e7d32)');
     row.appendChild(cancelBtn);
     row.appendChild(okBtn);
     modal.appendChild(row);
@@ -4277,7 +4277,7 @@
         <div class="pc-body">${escapeHtml(p.body)}</div>
         <div class="pc-foot"><span>${escapeHtml(p.user?.nickname || (lang==='en'?'Anonymous':'匿名编剧'))}</span>
         <span>${new Date(p.createdAt).toLocaleString()}</span><span class="spacer"></span>
-        ${mine ? `<button class="chip del-post" style="color:#c0392b">${lang==='en'?'Delete':'删除'}</button>` : ''}
+        ${mine ? `<button class="chip del-post" style="color:var(--danger-text)">${lang==='en'?'Delete':'删除'}</button>` : ''}
         <button class="like-btn">♡ ${p.likes}</button></div>`;
       const likeBtn = c.querySelector('.like-btn');
       likeBtn.onclick = async () => {
@@ -4438,7 +4438,7 @@
         </div>
         ${v ? `<div class="v-section"><b>${lang === 'en' ? 'Six-dimension craft score' : '六维创作力评分'}</b>${dimBars}</div>` : ''}
         ${strengths ? `<div class="v-section"><b>${lang === 'en' ? 'Funder strengths' : '资方视角强项'}</b><ul>${strengths}</ul></div>` : ''}
-        ${risks ? `<div class="v-section"><b style="color:#b05a00">${lang === 'en' ? 'Funder risks' : '资方视角风险'}</b><ul>${risks}</ul></div>` : ''}
+        ${risks ? `<div class="v-section"><b style="color:var(--warn-text)">${lang === 'en' ? 'Funder risks' : '资方视角风险'}</b><ul>${risks}</ul></div>` : ''}
         <div class="v-section"><b>${lang === 'en' ? 'Reference price band' : '参考价值区间'}</b> <span>${band}</span> <span class="muted">（${escapeHtml(d.disclaimer || '')}）</span></div>
         <div class="v-section"><b>${lang === 'en' ? 'Sample' : '样章'}</b><div class="listing-sample">${escapeHtml(d.sample || (lang==='en'?'No sample':'暂无样章'))}</div></div>
         <div class="listing-foot" style="margin-top:12px"><span class="price-tag">${d.pricePoints} ${t('points')}</span>
@@ -5817,7 +5817,7 @@
   // 痛点：编导沉淀一堆资产后，不知道"哪些是明星资产/哪些待激活/空壳该先补哪个"。
   // dashboard 端点聚合三族：热度榜 top10（按 usedCount 降序）+ 空壳补全队列（score<55，缺失维度越少越优先）。
   // 渲染策略：热度榜按族分三块；空壳队列跨族合并，每行带 family 标签 + 缺失维度 + 跳转按钮。
-  const DASH_LEVEL_COLOR = { rich: 'var(--ok, #2f8c4a)', usable: 'var(--gold, #c79a3a)', thin: 'var(--cinnabar, #c0392b)' };
+  const DASH_LEVEL_COLOR = { rich: 'var(--ok, #2f8c4a)', usable: 'var(--gold, #c79a3a)', thin: 'var(--cinnabar, var(--danger-text))' };
   const DASH_FAMILY_KEY = { cast: 'dashFamilyCast', prop: 'dashFamilyProp', scene: 'dashFamilyScene' };
   // v2.171 资产编辑表单只读显示行：编导编辑资产时知道"从哪沉淀的"，可回溯原剧看上下文用法。
   // 紧凑形式（背景色 + 圆角）避免占用编辑表单字段空间；空 sourceProjectTitle 显示"手动创建"。
@@ -5944,7 +5944,7 @@
     const color = DASH_LEVEL_COLOR[a.level] || DASH_LEVEL_COLOR.thin;
     const tag = t(DASH_FAMILY_KEY[family] || 'dashFamilyCast');
     // 明星空壳预警：usedCount>0 但 score<55 = 被多剧引用但已是空壳，最危险（编导以为有约束实际拿不到）
-    const warn = a.usedCount > 0 && a.score < 55 ? `<span style="color:var(--cinnabar,#c0392b);margin-left:6px" title="${t('dashThinWarn')}">⚠ ${t('dashThinWarn')}</span>` : '';
+    const warn = a.usedCount > 0 && a.score < 55 ? `<span style="color:var(--cinnabar,var(--danger-text));margin-left:6px" title="${t('dashThinWarn')}">⚠ ${t('dashThinWarn')}</span>` : '';
     return `<div style="display:flex;justify-content:space-between;align-items:center;padding:6px 8px;border-bottom:1px solid rgba(127,127,127,.15)">
       <div style="flex:1;min-width:0">
         <span style="color:${color};font-weight:600">●</span>
@@ -5976,7 +5976,7 @@
         <span style="color:${color};font-weight:600">●</span>
         <span style="margin:0 6px">${escapeHtml(a.name)}</span>
         <span style="font-size:11px;color:var(--muted,#888)">[${tag}]</span>
-        <span style="font-size:11px;color:var(--cinnabar,#c0392b);margin-left:6px">${t('dashMissingLabel')}: ${escapeHtml(a.missing.join(' / ')) || '—'}</span>
+        <span style="font-size:11px;color:var(--cinnabar,var(--danger-text));margin-left:6px">${t('dashMissingLabel')}: ${escapeHtml(a.missing.join(' / ')) || '—'}</span>
       </div>
       <div style="font-size:12px;color:var(--muted,#888);text-align:right;white-space:nowrap">
         <span style="color:${color}">${a.score}</span>
@@ -6065,8 +6065,8 @@
       // v2.173 增量闭环：冲突数提示带"去消冲突"按钮（family 参数），点击关闭 dashboard + 调对应 openXxxLibrary——宏观 KPI 不只是"展示数据"而是"调度动作"
       const dashStatsCard = (label, s, family) => {
         const emptyRate = s.total ? Math.round((s.empty / s.total) * 100) : 0;
-        const emptyColor = s.empty > 0 ? 'var(--cinnabar,#c0392b)' : 'var(--ok,#2f8c4a)';
-        const conflictColor = s.conflicts > 0 ? 'var(--cinnabar,#c0392b)' : 'var(--muted,#888)';
+        const emptyColor = s.empty > 0 ? 'var(--cinnabar,var(--danger-text))' : 'var(--ok,#2f8c4a)';
+        const conflictColor = s.conflicts > 0 ? 'var(--cinnabar,var(--danger-text))' : 'var(--muted,#888)';
         const resolveBtn = s.conflicts > 0 && family
           ? ` <button type="button" class="btn-ghost dash-conflict" style="font-size:10px;padding:1px 6px;margin-left:4px;border:1px solid ${conflictColor};color:${conflictColor}" data-jump-family="${escapeHtml(family)}">${t('dashResolveConflictBtn')}</button>`
           : '';
@@ -6240,7 +6240,7 @@
     const titles = refs.map((r) => String(r.projectTitle || r.projectId));
     const joiner = lang === 'en' ? ', ' : '、';
     const listStr = titles.slice(0, 3).join(joiner) + (titles.length > 3 ? t('libUsageMore', { n: titles.length - 3 }) : '');
-    return `<div class="muted" style="font-size:11px;margin-top:2px">📌 ${t('libUsageNow', { n: refs.length })}：${escapeHtml(listStr)}</div>${hLevel === 'thin' ? `<div style="font-size:11px;margin-top:3px;color:#c0392b">⚠️ ${t('libThinInUse')}</div>` : ''}`;
+    return `<div class="muted" style="font-size:11px;margin-top:2px">📌 ${t('libUsageNow', { n: refs.length })}：${escapeHtml(listStr)}</div>${hLevel === 'thin' ? `<div style="font-size:11px;margin-top:3px;color:var(--danger-text)">⚠️ ${t('libThinInUse')}</div>` : ''}`;
   }
   // v2.178 资产补全建议渲染（三族共用）：1 条单行显示，多条用 <details> 折叠展开（CSP 友好，原生展开）
   // 复盘 c172-c173：thin 视图闭环里编导需要看完整 advice 清单，原代码只显示 advice[0] 隐藏后续——多条建议不可见
@@ -6260,7 +6260,7 @@
     const hMap = new Map((health.items || []).map((h) => [h.id, h]));
     const conflicts = health.conflicts || [];
     let conflictHtml = conflicts.length
-      ? `<div class="notice" style="border-color:#c0392b"><b>${t('castLibConflictTitle')}</b><ul style="margin:4px 0 0 18px;padding:0">${conflicts.map((c) => `<li style="font-size:12px">${escapeHtml(c.note)}</li>`).join('')}</ul></div>`
+      ? `<div class="notice conflict"><b>${t('castLibConflictTitle')}</b><ul style="margin:4px 0 0 18px;padding:0">${conflicts.map((c) => `<li style="font-size:12px">${escapeHtml(c.note)}</li>`).join('')}</ul></div>`
       : '';
     // v2.156 复盘修复：health.total / listTotal 超出渲染条数时给截断提示（不再静默截断）
     // v2.164 复盘修复：搜索态下 total=命中数，文案从"资产库共 N 条"切"搜索命中 N 条"（三面板同口径）
@@ -6290,7 +6290,7 @@
     }
     if (thinFiltered) {
       const curQ = String($('castLibSearch')?.value ?? '').trim();
-      conflictHtml = `<div class="notice" style="border-color:var(--cinnabar,#c0392b);display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+      conflictHtml = `<div class="notice" style="border-color:var(--cinnabar,var(--danger-text));display:flex;align-items:center;gap:8px;flex-wrap:wrap">
         <b>${curQ ? t('dashThinSearchFiltered', { n: assets.length, q: curQ }) : t('dashThinFiltered', { n: assets.length })}</b>
         <button type="button" class="btn-ghost dash-thin-clear" style="font-size:11px;padding:2px 8px">${t('dashThinClear')}</button>
         ${assets.length ? `<button type="button" class="btn-ghost dash-thin-batch-complete" style="font-size:11px;padding:2px 8px;border-color:var(--jade,#2e7d32);color:var(--jade,#2e7d32)">${t('dashThinBatchComplete')}</button>` : ''}
@@ -6510,7 +6510,7 @@
     const hMap = new Map((health.items || []).map((h) => [h.id, h]));
     const conflicts = health.conflicts || [];
     let conflictHtml = conflicts.length
-      ? `<div class="notice" style="border-color:#c0392b"><b>${t('propLibConflictTitle')}</b><ul style="margin:4px 0 0 18px;padding:0">${conflicts.map((c) => `<li style="font-size:12px">${escapeHtml(c.note)}</li>`).join('')}</ul></div>`
+      ? `<div class="notice conflict"><b>${t('propLibConflictTitle')}</b><ul style="margin:4px 0 0 18px;padding:0">${conflicts.map((c) => `<li style="font-size:12px">${escapeHtml(c.note)}</li>`).join('')}</ul></div>`
       : '';
     // v2.164 复盘修复：搜索态下 total=命中数，文案从"资产库共 N 条"切"搜索命中 N 条"（三面板同口径）
     const shown = Math.max(assets.length, (health.items || []).length);
@@ -6537,7 +6537,7 @@
     }
     if (thinFiltered) {
       const curQ = String($('propLibSearch')?.value ?? '').trim();
-      conflictHtml = `<div class="notice" style="border-color:var(--cinnabar,#c0392b);display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+      conflictHtml = `<div class="notice" style="border-color:var(--cinnabar,var(--danger-text));display:flex;align-items:center;gap:8px;flex-wrap:wrap">
         <b>${curQ ? t('dashThinSearchFiltered', { n: assets.length, q: curQ }) : t('dashThinFiltered', { n: assets.length })}</b>
         <button type="button" class="btn-ghost dash-thin-clear" style="font-size:11px;padding:2px 8px">${t('dashThinClear')}</button>
         ${assets.length ? `<button type="button" class="btn-ghost dash-thin-batch-complete" style="font-size:11px;padding:2px 8px;border-color:var(--jade,#2e7d32);color:var(--jade,#2e7d32)">${t('dashThinBatchComplete')}</button>` : ''}
@@ -6614,7 +6614,7 @@
         </div>
         <div style="font-size:12px;margin-top:4px">${escapeHtml(a.meaning || '')}</div>
         ${assetUsageHtml(a, usage, h.level)}
-        ${a.taboo ? `<div class="muted" style="font-size:11px;margin-top:2px;color:#c0392b">⚠ ${t('propLibTaboo')}: ${escapeHtml(a.taboo)}</div>` : ''}
+        ${a.taboo ? `<div class="muted" style="font-size:11px;margin-top:2px;color:var(--danger-text)">⚠ ${t('propLibTaboo')}: ${escapeHtml(a.taboo)}</div>` : ''}
         ${(a.eps || []).length ? `<div class="muted" style="font-size:11px">${t('propLibEps')}: ${(a.eps || []).join(', ')}</div>` : ''}
         ${(a.closedEps || []).length ? `<div class="muted" style="font-size:11px">${t('propLibClosedEps')}: ${(a.closedEps || []).join(', ')}</div>` : ''}
         ${a.visualAnchor ? `<div class="muted" style="font-size:11px">${t('propLibAnchor')}: ${escapeHtml(a.visualAnchor)}</div>` : ''}
@@ -6750,7 +6750,7 @@
     const hMap = new Map((health.items || []).map((h) => [h.id, h]));
     const conflicts = health.conflicts || [];
     let conflictHtml = conflicts.length
-      ? `<div class="notice" style="border-color:#c0392b"><b>${t('sceneLibConflictTitle')}</b><ul style="margin:4px 0 0 18px;padding:0">${conflicts.map((c) => `<li style="font-size:12px">${escapeHtml(c.note)}</li>`).join('')}</ul></div>`
+      ? `<div class="notice conflict"><b>${t('sceneLibConflictTitle')}</b><ul style="margin:4px 0 0 18px;padding:0">${conflicts.map((c) => `<li style="font-size:12px">${escapeHtml(c.note)}</li>`).join('')}</ul></div>`
       : '';
     // v2.164 复盘修复：搜索态下 total=命中数，文案从"资产库共 N 条"切"搜索命中 N 条"（三面板同口径）
     const shown = Math.max(assets.length, (health.items || []).length);
@@ -6777,7 +6777,7 @@
     }
     if (thinFiltered) {
       const curQ = String($('sceneLibSearch')?.value ?? '').trim();
-      conflictHtml = `<div class="notice" style="border-color:var(--cinnabar,#c0392b);display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+      conflictHtml = `<div class="notice" style="border-color:var(--cinnabar,var(--danger-text));display:flex;align-items:center;gap:8px;flex-wrap:wrap">
         <b>${curQ ? t('dashThinSearchFiltered', { n: assets.length, q: curQ }) : t('dashThinFiltered', { n: assets.length })}</b>
         <button type="button" class="btn-ghost dash-thin-clear" style="font-size:11px;padding:2px 8px">${t('dashThinClear')}</button>
         ${assets.length ? `<button type="button" class="btn-ghost dash-thin-batch-complete" style="font-size:11px;padding:2px 8px;border-color:var(--jade,#2e7d32);color:var(--jade,#2e7d32)">${t('dashThinBatchComplete')}</button>` : ''}
@@ -6855,7 +6855,7 @@
         <div style="font-size:12px;margin-top:4px">${escapeHtml(a.meaning || '')}</div>
         ${assetUsageHtml(a, usage, h.level)}
         ${a.mood ? `<div class="muted" style="font-size:11px;margin-top:2px">${t('sceneLibMood')}: ${escapeHtml(a.mood)}</div>` : ''}
-        ${a.taboo ? `<div class="muted" style="font-size:11px;margin-top:2px;color:#c0392b">⚠ ${t('sceneLibTaboo')}: ${escapeHtml(a.taboo)}</div>` : ''}
+        ${a.taboo ? `<div class="muted" style="font-size:11px;margin-top:2px;color:var(--danger-text)">⚠ ${t('sceneLibTaboo')}: ${escapeHtml(a.taboo)}</div>` : ''}
         ${(a.eps || []).length ? `<div class="muted" style="font-size:11px">${t('sceneLibEps')}: ${(a.eps || []).join(', ')}</div>` : ''}
         ${a.visualAnchor ? `<div class="muted" style="font-size:11px">${t('sceneLibAnchor')}: ${escapeHtml(a.visualAnchor)}</div>` : ''}
         ${adviceHtml(h)}`;
@@ -7390,7 +7390,7 @@
         clTip.classList.remove('hidden');
         const hard = [...(cl.p0 || []), ...(cl.p1 || [])];
         const avg = typeof cl.avg === 'number' ? cl.avg : 0;
-        const color = avg >= 80 ? '#2e7d32' : avg >= 60 ? '#e0a030' : '#c0392b';
+        const color = avg >= 80 ? '#2e7d32' : avg >= 60 ? '#e0a030' : 'var(--danger-text)';
         if (hard.length) {
           clTip.innerHTML = (lang === 'en'
             ? `<b style="color:${color}">Craft score ${avg}/100</b> · ${hard.length} hard issue(s): ${hard.map((i) => i.dim).join(', ')}`
@@ -7412,7 +7412,7 @@
         cdTip.classList.remove('hidden');
         const hard = (cd.p1 || []).length;
         const avg = typeof cd.avg === 'number' ? cd.avg : 0;
-        const color = avg >= 80 ? '#1565c0' : avg >= 60 ? '#e0a030' : '#c0392b';
+        const color = avg >= 80 ? '#1565c0' : avg >= 60 ? '#e0a030' : 'var(--danger-text)';
         const subs = [cd.emotion, cd.webnovel, cd.archetype, cd.narrative].filter(Boolean);
         cdTip.innerHTML = (lang === 'en'
           ? `<b style="color:${color}">Craft depth ${avg}/100</b> · ${subs.map((s) => `${s.avg}`).join('/')} across emotion/webnovel/archetype/narrative${hard ? ` · ${hard} hard issue(s)` : ''}`
@@ -7427,8 +7427,8 @@
       if (tk) {
         tkTip.classList.remove('hidden');
         tkTip.innerHTML = (lang === 'en'
-          ? `<b style="color:#ef6c00">Market track</b>: ${tk === 'mass' ? 'Mass (high-burst, instant payoff)' : 'Premium (high-floor, delayed payoff, character arc)'}`
-          : `<b style="color:#ef6c00">市场赛道</b>：${tk === 'mass' ? '下沉剧（高爆发·即时兑付·钩子密度优先）' : '精品剧（高保底·延迟兑付·人物弧光优先）'}`);
+          ? `<b style="color:var(--warn-text)">Market track</b>: ${tk === 'mass' ? 'Mass (high-burst, instant payoff)' : 'Premium (high-floor, delayed payoff, character arc)'}`
+          : `<b style="color:var(--warn-text)">市场赛道</b>：${tk === 'mass' ? '下沉剧（高爆发·即时兑付·钩子密度优先）' : '精品剧（高保底·延迟兑付·人物弧光优先）'}`);
       } else tkTip.classList.add('hidden');
     }
     // v2.99 标题传播力校验（前13字=身份+冲突+反差）
@@ -7438,7 +7438,7 @@
       if (tp && tp.first13) {
         tpTip.classList.remove('hidden');
         const score = tp.score || 0;
-        const color = score >= 100 ? '#2e7d32' : score >= 66 ? '#e0a030' : '#c62828';
+        const color = score >= 100 ? '#2e7d32' : score >= 66 ? '#e0a030' : 'var(--danger-text)';
         tpTip.innerHTML = (lang === 'en'
           ? `<b style="color:${color}">Title pitch ${score}/100</b> · first 13 chars: "${tp.first13}" · identity ${tp.hasIdentity ? '✓' : '✗'} conflict ${tp.hasConflict ? '✓' : '✗'} contrast ${tp.hasContrast ? '✓' : '✗'}`
           : `<b style="color:${color}">标题传播力 ${score}/100</b> · 前13字「${tp.first13}」· 身份${tp.hasIdentity ? '✓' : '✗'} 冲突${tp.hasConflict ? '✓' : '✗'} 反差${tp.hasContrast ? '✓' : '✗'}`);
@@ -7452,7 +7452,7 @@
       if (tq) {
         tqTip.classList.remove('hidden');
         const allOk = tq.want && tq.block && tq.whyNext;
-        const color = allOk ? '#2e7d32' : '#c62828';
+        const color = allOk ? '#2e7d32' : 'var(--danger-text)';
         tqTip.innerHTML = (lang === 'en'
           ? `<b style="color:${color}">Episode 3-Q</b> · Want ${tq.want ? '✓' : '✗'} Block ${tq.block ? '✓' : '✗'} Why-Next ${tq.whyNext ? '✓' : '✗'}${allOk ? ' — all present' : ' — missing element(s)'}`
           : `<b style="color:${color}">每集三问</b> · 想要${tq.want ? '✓' : '✗'} 阻拦${tq.block ? '✓' : '✗'} 追更${tq.whyNext ? '✓' : '✗'}${allOk ? '——三要素齐全' : '——缺项需补'}`);
@@ -7465,7 +7465,7 @@
       if (oc) {
         ocTip.classList.remove('hidden');
         const allOk = oc.trouble && oc.oppressor && oc.counterPlan && oc.mustWatch;
-        const color = allOk ? '#2e7d32' : '#c62828';
+        const color = allOk ? '#2e7d32' : 'var(--danger-text)';
         ocTip.innerHTML = (lang === 'en'
           ? `<b style="color:${color}">Opening 4-check</b> · Trouble ${oc.trouble ? '✓' : '✗'} Oppressor ${oc.oppressor ? '✓' : '✗'} Counter-plan ${oc.counterPlan ? '✓' : '✗'} Must-watch ${oc.mustWatch ? '✓' : '✗'} (${oc.score}/100)`
           : `<b style="color:${color}">开场四要素</b> · 麻烦${oc.trouble ? '✓' : '✗'} 施压者${oc.oppressor ? '✓' : '✗'} 反击${oc.counterPlan ? '✓' : '✗'} 必看${oc.mustWatch ? '✓' : '✗'}（${oc.score}/100）`);
@@ -7478,7 +7478,7 @@
       const sc = done.scorecard;
       if (sc) {
         scTip.classList.remove('hidden');
-        const color = sc.total >= 85 ? '#2e7d32' : sc.total >= 70 ? '#1565c0' : sc.total >= 60 ? '#e0a030' : '#c62828';
+        const color = sc.total >= 85 ? '#2e7d32' : sc.total >= 70 ? '#1565c0' : sc.total >= 60 ? '#e0a030' : 'var(--danger-text)';
         const dims = (sc.dimensions || []).map((d) => `${d.label}${d.score}`).join(' / ');
         scTip.innerHTML = (lang === 'en'
           ? `<b style="color:${color}">Quality scorecard ${sc.total}/100 (${sc.level})</b> · ${dims} · Weakest: ${sc.weakest.label}(${sc.weakest.score})`
@@ -7494,8 +7494,8 @@
       if (gs && gs.length) {
         gnTip.classList.remove('hidden');
         gnTip.innerHTML = (lang === 'en'
-          ? `<b style="color:#2e6512">Genre match</b>: ${gs.join(', ')}`
-          : `<b style="color:#2e6512">流派匹配</b>：${gs.join('、')}`);
+          ? `<b style="color:var(--ok-text)">Genre match</b>: ${gs.join(', ')}`
+          : `<b style="color:var(--ok-text)">流派匹配</b>：${gs.join('、')}`);
       } else gnTip.classList.add('hidden');
     }
     // v2.102 资方视角评估
@@ -7504,7 +7504,7 @@
       const iv = done.investor;
       if (iv) {
         ivTip.classList.remove('hidden');
-        const color = iv.verdict === 'STRONG' ? '#2e7d32' : iv.verdict === 'TALK' ? '#1565c0' : iv.verdict === 'CAUTION' ? '#e0a030' : '#c62828';
+        const color = iv.verdict === 'STRONG' ? '#2e7d32' : iv.verdict === 'TALK' ? '#1565c0' : iv.verdict === 'CAUTION' ? '#e0a030' : 'var(--danger-text)';
         ivTip.innerHTML = (lang === 'en'
           ? `<b style="color:${color}">Investor lens ${iv.overall}/100 (${iv.verdictLabel})</b>${iv.vetoes && iv.vetoes.length ? ' · Veto: ' + iv.vetoes.join('; ') : ''}`
           : `<b style="color:${color}">资方视角 ${iv.overall}/100（${iv.verdictLabel}）</b>${iv.vetoes && iv.vetoes.length ? ' · 否决：' + iv.vetoes.join('；') : ''}`);
@@ -7518,7 +7518,7 @@
       if (bp && bp.beats && bp.beats.length) {
         abTip.classList.remove('hidden');
         const beatsList = bp.beats.map((b) => `第${b.no}拍(${b.startSec}-${b.endSec}s${b.isTail ? '·尾' : ''})`).join(' | ');
-        abTip.innerHTML = `<b style="color:#4527a0">AIGC微节拍</b> · 约${bp.totalSeconds}秒 / ${bp.beatCount}个30秒单元 · ${beatsList}`;
+        abTip.innerHTML = `<b style="color:var(--info-text)">AIGC微节拍</b> · 约${bp.totalSeconds}秒 / ${bp.beatCount}个30秒单元 · ${beatsList}`;
         abTip.title = bp.beats.map((b) => `第${b.no}拍：${b.arcPrompt}\n制作提示：${b.productionHints.join('；')}`).join('\n\n');
       } else abTip.classList.add('hidden');
     }
@@ -7529,9 +7529,9 @@
       if (fs) {
         fsTip.classList.remove('hidden');
         const sc = fs.score;
-        const scColor = sc >= 70 ? '#2e7d32' : sc >= 40 ? '#f57f17' : '#c62828';
+        const scColor = sc >= 70 ? 'var(--ok-text)' : sc >= 40 ? 'var(--warn-text)' : 'var(--danger-text)';
         const danglingList = (fs.dangling || []).map((d) => `${d.signal}(第${d.plantedInEp}集种)`);
-        fsTip.innerHTML = `<b style="color:#5d4037">伏笔账本</b> · <span style="color:${scColor}">健康度 ${sc}</span> · 植入 ${fs.plants} / 回收 ${fs.payoffs}${danglingList.length ? ' · <span style="color:#c62828">悬空: ' + danglingList.join('、') + '</span>' : ''}`;
+        fsTip.innerHTML = `<b style="color:var(--gold-text)">伏笔账本</b> · <span style="color:${scColor}">健康度 ${sc}</span> · 植入 ${fs.plants} / 回收 ${fs.payoffs}${danglingList.length ? ' · <span style="color:var(--danger-text)">悬空: ' + danglingList.join('、') + '</span>' : ''}`;
         fsTip.title = (fs.issues || []).map((i) => `[${i.severity}] ${i.advice}`).join('\n') || '伏笔状态良好';
       } else fsTip.classList.add('hidden');
     }
@@ -7542,9 +7542,9 @@
       if (at) {
         atTip.classList.remove('hidden');
         const sc = at.score;
-        const scColor = sc >= 70 ? '#2e7d32' : sc >= 40 ? '#f57f17' : '#c62828';
+        const scColor = sc >= 70 ? 'var(--ok-text)' : sc >= 40 ? 'var(--warn-text)' : 'var(--danger-text)';
         const chars = (at.characters || []).map((c) => `${c.name}:${c.emotion}/${c.stage}${c.changed ? '' : '·停'}`);
-        atTip.innerHTML = `<b style="color:#00695c">角色弧光</b> · <span style="color:${scColor}">完整度 ${sc}</span> · ${chars.join(' | ')}`;
+        atTip.innerHTML = `<b style="color:var(--ok-text)">角色弧光</b> · <span style="color:${scColor}">完整度 ${sc}</span> · ${chars.join(' | ')}`;
         const tips = [];
         if (at.stalled && at.stalled.length) tips.push(...at.stalled.map((s) => `[停滞] ${s.name}: ${s.reason}`));
         if (at.jumpCut && at.jumpCut.length) tips.push(...at.jumpCut.map((j) => `[跳变] ${j.name}: ${j.from}→${j.to} ${j.reason}`));
@@ -7561,8 +7561,8 @@
         const reasons = (ht.boomReasons || []).map((b) => `${b.dim}：${b.conclusion}`).join('；');
         const tech = (ht.techniques || []).map((t) => `${t.point}（${t.reuse}）`).join('；');
         htTip.innerHTML = (lang === 'en'
-          ? `<b style="color:#6a1b9a">Hit reverse-engineering</b> · hook ${ht.hookType} · persona contrast ${ht.personaContrast} · payoff density ${Number(ht.coolDensity).toFixed(2)}/100 chars`
-          : `<b style="color:#6a1b9a">爆款逆向拆解</b> · 钩子「${ht.hookType}」· 人设反差 ${ht.personaContrast} · 爽点密度 ${Number(ht.coolDensity).toFixed(2)}/百字`);
+          ? `<b style="color:var(--info-text)">Hit reverse-engineering</b> · hook ${ht.hookType} · persona contrast ${ht.personaContrast} · payoff density ${Number(ht.coolDensity).toFixed(2)}/100 chars`
+          : `<b style="color:var(--info-text)">爆款逆向拆解</b> · 钩子「${ht.hookType}」· 人设反差 ${ht.personaContrast} · 爽点密度 ${Number(ht.coolDensity).toFixed(2)}/百字`);
         htTip.title = `${lang === 'en' ? 'Why it works' : '为什么爆'}：${reasons}\n${lang === 'en' ? 'Reusable techniques' : '可取技法'}：${tech}\n${lang === 'en' ? 'Tension curve' : '张力曲线'}：${JSON.stringify(ht.tensionCurve)}`;
       } else htTip.classList.add('hidden');
     }
@@ -8236,7 +8236,7 @@
         </div>`
       : '';
     const driftHtml = d.versionDrift
-      ? `<div style="margin:0 0 8px;padding:6px 10px;border-radius:6px;background:#fdf3e2;color:#8a6d3b;font-size:13px">
+      ? `<div style="margin:0 0 8px;padding:6px 10px;border-radius:6px;background:#fdf3e2;color:#7a5f2e;font-size:13px">
           ${enLang
             ? `The read was run on v${d.roomVersion}; this episode now has v${d.currentVersion}. The rewrite will apply to the latest v${d.currentVersion}, and old notes may no longer match verbatim.`
             : `围读基于第${d.epNo}集 v${d.roomVersion}，该集现已更新到 v${d.currentVersion}。定点改写将作用于最新版 v${d.currentVersion}，旧意见可能与正文不再逐字对应。`}${reReadHtml}</div>`
@@ -8245,7 +8245,7 @@
     const dpHtml = dps.length
       ? `<div style="margin:0 0 8px"><b>${enLang ? 'Live discussion' : '真人讨论'}</b>${dps.map((p) => `<div style="border-left:3px solid #5b8def;padding:2px 0 2px 8px;margin:4px 0">
           <span style="font-weight:600">${escapeHtml(p.seatName || '')}</span>
-          <span style="margin-left:6px;padding:0 6px;border-radius:8px;font-size:12px;color:#fff;background:${p.adopted ? '#4caf85' : '#e0a13c'}">${p.adopted ? (enLang ? 'converged' : '已采纳') : (enLang ? 'new flag' : '新增关注')}</span>
+          <span style="margin-left:6px;padding:0 6px;border-radius:8px;font-size:12px;color:#08110f;background:${p.adopted ? '#4caf85' : '#e0a13c'}">${p.adopted ? (enLang ? 'converged' : '已采纳') : (enLang ? 'new flag' : '新增关注')}</span>
           <div>${escapeHtml(p.point || '')}</div></div>`).join('')}</div>`
       : '';
     // null 版本号=409 幂等命中（处理中/已处理但拿不到新版号），同样锁定，重绘不复活按钮
@@ -8258,7 +8258,7 @@
       const fixed = rrFixedKeys.has(fk);
       const locked = !fixed && pk.gate && pk.gate.allowed === false;
       const lockTag = locked
-        ? ` <span style="font-size:12px;color:#b07a2e">🔒${escapeHtml(LV_NAME[pk.gate.needLevel] || pk.gate.needLevel)}</span>`
+        ? ` <span style="font-size:12px;color:var(--gold-text)">🔒${escapeHtml(LV_NAME[pk.gate.needLevel] || pk.gate.needLevel)}</span>`
         : '';
       const btn = fixed
         ? `<button class="diag-fix-btn" disabled>${fixedBtn(rrFixedKeys.get(fk))}</button>`
@@ -9040,7 +9040,7 @@
     list.innerHTML = matches.map((c) => {
       const verifiedBadge = c.verified
         ? `<span class="chip" style="background:#e8f5e9;color:#2e7d32">${lang === 'en' ? 'Verified' : '联系方式已核验'}</span>`
-        : `<span class="chip" style="background:#fff3e0;color:#e65100">${lang === 'en' ? 'Contact pending' : '联系方式待核验'}</span>`;
+        : `<span class="chip" style="background:#fff3e0;color:#b34700">${lang === 'en' ? 'Contact pending' : '联系方式待核验'}</span>`;
     // @module tags
       const kinds = (c.kinds || []).join('·');
     // @module tags
@@ -9084,7 +9084,7 @@
       box.innerHTML = channels.map((c) => {
         const verifiedBadge = c.verified
           ? `<span class="chip" style="background:#e8f5e9;color:#2e7d32">${lang === 'en' ? 'Verified' : '已核验'}</span>`
-          : `<span class="chip" style="background:#fff3e0;color:#e65100">${lang === 'en' ? 'Contact pending' : '待核验'}</span>`;
+          : `<span class="chip" style="background:#fff3e0;color:#b34700">${lang === 'en' ? 'Contact pending' : '待核验'}</span>`;
         return `<div class="sub-card">
           <div class="sub-head"><b>${escapeHtml(c.name)}</b><span class="muted">${escapeHtml(c.region === 'overseas' ? (lang === 'en' ? 'Overseas' : '海外') : (lang === 'en' ? 'Domestic' : '国内'))}</span>${verifiedBadge}</div>
           <div class="sub-meta"><span>${escapeHtml((c.kinds || []).join('·'))}</span></div>
@@ -9570,7 +9570,7 @@
         if (pr) {
           const p = document.createElement('div');
           p.className = 'dp-line';
-          p.style.cssText = 'font-size:11px;color:#8a6d3b;margin:1px 0 4px';
+          p.style.cssText = 'font-size:11px;color:var(--gold-text);margin:1px 0 4px';
           p.textContent = `🎨 ${pr}`;
           body.appendChild(p);
         }
@@ -10103,8 +10103,8 @@
     $('balRefresh').onclick = refreshAdmBalances;
   }
   // ── v2.612 供应商余额监控（仅超管）──
-  const BAL_COLOR = { NORMAL: '#16a34a', LOW: '#eab308', CRITICAL: '#dc2626', UNKNOWN: '#6b7280' };
-  function balBadge(level) { return `<span class="bal-badge bal-${level.toLowerCase()}" style="background:${BAL_COLOR[level] || '#6b7280'}">${level}</span>`; }
+  // v2.466 底色与前景都归 CSS 类（.bal-badge.bal-*）：原先内联底色 + 全站白字，NORMAL 绿只有 3.30:1
+  function balBadge(level) { return `<span class="bal-badge bal-${String(level).toLowerCase()}">${level}</span>`; }
   async function loadAdmBalances() {
     const listEl = $('balList'); const sumEl = $('balSummary'); const sel = $('balProvider'); const missEl = $('balMissing');
     if (listEl) znSkeleton(listEl);
@@ -10120,7 +10120,7 @@
           const yuan = r.balanceYuan === null || r.balanceYuan === undefined ? '—' : `¥${Number(r.balanceYuan).toFixed(2)}`;
           const src = r.source === 'MANUAL' ? '手动' : '自动';
           const upd = r.updatedAt ? new Date(r.updatedAt).toLocaleString(lang === 'en' ? 'en-US' : 'zh-CN') : '';
-          const err = r.errorMsg ? `<div class="muted" style="color:#c0392b;font-size:11px;margin-top:2px">⚠ ${escapeHtml(r.errorMsg)}</div>` : '';
+          const err = r.errorMsg ? `<div class="muted" style="color:var(--danger-text);font-size:11px;margin-top:2px">⚠ ${escapeHtml(r.errorMsg)}</div>` : '';
           return `<div class="card row-card">
             <div>${balBadge(r.alertLevel)} <b>${escapeHtml(r.providerName)}</b> <span class="muted">(${escapeHtml(r.vendor)})</span></div>
             <div class="muted" style="margin-top:4px">余额 <b>${yuan}</b> · 阈值 ¥${Number(r.thresholdYuan || 0).toFixed(2)} · ${src} · ${upd}</div>
@@ -10311,7 +10311,7 @@
     // @module admin
     const sevTag = (sv) => sv === 'BLOCK'
       ? '<span style="color:var(--danger,#e5484d);font-weight:600">BLOCK</span>'
-      : '<span style="color:#d9a23b;font-weight:600">WARN</span>';
+      : '<span style="color:var(--warn-text);font-weight:600">WARN</span>';
     $('sfTbody').innerHTML = d.rules.map((r) => {
       const src = r.builtin ? (lang === 'en' ? 'builtin' : '内置') : (lang === 'en' ? 'custom' : '自定义');
       const toggle = `<button data-id="${r.id}" data-act="toggle" data-active="${r.active ? '0' : '1'}" class="btn-ghost">${r.active ? (lang==='en'?'disable':'停用') : (lang==='en'?'enable':'启用')}</button>`;
