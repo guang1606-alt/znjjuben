@@ -174,24 +174,28 @@ export function createApp(routers: AppRouters = {}, preErrorRouter?: Router | Ro
       return String(JSON.parse(fs.readFileSync(path.join(__dirname, '../../package.json'), 'utf8')).version || '0');
     } catch { return '0'; }
   })();
-  let indexCache: { mtimeMs: number; html: string } = { mtimeMs: 0, html: '' };
-  function renderIndexHtml(): string | null {
+  let indexCache: { mtimeMs: number; html: string; htmlAbs: string } = { mtimeMs: 0, html: '', htmlAbs: '' };
+  function renderIndexHtml(absolute = false): string | null {
     try {
       const file = path.join(webDir, 'index.html');
       const { mtimeMs } = fs.statSync(file);
       if (indexCache.mtimeMs !== mtimeMs) {
         const html = fs.readFileSync(file, 'utf8');
+        // 只动本地相对引用的 .js/.css；外链、CDN、已带 ?query 的写法一律不碰
+        const versioned = html.replace(/((?:src|href)="\.\/[^"?]+\.(?:js|css))"/g, `$1?v=${assetVersion}"`);
         indexCache = {
           mtimeMs,
-          // 只动本地相对引用的 .js/.css；外链、CDN、已带 ?query 的写法一律不碰
-          html: html.replace(/((?:src|href)="\.\/[^"?]+\.(?:js|css))"/g, `$1?v=${assetVersion}"`),
+          html: versioned,
+          // v2.448 深链回退必须用绝对路径：浏览器在 /works/12345 下会把 ./app.js 解析成
+          // /works/app.js，服务端没有该文件 → 脚本全 404，页面只剩静态壳（离线时同理命中不了 SW 缓存）。
+          htmlAbs: versioned.replace(/((?:src|href)=")\.\//g, '$1/'),
         };
       }
-      return indexCache.html;
+      return absolute ? indexCache.htmlAbs : indexCache.html;
     } catch { return null; }
   }
-  const sendIndex = (res: express.Response) => {
-    const html = renderIndexHtml();
+  const sendIndex = (res: express.Response, absolute = false) => {
+    const html = renderIndexHtml(absolute);
     if (html === null) return false;
     res.setHeader('Cache-Control', 'no-cache'); // 入口版本正确性优先，与 v2.265 口径一致
     res.type('html').send(html);
@@ -201,7 +205,9 @@ export function createApp(routers: AppRouters = {}, preErrorRouter?: Router | Ro
   app.use(express.static(webDir, {
     maxAge: '5m',
     setHeaders: (res, filePath) => {
-      if (filePath.endsWith('index.html')) {
+      // v2.448 sw.js 必须每次回源：Service Worker 更新若被 5 分钟短缓存拖住，
+      // 用户会装着旧壳继续跑旧逻辑（与 v2.447 同族的失败模式）。
+      if (filePath.endsWith('index.html') || filePath.endsWith('sw.js')) {
         res.setHeader('Cache-Control', 'no-cache');
       }
     },
@@ -209,8 +215,9 @@ export function createApp(routers: AppRouters = {}, preErrorRouter?: Router | Ro
   app.get(/^(?!\/api(?:\/|$)|\/health$).*/, (req, res, next) => {
     // 只对浏览器导航（地址栏/刷新，Accept 含 text/html）回退单页；程序化 fetch（*/*）与后置路由放行
     if (!/text\/html/.test(req.headers.accept || '')) return next();
-    // SPA 回退与入口同源渲染：同样带 ?v=，否则地址栏深链刷新会退回无版本号的老资源
-    if (!sendIndex(res)) next();
+    // SPA 回退与入口同源渲染：同样带 ?v=，否则地址栏深链刷新会退回无版本号的老资源；
+    // absolute=true 解决深链下 ./ 被解析成子目录导致脚本全 404。
+    if (!sendIndex(res, true)) next();
   });
   // 注意：此处不再加终局 404 —— 测试/扩展会在 createApp 返回后追加注册路由（如 /_test/*），
   // 终局 catch-all 会抢在它们之前吞掉请求；非 API 未知路径维持 Express 默认 404 即可。

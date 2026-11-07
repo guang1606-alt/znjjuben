@@ -61,15 +61,20 @@ test('① GET / 的入口 HTML：同源 JS/CSS 全部带 ?v=<package.version>', 
   assert.ok(r.body.includes(`./styles.css?v=${version}`), 'styles.css 必须带版本号');
 });
 
-test('② 直连 /index.html 与 SPA 深链回退同一份渲染结果（深链刷新不会退回无版本资源）', async () => {
+test('② 深链回退改绝对路径（./ 在 /works/12345 下会被解析成 /works/*，脚本全 404）', async () => {
   const direct = await fetchRaw('/index.html', { Accept: 'text/html' });
   const deep = await fetchRaw('/works/12345', { Accept: 'text/html' });
   assert.strictEqual(direct.status, 200);
   assert.strictEqual(deep.status, 200);
   for (const r of [direct, deep]) {
     assert.match(r.cacheControl, /no-cache/);
-    assert.ok(r.body.includes(`./app.js?v=${version}`), '深链回退也必须带版本号');
+    assert.ok(r.body.includes(`?v=${version}`), '深链回退也必须带版本号');
   }
+  // 根路径保持相对引用：部署在子路径时 ./ 才是对的，不能一刀切改绝对路径
+  assert.ok(direct.body.includes(`"./app.js?v=${version}"`), '入口根路径应保持相对引用');
+  // 深链必须是同源绝对路径，且不残留任何 ./ 引用
+  assert.ok(deep.body.includes(`"/app.js?v=${version}"`), '深链回退必须改成绝对路径');
+  assert.ok(!/(?:src|href)="\.\//.test(deep.body), '深链入口不得残留 ./ 相对引用');
 });
 
 test('③ 版本号取自 package.json，且改动 index.html 后无需重启即可刷新（mtime 缓存）', async () => {

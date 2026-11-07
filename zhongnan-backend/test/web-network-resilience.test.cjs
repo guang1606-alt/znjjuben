@@ -97,7 +97,8 @@ test('v2.445 全局异常兜底：漏 catch 的异常要有可读出口', () => 
   assert.match(fn[0], /Failed to fetch\|NetworkError\|Load failed/i, '网络失败由 api.js 统一提示，需跳过避免双 toast');
   assert.match(fn[0], /AbortError/, '主动取消不应打扰用户');
   assert.match(fn[0], /e\.target\.tagName/, '资源加载失败（离线图片）不应弹提示');
-  const boot = appJs.match(/initNetWatch\(\); initInstallPrompt\(\);[\s\S]{0,200}if \(Api\.isAuthed\(\)\) loadMe\(\);/);
+  // 启动段窗口 320 字符：v2.446/v2.448 又插入了视图路由与离线壳两步，原 200 字符装不下
+  const boot = appJs.match(/initNetWatch\(\); initInstallPrompt\(\);[\s\S]{0,320}if \(Api\.isAuthed\(\)\) loadMe\(\);/);
   assert.ok(boot, '缺启动段');
   assert.match(boot[0], /initGlobalErrorGuard\(\)/, '必须在启动时接线');
   const hits = i18nJs.match(/\bglobalErrorHint:/g) || [];

@@ -131,6 +131,25 @@
       } catch { /* 浏览器改版安装弹层 API 行为时不阻断其它交互 */ }
     });
   }
+  // v2.448 离线壳接线：主屏安装后断网/弱网仍能打开工作台。
+  // 只在安全上下文注册（http 内网地址注册会直接抛错，非 https 部署也不该走 SW）；
+  // 版本号取自入口资源 URL 的 ?v=（v2.447 注入），升版即换缓存桶，不会把旧壳留在用户机器上。
+  function initOfflineShell() {
+    if (!('serviceWorker' in navigator)) return;
+    const proto = String(location.protocol || '');
+    const host = String(location.hostname || '');
+    const secure = proto === 'https:' || /^(localhost|127\.0\.0\.1|\[::1\])$/.test(host);
+    if (!secure) return;
+    let v = '';
+    try {
+      const tag = document.querySelector('script[src*="app.js"]');
+      v = new URL((tag && tag.src) || '', location.href).searchParams.get('v') || '';
+    } catch { v = ''; }
+    const url = './sw.js' + (v ? '?v=' + encodeURIComponent(v) : '');
+    try {
+      navigator.serviceWorker.register(url).catch(() => { /* 隐私模式/策略禁用：不影响主流程 */ });
+    } catch { /* 老浏览器 register 同步抛错 */ }
+  }
   // v2.445 全局异常兜底：漏 catch 的 Promise 与运行时异常过去是纯静默失败——
   // 用户只看到「点了没反应」。这里给一个可读出口，同类异常 5s 内只提示一次，
   // 免得住循环报错刷屏；网络层已由 api.js 统一 toast，不重复打扰。
@@ -10951,5 +10970,6 @@
   initNetWatch(); initInstallPrompt(); // v2.442 网络韧性横幅 + 安装引导（失败不影响主流程）
   initGlobalErrorGuard(); // v2.445 全局异常兜底，先于业务请求接线
   initViewRouter(); // v2.446 视图路由恢复：刷新/直链/后退落在同一页，先于业务取数
+  initOfflineShell(); // v2.448 离线壳注册：失败静默，不影响首屏与业务请求
   if (Api.isAuthed()) loadMe();
 })();
