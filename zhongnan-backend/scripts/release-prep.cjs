@@ -40,9 +40,9 @@ function checkDailyNote(dir, version, dateStr) {
 }
 
 /** 发布后要敲的命令：把易错的 tag/push 目标固化下来，避免手滑推到父仓库 */
-function nextSteps(version) {
+function nextSteps(version, hasHook) {
   const tag = 'v' + version.split('.').slice(0, 2).join('.');
-  return [
+  const steps = [
     `git add <本任务明确列出的文件>`,
     `git commit -m "feat(${tag}): …"`,
     `git tag ${tag}`,
@@ -50,6 +50,21 @@ function nextSteps(version) {
     `git ls-remote --tags gitee ${tag}   # 核对远端 tag 指向本次提交`,
     `# 释放巡检端口：lsof -nP -iTCP:8130 -sTCP:LISTEN -t | xargs -r kill`,
   ];
+  // v2.479 未装 pre-push（scope-guard）时给出一次性安装提示：防跑偏不该靠人记得敲
+  if (!hasHook) steps.unshift('npm run hooks:install   # 一次性：让每次 push 自动过 preflight');
+  return steps;
+}
+
+// v2.479 只认本安装器写的钩子（带 marker），避免把别人的 pre-push 也算作已装
+function hookInstalled() {
+  try {
+    const r = spawnSync('git', ['rev-parse', '--git-dir'], { cwd: ROOT, encoding: 'utf8' });
+    if (r.status !== 0) return false;
+    const p = path.resolve(ROOT, r.stdout.trim(), 'hooks', 'pre-push');
+    return fs.existsSync(p) && fs.readFileSync(p, 'utf8').includes('zn-hooks:managed');
+  } catch {
+    return false;
+  }
 }
 
 function runPreflight() {
@@ -69,7 +84,7 @@ function main(argv) {
   const version = pkg.version;
   const pre = runPreflight();
   const note = checkDailyNote(path.join(ROOT, 'docs', 'daily-review'), version, today());
-  const steps = nextSteps(version);
+  const steps = nextSteps(version, hookInstalled());
   const ok = pre.ok && note.ok;
   if (json) {
     console.log(JSON.stringify({ version, preflight: pre, dailyNote: note, steps, ok }, null, 2));

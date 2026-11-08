@@ -84,6 +84,13 @@ describe('v2.478 死引用守卫', () => {
     assert.match(block, /\bqsMask:\s*\{[^}]*sel:\s*\[[^\]]*'#qsBtn'/, 'REAL_TRIGGERS 必须登记 qsMask 的真实入口 #qsBtn');
   });
 
+  it('D4 快速跳转列表不得把内部英文模式 id 当文案展示', () => {
+    const body = quickSwitcherBody();
+    assert.doesNotMatch(body, /\(dict\?\.mode\?\.\[m\.id\] \|\| m\.id\) \+ ' ' \+ m\.id/, '模式名后不得拼接 id 显示');
+    assert.match(body, /q: name \+ ' ' \+ m\.id/, 'id 只应进入搜索匹配字段 q');
+    assert.match(body, /\(t\.q \|\| t\.k\)\.toLowerCase\(\)/, '搜索必须匹配 名称+id');
+  });
+
   it('D3 运行时弹窗的占位符/无障碍名/空态走 i18n，不得写死中文', () => {
     const body = quickSwitcherBody();
     for (const key of ['qsInputAria', 'qsPh', 'qsEmpty']) {

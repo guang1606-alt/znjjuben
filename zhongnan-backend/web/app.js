@@ -3029,13 +3029,18 @@
     const targets = () => {
       const nav = [...document.querySelectorAll('.nav [data-view]')].map((b) => ({ k: b.textContent.trim(), v: b.getAttribute('data-view') }));
       const dict = D();
-      const modes = window.I18N ? I18N.MODES.map((m, i) => ({ k: (dict?.mode?.[m.id] || m.id) + ' ' + m.id, modeIndex: i })) : [];
+      // v2.479 列表只显示用户能懂的名称；英文模式 id 仅参与搜索匹配——
+      // 之前把「标签 tag」这种内部标识直接摊在列表里，等于把实现字段当文案给编辑看。
+      const modes = window.I18N ? I18N.MODES.map((m, i) => {
+        const name = dict?.mode?.[m.id] || m.id;
+        return { k: name, q: name + ' ' + m.id, modeIndex: i };
+      }) : [];
       return [...nav, ...modes];
     };
     let cur = 0, shown = [];
     function render(q) {
       const all = targets();
-      shown = q ? all.filter((t) => t.k.toLowerCase().includes(q.toLowerCase())) : all;
+      shown = q ? all.filter((t) => (t.q || t.k).toLowerCase().includes(q.toLowerCase())) : all;
       cur = 0;
       list.innerHTML = shown.slice(0, 12).map((t, i) => `<div class="qs-item${i === 0 ? ' on' : ''}" data-idx="${i}">${escapeHtml(t.k)}</div>`).join('') || `<div class="muted" style="padding:8px">${escapeHtml(t('qsEmpty'))}</div>`;
       list.querySelectorAll('.qs-item').forEach((el) => el.onclick = () => pick(+el.getAttribute('data-idx')));

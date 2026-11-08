@@ -63,4 +63,15 @@ describe('v2.476 发布收口脚本', { concurrency: 1 }, () => {
     assert.strictEqual(r.status, 0);
     assert.match(r.stdout, /release-prep/);
   });
+
+  // v2.479 防跑偏闸门不该靠人记得敲：未装 pre-push 时把一次性安装命令排在最前
+  it('未装 pre-push → 提示一次性安装 hooks:install', () => {
+    const steps = nextSteps('2.479.0').join('\n');
+    assert.match(steps, /npm run hooks:install/);
+    assert.ok(steps.indexOf('hooks:install') < steps.indexOf('git commit'), '安装提示应排在提交流程之前');
+  });
+
+  it('已装 pre-push → 不再重复提示', () => {
+    assert.doesNotMatch(nextSteps('2.479.0', true).join('\n'), /hooks:install/);
+  });
 });
