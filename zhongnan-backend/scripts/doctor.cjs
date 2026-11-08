@@ -42,6 +42,14 @@ function copyGuardCount() {
   return (fs.readFileSync(f, 'utf8').match(/\bit\('G\d+/g) || []).length;
 }
 
+// v2.490 巡检盲区播报：needsData 登记的弹窗只能靠「有数据账号」在真机覆盖，
+// 复盘时最容易被忘（红色报告里它们不出现，看着像全绿）。每轮把个数摆在 doctor 里。
+function auditBlindSpots() {
+  const f = path.join(ROOT, 'scripts', 'ui-audit.cjs');
+  if (!fs.existsSync(f)) return 0;
+  return (fs.readFileSync(f, 'utf8').match(/needsData:\s*['"]/g) || []).length;
+}
+
 function hooksState() {
   const gitDir = sh('git', ['rev-parse', '--git-dir']);
   if (!gitDir) return { installed: [], missing: ['pre-commit', 'pre-push'], dir: '' };
@@ -91,6 +99,7 @@ function main() {
     changes: statusSummary(),
     guards: guardFamilies(),
     copyGuards: copyGuardCount(),
+    blindSpots: auditBlindSpots(),
     hooks: hooksState(),
     daily: dailyNote(version),
   };
@@ -109,6 +118,7 @@ function main() {
   console.log(`版本   ${version || '缺失'}（pkg ${v.pkg || '-'} / lock ${v.lock || '-'} / lockRoot ${v.lockRoot || '-'} / 文档 ${v.docs || '-'}）${ok(scope.ok)}`);
   console.log(`改动   总 ${state.changes.total} · 暂存 ${state.changes.staged} · 工作区 ${state.changes.worktree} · 未跟踪 ${state.changes.untracked}（本地专属 ${state.changes.localOnly}）`);
   console.log(`守卫   ${state.guards.length} 族（${state.guards.join(' / ')}）+ 文案 ${state.copyGuards} 组`);
+  console.log(`巡检   控件接线 H1-H3 · 弹窗需数据盲区 ${state.blindSpots} 个（真机未覆盖，勿当成全绿）`);
   console.log(`钩子   ${state.hooks.installed.length ? '已装 ' + state.hooks.installed.join(' + ') : '未安装'}${state.hooks.missing.length ? '，缺 ' + state.hooks.missing.join(' + ') + ' → npm run hooks:install' : ''}`);
   console.log(`日报   ${state.daily.exists ? '今日已建' : '今日未建（发布前需补）'}${state.daily.hasVersion ? ' · 已记录本版' : ''}`);
   if (state.drift.length) {
@@ -118,9 +128,10 @@ function main() {
   console.log('');
   console.log('本轮推荐顺序：');
   console.log('  1) 改代码 → npm run build && npm test -- <相关测试>');
-  console.log('  2) npm run verify:copy    # 文案/离线壳/死链/UI 触发面');
-  console.log('  3) npm run release:prep   # 升版 + 日报 + 发布命令');
-  console.log('  4) npm run verify:full    # 全量（发布前最后一道）');
+  console.log('  2) npm run mutate -- --file <源码> --find <原文> --replace <变异> --test <测试>  # 变异必红并自动还原');
+  console.log('  3) npm run verify:copy    # 文案/离线壳/死链/控件接线/UI 触发面');
+  console.log('  4) npm run release:prep   # 升版 + 日报 + 发布命令');
+  console.log('  5) npm run verify:full    # 全量（发布前最后一道）');
   process.exit(scope.ok ? 0 : 1);
 }
 

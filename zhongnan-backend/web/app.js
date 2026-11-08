@@ -2116,7 +2116,10 @@
   function viewFromHash() {
     const raw = String(location.hash || '');
     if (raw.indexOf(ROUTE_PREFIX) !== 0) return null;
-    const v = raw.slice(ROUTE_PREFIX.length);
+    // v2.490 分享链接常被二次加工成 #/works?id=123：hash 段内的查询串只是附加信息，
+    // 不参与视图匹配。旧实现拿整串比对白名单，`works?id=123` 不在名单里 → 静默回落首页，
+    // 用户点开分享链接看到的是首页，表现为「链接打不开对应页面」。
+    const v = raw.slice(ROUTE_PREFIX.length).split('?')[0];
     // 白名单校验：任意 hash 不得把用户带进未知分支
     return VIEWS.indexOf(v) >= 0 ? v : null;
   }

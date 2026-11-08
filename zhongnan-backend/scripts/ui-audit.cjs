@@ -45,8 +45,20 @@ const PUBLIC_VIEWS = ['home', 'studio', 'toolbox', 'vip', 'square', 'market', 'w
 // 但过去巡检一律从 /#/<view> 进入，这条路永远不会踩到。这里补三类真实可达地址：
 //   路径深链（分享/离线壳回退）：/works/12345、多级 /market/a/b
 //   哈希深链（站内分享）：/#/works/12345 —— 路由器白名单不认多余段，应安全回落首页而不是白屏
-// 判据是「应用还能不能启动」：脚本/样式无 4xx、有可见控件、有激活导航项，缺一即红。
-const DEEP_LINKS = ['/works/12345', '/market/a/b', '/#/works/12345'];
+// v2.490 追加查询串形态：/market?id=123、/#/works?id=123。
+// 分享链接经复制/二次加工后常带 ?参数，过去从未被访问过，hash 段带 ? 时视图会被判为未知而回落首页。
+// 判据是「应用还能不能启动」：脚本/样式无 4xx、有可见控件、有激活导航项，缺一即红；
+// 哈希形态额外要求落到该视图（expectedView），路径形态只要求能启动。
+const DEEP_LINKS = ['/works/12345', '/market/a/b', '/#/works/12345', '/market?id=123', '/#/works?id=123'];
+// 只有「哈希段恰好是白名单视图（可带 ?查询串）」才断定落点；
+// 多级哈希（#/works/12345）本就是故意回落的，不断言视图，避免制造假红。
+const HASH_VIEW_RE = /^#\/(home|studio|toolbox|works|vip|square|market|admin)(?:\?|$)/;
+function expectedViewOf(p) {
+  const i = p.indexOf('#');
+  if (i < 0) return '';
+  const m = p.slice(i).match(HASH_VIEW_RE);
+  return m ? m[1] : '';
+}
 
 function arg(name, def) {
   const i = process.argv.indexOf(name);
@@ -408,6 +420,13 @@ async function auditDeepLinks(browser, base, viewport) {
     // 应用启动三件套：有可见交互控件、有导航、导航有激活态
     data.appBooted = data.visibleControls > 0;
     data.navReady = await page.evaluate(() => !!document.querySelector('.nav .nav-item.active'));
+    // v2.490 哈希形态的落点断言：带 ?查询串 的分享链接必须仍落到目标视图，
+    // 而不是「能启动但静默回首页」（用户看到的是首页，链接形同失效）。
+    data.expectedView = expectedViewOf(p);
+    data.landedView = await page.evaluate(() => {
+      const cur = document.querySelector('.nav .nav-item.active');
+      return (cur && cur.getAttribute('data-view')) || '';
+    });
     results.push(data);
   }
   await ctx.close();
@@ -641,11 +660,15 @@ async function auditModals(browser, base, cred, viewport) {
         r.gated = r.requested !== r.view;
         if (r.gated) continue;
       }
-      // v2.482 深链形态：不比对「落地视图 = 请求视图」（深链回退本就落首页），
-      // 只要求应用能启动：资源无 4xx、有可见控件、导航有激活态。
+      // v2.482 深链形态：不比对「落地视图 = 请求视图」（多级深链回退本就落首页），
+      // 只要求应用能启动：资源无 4xx、有可见控件、导航有激活态；
+      // v2.490 起，哈希段是白名单视图（可带 ?查询串）时额外断言落点，防止「能开但静默回首页」。
       if (r.deepLink) {
         if (!r.appBooted) issues.push({ pass: pass.label, view: r.requested, kind: 'deepLinkNotBooted', detail: '深链下无任何可见交互控件（脚本可能未加载）' });
         if (!r.navReady) issues.push({ pass: pass.label, view: r.requested, kind: 'deepLinkNavMissing', detail: '深链下导航无激活项（页面未完成初始化）' });
+        if (r.expectedView && r.landedView !== r.expectedView) {
+          issues.push({ pass: pass.label, view: r.requested, kind: 'deepLinkViewMismatch', detail: `应落到 ${r.expectedView}，实际 ${r.landedView || '无激活项'}` });
+        }
         (r.assetFailures || []).forEach((x) => issues.push({ pass: pass.label, view: r.requested, kind: 'deepLinkAssetFail', detail: x }));
       }
       // 真实入口打不开内容（点了入口却仍只有关闭键）= 点击无效/空白弹窗，是真缺陷不是盲区

@@ -40,6 +40,14 @@ test('hash 解析只认白名单视图，脏 hash 一律回落到首页', () => 
   assert.match(init, /fromRoute: true/, 'popstate 内的切换不能再写一次历史，否则后退会自增');
 });
 
+// v2.490 分享链接常被二次加工（复制时带上筛选/定位参数），形如 #/works?id=123。
+// 旧实现把 hash 整串拿去比对白名单，`works?id=123` 不在名单里 → 静默回落首页，
+// 用户点开分享链接看到的是首页，表现为「链接打不开对应页面」。
+test('hash 段内带查询串/锚点时仍能识别白名单视图', () => {
+  const fn = pick('viewFromHash');
+  assert.match(fn, /split\(['"]\?['"]\)/, '解析前必须剥掉 hash 内的查询串（#/works?id=1 应识别为 works）');
+});
+
 test('管理后台不在未登录时从 URL 恢复，避免刷新即弹登录框', () => {
   const init = pick('initViewRouter');
   assert.match(init, /initial !== 'admin' \|\| Api\.isAuthed\(\)/, 'admin 视图需登录后才可恢复');
