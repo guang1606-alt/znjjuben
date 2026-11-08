@@ -88,4 +88,27 @@ describe('v2.471 文案准确性', () => {
       '前端模式 id 与后端 CREATION_MODES 不一致（会产生可选但不可建的卡片）',
     );
   });
+
+  it('G7 岗位数量必须与后端 ALL_ROLE_IDS 对齐（九大），不得手写「十大 / 10 岗位」', () => {
+    const policy = fs.readFileSync(path.join(ROOT, 'src', 'lib', 'model-config-policy.ts'), 'utf8');
+    const m = policy.match(/ALL_ROLE_IDS:\s*RoleId\[\]\s*=\s*\[([\s\S]*?)\]/);
+    assert.ok(m, 'model-config-policy.ts 缺少 ALL_ROLE_IDS');
+    const count = (m[1].match(/'[a-z]+'/g) || []).length;
+    assert.strictEqual(count, 9, 'ALL_ROLE_IDS 应恰为 9 个（本守卫的数量基准），实际 ' + count);
+    const zhNum = { 9: '九', 10: '十' }[count];
+    // 前端：任何文件都不得再写「十大岗位 / 10 岗位 / 十岗位」
+    const bad = [];
+    for (const [file, src] of webSources()) {
+      if (/十大岗位|10\s*岗位|十岗位/.test(src)) bad.push(file);
+    }
+    assert.deepStrictEqual(bad, [], '岗位数量与实际不符（后端 ALL_ROLE_IDS 为 ' + count + ' 个）：' + bad.join(', '));
+    // 首页副标题必须用对齐后的数字（中英各一处，i18n 与 app.js 兜底文案都要对）
+    const i18n = read('i18n.js');
+    assert.match(i18n, new RegExp(zhNum + '大岗位智能体协同创作'), 'i18n 中文首页副标题的岗位数必须为' + zhNum + '大');
+    assert.match(i18n, /homeSub:\s*'Nine agent roles/, 'i18n 英文首页副标题必须为 Nine agent roles');
+    assert.ok(!/Ten agent roles|Ten specialized agents/.test(read('app.js')), 'app.js 英文兜底文案仍写 Ten');
+    // 后端对外的 Word 清单同源文案
+    const docx = fs.readFileSync(path.join(ROOT, 'src', 'lib', 'api-directory-docx.ts'), 'utf8');
+    assert.ok(!/十岗位|10\s*岗位/.test(docx), 'api-directory-docx.ts 的岗位数文案仍与实际不符');
+  });
 });

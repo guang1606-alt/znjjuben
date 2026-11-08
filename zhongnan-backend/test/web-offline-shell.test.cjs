@@ -9,7 +9,8 @@
  *   ③ 断网时静态资源走缓存命中（不只是入口 HTML 能开，脚本样式也得在）；
  *   ④ /api/* 一律不拦截（接口带token与时效性，缓存会串号/串数据）；
  *   ⑤ activate 清理旧版本桶，只保留当前版本；
- *   ⑥ app.js 只在安全上下文注册，并把入口的 ?v= 带给 sw.js（升版即换桶）。
+ *   ⑥ app.js 只在安全上下文注册，并把入口的 ?v= 带给 sw.js（升版即换桶）；
+ *   ⑦ 注册地址必须以「脚本自身 URL」为基准解析：深链文档下不能退化成 /<一级路径>/sw.js。
  */
 const test = require('node:test');
 const assert = require('node:assert/strict');
@@ -198,4 +199,20 @@ test('⑥ app.js 仅在安全上下文注册，并把入口 ?v= 传给 sw.js', (
   assert.match(fn, /searchParams\.get\('v'\)|searchParams\.get\("v"\)/, '版本号要取自入口资源 URL 的 ?v=');
   assert.match(fn, /catch/, '注册失败（隐私模式/策略禁用）不得打断主流程');
   assert.match(src, /initOfflineShell\(\);/, '启动段必须接线 initOfflineShell');
+});
+
+test('⑦ SW 注册地址相对「脚本自身 URL」解析，深链文档下不得退化成 /<一级路径>/sw.js', () => {
+  const src = fs.readFileSync(path.join(ROOT, 'app.js'), 'utf8');
+  const m = src.match(/function initOfflineShell\([^)]*\)[\s\S]*?\n  \}/);
+  assert.ok(m, 'app.js 缺少 initOfflineShell()');
+  const fn = m[0];
+  // 语义自证：为什么必须换基准——文档地址解析会把深链的一级路径当成目录
+  assert.equal(new URL('./sw.js', ORIGIN + '/works/12345').href, ORIGIN + '/works/sw.js',
+    '文档基准会把 ./sw.js 解析到一级路径下（记录真实失败模式）');
+  assert.equal(new URL('./sw.js?v=2.480.0', new URL('/app.js?v=2.480.0', ORIGIN)).href,
+    ORIGIN + '/sw.js?v=2.480.0', '脚本基准在深链文档下仍应落到同源根目录');
+  // 结构约束：必须先解析脚本 URL，再以它为基准解析 sw.js
+  assert.match(fn, /scriptUrl\s*=\s*new URL\(/, '必须先解析出 app.js 自身的 URL 作为基准');
+  assert.match(fn, /new URL\([^)]*,\s*scriptUrl\)/, 'sw.js 必须以脚本 URL 为基准解析');
+  assert.ok(!/register\(\s*'\.\/sw\.js/.test(fn), '不得把 ./sw.js 直接交给 register（会按文档 URL 解析）');
 });

@@ -148,12 +148,19 @@
     const host = String(location.hostname || '');
     const secure = proto === 'https:' || /^(localhost|127\.0\.0\.1|\[::1\])$/.test(host);
     if (!secure) return;
+    let scriptUrl = null;
     let v = '';
     try {
       const tag = document.querySelector('script[src*="app.js"]');
-      v = new URL((tag && tag.src) || '', location.href).searchParams.get('v') || '';
-    } catch { v = ''; }
-    const url = './sw.js' + (v ? '?v=' + encodeURIComponent(v) : '');
+      scriptUrl = new URL((tag && tag.src) || './app.js', location.href);
+      v = scriptUrl.searchParams.get('v') || '';
+    } catch { scriptUrl = null; v = ''; }
+    // v2.480 深链修正：'./sw.js' 是按「文档地址」解析的——用户从旧链接打开 /works/12345 这类深链时
+    // 会变成 /works/sw.js 并 404，register 的 catch 又把它吞掉，离线壳在这些页面上静默不存在
+    // （页面照常能开，只有断网才发现打不开，正是最难排查的一类）。改以 app.js 自身 URL 为基准：
+    // 根路径与任意深链都落到同一个同源 /sw.js，子路径部署同样成立。
+    const swBase = './sw.js' + (v ? '?v=' + encodeURIComponent(v) : '');
+    const url = scriptUrl ? new URL(swBase, scriptUrl).href : swBase;
     try {
       navigator.serviceWorker.register(url).catch(() => { /* 隐私模式/策略禁用：不影响主流程 */ });
     } catch { /* 老浏览器 register 同步抛错 */ }
@@ -283,8 +290,8 @@
     $('brandSlogan').textContent = lang === 'en' ? 'Human-grade, AI-undetectable vertical short-drama studio' : '人类级、无AI感的竖屏短剧创作工作台';
     $('heroTitle').textContent = lang === 'en' ? 'Turn one idea into a full AI writers’ room' : '把一个灵感，交给一整支AI编剧团队';
     $('heroSub').textContent = lang === 'en'
-      ? 'Ten specialized agents collaborate; gated, anti-AI, market-aware scripts.'
-      : '十大岗位智能体协同创作，分级把关、去AI化、贴合市场，进度全程可见。';
+      ? 'Nine specialist agents collaborate; gated, anti-AI, market-aware scripts.'
+      : '九大岗位智能体协同创作，分级把关、去AI化、贴合市场，进度全程可见。';
     $('xnLine').textContent = lang === 'en' ? 'Xiaonan: Ready when you are.' : '小南：准备开工～';
     if (typeof refreshListenBtn === 'function') refreshListenBtn();
     // c207：切语言后播放器按钮（播放/暂停/继续）与进度文案也要立即跟随
@@ -10688,7 +10695,7 @@
     const cov = j.coverage && (j.coverage.missing.length || j.coverage.extra.length)
       ? znErrorHtml('目录覆盖异常', `缺 ${j.coverage.missing.join(',') || '无'} / 多 ${j.coverage.extra.join(',') || '无'}`)
       : '<div class="notice">目录覆盖自检 ✅ 模型目录每个型号都有申请入口</div>';
-    box.innerHTML = cov + '<div style="margin:6px 0 10px"><button class="btn-primary" id="apiDirDocx">下载设计版 Word 清单（封面/预留填写位/签署位）</button></div>' + tbl('一、文本大模型（10 岗位流水线）', j.text) + tbl('二、图片大模型（海报/分镜，全部收费）', j.image) + tbl('三、基础设施 API（登录/支付/存储/审核/语音等）', j.infra);
+    box.innerHTML = cov + '<div style="margin:6px 0 10px"><button class="btn-primary" id="apiDirDocx">下载设计版 Word 清单（封面/预留填写位/签署位）</button></div>' + tbl('一、文本大模型（9 岗位流水线）', j.text) + tbl('二、图片大模型（海报/分镜，全部收费）', j.image) + tbl('三、基础设施 API（登录/支付/存储/审核/语音等）', j.infra);
     const dl = $('apiDirDocx'); if (dl) dl.onclick = () => { admDownload('/model/api-directory/docx', 'zhongnanji-api-directory.docx'); };
     box.querySelectorAll('[data-copy]').forEach((b) => b.onclick = () => { navigator.clipboard?.writeText(b.dataset.copy || ''); b.textContent = '已复制'; setTimeout(() => (b.textContent = '复制'), 1200); });
   }

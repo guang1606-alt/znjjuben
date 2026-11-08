@@ -29,7 +29,7 @@ export interface ApiEntry {
 }
 
 export const API_DIRECTORY: ApiEntry[] = [
-  /* ================= 一、文本大模型（10 岗位流水线，国内外最适 + 国产最强替补） ================= */
+  /* ================= 一、文本大模型（9 岗位流水线，国内外最适 + 国产最强替补） ================= */
   {
     id: 'api_deepseek', layer: 'llm_text', catalogId: 'deepseek_v4flash', catalogIds: ['deepseek_v4pro'], vendor: '深度求索 DeepSeek', product: 'DeepSeek 开放平台（V4-Flash / V4-Pro 同入口）',
     region: 'domestic', usedBy: ['剧情架构师(首选/替补)', '观众代言官(首选)', '市场终评(首选)', '经济档逻辑岗'],

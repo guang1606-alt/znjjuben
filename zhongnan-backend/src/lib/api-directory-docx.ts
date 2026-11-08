@@ -67,7 +67,7 @@ export async function renderApiDirectoryDocx(version: string): Promise<Buffer> {
     p('3. 创作类模型按「首选全球最适 + 第一替补国产最强」配置；任一海外服务不可用时自动切国产替补，不中断用户创作。'),
     p('4. 单价以后台真实账单为准，用户售价始终不低于采购成本 2 倍；如厂商控制台改版，以其官网最新入口为准。'),
 
-    p('一、文本大模型（十岗位 AGI 协作流水线）', { head: true, before: 240 }),
+    p('一、文本大模型（九大岗位 AGI 协作流水线）', { head: true, before: 240 }),
     apiTable(API_DIRECTORY.filter((e) => e.layer === 'llm_text'), true),
     p('二、图片大模型（剧本海报 / 分镜，全部收费、无免费额度）', { head: true, before: 240 }),
     apiTable(API_DIRECTORY.filter((e) => e.layer === 'llm_image'), true),

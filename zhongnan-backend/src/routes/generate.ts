@@ -2816,7 +2816,7 @@ generateRouter.post('/episodes', authRequired, async (req: AuthRequest, res) => 
   // v2.190 用户显式取消信号：注册到全局 map，取消端点 abort() 后停止后续 LLM 调用
   const abortController = new AbortController();
   setActiveAbort(task.id, abortController);
-  // v2.191 全局硬超时 30 分钟：防止候选链×重试×10 岗位叠加导致最坏 180 分钟无法中断
+  // v2.191 全局硬超时 30 分钟：防止候选链×重试×9 岗位叠加导致最坏 180 分钟无法中断
   const GLOBAL_TIMEOUT_MS = 30 * 60_000;
   const globalTimeout = setTimeout(() => abortController.abort(), GLOBAL_TIMEOUT_MS);
 
