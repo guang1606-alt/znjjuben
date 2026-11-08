@@ -16,6 +16,11 @@ export const FEN_PER_POINT = 10; // 1 积分 = 0.1 元 = 10 分
 export enum MemberLevel { FREE = 'FREE', BASIC = 'BASIC', ADVANCED = 'ADVANCED', PRO = 'PRO' }
 export enum EngineTier { ECONOMY = 'ECONOMY', STANDARD = 'STANDARD', FLAGSHIP = 'FLAGSHIP', OVERSEAS = 'OVERSEAS' }
 
+/** 预留档位：成本已登记但暂不售卖。必须同时不出现在任何 MEMBERSHIP.engines 与 EP_PRICE 中。
+ *  v2.487 起由 pricingMatrixErrors()（启动自检）与 scripts/guard-pricing-matrix.cjs（提交前）双向锁死：
+ *  「engines 有价无目」= 用户可选却算不出价（0 积分白跑），「有价目未授权」= 死价目，两者都是名实不符。 */
+export const RESERVED_TIERS: EngineTier[] = [EngineTier.OVERSEAS];
+
 /** 引擎单集积分价矩阵（积分/集）—— 最终定价权威表 */
 export const EP_PRICE: Record<MemberLevel, Partial<Record<EngineTier, number>>> = {
   FREE:     { ECONOMY: 12 },                                  // 零售 1.2 元/集（每日2集补贴内不扣）
@@ -55,7 +60,9 @@ export const ENGINE = {
   STANDARD: { costFenPerEp: 35, label: '标准引擎（均衡强组合）' },
   FLAGSHIP: { costFenPerEp: 110, label: '旗舰引擎（顶配多模型协同）' },
   // v2.54 海外档：预留不开放购买；EP_PRICE 未列 OVERSEAS → assertMargin 自动拒售。
-  // 启用时只需在 EP_PRICE 各 MemberLevel 加 OVERSEAS 列 + MEMBERSHIP.engines 加 OVERSEAS 即可
+  // v2.487 启用步骤收紧为三处同改（缺一即被 pricingMatrixErrors / guard-pricing-matrix 拦下）：
+  //   ①EP_PRICE 各 MemberLevel 加 OVERSEAS 单价（并满足 ≥成本×2）；②对应 MEMBERSHIP.engines 加 OVERSEAS；
+  //   ③从 RESERVED_TIERS 移除。
   OVERSEAS: { costFenPerEp: 200, label: '海外API创作引擎（预留·未开放购买）' },
 } as const;
 
@@ -117,9 +124,44 @@ export const INVITE = {
   BONUS_VALID_DAYS: 90,
 };
 
-/** 某会员档用某引擎生成一集的积分价（未授权组合返回0，由 engines 权限在调用前拦截） */
+/** 某会员档用某引擎生成一集的积分价（未授权组合返回 0，由 engines 权限在调用前拦截） */
 export function episodePoints(level: MemberLevel, tier: EngineTier): number {
   return EP_PRICE[level]?.[tier] ?? 0;
+}
+
+/** 定价矩阵一致性（v2.487）：可售引擎与单集价必须双向一一对应。
+ *  背景：generate.ts 的门控只查 MEMBERSHIP[level].engines，计费走 episodePoints()（缺价返回 0）。
+ *  一旦「授权了某引擎但漏配单价」，用户能选、能跑整条 LLM 流水线、却扣 0 积分——不报错、不红测试，
+ *  只在账单上悄悄漏营收；反向「配了价但没授权」则是死价目，会员页会写出用户永远选不到的档位。
+ *  纯函数、零 IO，启动自检与守卫脚本共用同一口径。 */
+export function pricingMatrixErrors(): string[] {
+  const errors: string[] = [];
+  const levels = [MemberLevel.FREE, MemberLevel.BASIC, MemberLevel.ADVANCED, MemberLevel.PRO];
+  const allTiers = Object.keys(ENGINE) as EngineTier[];
+  const reserved = new Set<EngineTier>(RESERVED_TIERS);
+  for (const lv of levels) {
+    const engines = MEMBERSHIP[lv].engines as readonly EngineTier[];
+    const priced = Object.keys(EP_PRICE[lv] || {}) as EngineTier[];
+    for (const tier of engines) {
+      if (reserved.has(tier)) errors.push(`${lv}: 预留档 ${tier} 不得出现在 engines（尚未开放售卖）`);
+      const pts = EP_PRICE[lv][tier];
+      if (pts == null || pts <= 0) errors.push(`${lv}+${tier}: 已授权但无有效单集价（用户可选却算不出价，0 积分白跑）`);
+    }
+    for (const tier of priced) {
+      if (!engines.includes(tier)) errors.push(`${lv}+${tier}: 有单集价但未授权（死价目，用户永远选不到）`);
+    }
+  }
+  for (const tier of allTiers) {
+    const soldSomewhere = levels.some((lv) => (MEMBERSHIP[lv].engines as readonly EngineTier[]).includes(tier));
+    const pricedSomewhere = levels.some((lv) => EP_PRICE[lv][tier] != null);
+    if (reserved.has(tier)) {
+      if (soldSomewhere) errors.push(`${tier}: 已列 RESERVED_TIERS 却出现在 MEMBERSHIP.engines`);
+      if (pricedSomewhere) errors.push(`${tier}: 已列 RESERVED_TIERS 却出现在 EP_PRICE`);
+    } else if (!soldSomewhere) {
+      errors.push(`${tier}: 非预留档却没有任何会员可售（整档静默下架/漏配 engines）`);
+    }
+  }
+  return errors;
 }
 
 /** 启动自检：任何售卖组合 售价(分) < 成本(分)×2 即拒绝启动 */
@@ -132,7 +174,9 @@ export function assertNoLoss(): string[] {
   });
   ([MemberLevel.FREE, MemberLevel.BASIC, MemberLevel.ADVANCED, MemberLevel.PRO] as MemberLevel[])
     .forEach((lv) => {
-      ([EngineTier.ECONOMY, EngineTier.STANDARD, EngineTier.FLAGSHIP] as EngineTier[])
+      // v2.487 遍历全部 ENGINE 档（不再手抄三档）：新增档位一旦进 EP_PRICE 就会自动纳入铁底检查，
+      // 不会因为忘了改这行而绕开「售价≥成本×2」。
+      (Object.keys(ENGINE) as EngineTier[])
         .forEach((tier) => {
           const pts = EP_PRICE[lv][tier];
           if (pts == null) return; // 未开放组合

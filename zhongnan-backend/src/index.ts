@@ -1,5 +1,5 @@
 import 'dotenv/config';
-import { assertNoLoss } from './config/pricing';
+import { assertNoLoss, pricingMatrixErrors } from './config/pricing';
 import { createApp } from './server/app';
 import { settleDueEscrows } from './lib/escrow';
 import { prisma } from './lib/prisma';
@@ -14,6 +14,13 @@ if (lossErrors.length) {
   process.exit(1);
 }
 console.log('✅ 定价自检通过：所有售卖组合 售价 >= 成本×2');
+
+/** v2.487 定价矩阵自检：可售引擎 ↔ 单集价双向一致，杜绝「可选却算 0 积分」与死价目 */
+const matrixErrors = pricingMatrixErrors();
+if (matrixErrors.length) {
+  console.error('❌ 定价矩阵不一致（会员可售引擎与单集价未一一对应），拒绝启动：\n -', matrixErrors.join('\n - '));
+  process.exit(1);
+}
 
 /** 启动前自检：生产环境必须显式配置 JWT 密钥，杜绝公开默认密钥导致的令牌伪造 */
 try {

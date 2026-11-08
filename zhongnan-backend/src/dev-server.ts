@@ -5,7 +5,7 @@
  */
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const { createMemoryPrisma } = require('../test/helpers/memory-prisma.cjs');
-import { assertNoLoss } from './config/pricing';
+import { assertNoLoss, pricingMatrixErrors } from './config/pricing';
 import { createApp } from './server/app';
 import { createAuthRouter } from './routes/auth';
 import { createGenerateRouter } from './routes/generate';
@@ -30,6 +30,8 @@ const mem = createMemoryPrisma();
 
 const loss = assertNoLoss();
 if (loss.length) { console.error('定价自检失败', loss); process.exit(1); }
+const matrix = pricingMatrixErrors();
+if (matrix.length) { console.error('定价矩阵不一致（可售引擎与单集价未一一对应）', matrix); process.exit(1); }
 
 const app = createApp({
   auth: createAuthRouter(mem),

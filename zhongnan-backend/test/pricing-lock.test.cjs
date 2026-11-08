@@ -46,3 +46,32 @@ test('定稿邀请奖励：双方各30积分、首充返10%', () => {
 test('定稿货架整体不赔钱（assertNoLoss 为空）', () => {
   assert.deepStrictEqual(P.assertNoLoss(), []);
 });
+
+// v2.487 定价矩阵：会员可售引擎与单集价必须双向一一对应。
+// 门控只查 MEMBERSHIP.engines、计费走 episodePoints（缺价=0），
+// 一旦「授权了却没配价」，用户能选、能跑完整条流水线、扣 0 积分——不报错也不红测试。
+test('定价矩阵双向一致（pricingMatrixErrors 为空）', () => {
+  assert.deepStrictEqual(P.pricingMatrixErrors(), []);
+});
+
+test('矩阵自检能咬红：临时给授权档配 0 价 / 给未授权档加价都必须报', () => {
+  const EP = P.EP_PRICE;
+  EP.BASIC.STANDARD = 0;
+  assert.ok(P.pricingMatrixErrors().some((m) => m.includes('BASIC+STANDARD')),
+    '已授权却无有效单集价必须被矩阵自检拦下');
+  EP.BASIC.STANDARD = 15;
+  EP.FREE.STANDARD = 15;
+  assert.ok(P.pricingMatrixErrors().some((m) => m.includes('FREE+STANDARD')),
+    '有价目但未授权（死价目）必须被矩阵自检拦下');
+  delete EP.FREE.STANDARD;
+  assert.deepStrictEqual(P.pricingMatrixErrors(), [], '还原后必须回到干净状态');
+});
+
+test('铁底检查覆盖新增档位（assertNoLoss 遍历全部 ENGINE，而非手抄三档）', () => {
+  // 模拟未来启用海外档：只加价不加成本，售价必须被判定破底，证明新档位无法绕过铁底
+  P.EP_PRICE.PRO.OVERSEAS = 1;
+  assert.ok(P.assertNoLoss().some((m) => m.includes('PRO+OVERSEAS')),
+    '新增档位进 EP_PRICE 后必须自动纳入「售价≥成本×2」检查');
+  delete P.EP_PRICE.PRO.OVERSEAS;
+  assert.deepStrictEqual(P.assertNoLoss(), []);
+});
