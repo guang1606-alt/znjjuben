@@ -59,20 +59,16 @@ export const ENGINE = {
   OVERSEAS: { costFenPerEp: 200, label: '海外API创作引擎（预留·未开放购买）' },
 } as const;
 
-/** 增值服务价目（points=售价积分，costFen=真实采购成本，分）；全部满足 售价≥成本×2 */
+/** 增值服务价目（points=售价积分，costFen=真实采购成本，分）；全部满足 售价≥成本×2
+ *  v2.485 只保留「真有收费代码引用」的项：零售单集已由 EP_PRICE 表达（免费档经济 12 积分），
+ *  市场价值评估/分镜附录/听剧本均已改为权益内或免费实现，版权存证/存储扩容从无路由实现——
+ *  这些价目若留在表里，会被下一轮当成真实现状引用（名实不符），故删除；
+ *  新增任何一项前必须同时有收费代码，`scripts/guard-pricing-billing.cjs` 会拦。 */
 export const VALUE_ADDED = {
-  SCRIPT_EP_ECONOMY: { points: 20, costFen: 12, desc: '生成1集·经济引擎(零售)' },
   POSTER_STANDARD: { points: 39, costFen: 40, desc: '标准剧本海报(国产引擎4选1)' },
   POSTER_FLAGSHIP: { points: 199, costFen: 560, desc: '精品海报(旗舰GPT-image引擎4选1)' },
-  SHARE_POSTER: { points: 12, costFen: 10, desc: '分享海报(梗概,1张)' },
   PK_BATTLE: { points: 20, costFen: 2, desc: '剧本PK一次(小游戏)' },
   XIAONAN_DEEP: { points: 10, costFen: 2, desc: '小南深度共创(每次)' },
-  EVAL_REPORT: { points: 590, costFen: 30, desc: '市场价值深度评估' },
-  AI_POLISH: { points: 990, costFen: 200, desc: 'AI精修去AI化(按本)' },
-  STORYBOARD: { points: 690, costFen: 100, desc: '分镜工单转换' },
-  COPYRIGHT: { points: 490, costFen: 1500, desc: '区块链版权存证(第三方成本高)' },
-  STORAGE_10G: { points: 50, costFen: 12, desc: '存储空间扩容10G/月' },
-  LISTEN_SCRIPT: { points: 39, costFen: 13, desc: '听剧本TTS(按本,高级会员含额度)' },
   PITCH_MEETING: { points: 20, costFen: 4, desc: '选题会·一轮多角色AI共创评估' },
   TABLE_READ: { points: 30, costFen: 8, desc: '剧本围读·一轮多立场AI围读与修改清单' },
   TEARDOWN_ANALYZE: { points: 30, costFen: 8, desc: '拆爆款·拆解为什么爆+标签池+可取技法' },

@@ -20,8 +20,8 @@ const { spawnSync } = require('node:child_process');
 const ROOT = path.join(__dirname, '..');
 const SCRIPTS_DIR = path.join(ROOT, 'scripts');
 const TEST_DIR = path.join(ROOT, 'test');
-/** 家族数量基线：v2.313 时 4 个，只增不减 */
-const MIN_GUARDS = 4;
+/** 家族数量基线：v2.313 时 4 个，v2.485 增至 5 个（+ pricing-billing），只增不减 */
+const MIN_GUARDS = 5;
 /** 配对 test 最小字节数：防空壳 test（仅注释/describe 壳）骗过存在性检查 */
 const MIN_TEST_BYTES = 200;
 const CLI_TIMEOUT_MS = 30000;

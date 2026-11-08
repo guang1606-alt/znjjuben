@@ -8,7 +8,7 @@
  *  · 最强组合 ≠ 每岗都堆最贵模型：2026-08 多源横评交叉结论——DeepSeek(V4)逻辑/因果闭环但文笔情绪偏干，
  *    豆包 Seed-2.0「写文章最像人、几乎无AI味」、MiniMax 角色对白强、Claude(Sonnet5)叙事去AI腔第一梯队、
  *    Gemini3/Kimi K3 超长上下文与多语。故：架构/挑漏用 DeepSeek，中文成稿(writer)/人设/润色以豆包为主、MiniMax/Claude 补强；
- *  · Claude Opus 5 极贵，不进“每集”组合（会击穿成本×2铁底），只用于“按本精修”增值服务(VALUE_ADDED.AI_POLISH)。
+ *  · Claude Opus 5 极贵，不进“每集”组合（会击穿成本×2铁底），仅登记为旗舰档备用/对照，不进任何组合流水线。
  *
  * 单价为 2026-08 公开价保守参考量级（元/百万 token，就高不就低），以后台真实账单校准；型号可在后台一键替换。
  * 合规/市场评分默认走本地引擎(LOCAL，零模型成本)，把钱花在架构/人设/撰写/润色上。
@@ -42,7 +42,7 @@ export const TEXT_MODELS: ModelInfo[] = [
   { id: 'minimax_m25', vendor: 'MiniMax', name: 'MiniMax-M2.5', modality: 'text', goodAt: ['character', 'writer', 'polish'], inYuanPerMTok: 2.1, outYuanPerMTok: 8.4, contextK: 256, region: 'domestic', grade: 'std', defaultBaseUrl: 'https://api.minimax.chat/v1', note: '创意写作/角色扮演强，人物对白与差异化声口' },
   { id: 'gpt_5flag', vendor: 'OpenAI', name: 'GPT-5.x 旗舰', modality: 'text', goodAt: ['architect', 'polish', 'character'], inYuanPerMTok: 25, outYuanPerMTok: 100, contextK: 256, region: 'overseas', grade: 'flag', defaultBaseUrl: 'https://api.openai.com/v1', note: '综合最强梯队，旗舰架构/复杂统筹' },
   { id: 'claude_sonnet5', vendor: 'Anthropic', name: 'Claude Sonnet 5', modality: 'text', goodAt: ['polish', 'character', 'writer'], inYuanPerMTok: 22, outYuanPerMTok: 110, contextK: 200, region: 'overseas', grade: 'flag', defaultBaseUrl: 'https://api.anthropic.com/v1', note: '叙事/人物/去AI腔第一梯队，旗舰人设润色' },
-  { id: 'claude_opus5', vendor: 'Anthropic', name: 'Claude Opus 5', modality: 'text', goodAt: ['polish', 'architect'], inYuanPerMTok: 36, outYuanPerMTok: 180, contextK: 200, region: 'overseas', grade: 'flag', defaultBaseUrl: 'https://api.anthropic.com/v1', note: '2026智能指数第一，但每集成本过高，仅用于按本精修增值，不进每集组合' },
+  { id: 'claude_opus5', vendor: 'Anthropic', name: 'Claude Opus 5', modality: 'text', goodAt: ['polish', 'architect'], inYuanPerMTok: 36, outYuanPerMTok: 180, contextK: 200, region: 'overseas', grade: 'flag', defaultBaseUrl: 'https://api.anthropic.com/v1', note: '2026智能指数第一，但每集成本过高，仅登记备用、不进每集组合' },
   { id: 'gemini_3pro', vendor: 'Google', name: 'Gemini 3.x Pro', modality: 'text', goodAt: ['market_pre', 'character', 'compliance'], inYuanPerMTok: 14, outYuanPerMTok: 86, contextK: 1024, region: 'overseas', grade: 'flag', defaultBaseUrl: 'https://generativelanguage.googleapis.com/v1beta/openai', note: '百万级超长上下文、多语，旗舰市场前置/海外资料消化' },
 ];
 

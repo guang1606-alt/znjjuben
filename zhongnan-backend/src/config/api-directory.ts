@@ -68,9 +68,9 @@ export const API_DIRECTORY: ApiEntry[] = [
   },
   {
     id: 'api_anthropic', layer: 'llm_text', catalogId: 'claude_sonnet5', catalogIds: ['claude_opus5'], vendor: 'Anthropic', product: 'Claude Sonnet/Opus（旗舰档人设润色，海外）',
-    region: 'overseas', usedBy: ['旗舰档人设设计师/细节润色师首选', '按本精修增值'],
+    region: 'overseas', usedBy: ['旗舰档人设设计师/细节润色师首选'],
     consoleUrl: 'https://console.anthropic.com/', docUrl: 'https://docs.anthropic.com/',
-    baseUrl: 'https://api.anthropic.com/v1', necessity: 'alternative', note: '叙事去AI腔第一梯队；海外结算，断供自动切 MiniMax/豆包；Opus 仅按本精修、不进每集组合',
+    baseUrl: 'https://api.anthropic.com/v1', necessity: 'alternative', note: '叙事去AI腔第一梯队；海外结算，断供自动切 MiniMax/豆包；Opus 仅登记备用、不进每集组合',
   },
   {
     id: 'api_gemini', layer: 'llm_text', catalogId: 'gemini_3pro', vendor: 'Google', product: 'Gemini 3.x Pro（AI Studio / Vertex，海外）',

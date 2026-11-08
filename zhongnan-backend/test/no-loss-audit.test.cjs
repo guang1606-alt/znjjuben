@@ -25,7 +25,7 @@ test('【总账2】每个会员×其【已开放】引擎档：实付价≥真�
   }
 });
 
-test('【总账3】增值服务逐项：售价积分×10 ≥ 成本分×2（含海报/PK/小南/精修/版权/TTS/存储）', () => {
+test('【总账3】增值服务逐项：售价积分×10 ≥ 成本分×2（含海报/PK/小南/围读/拆解/定向重写）', () => {
   for (const [k, it] of Object.entries(VALUE_ADDED)) {
     const priceFen = it.points * FEN_PER_POINT;
     assert.ok(priceFen >= it.costFen * 2,
@@ -40,8 +40,6 @@ test('【总账4】图片海报：4张真实成本与定价costFen精确对齐�
   assert.strictEqual(VALUE_ADDED.POSTER_FLAGSHIP.costFen, flagCost);
   assert.ok(VALUE_ADDED.POSTER_STANDARD.points * FEN_PER_POINT >= stdCost * 2);
   assert.ok(VALUE_ADDED.POSTER_FLAGSHIP.points * FEN_PER_POINT >= flagCost * 2);
-  // 分享梗概海报也不亏
-  assert.ok(VALUE_ADDED.SHARE_POSTER.points * FEN_PER_POINT >= VALUE_ADDED.SHARE_POSTER.costFen * 2);
 });
 
 test('【总账5】会员月费 ≥ 当月赠送集全部用经济档兑完的真实成本（赠送只抵经济档，绝不倒贴）', () => {
