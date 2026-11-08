@@ -29,9 +29,9 @@
  * --deep 追加（登录态 + 弹窗）：
  *   用 dev-server 预置账号（PRO / 超管，密码 demo123456）经 /api/auth/login 拿令牌，
  *   按 web/api.js 的 store 口径（JSON.stringify）写入 localStorage 后重跑全部视图；
- *   并动态枚举页面内全部 `.modal-mask[id]` 强开巡检。内容由 open 函数按需渲染的空壳
- *   弹窗标记 shell 跳过（强开只会读到空标签，判缺陷是误报）。已知缺口：这些弹窗的真实
- *   内容态需要各自入口的数据准备，后续按需补真实触发器。
+ *   并动态枚举页面内全部 `.modal-mask[id]` 巡检。v2.475 起按 REAL_TRIGGERS 走真实入口，
+ *   让按需渲染的弹窗进入内容态后再审计；无法由演示数据到达的入口显式登记 needsData，
+ *   不允许静默遗漏（新增弹窗若既无真实入口也无 needsData，静态守卫测试会失败）。
  */
 const { spawn } = require('node:child_process');
 const fs = require('node:fs');
@@ -59,6 +59,35 @@ const KEEP_SERVER = !!arg('--keep', false);
 const DEMO = {
   pro: { phone: '13900000004', password: 'demo123456' },
   admin: { phone: '18891995171', password: 'demo123456' },
+};
+
+// v2.475 真实触发器目录：按需渲染的弹窗强开只会读到空壳，必须走真实入口让 open 函数把内容渲出来。
+// 字段：view=先切到的路由；pre=先点的前置入口（可传数组，按序点）；sel=触发入口（按序取第一个可见的）；
+//       needsAuth=需登录态才可触发；guestOnly=仅未登录态；needsData=演示数据不足时的显式盲区说明。
+// 约定：有 sel 的必须能真实打开；没有 sel 的必须写 needsData —— 不允许"静默未覆盖"。
+// 注意：二级配置栏（资产库/系统默认提示）默认 hidden，需先点一张模式卡（#modeGrid .mode-card）才挂载。
+const REAL_TRIGGERS = {
+  authModal: { view: 'home', sel: ['#loginBtn'], guestOnly: true },
+  sampleModal: { view: 'home', sel: ['#homeSampleBtn', '#sampleEntryBtn'] },
+  feedbackModal: { view: 'home', sel: ['#feedbackEntryBtn'] },
+  castLibModal: { view: 'studio', pre: '#modeGrid .mode-card', sel: ['#castLibBtn'] },
+  propLibModal: { view: 'studio', pre: '#modeGrid .mode-card', sel: ['#propLibBtn'] },
+  sceneLibModal: { view: 'studio', pre: '#modeGrid .mode-card', sel: ['#sceneLibBtn'] },
+  smartModal: { view: 'studio', pre: '#modeGrid .mode-card', sel: ['#smartDefaultBtn'], needsAuth: true },
+  xnChatModal: { view: 'home', sel: ['#xnFloat'], needsAuth: true },
+  mineModal: { view: 'market', sel: ['#mkMineBtn'], needsAuth: true },
+  // 资产看板按钮嵌在资产库弹窗内：先选模式 → 开库 → 点看板（看板本身需登录，游客只能看到 needLogin）
+  assetDashboardModal: { view: 'studio', pre: ['#modeGrid .mode-card', '#castLibBtn'], sel: ['[data-open-dash]'], needsAuth: true },
+  // 以下入口依赖已生成剧本/已购交易，演示账号无从到达 → 显式登记，等有数据再自动升级为真实入口
+  pkModal: { view: 'studio', sel: [], needsData: '需先生成剧本（openPk 无 currentProjectId 直接提示）' },
+  valueModal: { view: 'studio', sel: [], needsData: '需先生成剧本（openValueCard 无 projectId 直接提示）' },
+  detailModal: { view: 'market', sel: [], needsData: '交易广场无上架作品（演示库为空）' },
+  listModal: { view: 'market', sel: [], needsAuth: true, needsData: '账号无自己的剧本可上架' },
+  listenModal: { view: 'works', sel: [], needsData: '账号无成稿项目可听' },
+  fullModal: { view: 'market', sel: [], needsData: '无已购剧本全文' },
+  dpModal: { view: 'studio', sel: [], needsData: '无生成项目（需先跑一集）' },
+  matModal: { view: 'studio', sel: [], needsData: '无生成项目（需先跑一集）' },
+  xMatureModal: { view: 'studio', sel: [], needsData: '需触发成熟题材拦截（生成前）' },
 };
 
 function log(...a) { if (!JSON_ONLY) console.log(...a); }
@@ -153,11 +182,30 @@ function inPageAudit() {
   const tinyTargets = [];
 
   // 有遮罩/对话框打开时，罩外控件被挡住是设计使然（如未登录进管理后台弹登录框），
-  // 只检查罩内控件，避免整页误报。
-  const overlay = document.querySelector('.modal-mask:not(.hidden), .modal.open, .overlay.open, .ui-dlg-overlay, #workbenchLayer:not(.hidden)');
+  // 只检查罩内控件，避免整页误报。嵌套弹窗（如资产库上叠资产看板）必须取 DOM 最后的可见层，
+  // 否则会拿被压在下面的弹窗当遮罩，把"上层正常覆盖下层"误判成点击被吃。
+  const overlays = [...document.querySelectorAll('.modal-mask:not(.hidden), .modal.open, .overlay.open, .ui-dlg-overlay, #workbenchLayer:not(.hidden)')];
+  const overlay = overlays.length ? overlays[overlays.length - 1] : null;
   const overlayOpen = overlay ? desc(overlay) : '';
   let overlayControls = 0;
-  if (overlay) overlayControls = nodes.filter((el) => overlay.contains(el) && painted(el)).length;
+  let overlayTextLen = 0;
+  let overlayVisibleNodes = 0;
+  // 内容态 ≠ 内容丰富：空数据弹窗（无购买/无上架/无素材）本身就只有几行空态文字，
+  // 用纯文本长度判空壳会误报。真正的「空壳」只有两种：①仍停在加载骨架；②什么都没渲染。
+  // 因此额外采样骨架与空态标记，并允许 open 函数用 data-content-ready 显式声明「已渲染完成」。
+  let overlaySkeleton = false;
+  let overlayEmptyState = false;
+  let overlayReady = false;
+  if (overlay) {
+    overlayControls = nodes.filter((el) => overlay.contains(el) && painted(el)).length;
+    // 内容态判定不能只看交互控件：看板/统计类弹窗可能整屏是图表文字、只有一个关闭按钮。
+    // 用可见文本长度 + 可见节点数作为「有没有渲染出内容」的判据。
+    overlayTextLen = (overlay.innerText || '').replace(/\s+/g, ' ').trim().length;
+    overlayVisibleNodes = [...overlay.querySelectorAll('*')].filter((el) => painted(el)).length;
+    overlaySkeleton = !!overlay.querySelector('.sk-list[aria-busy="true"], .skeleton');
+    overlayEmptyState = !!overlay.querySelector('.zn-empty, .muted, [class*="empty"]');
+    overlayReady = overlay.getAttribute('data-content-ready') === '1';
+  }
 
   // 横向可滚动容器内的元素（如窄屏导航条）越界是"滑动可达"，不算布局溢出
   const scrollableAncestor = (el) => {
@@ -165,6 +213,26 @@ function inPageAudit() {
     while (n && n !== document.body) {
       const s = getComputedStyle(n);
       if ((s.overflowX === 'auto' || s.overflowX === 'scroll') && n.scrollWidth > n.clientWidth + 1) return true;
+      n = n.parentElement;
+    }
+    return false;
+  };
+
+  // 被可滚动祖先裁到可视区外（如弹窗底部按钮需滚动才能看到）：视口坐标仍在页内，
+  // 但该点命中的是容器/遮罩而非按钮本身，属"滚动可达"，不是点击被吃，必须跳过。
+  const clippedByAncestor = (el, r) => {
+    const cx = r.left + r.width / 2;
+    const cy = r.top + r.height / 2;
+    let n = el.parentElement;
+    while (n && n !== document.body) {
+      const s = getComputedStyle(n);
+      const scrollY = s.overflowY === 'auto' || s.overflowY === 'scroll' || s.overflow === 'auto' || s.overflow === 'scroll';
+      const scrollX = s.overflowX === 'auto' || s.overflowX === 'scroll' || s.overflow === 'auto' || s.overflow === 'scroll';
+      if (scrollY || scrollX) {
+        const nr = n.getBoundingClientRect();
+        if (scrollY && (cy < nr.top || cy > nr.bottom)) return true;
+        if (scrollX && (cx < nr.left || cx > nr.right)) return true;
+      }
       n = n.parentElement;
     }
     return false;
@@ -182,6 +250,7 @@ function inPageAudit() {
     if (cs.pointerEvents === 'none') continue; // 穿透层本身不可点，不算被遮挡
     if (overlay && !overlay.contains(el)) continue; // 遮罩外的控件按设计被挡
     if (r.top < 0 || r.bottom > vh || r.left < 0 || r.right > vw) continue; // 视口外不做命中测试
+    if (clippedByAncestor(el, r)) continue; // 滚动容器裁切，滚动可达
     const cx = Math.min(vw - 1, Math.max(0, r.left + r.width / 2));
     const cy = Math.min(vh - 1, Math.max(0, r.top + r.height / 2));
     const hit = document.elementFromPoint(cx, cy);
@@ -253,6 +322,8 @@ function inPageAudit() {
     visibleControls: nodes.filter((el) => painted(el)).length,
     overlayOpen,
     overlayControls,
+    overlayTextLen,
+    overlayVisibleNodes,
     activeNavHidden,
     view: (location.hash || '').replace(/^#\/?/, '') || 'home',
   };
@@ -304,8 +375,22 @@ async function newAuthedContext(browser, base, cred, viewport) {
   return ctx;
 }
 
-// 全部弹窗内部巡检：动态枚举页面里的 .modal-mask（不硬编码 id，新增弹窗自动覆盖），
-// 逐个显示 → 审计控件遮挡/命名/溢出 → 隐藏还原。
+/**
+ * 空壳判据（单一入口，避免两处阈值漂移）：
+ * - 真实入口打开的弹窗：由 open 函数自己渲染，若已声明 data-content-ready 或已渲染空态/正常内容，
+ *   即算内容态；只有仍停留骨架才算空壳。空数据弹窗（无购买/无上架/无素材）文本天然很短，
+ *   不能用统一文本阈值判空壳。
+ * - 强开兜底：没有 open 函数执行，只有阈值可依。
+ */
+function isShell(data, realTriggered) {
+  if (realTriggered && (data.overlayReady || data.overlayEmptyState) && !data.overlaySkeleton) return false;
+  if (realTriggered && data.overlaySkeleton) return true;
+  return data.overlayControls <= 1 && data.overlayTextLen < 60 && data.overlayVisibleNodes < 12;
+}
+
+// 全部弹窗内部巡检：动态枚举页面里的 .modal-mask（不硬编码 id，新增弹窗自动覆盖）。
+// v2.475 起先走真实入口（REAL_TRIGGERS）让按需渲染的弹窗进入内容态再审计；
+// 没有真实入口可走的强开兜底，空壳标 shell，演示数据不足的按 needsData 登记盲区。
 async function auditModals(browser, base, cred, viewport) {
   const ctx = cred
     ? await newAuthedContext(browser, base, cred, viewport)
@@ -319,35 +404,106 @@ async function auditModals(browser, base, cred, viewport) {
   await page.waitForTimeout(1100);
 
   const results = [];
-  // authModal 的内容由真实入口（登录按钮 → syncAuthTabs）填充；强行显示只会读到空壳，
-  // 未登录时先点真实按钮，拿到可信状态再审计。
-  let realAuthDone = false;
-  if (!cred) {
-    realAuthDone = await page.evaluate(() => {
-      const b = document.getElementById('loginBtn');
-      if (!b || b.offsetParent === null) return false;
-      b.click();
-      return true;
+  // 可靠收起：先点弹窗内关闭键走正常路径，再强制补 hidden ——
+  // 只靠 [data-close] 时有的弹窗关闭键是异步/改状态，没真正隐藏会让下一个弹窗叠在上面，
+  // 制造"点击被吃"整批假象（实测 xnChat/资产库叠在 auth 上）。
+  const hideAllModals = async () => {
+    await page.evaluate(() => {
+      document.querySelectorAll('.modal-mask').forEach((m) => m.classList.add('hidden'));
     });
-    if (realAuthDone) {
-      await page.waitForTimeout(220);
-      const d = await page.evaluate(inPageAudit);
-      d.requested = 'modal:authModal';
-      d.isModal = true;
-      results.push(d);
-      await page.evaluate(() => {
-        const c = document.getElementById('authClose');
-        if (c) c.click(); else document.getElementById('authModal')?.classList.add('hidden');
-      });
-      await page.waitForTimeout(120);
+    await page.waitForTimeout(80);
+  };
+  const closeModal = async (mid) => {
+    await page.evaluate((id) => {
+      const m = document.getElementById(id);
+      if (!m) return;
+      const c = m.querySelector('[data-close]');
+      if (c) c.click();
+    }, mid);
+    await page.waitForTimeout(150);
+    await hideAllModals();
+  };
+
+  // 1) 真实入口：内容态审计
+  for (const [id, spec] of Object.entries(REAL_TRIGGERS)) {
+    const guest = !cred;
+    if (spec.guestOnly && !guest) continue; // 登录后登录按钮已换成用户菜单
+    if (spec.needsAuth && guest) continue;  // 未登录会被引导去登录，入口无法到达内容态
+    if (!spec.sel || !spec.sel.length) continue;
+
+    await hideAllModals(); // 每个入口前先回到干净状态，避免上一个弹窗叠着挡住命中测试
+    if (spec.view) {
+      await page.evaluate((v) => { location.hash = '#/' + v; }, spec.view);
+      await page.waitForTimeout(500);
     }
+    const pres = Array.isArray(spec.pre) ? spec.pre : (spec.pre ? [spec.pre] : []);
+    for (const pre of pres) {
+      await page.evaluate((s) => {
+        // 同一选择器可能命中多个（如三个资产库各自的看板按钮），取第一个可见的
+        const el = [...document.querySelectorAll(s)].find((n) => {
+          const r = n.getBoundingClientRect();
+          return r.width > 0 && r.height > 0;
+        });
+        if (el) el.click();
+      }, pre);
+      await page.waitForTimeout(450);
+    }
+
+    let by = '';
+    for (const sel of spec.sel) {
+      // 入口可能是异步渲染/请求拉数据后才出内容：元素晚挂载或弹窗晚打开都重试一轮，
+      // 避免把"还没渲染"误判成"不可达"。
+      for (let attempt = 0; attempt < 3 && !by; attempt++) {
+        const clicked = await page.evaluate((s) => {
+          const el = [...document.querySelectorAll(s)].find((n) => {
+            const r = n.getBoundingClientRect();
+            return r.width > 0 && r.height > 0;
+          });
+          if (!el) return false;
+          el.click();
+          return true;
+        }, sel);
+        await page.waitForTimeout(attempt ? 900 : 650);
+        const shown = await page.evaluate((mid) => {
+          const m = document.getElementById(mid);
+          return !!m && !m.classList.contains('hidden');
+        }, id);
+        if (shown) by = sel;
+        if (!clicked && attempt >= 1) break; // 连续两轮都找不到可见入口才放弃
+      }
+      if (by) break;
+    }
+    if (!by) continue; // 打不开就退回强开兜底，由 needsData/shell 说明
+
+    // 弹窗已打开 ≠ 内容已渲染：多数 open 函数先 openModal 再请求数据，
+    // 骨架还没换成内容时抽样会把"正在加载"误判成空壳。等骨架消失（最多 4s）再审计。
+    for (let w = 0; w < 8; w++) {
+      const busy = await page.evaluate((mid) => {
+        const m = document.getElementById(mid);
+        return !!m && !!m.querySelector('.sk-list[aria-busy="true"]');
+      }, id);
+      if (!busy) break;
+      await page.waitForTimeout(500);
+    }
+
+    const data = await page.evaluate(inPageAudit);
+    data.requested = 'modal:' + id;
+    data.isModal = true;
+    data.triggeredBy = by;
+    data.shell = isShell(data, true);
+    results.push(data);
+    await closeModal(id);
   }
 
+  const done = new Set(results.map((r) => r.requested.replace('modal:', '')));
+
+  // 2) 其余弹窗：强开兜底（内容按需渲染的标 shell；演示数据不足的标 needsData）
   const ids = await page.evaluate(() => [...document.querySelectorAll('.modal-mask[id]')].map((m) => m.id));
   for (const id of ids) {
-    if (id === 'authModal' && realAuthDone) continue;
+    if (done.has(id)) continue;
     // 登录态下 authModal 无法由真实入口打开（登录按钮已换成用户菜单），强开只会读到空标签
     if (id === 'authModal' && cred) continue;
+    await hideAllModals();
     const shown = await page.evaluate((mid) => {
       const m = document.getElementById(mid);
       if (!m) return false;
@@ -359,13 +515,12 @@ async function auditModals(browser, base, cred, viewport) {
     const data = await page.evaluate(inPageAudit);
     data.requested = 'modal:' + id;
     data.isModal = true;
-    // 空壳（只有关闭键）：内容由各自 open 函数按需渲染，强开无意义，标记跳过
-    data.shell = data.overlayControls <= 1;
+    const spec = REAL_TRIGGERS[id] || {};
+    data.needsData = spec.needsData || '';
+    // 空壳（只有标题+关闭键）：内容由各自 open 函数按需渲染，强开无意义，标记跳过
+    data.shell = isShell(data, false);
     results.push(data);
-    await page.evaluate((mid) => {
-      const m = document.getElementById(mid);
-      if (m) m.classList.add('hidden');
-    }, id);
+    await closeModal(id);
   }
   await ctx.close();
   return { label: cred ? 'modals:pro' : 'modals', viewport, results, consoleErrors };
@@ -420,6 +575,8 @@ async function auditModals(browser, base, cred, viewport) {
         r.gated = r.requested !== r.view;
         if (r.gated) continue;
       }
+      // 真实入口打不开内容（点了入口却仍只有关闭键）= 点击无效/空白弹窗，是真缺陷不是盲区
+      if (r.triggeredBy && r.shell) issues.push({ pass: pass.label, view: r.requested, kind: 'emptyModal', detail: '真实入口 ' + r.triggeredBy + ' 打开后无内容控件' });
       if (r.shell) continue; // 空壳弹窗（内容由 open 函数按需渲染）不强判
       if (r.horizontalOverflow > 0) issues.push({ pass: pass.label, view: r.requested, kind: 'horizontalOverflow', detail: r.horizontalOverflow + 'px' });
       r.clickStolen.forEach((x) => issues.push({ pass: pass.label, view: r.requested, kind: 'clickStolen', detail: x }));
@@ -440,10 +597,11 @@ async function auditModals(browser, base, cred, viewport) {
       log('\n===== ' + pass.label + ' ' + pass.viewport.width + 'x' + pass.viewport.height + ' =====');
       for (const r of pass.results) {
         if (r.gated) { log(`- ${r.requested.padEnd(8)} 权限页，未登录被拦回 ${r.view}（跳过）`); continue; }
+        if (r.needsData) { log(`- ${r.requested.padEnd(22)} 需数据未覆盖：${r.needsData}`); continue; }
         if (r.shell) { log(`- ${r.requested.padEnd(22)} 空壳弹窗（内容按需渲染，跳过）`); continue; }
         const bad = (r.horizontalOverflow > 0 ? 1 : 0) + r.clickStolen.length + r.unnamedControls.length + r.offscreenX.length
           + (r.activeNavHidden ? 1 : 0) + (pass.label === 'mobile' ? r.tinyTargets.length : 0) + (r.motion === 0 ? 1 : 0);
-        log(`${bad ? '✗' : '✓'} ${r.requested.padEnd(8)} 控件=${String(r.visibleControls).padStart(3)} 动效=${String(r.motion).padStart(3)} 横向溢出=${r.horizontalOverflow} 点击被吃=${r.clickStolen.length} 无名称=${r.unnamedControls.length} 越界=${r.offscreenX.length} 导航裁切=${r.activeNavHidden ? 1 : 0}${pass.label === 'mobile' ? ' 小目标=' + r.tinyTargets.length : ''}`);
+        log(`${bad ? '✗' : '✓'} ${r.requested.padEnd(8)} 控件=${String(r.visibleControls).padStart(3)} 动效=${String(r.motion).padStart(3)} 横向溢出=${r.horizontalOverflow} 点击被吃=${r.clickStolen.length} 无名称=${r.unnamedControls.length} 越界=${r.offscreenX.length} 导航裁切=${r.activeNavHidden ? 1 : 0}${pass.label === 'mobile' ? ' 小目标=' + r.tinyTargets.length : ''}${r.triggeredBy ? ' 入口=' + r.triggeredBy : ''}`);
         r.clickStolen.slice(0, 6).forEach((x) => log(`    · 点击被吃：${x.el} ← ${x.hit} @${x.rect.join(',')}`));
         r.unnamedControls.slice(0, 6).forEach((x) => log(`    · 无名称：${x}`));
         r.offscreenX.slice(0, 6).forEach((x) => log(`    · 越界：${x.el} left=${x.left} right=${x.right}`));
@@ -452,6 +610,13 @@ async function auditModals(browser, base, cred, viewport) {
       pass.consoleErrors.slice(0, 8).forEach((t) => log('    ! console: ' + t));
     }
     log('\nreduced-motion 声明: ' + (report.reducedMotionDeclared ? '有' : '**无**'));
+    if (issues.length) {
+      log('\n问题明细：');
+      issues.forEach((x) => {
+        const detail = typeof x.detail === 'string' ? x.detail : JSON.stringify(x.detail);
+        log(`  ✗ [${x.pass}] ${x.view || '-'} ${x.kind}：${detail}`);
+      });
+    }
     log('问题合计: ' + issues.length);
   }
   process.exit(issues.length ? 1 : 0);

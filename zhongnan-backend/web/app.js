@@ -316,7 +316,7 @@
       pitchOpenBtn: en ? 'Start pitch meeting · Free' : '开始选题会（内部免费）',
       pitchSayBtn: en ? 'Add note · Free' : '补充发言(内部免费)',
       pitchDecideBtn: en ? 'Form verdict · Free' : '形成选题决议(内部免费)',
-      pkBtn: en ? '⚔️ Script PK · Free' : '⚔️ 剧本PK（内部免费）',
+      pkBtn: en ? '⚔️ Script PK · 20 pts' : '⚔️ 剧本PK（20积分）',
       ivStartBtn: en ? '🎬 Start interview · Free' : '🎬 开始采访（内部免费）',
       tdAnalyzeBtn: en ? 'Start teardown · Free' : '开始拆解（内部免费）',
       tdOutlineBtn: en ? 'Build adaptation outline · Free' : '生成改编大纲（内部免费）',
@@ -9381,6 +9381,9 @@
   // v2.70 立项前「智能默认」预览：免费、零大模型，让用户生成前看到系统默认与小南理由（可改）
   $('smartDefaultBtn').onclick = async () => {
     const en = lang === 'en';
+    // v2.475 未登录守卫：后端 /api/generate/smart-defaults 为 authRequired，
+    // 游客点击会先开弹窗再收 401（控制台报错 + 弹窗内错误文案），与「先登录再操作」的其他入口不一致。
+    if (!Api.isAuthed()) { xnSay(en ? 'Please sign in first.' : '先登录再查看智能默认哦～'); openAuth('login'); return; }
     const modal = $('smartModal'), body = $('smartBody');
     openModal(modal.id);
     body.innerHTML = `<p class="muted">${en ? 'Xiao-nan is preparing your smart defaults…' : '小南正在结合时令、热趋势和你的偏好整理默认方案…'}</p>`;
