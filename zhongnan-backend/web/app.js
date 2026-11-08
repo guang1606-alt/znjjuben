@@ -1935,36 +1935,6 @@
     if (bare && (status == null || status >= 500)) return lang === 'en' ? 'Server hiccup — please try again later.' : '服务开小差了，请稍后重试';
     return codeOrText;
   }
-  // 模态输入框：替代 window.prompt。resolve(value|null)；Enter=确定，Esc=取消
-  function askText(label, def) {
-    return new Promise((resolve) => {
-      const backdrop = document.createElement('div');
-      backdrop.className = 'zn-ask-backdrop';
-      backdrop.innerHTML = `<div class="zn-ask" role="dialog" aria-modal="true" aria-labelledby="znAskLabel">
-        <label class="zn-ask-label" id="znAskLabel" for="znAskInput"></label>
-        <input class="zn-ask-input" id="znAskInput" type="text" />
-        <div class="zn-ask-btns"><button type="button" class="btn-ghost zn-ask-cancel"></button><button type="button" class="btn-primary zn-ask-ok"></button></div>
-      </div>`;
-    // @module ui
-      const done = (val) => { backdrop.remove(); document.removeEventListener('keydown', onKey, true); resolve(val); };
-    // @module ui
-      const onKey = (e) => {
-        if (e.key === 'Escape') { e.stopPropagation(); done(null); }
-        else if (e.key === 'Enter' && e.target && e.target.classList && e.target.classList.contains('zn-ask-input')) { e.preventDefault(); done(inp.value.trim()); }
-      };
-      document.addEventListener('keydown', onKey, true);
-      backdrop.addEventListener('mousedown', (e) => { if (e.target === backdrop) done(null); });
-      backdrop.querySelector('.zn-ask-label').textContent = label || '';
-      const inp = backdrop.querySelector('.zn-ask-input');
-      inp.value = def != null ? String(def) : '';
-      backdrop.querySelector('.zn-ask-ok').textContent = t('askOk');
-      backdrop.querySelector('.zn-ask-cancel').textContent = t('askCancel');
-      backdrop.querySelector('.zn-ask-ok').onclick = () => done(inp.value.trim());
-      backdrop.querySelector('.zn-ask-cancel').onclick = () => done(null);
-      document.body.appendChild(backdrop);
-      inp.focus(); inp.select();
-    });
-  }
   // 按钮下方小菜单（主题/字号直接选择，替代"单击轮切"）：items=[{label,value,cur}]
   function openMiniMenu(anchorBtn, items, onPick) {
     document.querySelectorAll('.zn-mini-menu').forEach((m) => m.remove());

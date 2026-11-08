@@ -5,6 +5,7 @@
  * 但三个「造出来」的对话框漏了名称——屏幕阅读器只会念「对话框」，不说是干什么的：
  *   1) `_uiModalShell`（uiConfirm / uiPrompt 共用外壳）：有 h3 标题却不接 aria-labelledby，body 也不接 aria-describedby；
  *   2) `askText`（模态输入框，替代 window.prompt）：label 有文字但没有 id，对话框不引用它；
+ *      该函数自 v2.469 起全站无调用点，v2.474 连同 `.zn-ask-*` 样式与 i18n 键一并删除，改为「不得复活」守卫；
  *   3) `qsMask`（⌘/Ctrl+K 全局快速跳转）：整块只有 role/aria-modal，从无名称。
  *
  * WCAG 4.1.2（Name, Role, Value）：有 role 的组件必须有可访问名称。
@@ -54,18 +55,13 @@ test('v2.469 uiConfirm/uiPrompt 外壳必须有可访问名称与描述', () => 
   assert.match(body, /bodyEl\.id\s*=/, '_uiModalShell 必须给正文容器分配 id');
 });
 
-test('v2.469 askText 对话框必须引用自己的 label', () => {
-  const body = sliceFn(APP, 'askText');
-  assert.match(
-    body,
-    /<div class="zn-ask"[^>]*role="dialog"[^>]*aria-modal="true"[^>]*aria-labelledby="znAskLabel"/,
-    'askText 的 role="dialog" 必须带 aria-labelledby="znAskLabel"',
-  );
-  assert.match(
-    body,
-    /<label class="zn-ask-label" id="znAskLabel"/,
-    'askText 的 label 必须带 id="znAskLabel"，否则 aria-labelledby 指向空气',
-  );
+test('v2.474 askText 死代码与其样式/i18n 键不得复活', () => {
+  const CSS = fs.readFileSync(path.join(WEB, 'styles.css'), 'utf8');
+  const I18N = fs.readFileSync(path.join(WEB, 'i18n.js'), 'utf8');
+  assert.doesNotMatch(APP, /function askText\s*\(/, 'askText 全站无调用点，已删除；死代码不得复活');
+  assert.doesNotMatch(APP, /zn-ask-/, 'app.js 不得再构造 .zn-ask-* 结构');
+  assert.doesNotMatch(CSS, /\.zn-ask-/, 'styles.css 不得再声明 .zn-ask-* 死选择器');
+  assert.doesNotMatch(I18N, /askOk|askCancel/, 'i18n 的 askOk/askCancel 已随 askText 一并删除');
 });
 
 test('v2.469 快捷跳转遮罩 qsMask 必须有名称（走 i18n，不得写死中文）', () => {

@@ -178,15 +178,6 @@ html[data-theme="tech"] .net-banner {
 
 /* ================= c201 用户反馈修复：toast / 模态输入 / 小菜单 / 积分明细 ================= */
 /* v2.225：旧简版 toast（#znToastHost/.zn-toast）退役，统一走 v2.186 富版 #toastStack 体系（kind 色条/关闭/堆叠上限） */
-.zn-ask-backdrop { position: fixed; inset: 0; z-index: 9998; background: rgba(10, 10, 14, .45); backdrop-filter: blur(3px); display: grid; place-items: center; }
-.zn-ask {
-  width: min(88vw, 380px); background: var(--panel); color: var(--text);
-  border: 1px solid color-mix(in srgb, var(--line) 85%, transparent); border-radius: 16px;
-  padding: 18px; box-shadow: 0 24px 60px -20px rgba(0, 0, 0, .45);
-}
-.zn-ask-label { font-size: .92rem; margin-bottom: 10px; line-height: 1.5; }
-.zn-ask-input { width: 100%; box-sizing: border-box; padding: 9px 11px; border-radius: 9px; border: 1px solid var(--line); background: var(--panel-2, var(--panel)); color: var(--text); font: inherit; }
-.zn-ask-btns { display: flex; justify-content: flex-end; gap: 8px; margin-top: 14px; }
 .zn-mini-menu {
   position: absolute; z-index: 9997; min-width: 132px; padding: 6px;
   background: var(--panel); color: var(--text); border: 1px solid color-mix(in srgb, var(--line) 85%, transparent);
