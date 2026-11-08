@@ -39,6 +39,9 @@
   --ring: rgba(26, 77, 74, .18);
   --ease-out: cubic-bezier(.22,.61,.36,1); --ease-spring: cubic-bezier(.34,1.4,.5,1);
   --motion-fast: .14s; --motion: .2s; --motion-slow: .32s;
+  /* v2.477 键盘避让：iOS 弹键盘不缩 vh，底部抽屉会整块被压住；由 app.js 用
+     visualViewport 差值写入真实高度。默认 0px，桌面端与无键盘时布局零影响。 */
+  --kb-inset: 0px;
 }
 
 /* ---------- 浅色：宣纸 ---------- */
@@ -1575,8 +1578,11 @@ summary:hover{color:var(--accent-strong)}
   .adm-table { min-width: 640px; }
   .adm-toolbar { gap: 6px; }
   .modal-mask { padding: 0; align-items: flex-end; }
-  .modal, .modal-wide { width: 100%; max-width: 100%; max-height: 92vh; border-radius: 18px 18px 0 0; padding: 18px 16px calc(18px + env(safe-area-inset-bottom)); overflow-y: auto; }
-  .xn-float { width: 48px; height: 48px; right: 14px; bottom: 14px; font-size: 22px; }
+  .modal, .modal-wide { width: 100%; max-width: 100%; max-height: calc(92vh - var(--kb-inset, 0px)); border-radius: 18px 18px 0 0; padding: 18px 16px calc(18px + env(safe-area-inset-bottom)); overflow-y: auto; }
+  /* v2.477 键盘弹起：底部抽屉整体抬到键盘之上（只靠 max-height 收缩的话，
+     抽屉仍贴布局视口底部，底部输入框照样被键盘压住） */
+  html[data-kb] .modal-mask { padding-bottom: var(--kb-inset, 0px); }
+  .xn-float { width: 48px; height: 48px; right: 14px; bottom: calc(14px + var(--kb-inset, 0px)); font-size: 22px; }
   .xn-bubble { max-width: calc(100vw - 88px); }
   .xn-avatar { width: 38px; height: 38px; font-size: 20px; }
   .timeline { gap: 6px; }
@@ -1745,7 +1751,7 @@ body:has(.modal-mask:not(.hidden)) .toast-stack,
 body:has(#workbenchLayer:not(.hidden)) .toast-stack,
 body:has(.ui-dlg-overlay) .toast-stack {
   top: auto;
-  bottom: calc(18px + env(safe-area-inset-bottom, 0px));
+  bottom: calc(18px + env(safe-area-inset-bottom, 0px) + var(--kb-inset, 0px));
 }
 body:has(.modal-mask:not(.hidden)) .toast,
 body:has(#workbenchLayer:not(.hidden)) .toast,

@@ -151,6 +151,34 @@
       navigator.serviceWorker.register(url).catch(() => { /* 隐私模式/策略禁用：不影响主流程 */ });
     } catch { /* 老浏览器 register 同步抛错 */ }
   }
+  // v2.477 移动端键盘避让：iOS 弹起键盘时不缩小布局视口（vh 不变），底部抽屉弹窗
+  // 与底部悬浮层会整块被键盘压住——正在输入的字段看不见，用户表现为「点了没反应」。
+  // 用 visualViewport 与 innerHeight 的差值算出键盘高度，写进 --kb-inset 供 CSS 收缩/抬升；
+  // 桌面端差值恒为 0（不挂 data-kb），布局零影响。iOS 键盘收起动画期间会连发多次 resize/scroll，用 rAF 合并。
+  function initKeyboardInset() {
+    const vv = window.visualViewport;
+    if (!vv) return;
+    let raf = 0;
+    const sync = () => {
+      raf = 0;
+      const kb = Math.max(0, Math.round(window.innerHeight - vv.height - vv.offsetTop));
+      const open = kb > 80; // 80px 以下多半是地址栏收缩，不当作键盘
+      const root = document.documentElement;
+      root.style.setProperty('--kb-inset', (open ? kb : 0) + 'px');
+      root.toggleAttribute('data-kb', open);
+    };
+    const onView = () => { if (!raf) raf = requestAnimationFrame(sync); };
+    vv.addEventListener('resize', onView);
+    vv.addEventListener('scroll', onView);
+    addEventListener('orientationchange', onView);
+    // 抽屉内输入框聚焦后，iOS 不会把被键盘遮住的字段滚进可视区：等键盘动画结束再居中一次。
+    document.addEventListener('focusin', (e) => {
+      const el = e.target;
+      if (!el || !el.closest || !el.closest('.modal-mask:not(.hidden)')) return;
+      setTimeout(() => { try { el.scrollIntoView({ block: 'center' }); } catch { /* 老内核忽略 */ } }, 300);
+    });
+    sync();
+  }
   // v2.445 全局异常兜底：漏 catch 的 Promise 与运行时异常过去是纯静默失败——
   // 用户只看到「点了没反应」。这里给一个可读出口，同类异常 5s 内只提示一次，
   // 免得住循环报错刷屏；网络层已由 api.js 统一 toast，不重复打扰。
@@ -11114,5 +11142,6 @@
   initGlobalErrorGuard(); // v2.445 全局异常兜底，先于业务请求接线
   initViewRouter(); // v2.446 视图路由恢复：刷新/直链/后退落在同一页，先于业务取数
   initOfflineShell(); // v2.448 离线壳注册：失败静默，不影响首屏与业务请求
+  initKeyboardInset(); // v2.477 移动端键盘避让：visualViewport 差值写 --kb-inset
   if (Api.isAuthed()) loadMe();
 })();
