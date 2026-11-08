@@ -2641,8 +2641,9 @@
     const wl = $('workbenchLayer');
     if (wl && !wl.classList.contains('hidden')) wl.style.paddingTop = pad;
     // Toast 通知（v2.225 起 #toastStack 富版单体系接管；v2.191 该让位逻辑此前只覆盖旧 znToastHost，富版压顶缺口一并修复）
+    // v2.470 改写 CSS 变量而非内联 top：内联 top 会压过「弹窗态停靠底部」(top:auto)，令堆栈上下同时定位被拉伸
     const stack = document.getElementById('toastStack');
-    if (stack) stack.style.top = Math.ceil(tbBottom) + 8 + 'px';
+    if (stack) stack.style.setProperty('--toast-top', Math.ceil(tbBottom) + 8 + 'px');
   }
   window.addEventListener('resize', _syncTopbarOffset);
   document.addEventListener('zn-lang', _syncTopbarOffset);

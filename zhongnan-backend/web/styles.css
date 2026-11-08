@@ -1687,13 +1687,20 @@ summary:hover{color:var(--accent-strong)}
 
 /* —— 1. 全局 Toast 浮岛 —— */
 .toast-stack {
-  position: fixed; top: 18px; left: 50%; transform: translateX(-50%);
+  /* v2.470 top 改由 --toast-top 变量驱动（JS 按顶栏实际高度写入）；
+     若继续写内联 style.top，会压过「弹窗态停靠底部」的 top:auto，导致上下同时定位、堆栈被拉伸 */
+  position: fixed; top: var(--toast-top, 18px); left: 50%; transform: translateX(-50%);
   /* v2.207 高于模态遮罩(9999)：对话框打开时的错误/成功提示不得被盖住 */
   z-index: 10001; display: flex; flex-direction: column; gap: 8px;
   pointer-events: none; max-width: min(440px, calc(100vw - 32px));
 }
-.toast-stack > * { pointer-events: auto; }
+/* v2.470 点击穿透：toast 卡片本体不再拦截底层控件。
+   实测（390×844）一条 3 行长提示高 102px，恰好覆盖反馈弹窗页签「我的工单」(110,151,85,41)，
+   且 pointer-events:auto 让点按直接落到 t-body 上——用户表现为「点了没反应」。
+   卡片透明化事件后，仅动作/关闭按钮接收点击（子元素 auto 可覆盖父级 none），视觉与版式零变化。 */
+.toast-stack > * { pointer-events: none; }
 .toast {
+  --toast-y: -10px; /* v2.470 进场方向：顶部停靠时自上滑入，弹窗态停靠底部时改自下滑入 */
   display: flex; align-items: flex-start; gap: 10px;
   padding: 11px 14px 11px 12px;
   background: var(--panel); color: var(--text);
@@ -1717,6 +1724,7 @@ summary:hover{color:var(--accent-strong)}
 .toast .t-action {
   flex: 0 0 auto; background: transparent; border: 0; color: var(--accent-strong);
   font: inherit; font-weight: 600; padding: 4px 8px; border-radius: 8px; cursor: pointer;
+  pointer-events: auto; /* v2.470 卡片本体已点击穿透，互动控件单独恢复 */
   transition: background var(--motion-fast, .14s) var(--ease-out, cubic-bezier(.22,.61,.36,1));
 }
 .toast .t-action:hover { background: var(--accent-weak); }
@@ -1724,12 +1732,25 @@ summary:hover{color:var(--accent-strong)}
   position: relative;
   flex: 0 0 auto; background: transparent; border: 0; color: var(--text-2);
   font-size: 16px; line-height: 1; padding: 2px 4px; border-radius: 6px; cursor: pointer;
+  pointer-events: auto; /* v2.470 卡片本体已点击穿透，关闭按钮单独恢复 */
 }
 /* v2.273 触摸热区外扩：视觉 × 仅 18×20，用伪元素负向扩到 44×44（视觉与布局零位移） */
 .toast .t-close::before { content: ""; position: absolute; inset: -12px -13px; }
 .toast .t-close:hover { color: var(--text); background: var(--panel-2); }
-@keyframes toast-in  { from { opacity: 0; transform: translateY(-10px) scale(.96); } to { opacity: 1; transform: translateY(0) scale(1); } }
+@keyframes toast-in  { from { opacity: 0; transform: translateY(var(--toast-y, -10px)) scale(.96); } to { opacity: 1; transform: translateY(0) scale(1); } }
 @keyframes toast-out { from { opacity: 1; transform: translateY(0) scale(1); } to { opacity: 0; transform: translateY(-6px) scale(.98); } }
+/* v2.470 弹窗/工作台/通用对话框打开时，toast 停靠到底部安全区：
+   顶部 18px 的浮岛会压住对话框标题与页签（实测覆盖反馈弹窗两个页签），改停底部后对话框头部可读可点；
+   配合上面的点击穿透，即使底部仍与内容视觉重叠，也不会再吃掉点击。 */
+body:has(.modal-mask:not(.hidden)) .toast-stack,
+body:has(#workbenchLayer:not(.hidden)) .toast-stack,
+body:has(.ui-dlg-overlay) .toast-stack {
+  top: auto;
+  bottom: calc(18px + env(safe-area-inset-bottom, 0px));
+}
+body:has(.modal-mask:not(.hidden)) .toast,
+body:has(#workbenchLayer:not(.hidden)) .toast,
+body:has(.ui-dlg-overlay) .toast { --toast-y: 10px; }
 @media (prefers-reduced-motion: reduce) {
   .toast, .toast.toast-out { animation: none; }
 }
