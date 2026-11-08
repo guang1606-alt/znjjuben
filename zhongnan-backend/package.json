@@ -1,6 +1,6 @@
 {
   "name": "zhongnan-screenwriting-backend",
-  "version": "2.483.0",
+  "version": "2.484.0",
   "description": "终南编剧AI - 后端服务（认证/会员/积分账本/创作编排/模型黑盒代理/订单支付/反馈工单）",
   "main": "dist/index.js",
   "scripts": {
@@ -19,6 +19,7 @@
     "cost:report": "node scripts/cost-report.cjs",
     "audit:ui": "node scripts/ui-audit.cjs",
     "preflight": "node scripts/scope-guard.cjs",
+    "doctor": "node scripts/doctor.cjs",
     "hooks:install": "node scripts/install-hooks.cjs",
     "release:prep": "node scripts/release-prep.cjs",
     "verify": "npm run typecheck && npm test",

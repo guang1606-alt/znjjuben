@@ -12,7 +12,7 @@
  *
  * 检查项：
  *   root       git 根必须正好是剧本大师仓库，不能是父仓库「养正」
- *   scope      所有改动（含未跟踪）必须落在 zhongnan-backend/ 内
+ *   scope      所有改动（含未跟踪）必须落在 zhongnan-backend/ 内；仓库根仅放行 AGENTS.md/.gitignore
  *   localOnly  .trae/ 与 docs/daily-review/ 只允许本地未跟踪，一旦进入暂存区即失败
  *   artifacts  暂存区不得出现截图/日志/dump/压缩包等非交付产物
  *   version    package.json ↔ package-lock（根与 packages[""]）↔ 文档基线行，四处必须同版本
@@ -26,6 +26,9 @@ const path = require('node:path');
 const ROOT = path.join(__dirname, '..');            // zhongnan-backend
 const REPO = path.dirname(ROOT);                    // zhongnan
 const ALLOWED_PREFIX = 'zhongnan-backend/';
+// 仓库根上的协作约定文件属于本仓库、且需要随流程演进更新；放行白名单必须精确到文件名，
+// 不能放宽成「仓库根随便改」——否则防跑偏就形同虚设。
+const ALLOWED_ROOT_FILES = new Set(['AGENTS.md', '.gitignore']);
 const LOCAL_ONLY = ['zhongnan-backend/.trae/', 'zhongnan-backend/docs/daily-review/'];
 const ARTIFACT_RE = /\.(log|tmp|dump|png|jpe?g|webp|gif|mp4|mov|zip|tar|gz|pdf)$/i;
 
@@ -100,7 +103,9 @@ function main() {
 
   for (const p of changed) {
     const normalized = p.replace(/^\.\//, '');
-    if (normalized !== ALLOWED_PREFIX.replace(/\/$/, '') && !normalized.startsWith(ALLOWED_PREFIX)) {
+    if (normalized !== ALLOWED_PREFIX.replace(/\/$/, '')
+      && !normalized.startsWith(ALLOWED_PREFIX)
+      && !ALLOWED_ROOT_FILES.has(normalized)) {
       violations.push(`scope: ${p} 不在 ${ALLOWED_PREFIX} 内（禁止跨仓库/跨目录顺手改）`);
     }
     if (LOCAL_ONLY.some((pre) => normalized.startsWith(pre)) && staged.includes(p)) {

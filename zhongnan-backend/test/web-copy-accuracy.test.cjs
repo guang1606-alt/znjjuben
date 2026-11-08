@@ -232,4 +232,32 @@ describe('v2.471 文案准确性', () => {
     assert.match(room, /refundFlexible\(tx, userId, points, key, refId, idem\)/, '退款必须按实扣积分，不得按标准价多退');
     assert.ok(!/consumeValueAdded\(tx, userId, key/.test(room), '选题会/围读不得再走固定价扣费');
   });
+
+  it('G12 用户可见文案不得泄漏内部版本号/检查点代号（v2.xx、c123、Sprint/Phase）', () => {
+    // 背景：站点迭代上百版后，管理台与提示语里混进了「（v2.52 策展排序）」「（v2.41）」这类
+    // 只有开发者看得懂的代号。它们会被截图进用户反馈、被投喂给外部模型，也破坏产品观感。
+    // 注释里的版本号是开发痕迹，允许保留；本守卫只扫「注释之外」的文案/字符串。
+    const blankOut = (m) => m.replace(/[^\n]/g, '');
+    const stripComments = (src, html) => src
+      .replace(/\/\*[\s\S]*?\*\//g, blankOut)
+      .replace(html ? /<!--[\s\S]*?-->/g : /(?<!:)\/\/[^\n]*/g, blankOut)
+      .replace(/^\s*\*[^\n]*$/gm, blankOut); // JSDoc 续行
+    const BANNED = [
+      { re: /\bv2\.\d+/g, why: '内部版本号' },
+      { re: /（\s*c\d{2,3}\s*[）)]|[（(]\s*c\d{2,3}\s*[)）]/g, why: '内部检查点代号' },
+      { re: /\bSprint\b|\bPhase\s*\d/gi, why: '内部迭代术语' },
+    ];
+    const hits = [];
+    for (const [file, raw] of webSources()) {
+      const src = stripComments(raw, file.endsWith('.html'));
+      for (const { re, why } of BANNED) {
+        re.lastIndex = 0;
+        let m;
+        while ((m = re.exec(src))) {
+          hits.push(`${file}:${src.slice(0, m.index).split('\n').length} 「${m[0]}」（${why}）`);
+        }
+      }
+    }
+    assert.deepStrictEqual(hits, [], '用户可见文案不得出现内部版本号/代号（请改为纯产品表述，开发痕迹留在注释里）：\n' + hits.join('\n'));
+  });
 });

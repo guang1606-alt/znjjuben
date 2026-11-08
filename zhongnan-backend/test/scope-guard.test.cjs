@@ -63,6 +63,15 @@ test('S4 本地未跟踪目录不得进入提交', () => {
     '两个本地目录都应被拦：' + JSON.stringify(r.json.violations));
 });
 
+test('S6 仓库根仅放行协作约定文件，其余根目录文件仍判跑偏', () => {
+  const ok = run(['--paths', 'AGENTS.md,zhongnan-backend/scripts/doctor.cjs']);
+  assert.strictEqual(ok.code, 0, 'AGENTS.md 属于本仓库约定文件，应放行：' + JSON.stringify(ok.json.violations));
+  const bad = run(['--paths', 'README.md,package.json']);
+  assert.strictEqual(bad.code, 1, '根目录其它文件不得被白名单顺带放行');
+  assert.strictEqual(bad.json.violations.filter((s) => s.startsWith('scope:')).length, 2,
+    '两个根目录文件都应报 scope：' + JSON.stringify(bad.json.violations));
+});
+
 test('S5 npm run preflight 指向防跑偏脚本', () => {
   const pkg = JSON.parse(fs.readFileSync(path.join(ROOT, 'package.json'), 'utf8'));
   assert.match(pkg.scripts.preflight || '', /scope-guard\.cjs/, 'preflight 必须跑 scripts/scope-guard.cjs');

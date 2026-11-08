@@ -10683,7 +10683,7 @@
     const sc = j.backupSelfCheck || { ok: true, issues: [], upgradeHints: [], manualNeeded: [] };
     const bkIssues = sc.issues.length
       ? znErrorHtml('国产替补自检未过', sc.issues.map((i) => `${i.role}：${i.problem}${i.suggest.length ? ' → 建议：' + i.suggest.join('/') : ''}`).join('；'))
-      : '<div class="notice">国产最强替补自检 ✅ 三档八岗每岗第一替补均为该岗中国国内最强 API（v2.52 策展排序），海外首选断供时不降配兜底。</div>';
+      : '<div class="notice">国产最强替补自检 ✅ 三档八岗每岗第一替补均为该岗中国国内最强 API，海外首选断供时不降配兜底。</div>';
     const bkUp = sc.upgradeHints && sc.upgradeHints.length
       ? `<div class="notice">自动迭代候选（需联网横评+真实账单确认后换型）：<br>${sc.upgradeHints.map((h) => `· ${escapeHtml(h.role)}：${escapeHtml(h.note)}`).join('<br>')}</div>` : '';
     // @module admin
@@ -10695,7 +10695,7 @@
       <table class="adm-table"><thead><tr><th>岗位</th><th>首选</th><th>备选（前三）</th></tr></thead><tbody>${adviceRows}</tbody></table>
       <details><summary>图片模型端口（${j.imageCatalog.length} 家，含 GPT-image）</summary><table class="adm-table"><tbody>${imgRows}</tbody></table></details>
       <details><summary>口径 FAQ（baseUrl/单价/赚钱/黑盒）</summary><div class="notice">${faq}</div></details>
-      <details><summary>v2.53 全量 API 清单与官方申请链接（点击展开，含基础设施 API）</summary><div id="admApiDir">${znSkeletonHtml()}</div></details>`;
+      <details><summary>全量 API 清单与官方申请链接（点击展开，含基础设施 API）</summary><div id="admApiDir">${znSkeletonHtml()}</div></details>`;
     loadApiDirectory().catch(() => znError('admApiDir', '清单加载失败，可重试'));
     // 目录型号下拉
     const opts = ['<option value="">— 自定义/中转（手填端点与单价）—</option>']

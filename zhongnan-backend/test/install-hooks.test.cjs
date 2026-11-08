@@ -36,18 +36,19 @@ describe('v2.479 本地钩子安装器', () => {
     assert.strictEqual(pkg.scripts['hooks:install'], 'node scripts/install-hooks.cjs');
   });
 
-  it('P1 能装出可执行的 pre-push，并在其中调用 scope-guard（不跑全量，保持秒级）', () => {
+  it('P1 能装出可执行的 pre-commit 与 pre-push，并在其中调用 scope-guard（不跑全量，保持秒级）', () => {
     const gitDir = path.join(tmp, 'p1');
     fs.mkdirSync(path.join(gitDir, 'hooks'), { recursive: true });
     const r = run(['--dir', gitDir]);
     assert.strictEqual(r.status, 0, r.stderr || r.stdout);
-    const hook = path.join(gitDir, 'hooks', 'pre-push');
-    const src = fs.readFileSync(hook, 'utf8');
-    assert.match(src, /scope-guard\.cjs/, '钩子必须调用 scope-guard');
-    assert.match(src, /zn-hooks:managed/, '钩子必须带归属 marker（用于安全接管/幂等）');
-    assert.doesNotMatch(src, /verify:full|npm run verify/, 'push 闸门不得跑全量测试（会被绕过）');
-    if (process.platform !== 'win32') {
-      assert.ok((fs.statSync(hook).mode & 0o111) !== 0, 'pre-push 必须可执行');
+    for (const stage of ['pre-commit', 'pre-push']) {
+      const src = fs.readFileSync(path.join(gitDir, 'hooks', stage), 'utf8');
+      assert.match(src, /scope-guard\.cjs/, `${stage} 必须调用 scope-guard`);
+      assert.match(src, /zn-hooks:managed/, `${stage} 必须带归属 marker（用于安全接管/幂等）`);
+      assert.doesNotMatch(src, /verify:full|npm run verify/, `${stage} 闸门不得跑全量测试（会被绕过）`);
+      if (process.platform !== 'win32') {
+        assert.ok((fs.statSync(path.join(gitDir, 'hooks', stage)).mode & 0o111) !== 0, `${stage} 必须可执行`);
+      }
     }
   });
 
@@ -55,11 +56,11 @@ describe('v2.479 本地钩子安装器', () => {
     const gitDir = path.join(tmp, 'p2');
     fs.mkdirSync(path.join(gitDir, 'hooks'), { recursive: true });
     assert.strictEqual(run(['--dir', gitDir]).status, 0);
-    const hook = path.join(gitDir, 'hooks', 'pre-push');
-    const first = fs.readFileSync(hook, 'utf8');
+    const hooks = path.join(gitDir, 'hooks');
+    const first = Object.fromEntries(['pre-commit', 'pre-push'].map((s) => [s, fs.readFileSync(path.join(hooks, s), 'utf8')]));
     assert.strictEqual(run(['--dir', gitDir]).status, 0);
-    assert.strictEqual(fs.readFileSync(hook, 'utf8'), first);
-    assert.strictEqual(fs.readdirSync(path.join(gitDir, 'hooks')).length, 1, '不得留下备份垃圾');
+    for (const s of ['pre-commit', 'pre-push']) assert.strictEqual(fs.readFileSync(path.join(hooks, s), 'utf8'), first[s]);
+    assert.strictEqual(fs.readdirSync(hooks).length, 2, '不得留下备份垃圾');
   });
 
   it('P3 外来钩子不得静默覆盖：无 --force 直接失败且原文件不变', () => {
