@@ -225,7 +225,7 @@ const TRACK_SCORES: Record<SparkTrack, ScoreTuple> = {
   hit_reverse: [3, 3, 3, 2, 3],
 };
 
-/* ---- 3.3 剧本类型（9） ---- */
+/* ---- 3.3 剧本类型（10） ---- */
 const SCRIPT_TYPE_SCORES: Record<ScriptTypeId, ScoreTuple> = {
   // 真人短剧：大众成品形态，必须留在免费入口
   live_action_drama: [1, 1, 1, 1, 0],

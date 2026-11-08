@@ -24,9 +24,24 @@ const ROOT = path.join(__dirname, '..');
 const WEB = path.join(ROOT, 'web');
 const read = (...p) => fs.readFileSync(path.join(WEB, ...p), 'utf8');
 
+/** 用户可见文案的全部载体：web/ 下递归的 .js/.html/.json/.webmanifest。
+ *  v2.487 起改为递归且纳入 PWA 清单：此前只扫顶层 .js/.html，`data/constants.js`（模式说明正文）
+ *  与 `manifest.webmanifest`（安装弹窗/应用信息页的 description）全部逃过 G1/G7/G12 扫描——
+ *  manifest 里「十大岗位」与后端 ALL_ROLE_IDS=9 的不符就是这么漏出去的。 */
 function webSources() {
   const out = new Map();
-  for (const f of fs.readdirSync(WEB)) if (f.endsWith('.js') || f.endsWith('.html')) out.set(f, read(f));
+  const walk = (dir) => {
+    for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+      const abs = path.join(dir, entry.name);
+      if (entry.isDirectory()) {
+        if (entry.name !== 'node_modules') walk(abs);
+        continue;
+      }
+      if (!/\.(js|html|json|webmanifest)$/.test(entry.name)) continue;
+      out.set(path.relative(WEB, abs), fs.readFileSync(abs, 'utf8'));
+    }
+  };
+  walk(WEB);
   return out;
 }
 
@@ -89,6 +104,47 @@ describe('v2.471 文案准确性', () => {
     );
   });
 
+  it('G13 剧本类型 / 输出语言：前端选项必须与后端 modes.ts 一一对应（id + 最低会员档）', () => {
+    const ts = fs.readFileSync(path.join(ROOT, 'src', 'config', 'modes.ts'), 'utf8');
+    const web = read('data', 'constants.js');
+    /** 后端：[{ id|code: 'x', ..., minLevel: L.XXX }] 逐行解析（与源码排版解耦：按字段取，不按行号取） */
+    const parseTs = (marker) => {
+      const start = ts.indexOf(marker);
+      assert.ok(start >= 0, `modes.ts 缺少 ${marker}`);
+      const end = ts.indexOf('\n];', start);
+      const block = end < 0 ? ts.slice(start) : ts.slice(start, end);
+      const out = {};
+      for (const line of block.split('\n')) {
+        const id = (line.match(/\b(?:id|code):\s*'([a-z_]+)'/) || [])[1];
+        const lv = (line.match(/minLevel:\s*L\.([A-Z]+)/) || [])[1];
+        if (id && lv) out[id] = lv.toLowerCase();
+      }
+      return out;
+    };
+    /** 前端：C.SCRIPT_TYPES / C.OUT_LANGS 数组块 */
+    const parseWeb = (name) => {
+      const start = web.indexOf(`C.${name} = [`);
+      assert.ok(start >= 0, `web/data/constants.js 缺少 C.${name}`);
+      const end = web.indexOf('];', start);
+      const block = web.slice(start, end < 0 ? web.length : end);
+      const out = {};
+      for (const line of block.split('\n')) {
+        const id = (line.match(/\b(?:id|code):\s*'([a-z_]+)'/) || [])[1];
+        const lv = (line.match(/\bmin:\s*'([a-z]+)'/) || [])[1];
+        if (id && lv) out[id] = lv;
+      }
+      return out;
+    };
+    const typeTs = parseTs('export const SCRIPT_TYPES');
+    const typeWeb = parseWeb('SCRIPT_TYPES');
+    assert.ok(Object.keys(typeTs).length >= 9 && Object.keys(typeWeb).length >= 9, '剧本类型解析数量异常（守卫失效会假绿）');
+    assert.deepStrictEqual(typeWeb, typeTs, '前端剧本类型与后端 SCRIPT_TYPES 不一致（会产出「UI 有卡片、后端 400」或「后端已上、UI 选不到」）');
+    const langTs = parseTs('export const OUTPUT_LANGUAGES');
+    const langWeb = parseWeb('OUT_LANGS');
+    assert.ok(Object.keys(langTs).length >= 8 && Object.keys(langWeb).length >= 8, '输出语言解析数量异常（守卫失效会假绿）');
+    assert.deepStrictEqual(langWeb, langTs, '前端输出语言与后端 OUTPUT_LANGUAGES 不一致');
+  });
+
   it('G7 岗位数量必须与后端 ALL_ROLE_IDS 对齐（九大），不得手写「十大 / 10 岗位」', () => {
     const policy = fs.readFileSync(path.join(ROOT, 'src', 'lib', 'model-config-policy.ts'), 'utf8');
     const m = policy.match(/ALL_ROLE_IDS:\s*RoleId\[\]\s*=\s*\[([\s\S]*?)\]/);
@@ -110,6 +166,9 @@ describe('v2.471 文案准确性', () => {
     // 后端对外的 Word 清单同源文案
     const docx = fs.readFileSync(path.join(ROOT, 'src', 'lib', 'api-directory-docx.ts'), 'utf8');
     assert.ok(!/十岗位|10\s*岗位/.test(docx), 'api-directory-docx.ts 的岗位数文案仍与实际不符');
+    // PWA 清单的 description 是用户可见文案（安装弹窗、桌面应用信息页），必须同源
+    const manifest = read('manifest.webmanifest');
+    assert.match(manifest, new RegExp(`${zhNum}大岗位智能体`), 'manifest.webmanifest 的岗位数必须与 ALL_ROLE_IDS 对齐');
   });
 
   it('G8 导出权益文案的会员档位必须与后端门控常量一致', () => {

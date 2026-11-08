@@ -1845,7 +1845,7 @@
       if (!el.value) { const i = [...el.options].findIndex((o) => !o.disabled); if (i >= 0) el.selectedIndex = i; }
     });
   }
-  // v2.329 剧本类型（9 种，按会员档解锁）；选类型会影响品牌简报/分支简报的显隐
+  // v2.329 剧本类型（10 种，按会员档解锁）；选类型会影响品牌简报/分支简报的显隐
   function renderScriptTypes() {
     const el = $('scriptTypeSel');
     if (!el) return;
