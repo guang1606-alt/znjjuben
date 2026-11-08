@@ -9,6 +9,7 @@
  * 用法：
  *   node scripts/ui-audit.cjs                 # 自动起服务（默认 8130）→ 桌面 1280x900 全视图巡检
  *   node scripts/ui-audit.cjs --mobile        # 追加 390x844 移动端巡检（公共视图）
+ *   node scripts/ui-audit.cjs --deep          # 追加登录态巡检（PRO + 超管账号）与全部弹窗内部巡检
  *   node scripts/ui-audit.cjs --base http://127.0.0.1:8122   # 复用已启动服务
  *   node scripts/ui-audit.cjs --json          # 只输出 JSON（便于外部消费）
  *   CHROME_PATH=/path/to/chrome node scripts/ui-audit.cjs
@@ -24,6 +25,13 @@
  *   activeNavHidden     当前激活栏被导航滚动容器裁出可视区（切视图后找不到"我在哪"）
  *   motion              可见元素带 transition/animation 的数量（0 视为页面无动效）
  *   reducedMotion       styles.css 是否声明 prefers-reduced-motion 降级
+ *
+ * --deep 追加（登录态 + 弹窗）：
+ *   用 dev-server 预置账号（PRO / 超管，密码 demo123456）经 /api/auth/login 拿令牌，
+ *   按 web/api.js 的 store 口径（JSON.stringify）写入 localStorage 后重跑全部视图；
+ *   并动态枚举页面内全部 `.modal-mask[id]` 强开巡检。内容由 open 函数按需渲染的空壳
+ *   弹窗标记 shell 跳过（强开只会读到空标签，判缺陷是误报）。已知缺口：这些弹窗的真实
+ *   内容态需要各自入口的数据准备，后续按需补真实触发器。
  */
 const { spawn } = require('node:child_process');
 const fs = require('node:fs');
@@ -44,8 +52,14 @@ function arg(name, def) {
 const PORT = Number(arg('--port', process.env.UI_AUDIT_PORT || 8130));
 const BASE = typeof arg('--base', '') === 'string' ? arg('--base', '') : '';
 const MOBILE = !!arg('--mobile', false);
+const DEEP = !!arg('--deep', false);
 const JSON_ONLY = !!arg('--json', false);
 const KEEP_SERVER = !!arg('--keep', false);
+// dev-server 预置演示账号（见 src/dev-server.ts）：PRO 与超管，密码统一 demo123456
+const DEMO = {
+  pro: { phone: '13900000004', password: 'demo123456' },
+  admin: { phone: '18891995171', password: 'demo123456' },
+};
 
 function log(...a) { if (!JSON_ONLY) console.log(...a); }
 
@@ -142,6 +156,8 @@ function inPageAudit() {
   // 只检查罩内控件，避免整页误报。
   const overlay = document.querySelector('.modal-mask:not(.hidden), .modal.open, .overlay.open, .ui-dlg-overlay, #workbenchLayer:not(.hidden)');
   const overlayOpen = overlay ? desc(overlay) : '';
+  let overlayControls = 0;
+  if (overlay) overlayControls = nodes.filter((el) => overlay.contains(el) && painted(el)).length;
 
   // 横向可滚动容器内的元素（如窄屏导航条）越界是"滑动可达"，不算布局溢出
   const scrollableAncestor = (el) => {
@@ -236,13 +252,16 @@ function inPageAudit() {
     motion: animCount,
     visibleControls: nodes.filter((el) => painted(el)).length,
     overlayOpen,
+    overlayControls,
     activeNavHidden,
     view: (location.hash || '').replace(/^#\/?/, '') || 'home',
   };
 }
 
-async function auditViewport(browser, base, label, viewport, views) {
-  const ctx = await browser.newContext({ viewport, deviceScaleFactor: 1 });
+async function auditViewport(browser, base, label, viewport, views, cred) {
+  const ctx = cred
+    ? await newAuthedContext(browser, base, cred, viewport)
+    : await browser.newContext({ viewport, deviceScaleFactor: 1 });
   const page = await ctx.newPage();
   const consoleErrors = [];
   page.on('console', (m) => { if (m.type() === 'error') consoleErrors.push(m.text().slice(0, 200)); });
@@ -259,6 +278,97 @@ async function auditViewport(browser, base, label, viewport, views) {
   }
   await ctx.close();
   return { label, viewport, results, consoleErrors };
+}
+
+// 登录拿令牌：写进 localStorage 前必须与 web/api.js 的 store 同口径（JSON.stringify）
+async function login(base, cred) {
+  const r = await fetch(base + '/api/auth/login', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify(cred),
+  });
+  if (!r.ok) throw new Error('登录失败 ' + cred.phone + ' → HTTP ' + r.status);
+  return r.json();
+}
+
+async function newAuthedContext(browser, base, cred, viewport) {
+  const s = await login(base, cred);
+  const ctx = await browser.newContext({ viewport, deviceScaleFactor: 1 });
+  await ctx.addInitScript(([a, rf, u]) => {
+    try {
+      localStorage.setItem('zn_token', JSON.stringify(a));
+      localStorage.setItem('zn_refresh', JSON.stringify(rf));
+      localStorage.setItem('zn_user', JSON.stringify(u));
+    } catch { /* 隐私模式忽略，巡检退化为未登录 */ }
+  }, [s.accessToken, s.refreshToken, s.user]);
+  return ctx;
+}
+
+// 全部弹窗内部巡检：动态枚举页面里的 .modal-mask（不硬编码 id，新增弹窗自动覆盖），
+// 逐个显示 → 审计控件遮挡/命名/溢出 → 隐藏还原。
+async function auditModals(browser, base, cred, viewport) {
+  const ctx = cred
+    ? await newAuthedContext(browser, base, cred, viewport)
+    : await browser.newContext({ viewport, deviceScaleFactor: 1 });
+  const page = await ctx.newPage();
+  const consoleErrors = [];
+  page.on('console', (m) => { if (m.type() === 'error') consoleErrors.push(m.text().slice(0, 200)); });
+  page.on('pageerror', (e) => consoleErrors.push('pageerror: ' + String(e.message).slice(0, 200)));
+
+  await page.goto(base + '/#/home', { waitUntil: 'domcontentloaded' });
+  await page.waitForTimeout(1100);
+
+  const results = [];
+  // authModal 的内容由真实入口（登录按钮 → syncAuthTabs）填充；强行显示只会读到空壳，
+  // 未登录时先点真实按钮，拿到可信状态再审计。
+  let realAuthDone = false;
+  if (!cred) {
+    realAuthDone = await page.evaluate(() => {
+      const b = document.getElementById('loginBtn');
+      if (!b || b.offsetParent === null) return false;
+      b.click();
+      return true;
+    });
+    if (realAuthDone) {
+      await page.waitForTimeout(220);
+      const d = await page.evaluate(inPageAudit);
+      d.requested = 'modal:authModal';
+      d.isModal = true;
+      results.push(d);
+      await page.evaluate(() => {
+        const c = document.getElementById('authClose');
+        if (c) c.click(); else document.getElementById('authModal')?.classList.add('hidden');
+      });
+      await page.waitForTimeout(120);
+    }
+  }
+
+  const ids = await page.evaluate(() => [...document.querySelectorAll('.modal-mask[id]')].map((m) => m.id));
+  for (const id of ids) {
+    if (id === 'authModal' && realAuthDone) continue;
+    // 登录态下 authModal 无法由真实入口打开（登录按钮已换成用户菜单），强开只会读到空标签
+    if (id === 'authModal' && cred) continue;
+    const shown = await page.evaluate((mid) => {
+      const m = document.getElementById(mid);
+      if (!m) return false;
+      m.classList.remove('hidden');
+      return true;
+    }, id);
+    if (!shown) continue;
+    await page.waitForTimeout(150);
+    const data = await page.evaluate(inPageAudit);
+    data.requested = 'modal:' + id;
+    data.isModal = true;
+    // 空壳（只有关闭键）：内容由各自 open 函数按需渲染，强开无意义，标记跳过
+    data.shell = data.overlayControls <= 1;
+    results.push(data);
+    await page.evaluate((mid) => {
+      const m = document.getElementById(mid);
+      if (m) m.classList.add('hidden');
+    }, id);
+  }
+  await ctx.close();
+  return { label: cred ? 'modals:pro' : 'modals', viewport, results, consoleErrors };
 }
 
 (async () => {
@@ -283,6 +393,17 @@ async function auditViewport(browser, base, label, viewport, views) {
       const mobile = await auditViewport(browser, base, 'mobile', { width: 390, height: 844 }, PUBLIC_VIEWS);
       report.passes.push(mobile);
     }
+    if (DEEP) {
+      // 登录态：PRO 覆盖全部 8 视图（含作品/市场/后台入口），超管单独看后台
+      report.passes.push(await auditViewport(browser, base, 'deep:pro', { width: 1280, height: 900 }, VIEWS, DEMO.pro));
+      report.passes.push(await auditViewport(browser, base, 'deep:admin', { width: 1280, height: 900 }, ['admin'], DEMO.admin));
+      if (MOBILE) {
+        report.passes.push(await auditViewport(browser, base, 'deep:pro-mobile', { width: 390, height: 844 }, PUBLIC_VIEWS, DEMO.pro));
+      }
+      // 全部弹窗内部：未登录态用真实登录入口打开 authModal；其余强开，空壳（内容按需渲染）标记跳过
+      report.passes.push(await auditModals(browser, base, null, { width: 1280, height: 900 }));
+      report.passes.push(await auditModals(browser, base, DEMO.pro, { width: 1280, height: 900 }));
+    }
   } finally {
     await browser.close().catch(() => {});
     if (child && !KEEP_SERVER) child.kill('SIGKILL');
@@ -294,9 +415,12 @@ async function auditViewport(browser, base, label, viewport, views) {
   const issues = [];
   for (const pass of report.passes) {
     for (const r of pass.results) {
-      // 权限页未登录会被弹窗拦截（requested=admin → landed=home），不是缺陷
-      r.gated = r.requested !== r.view;
-      if (r.gated) continue;
+      // 权限页未登录会被弹窗拦截（requested=admin → landed=home），不是缺陷；弹窗巡检不看落地视图
+      if (!r.isModal) {
+        r.gated = r.requested !== r.view;
+        if (r.gated) continue;
+      }
+      if (r.shell) continue; // 空壳弹窗（内容由 open 函数按需渲染）不强判
       if (r.horizontalOverflow > 0) issues.push({ pass: pass.label, view: r.requested, kind: 'horizontalOverflow', detail: r.horizontalOverflow + 'px' });
       r.clickStolen.forEach((x) => issues.push({ pass: pass.label, view: r.requested, kind: 'clickStolen', detail: x }));
       r.unnamedControls.forEach((x) => issues.push({ pass: pass.label, view: r.requested, kind: 'unnamedControls', detail: x }));
@@ -316,6 +440,7 @@ async function auditViewport(browser, base, label, viewport, views) {
       log('\n===== ' + pass.label + ' ' + pass.viewport.width + 'x' + pass.viewport.height + ' =====');
       for (const r of pass.results) {
         if (r.gated) { log(`- ${r.requested.padEnd(8)} 权限页，未登录被拦回 ${r.view}（跳过）`); continue; }
+        if (r.shell) { log(`- ${r.requested.padEnd(22)} 空壳弹窗（内容按需渲染，跳过）`); continue; }
         const bad = (r.horizontalOverflow > 0 ? 1 : 0) + r.clickStolen.length + r.unnamedControls.length + r.offscreenX.length
           + (r.activeNavHidden ? 1 : 0) + (pass.label === 'mobile' ? r.tinyTargets.length : 0) + (r.motion === 0 ? 1 : 0);
         log(`${bad ? '✗' : '✓'} ${r.requested.padEnd(8)} 控件=${String(r.visibleControls).padStart(3)} 动效=${String(r.motion).padStart(3)} 横向溢出=${r.horizontalOverflow} 点击被吃=${r.clickStolen.length} 无名称=${r.unnamedControls.length} 越界=${r.offscreenX.length} 导航裁切=${r.activeNavHidden ? 1 : 0}${pass.label === 'mobile' ? ' 小目标=' + r.tinyTargets.length : ''}`);

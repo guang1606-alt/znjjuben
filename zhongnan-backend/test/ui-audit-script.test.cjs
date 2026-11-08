@@ -54,4 +54,25 @@ describe('v2.472 UI 巡检脚本守卫', () => {
     assert.ok(script.includes('CHROME_PATH'), '需支持 CHROME_PATH 覆盖浏览器路径');
     assert.ok(script.includes("require('playwright-core')"), '需使用仓库内 playwright-core');
   });
+
+  it('--deep 登录态巡检：令牌写入口径必须与 web/api.js 一致', () => {
+    assert.ok(script.includes('--deep'), '缺少 --deep 选项');
+    assert.ok(script.includes("'/api/auth/login'"), '缺少登录接口调用');
+    ['zn_token', 'zn_refresh', 'zn_user'].forEach((k) => {
+      assert.ok(script.includes("localStorage.setItem('" + k + "'"), '缺少会话键写入：' + k);
+    });
+    assert.ok(/JSON\.stringify/.test(script), '存储值必须是 JSON.stringify（与 web/api.js 同口径）');
+  });
+
+  it('弹窗巡检动态枚举且跳过空壳（避免强开误报）', () => {
+    assert.ok(script.includes("querySelectorAll('.modal-mask[id]')"), '弹窗列表必须动态枚举，新增弹窗才能自动覆盖');
+    assert.ok(script.includes('shell'), '缺少空壳弹窗跳过机制');
+    assert.ok(script.includes('overlayControls'), '缺少遮罩内控件计数（判定空壳依据）');
+  });
+
+  it('一键收口命令存在且链路正确', () => {
+    assert.strictEqual(pkg.scripts.verify, 'npm run typecheck && npm test');
+    assert.match(pkg.scripts['verify:full'] || '', /audit:ui|ui-audit\.cjs/, 'verify:full 必须包含 UI 巡检');
+    assert.match(pkg.scripts['verify:full'] || '', /--deep/, 'verify:full 应覆盖登录态与弹窗');
+  });
 });
