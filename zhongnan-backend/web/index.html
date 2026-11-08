@@ -729,7 +729,8 @@
       <div class="section-title"><h2 data-i="vipTitle"></h2><small data-i="vipSub"></small></div>
       <div class="notice hidden" id="paymentNotice" role="status"></div>
       <div class="grid plans-grid" id="plansGrid"></div>
-      <div class="notice">会员等级决定同时可进行的剧本项目数：免费 2 个 · 基础 10 个 · 高级 30 个 · 专业 100 个；等级越高，拆爆款/围读/选题会等 AI 共创消耗积分越低（高级 8 折、专业 6 折），引擎组合也更强。</div>
+      <!-- v2.482 权益说明由 /api/order/catalog 下发数据渲染（项目上限/增值折扣），不再手写档位数字 -->
+      <div class="notice" id="vipLimitNote"></div>
       <div class="section-title"><h2 data-i="pointsPack"></h2></div>
       <div class="grid" id="skuGrid"></div>
       <div class="notice" id="payNote" data-i="payNote">在线支付暂未开通，请联系管理员处理充值或会员开通。</div>
@@ -1217,12 +1218,12 @@
         <div class="adm-toolbar">
           <select id="fbStatus" class="mini-select" data-i-aria="fbStatusAria" aria-label="反馈状态筛选">
             <option value="" data-i="admPostAll"></option>
-            <option value="PENDING">PENDING</option><option value="EXECUTING">EXECUTING</option>
-            <option value="TODO">TODO</option><option value="REJECTED">REJECTED</option>
+            <option value="PENDING" data-i="fbStatus_PENDING"></option><option value="EXECUTING" data-i="fbStatus_EXECUTING"></option>
+            <option value="TODO" data-i="fbStatus_TODO"></option><option value="REJECTED" data-i="fbStatus_REJECTED"></option>
           </select>
           <select id="fbType" class="mini-select" data-i-aria="fbTypeAria" aria-label="反馈类型筛选">
             <option value="" data-i="admFbAllType"></option>
-            <option value="BUG">BUG</option><option value="SUGGESTION" data-i="admFbSuggest"></option>
+            <option value="BUG" data-i="fbTypeBUG"></option><option value="SUGGESTION" data-i="admFbSuggest"></option>
           </select>
           <button class="btn-ghost" id="fbReload" data-i="reload"></button>
           <button class="btn-ghost" id="fbExportBtn" data-i="admFbExport"></button>

@@ -41,6 +41,12 @@ const ROOT = path.join(__dirname, '..');
 const VIEWS = ['home', 'studio', 'toolbox', 'works', 'vip', 'square', 'market', 'admin'];
 // 未登录时 admin 会被路由器拦回 home（权限页），巡检不把它算失败
 const PUBLIC_VIEWS = ['home', 'studio', 'toolbox', 'vip', 'square', 'market', 'works'];
+// v2.482 深链形态巡检：v2.480 的离线壳失效只在「深链文档」下出现（./app.js 被解析成 /works/app.js），
+// 但过去巡检一律从 /#/<view> 进入，这条路永远不会踩到。这里补三类真实可达地址：
+//   路径深链（分享/离线壳回退）：/works/12345、多级 /market/a/b
+//   哈希深链（站内分享）：/#/works/12345 —— 路由器白名单不认多余段，应安全回落首页而不是白屏
+// 判据是「应用还能不能启动」：脚本/样式无 4xx、有可见控件、有激活导航项，缺一即红。
+const DEEP_LINKS = ['/works/12345', '/market/a/b', '/#/works/12345'];
 
 function arg(name, def) {
   const i = process.argv.indexOf(name);
@@ -367,6 +373,47 @@ async function auditViewport(browser, base, label, viewport, views, cred) {
   return { label, viewport, results, consoleErrors };
 }
 
+/**
+ * 深链形态巡检（v2.482）：从真实地址栏入口进站，验证「应用仍能启动」。
+ * 与 auditViewport 的区别：不点导航、不切视图，只校验深链文档自身的启动完整性。
+ * 同一源的 4xx/5xx 资源响应单独记为 assetFailures —— 深链下 ./ 解析错位时，
+ * 页面会「看起来正常」（静态壳还在），但脚本全 404，表现为无动效、所有点击无效。
+ */
+async function auditDeepLinks(browser, base, viewport) {
+  const ctx = await browser.newContext({ viewport, deviceScaleFactor: 1 });
+  const page = await ctx.newPage();
+  const consoleErrors = [];
+  page.on('console', (m) => { if (m.type() === 'error') consoleErrors.push(m.text().slice(0, 200)); });
+  page.on('pageerror', (e) => consoleErrors.push('pageerror: ' + String(e.message).slice(0, 200)));
+  const origin = new URL(base).origin;
+  const results = [];
+  for (const p of DEEP_LINKS) {
+    const assetFailures = [];
+    const onResponse = (r) => {
+      if (r.status() < 400) return;
+      let u;
+      try { u = new URL(r.url()); } catch { return; }
+      // 游客访问需要登录的接口会 401，属预期；只关心静态资源加载失败
+      if (u.origin !== origin || u.pathname === '/api' || u.pathname.indexOf('/api/') === 0) return;
+      assetFailures.push(u.pathname + u.search + ' → ' + r.status());
+    };
+    page.on('response', onResponse);
+    await page.goto(base + p, { waitUntil: 'domcontentloaded' });
+    await page.waitForTimeout(1100);
+    const data = await page.evaluate(inPageAudit);
+    page.off('response', onResponse);
+    data.requested = 'deep:' + p;
+    data.deepLink = p;
+    data.assetFailures = assetFailures;
+    // 应用启动三件套：有可见交互控件、有导航、导航有激活态
+    data.appBooted = data.visibleControls > 0;
+    data.navReady = await page.evaluate(() => !!document.querySelector('.nav .nav-item.active'));
+    results.push(data);
+  }
+  await ctx.close();
+  return { label: 'deep-link', viewport, results, consoleErrors };
+}
+
 // 登录拿令牌：写进 localStorage 前必须与 web/api.js 的 store 同口径（JSON.stringify）
 async function login(base, cred) {
   const r = await fetch(base + '/api/auth/login', {
@@ -560,9 +607,12 @@ async function auditModals(browser, base, cred, viewport) {
   try {
     const desktop = await auditViewport(browser, base, 'desktop', { width: 1280, height: 900 }, VIEWS);
     report = { base, chrome, passes: [desktop] };
+    // v2.482 深链启动完整性（含路径深链与哈希深链）：无论是否 --deep 都跑，成本约 3 次页面加载
+    report.passes.push(await auditDeepLinks(browser, base, { width: 1280, height: 900 }));
     if (MOBILE) {
       const mobile = await auditViewport(browser, base, 'mobile', { width: 390, height: 844 }, PUBLIC_VIEWS);
       report.passes.push(mobile);
+      report.passes.push(await auditDeepLinks(browser, base, { width: 390, height: 844 }));
     }
     if (DEEP) {
       // 登录态：PRO 覆盖全部 8 视图（含作品/市场/后台入口），超管单独看后台
@@ -587,9 +637,16 @@ async function auditModals(browser, base, cred, viewport) {
   for (const pass of report.passes) {
     for (const r of pass.results) {
       // 权限页未登录会被弹窗拦截（requested=admin → landed=home），不是缺陷；弹窗巡检不看落地视图
-      if (!r.isModal) {
+      if (!r.isModal && !r.deepLink) {
         r.gated = r.requested !== r.view;
         if (r.gated) continue;
+      }
+      // v2.482 深链形态：不比对「落地视图 = 请求视图」（深链回退本就落首页），
+      // 只要求应用能启动：资源无 4xx、有可见控件、导航有激活态。
+      if (r.deepLink) {
+        if (!r.appBooted) issues.push({ pass: pass.label, view: r.requested, kind: 'deepLinkNotBooted', detail: '深链下无任何可见交互控件（脚本可能未加载）' });
+        if (!r.navReady) issues.push({ pass: pass.label, view: r.requested, kind: 'deepLinkNavMissing', detail: '深链下导航无激活项（页面未完成初始化）' });
+        (r.assetFailures || []).forEach((x) => issues.push({ pass: pass.label, view: r.requested, kind: 'deepLinkAssetFail', detail: x }));
       }
       // 真实入口打不开内容（点了入口却仍只有关闭键）= 点击无效/空白弹窗，是真缺陷不是盲区
       if (r.triggeredBy && r.shell) issues.push({ pass: pass.label, view: r.requested, kind: 'emptyModal', detail: '真实入口 ' + r.triggeredBy + ' 打开后无内容控件' });

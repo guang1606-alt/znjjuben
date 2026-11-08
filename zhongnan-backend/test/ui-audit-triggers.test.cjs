@@ -116,3 +116,22 @@ test('T6 空壳判据单一入口且真实入口等待内容渲染', () => {
   assert.match(src, /sk-list\[aria-busy="true"\]/, '必须能识别加载骨架');
   assert.match(src, /overlayEmptyState|overlayReady/, '必须采样空态/已渲染标记，避免空数据误报');
 });
+
+// T7 v2.482 深链形态必须进入巡检：v2.480 的离线壳失效只在深链文档下出现，
+// 而旧巡检只从 /#/<view> 进站，永远踩不到。这里锁死「深链地址被真正访问 + 启动完整性被判定」。
+test('T7 深链形态（路径/多级/哈希）必须被真实访问并判定启动完整性', () => {
+  assert.match(src, /const DEEP_LINKS = \[/, '必须有深链地址目录 DEEP_LINKS');
+  const block = src.slice(src.indexOf('const DEEP_LINKS = ['), src.indexOf('];', src.indexOf('const DEEP_LINKS = [')));
+  for (const p of ['/works/12345', '/market/a/b', '/#/works/12345']) {
+    assert.ok(block.includes("'" + p + "'"), '深链目录缺少 ' + p + '（覆盖路径深链/多级深链/哈希深链三类）');
+  }
+  assert.match(src, /async function auditDeepLinks\(/, '必须有深链巡检函数');
+  assert.match(src, /auditDeepLinks\(browser, base, \{ width: 1280/, '桌面巡检必须接线深链检查');
+  assert.match(src, /data\.assetFailures = assetFailures/, '必须记录深链下的资源加载失败');
+  assert.match(src, /data\.appBooted = /, '必须判定应用是否启动');
+  assert.match(src, /data\.navReady = /, '必须判定导航是否就绪');
+  assert.match(src, /kind: 'deepLinkAssetFail'/, '资源 4xx 必须判缺陷');
+  assert.match(src, /kind: 'deepLinkNotBooted'/, '未启动必须判缺陷');
+  // 深链不得被「落地视图 = 请求视图」的权限页豁免误跳过
+  assert.match(src, /if \(!r\.isModal && !r\.deepLink\)/, '深链结果不得走 gated 跳过分支');
+});

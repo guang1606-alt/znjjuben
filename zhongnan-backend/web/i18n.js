@@ -97,7 +97,8 @@
       fbTicketLabel: '工单', fbEmpty: '还没有提交过反馈，有任何想法都欢迎告诉小南～',
       fbReplyTitle: '小南回复', fbUrgentTag: '紧急', fbBadgeSug: '建议', fbBadgeBug: 'Bug',
       
-      fbStatus_EXECUTING: '已安排处理', fbStatus_TODO: '已列入待办', fbStatus_REJECTED: '暂不采纳',
+      fbStatus_PENDING: '待处理', fbStatus_EXECUTING: '已安排处理', fbStatus_TODO: '已列入待办', fbStatus_REJECTED: '暂不采纳',
+      fbTypeBUG: 'Bug',
       
       fbImagesLabel: '附图（选填）', fbImagesAdd: '添加图片', fbImagesHint: '最多 3 张，单张 ≤ 2MB，支持 png / jpeg / webp，自动压缩',
       admFbExport: '导出总表',
@@ -284,7 +285,8 @@
       fbTicketLabel: 'Ticket', fbEmpty: 'No feedback yet. Xiaonan would love to hear from you.',
       fbReplyTitle: 'Xiaonan replies', fbUrgentTag: 'Urgent', fbBadgeSug: 'Idea', fbBadgeBug: 'Bug',
       
-      fbStatus_EXECUTING: 'Scheduled', fbStatus_TODO: 'On roadmap', fbStatus_REJECTED: 'Not now',
+      fbStatus_PENDING: 'Pending', fbStatus_EXECUTING: 'Scheduled', fbStatus_TODO: 'On roadmap', fbStatus_REJECTED: 'Not now',
+      fbTypeBUG: 'Bug',
       
       fbImagesLabel: 'Images (optional)', fbImagesAdd: 'Add images', fbImagesHint: 'Up to 3 images, ≤ 2MB each, png / jpeg / webp, auto-compressed',
       admFbExport: 'Export all',

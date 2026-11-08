@@ -147,4 +147,61 @@ describe('v2.471 文案准确性', () => {
     const noWm = copy('dlNoWm', 'zh');
     for (const low of ['免费', '基础']) assert.ok(!noWm.includes(low), '去水印文案不得暗示低于 ' + ZH[wmLevel] + ' 的档位');
   });
+
+  it('G9 会员权益说明不得手写档位数字（项目上限/折扣须由服务端目录派生）', () => {
+    // 真源：src/config/pricing.ts 的 MEMBERSHIP.maxActiveProjects
+    const pricing = fs.readFileSync(path.join(ROOT, 'src', 'config', 'pricing.ts'), 'utf8');
+    const memBlock = pricing.slice(pricing.indexOf('export const MEMBERSHIP'), pricing.indexOf('} as const;', pricing.indexOf('export const MEMBERSHIP')));
+    assert.ok(memBlock.length > 0, '未能定位 MEMBERSHIP 真源块');
+    const limits = ['FREE', 'BASIC', 'ADVANCED', 'PRO'].map((lv) => {
+      const seg = memBlock.slice(memBlock.indexOf(lv + ': {'));
+      return Number((seg.match(/maxActiveProjects:\s*(\d+)/) || [])[1]);
+    });
+    assert.deepStrictEqual(limits, [2, 10, 30, 100], '提取器读到的项目上限与预期不符，先修提取器：' + limits.join(','));
+    // 前端任何文件都不得再把这组数字/折扣写成固定文案
+    const banned = [/免费\s*2\s*个[\s\S]{0,20}基础\s*10\s*个/, /免费2\/基础10\/高级30\/专业100/];
+    const hits = [];
+    for (const [file, src] of webSources()) {
+      for (const re of banned) if (re.test(src)) hits.push(file + ' 命中 ' + re);
+    }
+    assert.deepStrictEqual(hits, [], '权益数字又回到手写文案（会员价格一调就失真）：\n' + hits.join('\n'));
+    // 必须由目录数据动态渲染
+    const app = read('app.js');
+    assert.match(app, /\$\('vipLimitNote'\)/, 'app.js 必须渲染 #vipLimitNote');
+    assert.match(app, /p2\.maxActiveProjects/, '项目上限必须取自目录 plans.maxActiveProjects');
+    assert.match(app, /p2\.vaRate/, '增值折扣必须取自目录 plans.vaRate');
+    assert.match(read('index.html'), /id="vipLimitNote"/, 'index.html 必须保留可被动态填充的 #vipLimitNote');
+    // 后端目录必须下发 VA_LEVEL_RATE（否则前端拿不到折扣真源）
+    const order = fs.readFileSync(path.join(ROOT, 'src', 'routes', 'order.ts'), 'utf8');
+    assert.match(order, /vaRate:\s*VA_LEVEL_RATE\[lv\]/, '/order/catalog 必须下发 vaRate=VA_LEVEL_RATE[lv]');
+  });
+
+  it('G10 反馈/知识库的状态与类型不得直接暴露原始枚举', () => {
+    // ① 词典：新工单 DB 默认 PENDING（prisma Feedback.status），缺键时中文徽章会漏出枚举值
+    const i18n = read('i18n.js');
+    const zhStart = i18n.indexOf('  zh: {'), enStart = i18n.indexOf('  en: {');
+    assert.ok(zhStart > 0 && enStart > zhStart, '无法定位 zh/en 词典块');
+    for (const [name, block] of [['zh', i18n.slice(zhStart, enStart)], ['en', i18n.slice(enStart)]]) {
+      assert.match(block, /fbStatus_PENDING:\s*'/, name + ' 词典缺少 fbStatus_PENDING（新工单默认态会显示原始枚举）');
+      assert.match(block, /fbTypeBUG:\s*'/, name + ' 词典缺少 fbTypeBUG');
+    }
+    // ② 筛选下拉：每个状态选项都必须走词典，且不得以枚举值本身作文案
+    const html = read('index.html');
+    const start = html.indexOf('id="fbStatus"');
+    assert.ok(start > 0, '缺少反馈状态筛选 #fbStatus');
+    const sel = html.slice(start, html.indexOf('</select>', start));
+    for (const v of ['PENDING', 'EXECUTING', 'TODO', 'REJECTED']) {
+      const tag = sel.match(new RegExp('<option value="' + v + '"([^>]*)>'));
+      assert.ok(tag, '反馈状态筛选缺少 ' + v + ' 选项');
+      assert.match(tag[1], /data-i="fbStatus_/, v + ' 选项必须用 data-i 走词典');
+      assert.ok(!new RegExp('<option value="' + v + '"[^>]*>' + v + '<').test(sel), v + ' 不得直接以枚举值作选项文案');
+    }
+    // ③ 列表徽章：状态名走词典，不在英文界面回落枚举；知识库状态/类型均需本地化
+    const app = read('app.js');
+    assert.ok(!/lang === 'en' \? s : \(FB_STATUS_ZH/.test(app), '英文界面不得直接显示 PENDING/TODO 原始枚举');
+    assert.match(app, /const fbStatusName = \(s\) => \{ const k = 'fbStatus_' \+ s;/, '反馈状态名必须经 t() 词典解析');
+    assert.match(app, /stName\[k\.status\]/, '知识库状态徽章必须本地化（不得直接输出 APPROVED/PENDING）');
+    assert.match(app, /kindName\[k\.kind\]/, '知识库类型标签必须本地化（不得直接输出 TEXT/URL）');
+    assert.ok(!/\[?\$\{k\.status\}<\/span>/.test(app), '知识库列表不得直接渲染 k.status');
+  });
 });

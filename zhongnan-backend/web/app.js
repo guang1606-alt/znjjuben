@@ -3941,6 +3941,22 @@
       return `<div class="plan-card"><h3>${i.points} ${t('points')} ${bonusTxt}</h3><div class="plan-price">¥${i.amountYuan}</div>
        <button class="btn-ghost" data-sku="${i.sku}"${disabled}>${purchaseLabel}</button></div>`;
     }).join('');
+    // v2.482 项目上限与增值折扣全部来自服务端目录（pricing.ts 单一真源）：
+    // 旧文案把这些档位数字写死在 index.html，会员价格/折扣一调就会与真实结算脱节。
+    const limitNote = $('vipLimitNote');
+    if (limitNote) {
+      const limitTxt = cat.plans.map((p2) => `${lvName(p2.level)} ${p2.maxActiveProjects}`).join(' · ');
+      const disc = cat.plans.filter((p2) => typeof p2.vaRate === 'number' && p2.vaRate < 1)
+        .map((p2) => `${lvName(p2.level)} ${lang === 'en' ? p2.vaRate + '×' : Math.round(p2.vaRate * 10) + ' 折'}`)
+        .join(' · ');
+      const rest = cat.plans.filter((p2) => typeof p2.vaRate === 'number' && p2.vaRate >= 1)
+        .map((p2) => lvName(p2.level)).join(lang === 'en' ? ' & ' : '与');
+      const discountZh = disc ? `；AI 共创（拆爆款 / 围读 / 选题会）积分消耗：${disc}，${rest || '免费与基础'}按标准价` : '';
+      const discountEn = disc ? `. AI co-creation (teardown / table read / pitch meeting) point cost: ${disc}; ${rest || 'Free & Basic'} pay standard` : '';
+      limitNote.textContent = lang === 'en'
+        ? `Your tier sets how many projects can run at once: ${limitTxt}${discountEn}. Higher tiers unlock stronger engine mixes.`
+        : `会员等级决定同时可进行的剧本项目数：${limitTxt}${discountZh}；等级越高可用引擎组合越强。`;
+    }
     document.querySelectorAll('[data-sku]').forEach((b) => b.onclick = () => placeOrder(b.getAttribute('data-sku')));
   }
   // v2.260 下单在途锁：[data-sku] 按钮与 xMatureBuy 两入口共享，函数级锁才能挡跨入口重入
@@ -7175,7 +7191,9 @@
           const ej = await pr.json().catch(() => ({}));
           if (!isPrivateSessionCurrent(account)) return;
           if (ej.error === 'REACH_PROJECT_LIMIT') {
-            toastError((ej.message || '项目数已达当前会员上限') + ' 免费2/基础10/高级30/专业100，升级会员或清理旧项目即可继续');
+            // v2.482 不再手写各档项目上限：数字只认服务端目录，
+            // 否则会员价格一调这里就变成错误承诺（与 teardown-view 的同义提示保持一致）。
+            toastError((ej.message || '项目数已达当前会员上限') + '，升级会员或清理旧项目即可继续');
             return;
           }
           if (ej.error === 'MATURE_CONSENT_REQUIRED') { openXMature().catch(() => {}); return; }
@@ -10809,8 +10827,18 @@
     let list = [];
     try { list = await admApi('/knowledge' + (status ? '?status=' + status : '')); } catch (e) { xnSay(e.message); return; }
     const stBadge = { PENDING: 'warn', APPROVED: 'ok', REJECTED: 'bad', ARCHIVED: '' };
+    // v2.482 后台列表不再直接输出 PENDING/APPROVED 与 TEXT/URL 等原始枚举：
+    // 与反馈工单同属「可见文案漏枚举」，中文界面读起来像调试信息，英文界面更是无从理解。
+    const stName = {
+      PENDING: lang === 'en' ? 'Pending' : '待审', APPROVED: lang === 'en' ? 'Approved' : '已通过',
+      REJECTED: lang === 'en' ? 'Rejected' : '已驳回', ARCHIVED: lang === 'en' ? 'Archived' : '已归档',
+    };
+    const kindName = {
+      TEXT: lang === 'en' ? 'Text' : '文本', URL: lang === 'en' ? 'URL' : '链接',
+      VIDEO: lang === 'en' ? 'Video' : '视频', FILE: lang === 'en' ? 'File' : '文件',
+    };
     $('admKnowList').innerHTML = list.map((k) => `<div class="post-card" data-kid="${k.id}">
-      <h4>[${k.kind}] ${escapeHtml(k.title)} <span class="badge ${stBadge[k.status] || ''}">${k.status}</span> <span class="muted">${knCatName(k.category)}</span></h4>
+      <h4>[${escapeHtml(kindName[k.kind] || k.kind)}] ${escapeHtml(k.title)} <span class="badge ${stBadge[k.status] || ''}">${escapeHtml(stName[k.status] || k.status)}</span> <span class="muted">${knCatName(k.category)}</span></h4>
       ${k.conflictNote ? `<div class="warn-text">${escapeHtml(k.conflictNote)}</div>` : ''}
       <div class="pc-foot"><span class="muted">${new Date(k.createdAt).toLocaleString()}</span><span class="spacer"></span>
       ${k.status === 'PENDING' ? '<button class="btn-ghost" data-kn="approve">' + (lang === 'en' ? 'Approve & sync' : '通过并同步技能') + '</button><button class="btn-ghost" data-kn="reject">' + (lang === 'en' ? 'Reject' : '驳回') + '</button>' : ''}
@@ -10919,9 +10947,10 @@
   // 反馈工单路由挂载在 /api/feedback（其 admin/* 子路径由 requireAdmin 守护）
     // @module admin
   const fbAdm = async (path, opts) => { const r = await Api.request('/api/feedback' + path, opts); return Api.jsonOrThrow(r); };
-  const FB_STATUS_ZH = { PENDING: '待处理', EXECUTING: '已安排执行', TODO: '待办', REJECTED: '未采纳' };
+  // v2.482 状态名统一走词典（中英同一套）：旧实现英文界面直接显示 PENDING/TODO 原始枚举，
+  // 且 fbStatus_PENDING 缺键时中文列表也会漏出枚举值（新工单默认就是 PENDING）。
     // @module admin
-  const fbStatusName = (s) => (lang === 'en' ? s : (FB_STATUS_ZH[s] || s));
+  const fbStatusName = (s) => { const k = 'fbStatus_' + s; const v = t(k); return v === k ? s : v; };
   async function loadAdmFeedback() {
     const status = $('fbStatus').value, type = $('fbType').value;
     const q = new URLSearchParams(); if (status) q.set('status', status); if (type) q.set('type', type);

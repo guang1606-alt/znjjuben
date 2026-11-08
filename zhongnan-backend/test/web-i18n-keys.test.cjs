@@ -148,7 +148,7 @@ describe('v2.235 i18n 键完整性', () => {
   const DYN_FAMILIES = [
     /^admTab_/,                    // 超管后台 Tab（既有前缀形态，t('admTab_' + tab)）
     /^sec(Experience|Team|Review|News)$/, // app.js SQ_SECTIONS：t('sec' + Cap(s))，s ∈ experience/team/review/news
-    /^fbStatus_(EXECUTING|TODO|REJECTED)$/, // app.js t('fbStatus_' + rawStatus)；engine/feedback.ts nextStatus 仅产出 executing/todo/rejected 三态（大写后）
+    /^fbStatus_(PENDING|EXECUTING|TODO|REJECTED)$/, // app.js t('fbStatus_' + rawStatus)；新工单 DB 默认 PENDING，管理员三态流转为 executing/todo/rejected（大写后）
     /^dashThinBatchFields(Voice|SignatureLines|VisualAnchor|Taboo|Tags|Mood)$/, // app.js fieldName()：'dashThinBatchFields' + Cap(f)；f ∈ PATCH_FIELDS_CAST/PROP/SCENE 白名单并集
   ];
   it('字典顶层键 ⊆ 消费证据集（防死键积累）', () => {

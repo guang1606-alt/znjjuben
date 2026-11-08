@@ -55,6 +55,15 @@ describe('订单下单-支付回调-发货-幂等 资金链路', { concurrency: 
     const catalog = await (await fetch(base + '/api/order/catalog')).json();
     assert.strictEqual(catalog.paymentAvailable, false);
     assert.strictEqual(catalog.items.find((x) => x.sku === 'PRO_Y').amountFen, 299900);
+    // v2.482 会员权益说明（项目上限/增值折扣）由目录下发，必须与 pricing.ts 单一真源逐档一致，
+    // 否则 vip 页会展示与真实扣费不符的承诺（旧文案把 2/10/30/100 与 8折/6折 手写在 HTML 里）。
+    const { VA_LEVEL_RATE, MEMBERSHIP } = require('../dist/config/pricing.js');
+    const ORDER = ['FREE', 'BASIC', 'ADVANCED', 'PRO'];
+    assert.deepStrictEqual(catalog.plans.map((p) => p.level), ORDER);
+    for (const p of catalog.plans) {
+      assert.strictEqual(p.vaRate, VA_LEVEL_RATE[p.level], p.level + ' 的增值折扣必须来自 VA_LEVEL_RATE');
+      assert.strictEqual(p.maxActiveProjects, MEMBERSHIP[p.level].maxActiveProjects, p.level + ' 的项目上限必须来自 MEMBERSHIP');
+    }
     const count = mem._orders.length;
     const r = await create('yearbuyer', 'FREE', 'PRO_Y');
     assert.strictEqual(r.status, 503);
