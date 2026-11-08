@@ -44,7 +44,8 @@ describe('v2.241 a11y：导航语义（aria-label 地标区分 + aria-current �
   });
 
   it('data-open 面板按钮激活设 aria-current="true"（非页面语义不用 page）', () => {
-    const region = sliceBetween(appSrc, "querySelectorAll('.nav [data-open]')", "querySelectorAll('.nav [data-nav]')");
+    // v2.471 旧 data-nav 占位处理器已删除，改用其后的 v2.186 注释作为切片右边界
+    const region = sliceBetween(appSrc, "querySelectorAll('.nav [data-open]')", '/* v2.186');
     assert.ok(region.length > 0, '应定位到 data-open 分支');
     assert.match(region, /setAttribute\('aria-current', 'true'\)/, 'data-open 激活缺 aria-current="true"');
     assert.doesNotMatch(region, /aria-current', 'page'/, 'data-open 面板按钮不应用 page 语义');

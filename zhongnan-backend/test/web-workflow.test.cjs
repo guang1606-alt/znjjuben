@@ -31,6 +31,8 @@ function setup(names, extra = {}) {
     return nodes.get(id);
   };
   const context = { $, lang: 'zh', console, AbortController, TextDecoder, Event, CustomEvent, PV: () => ProgressView,
+    // v2.471 loadCatalog 的会员权益改为由 I18N.MODES 派生数量与名单，浏览器里 I18N 是全局，这里同源注入
+    I18N: require('../web/i18n.js'),
     capturePrivateSession: () => ({ owner: 'fixture', epoch: 0 }), isPrivateSessionCurrent: () => true,
     document: { getElementById: () => null, querySelector: () => null, querySelectorAll: () => [], removeEventListener() {}, createElement: () => $('created') },
     setTimeout: fn => { timers.push(fn); return timers.length; }, clearTimeout() {},

@@ -1,5 +1,5 @@
 /* 终南集·AGI编剧大师 · 前端主逻辑（零构建原生 ES）。
-   主题/语言持久化、12 模式、登录注册、作品库、带鉴权 SSE 生成、游戏化进度、结果与分享。 */
+   主题/语言持久化、创作模式、登录注册、作品库、带鉴权 SSE 生成、游戏化进度、结果与分享。 */
 (function () {
   'use strict';
   const $ = (id) => document.getElementById(id);
@@ -195,7 +195,7 @@
     if (qsMaskEl) qsMaskEl.setAttribute('aria-label', t('qsDialog'));
     renderStaticText(); renderModes(); renderHome(); renderSelects(); renderScriptTypes(); renderAuthButton();
     _applyToolboxHints(); // A3 工具箱卡片分层：静态卡注入方法论一句话提示行（随语言刷新）
-    // v2.188 初始化同步守卫：applyLang 期间 syncTagBench/syncModeBrief 不主动调 openWorkbench（避免 layer 自动展开覆盖 12 模式主页）
+    // v2.188 初始化同步守卫：applyLang 期间 syncTagBench/syncModeBrief 不主动调 openWorkbench（避免 layer 自动展开覆盖模式主页）
     _initSyncing = true;
     // 语言切换时同步标签工作台（维度下拉与已选标签的显示语言）
     // v2.266 快照防双发：syncTagBench→initTagBench 首次取数并置 tagDimInited=true，活读标志会当轮再取一次；改用调用前快照
@@ -342,18 +342,16 @@
     const myRank0 = acctRank();
     const TIER_ZH = { basic: '基础', advanced: '高级', pro: '专业' };
     I18N.MODES.forEach((m) => {
-      const tierLocked = !m.soon && !m.lock && (RANK[m.free] ?? 0) > myRank0;
+      const tierLocked = !m.lock && (RANK[m.free] ?? 0) > myRank0;
       const card = document.createElement('button');
-      card.className = 'mode-card' + (m.id === selectedMode ? ' on' : '') + (m.soon ? ' soon' : '') + (m.lock ? ' lock' : '') + (tierLocked ? ' tier-lock' : '');
+      card.className = 'mode-card' + (m.id === selectedMode ? ' on' : '') + (m.lock ? ' lock' : '') + (tierLocked ? ' tier-lock' : '');
       const modeHint = councilText('mode:' + m.id); if (modeHint) card.title = modeHint;
       card.innerHTML = `<b>${D.mode[m.id] || m.id}</b><span>${D.modeDesc[m.id] || ''}</span>` +
-        (m.soon ? `<em class="badge soon-badge">${lang === 'en' ? 'coming soon' : '研发中'}</em>` : '') +
         (m.lock ? `<em class="badge lock-badge">${lang === 'en' ? 'gated, age-verified' : '分级授权'}</em>` : '') +
         (tierLocked ? `<em class="badge tier-badge">${lang === 'en' ? `${m.free}+` : `需${TIER_ZH[m.free] || ''}会员`}</em>` : '') +
         // P1 trailing icon：Button-in-Button（high-end-visual-design）—— 不可进入态不显示箭头
-        ((!m.soon && !m.lock && !tierLocked) ? `<em class="mode-go" aria-hidden="true">↗</em>` : '');
+        ((!m.lock && !tierLocked) ? `<em class="mode-go" aria-hidden="true">↗</em>` : '');
       card.onclick = () => {
-        if (m.soon) { xnSay(lang === 'en' ? 'Feature film script is in the works. Stay tuned.' : '电影剧本功能正在打磨，敬请期待～'); return; }
         if (m.lock) { openXMature(); return; }
         // 会员等级软拦截：等级不足不进入，明确告知并引导升级（与后端 /projects 强校验同源）
         const RANK = _RANK;
@@ -395,7 +393,7 @@
       const myRank0 = acctRank();
       const TIER_ZH = { basic: '基础', advanced: '高级', pro: '专业' };
       I18N.MODES.filter((m) => HOME_QUICK_MODES.includes(m.id)).forEach((m) => {
-        const tierLocked = !m.soon && !m.lock && (RANK[m.free] ?? 0) > myRank0;
+        const tierLocked = !m.lock && (RANK[m.free] ?? 0) > myRank0;
         const card = document.createElement('button');
         card.className = 'home-quick-card' + (tierLocked ? ' tier-lock' : '');
         card.innerHTML = `<b>${escapeHtml(D.mode[m.id] || m.id)}</b><span>${escapeHtml(D.modeDesc[m.id] || '')}</span>` +
@@ -2425,7 +2423,8 @@
     b.setAttribute('aria-current', 'true');
     openWorkbench(id);
   });
-  document.querySelectorAll('.nav [data-nav]').forEach((b) => b.onclick = () => xnSay(lang === 'en' ? 'That area is being built.' : '该板块正在建设中，敬请期待～'));
+  // v2.471 删除旧导航项占位处理器：v2.188 工作台化后 index.html 已无对应属性，
+  // 原「板块占位」提示永远不可达（导航项统一走 data-open / data-view）
 
   /* v2.186 创作辅助台 chip toggle → v2.188 改为打开工作台独立板块（不再同页折叠） */
   document.querySelectorAll('.bench-toggle').forEach((b) => b.onclick = () => {
@@ -2436,7 +2435,7 @@
   });
 
   /* ---------- v2.188 工作台独立板块（全屏覆盖层）----------
-     所有"展开的功能工作区"独立成板块，不再和 12 模式 grid / 5 工具卡同页堆叠。
+     所有"展开的功能工作区"独立成板块，不再和模式 grid / 工具卡同页堆叠。
      实现：初始化时把 16 个工作台 panel 从 #view-studio 静态转移到 #workbenchBody；
      MutationObserver 监视 panel.hidden 变化，自动开/关 layer；外部代码（syncTagBench /
      syncModeBrief / 任务流等）依旧用 classList.toggle('hidden', ...) 即可触发。 */
@@ -2465,7 +2464,7 @@
     failPanel:        { zh: '生成失败',                 en: 'Failure' },
   };
   let _workbenchInited = false;
-  let _initSyncing = false; // v2.188 初始化同步守卫：applyLang 期间为 true，syncTagBench/syncModeBrief 不主动调 openWorkbench（避免 layer 自动展开覆盖 12 模式主页）
+  let _initSyncing = false; // v2.188 初始化同步守卫：applyLang 期间为 true，syncTagBench/syncModeBrief 不主动调 openWorkbench（避免 layer 自动展开覆盖模式主页）
   let _workbenchHideTimer = null; // v2.188 _hideWorkbenchLayer 的 setTimeout id，_showWorkbenchLayer 内 clearTimeout，避免切换 panel 时旧 timer 异步关闭 layer
   const _workbenchPrevHidden = {}; // 记录上次 hidden 状态，只在变化时行动（避免 view-in 等无关类变化触发死循环）
   let _workbenchOpenToken = ''; // v2.266 用户显式打开令牌：openWorkbench 设令牌，Observer 消费一次即放行 view-studio 守卫（后台直达 classList 无令牌仍被拦）
@@ -3853,13 +3852,17 @@
       const engN = (p.engines || []).length;
       if (engN) perks.push(lang==='en'?`${engN} engine tiers`:`可用引擎档 ${engN} 档`);
       if (p.maxActiveProjects) perks.push((lang==='en'?'Up to ':'同时进行项目≤')+p.maxActiveProjects+(lang==='en'?' projects':' 个'));
-      const MODE_PERK = {
-        FREE: lang==='en'?'Tag mode only':'仅标签创建模式',
-        BASIC: lang==='en'?'5 core modes':'采访/改编/标签/小说/互动 5模式',
-        ADVANCED: lang==='en'?'+ Scene/Hot/ShortVideo/SoftAd':'+名场面/热点/短视频/软广，去水印·听剧本',
-        PRO: lang==='en'?'All 12 modes, strongest mix, batch':'全部12模式·最强模型组合·批量生成·专属投稿',
-      };
-      if (MODE_PERK[p.level]) perks.push(MODE_PERK[p.level]);
+      // v2.471 模式权益由 I18N.MODES 派生：旧文案手写模式总数与实际 8 种长期不符，
+      // 且把剧本类型（短视频/软广）与灵感子轨道（名场面）误当成了模式。
+      const MODE_TIER = { FREE: 0, BASIC: 1, ADVANCED: 2, PRO: 3 };
+      const MODE_RANK = { free: 0, basic: 1, advanced: 2, pro: 3 };
+      const modesUpTo = I18N.MODES.filter((m2) => m2.id !== 'auto' && (MODE_RANK[m2.free] ?? 0) <= (MODE_TIER[p.level] ?? 0));
+      const modeNames = modesUpTo.map((m2) => (I18N.DICT[lang] || I18N.DICT.zh).mode[m2.id] || m2.id).join(' / ');
+      const proExtra = p.level === 'PRO' ? (lang === 'en' ? ' · strongest mix · batch · exclusive submissions' : ' · 最强模型组合 · 批量生成 · 专属投稿') : '';
+      const modePerk = !modesUpTo.length ? '' : ((modesUpTo.length === 1
+        ? (lang === 'en' ? `Only ${modeNames}` : `仅${modeNames}`)
+        : (lang === 'en' ? `${modesUpTo.length} modes: ${modeNames}` : `${modesUpTo.length} 种模式：${modeNames}`)) + proExtra);
+      if (modePerk) perks.push(modePerk);
       if (p.commission !== undefined) perks.push(`${t('commission')} ${p.commission}%`);
       const isCur = cur === p.level;
       // 年卡折算月价与节省比例
@@ -3898,7 +3901,9 @@
     try {
       const res = await Api.request('/api/order/create', { method: 'POST', body: JSON.stringify({ sku }) });
       const o = await Api.jsonOrThrow(res);
-      xnSay(lang === 'en' ? `Order ${o.orderId} created (pending). Live pay coming soon.` : `已创建待支付订单 ${o.orderId}，正式支付通道接入中。`);
+      // v2.471 旧文案「正式支付通道接入中」是时效承诺；后端未配置支付时直接 503 并给出准确提示，
+      // 此成功分支只陈述事实，不再许诺上线时间。
+      xnSay(lang === 'en' ? `Order ${o.orderId} created.` : `订单 ${o.orderId} 已创建。`);
     } catch (e) { xnSay(e.message); } finally { _placingOrder = false; }
   }
 

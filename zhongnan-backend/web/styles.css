@@ -470,9 +470,7 @@ details.home-updates[open] > summary.home-section-head .home-updates-caret { tra
 .track-btn.on { border-color: var(--accent); background: var(--accent-weak); color: var(--accent-strong); font-weight: 600; }
 .badge { font-style: normal; font-size: .68rem; padding: 2px 9px; border-radius: 999px; font-weight: 600; letter-spacing: .03em; }
 .badge.paid { background: var(--gold-soft); color: var(--gold-deep); border: 1px solid color-mix(in srgb, var(--gold) 35%, transparent); }
-.badge.soon { background: var(--panel-2); color: var(--text-2); }
-.mode-card .soon-badge, .mode-card .lock-badge { align-self: flex-start; margin-top: 9px; }
-.soon-badge { background: var(--panel-2); color: var(--text-2); border: 1px solid var(--line); }
+.mode-card .lock-badge { align-self: flex-start; margin-top: 9px; }
 .lock-badge { background: color-mix(in srgb, var(--cinnabar) 12%, var(--panel)); color: var(--cinnabar); border: 1px solid color-mix(in srgb, var(--cinnabar) 35%, transparent); }
 .tier-badge {
   position: absolute; top: 12px; right: 12px; font-size: .66rem; padding: 2px 9px; border-radius: 999px;
@@ -1893,7 +1891,7 @@ body:has(.ui-dlg-overlay) .toast { --toast-y: 10px; }
 .bench-chips .bench-toggle.on::before { content: "▾ "; }
 @media (prefers-reduced-motion: reduce) { .bench-chips .bench-toggle { transition: none; } }
 
-/* v2.188 工作台独立板块：全屏覆盖层。所有"展开的功能工作区"独立成板块，不再和 12 模式 grid 同页堆叠 */
+/* v2.188 工作台独立板块：全屏覆盖层。所有"展开的功能工作区"独立成板块，不再和模式 grid 同页堆叠 */
 .workbench-layer {
   position: fixed; inset: 0; z-index: 60;
   background: var(--bg, #f6f1e7);
