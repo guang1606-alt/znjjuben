@@ -383,6 +383,51 @@ describe('v2.471 文案准确性', () => {
     assert.ok(!/\$\{p\.mode\}/.test(app), '作品卡仍直接渲染 mode 原始枚举');
   });
 
+  it('G16 导出格式/去水印的档位文案必须由后端门控反查（禁止写死档名）', () => {
+    // 真源：src/lib/script-doc.ts 的 EXPORT_MIN_LEVEL 与 canRemoveWatermark 阈值。
+    // 过去这几处文案是人工抄的，后端一调档位（例如把 pdf 改成 PRO），前端就会继续承诺旧档位，
+    // 用户升级到「文案说的档位」却发现仍拿不到文件——正是最难自证的一类名实不符。
+    const doc = fs.readFileSync(path.join(ROOT, 'src', 'lib', 'script-doc.ts'), 'utf8');
+    const ZH = { FREE: '免费', BASIC: '基础', ADVANCED: '高级', PRO: '专业' };
+    const EN = { FREE: 'Free', BASIC: 'Basic', ADVANCED: 'Advanced', PRO: 'Pro' };
+    const exportBlock = doc.slice(doc.indexOf('EXPORT_MIN_LEVEL'), doc.indexOf('};', doc.indexOf('EXPORT_MIN_LEVEL')));
+    const minOf = (fmt) => {
+      const m = exportBlock.match(new RegExp(fmt + ':\\s*MemberLevel\\.([A-Z]+)'));
+      assert.ok(m, `script-doc.ts 的 EXPORT_MIN_LEVEL 缺少 ${fmt}（守卫失效会假绿）`);
+      return m[1];
+    };
+    // 去水印阈值：canRemoveWatermark 里比较的等级
+    const wmFn = doc.slice(doc.indexOf('export function canRemoveWatermark'), doc.indexOf('}', doc.indexOf('export function canRemoveWatermark')));
+    const wmLevel = (wmFn.match(/LEVEL_RANK\[MemberLevel\.([A-Z]+)\]/g) || []).map((s) => s.match(/MemberLevel\.([A-Z]+)/)[1]).pop();
+    assert.ok(wmLevel, 'canRemoveWatermark 阈值解析失败（守卫失效会假绿）');
+
+    const zh = require('../web/i18n.js').DICT.zh;
+    const en = require('../web/i18n.js').DICT.en;
+    const fmtCopy = { docx: ['dlDocx', minOf('docx')], pdf: ['dlPdf', minOf('pdf')], wm: ['dlNoWm', wmLevel] };
+    for (const [key, [i18nKey, need]] of Object.entries(fmtCopy)) {
+      const text = zh[i18nKey] || '';
+      assert.ok(text, `zh 缺少 ${i18nKey}`);
+      // 免费档不写档位（本来人人可用）；其余必须在文案里给出准确档名
+      const expectZh = need === 'FREE' ? '' : ZH[need] + '会员起';
+      if (expectZh) assert.ok(text.includes(expectZh), `${i18nKey} 必须写「${expectZh}」（后端门控 ${need}）：${text}`);
+      for (const other of Object.keys(ZH)) {
+        if (other === need || other === 'FREE') continue;
+        assert.ok(!text.includes(ZH[other] + '会员起'), `${i18nKey} 写了错误的档位「${ZH[other]}」，实际 ${need}：${text}`);
+      }
+      const enText = en[i18nKey] || '';
+      const expectEn = need === 'FREE' ? '' : EN[need] + '+';
+      if (expectEn) assert.ok(enText.includes(expectEn), `${i18nKey}(en) 必须写 ${expectEn}（后端门控 ${need}）：${enText}`);
+    }
+    // 403 兜底文案（后端直接回给用户）同样不得写死错误档位
+    const route = fs.readFileSync(path.join(ROOT, 'src', 'routes', 'export.ts'), 'utf8');
+    const pdfMsg = (route.match(/fmt === 'pdf' \? '([^']+)'/) || [])[1] || '';
+    assert.ok(pdfMsg.includes(ZH[minOf('pdf')] + '会员'), `导出 403 的 PDF 文案档位与门控不一致：${pdfMsg}`);
+    const docxMsg = (route.match(/fmt === 'pdf' \? '[^']+' : '([^']+)'/) || [])[1] || '';
+    assert.ok(docxMsg.includes(ZH[minOf('docx')] + '会员'), `导出 403 的 docx 文案档位与门控不一致：${docxMsg}`);
+    // 前端去水印入口的显隐必须按同一阈值（阈值改了但入口没改 → 低档用户看不到、或高档用户看不到）
+    assert.ok(read('app.js').includes(`lv === '${wmLevel}'`), `去水印入口显隐必须包含 ${wmLevel}（与 canRemoveWatermark 同源）`);
+  });
+
   it('G12 用户可见文案不得泄漏内部版本号/检查点代号（v2.xx、c123、Sprint/Phase）', () => {
     // 背景：站点迭代上百版后，管理台与提示语里混进了「（v2.52 策展排序）」「（v2.41）」这类
     // 只有开发者看得懂的代号。它们会被截图进用户反馈、被投喂给外部模型，也破坏产品观感。

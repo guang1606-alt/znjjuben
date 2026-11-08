@@ -2119,7 +2119,9 @@
     // v2.490 分享链接常被二次加工成 #/works?id=123：hash 段内的查询串只是附加信息，
     // 不参与视图匹配。旧实现拿整串比对白名单，`works?id=123` 不在名单里 → 静默回落首页，
     // 用户点开分享链接看到的是首页，表现为「链接打不开对应页面」。
-    const v = raw.slice(ROUTE_PREFIX.length).split('?')[0];
+    // v2.491 多级哈希同理：#/works/12345 的首段就是目标视图，后缀（具体作品 id）当前不支持定位，
+    // 但至少应落到「我的作品」而不是首页——只有首段本身不在白名单（#/workshop）才回落。
+    const v = raw.slice(ROUTE_PREFIX.length).split('?')[0].split('/')[0];
     // 白名单校验：任意 hash 不得把用户带进未知分支
     return VIEWS.indexOf(v) >= 0 ? v : null;
   }

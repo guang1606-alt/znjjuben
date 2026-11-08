@@ -50,9 +50,10 @@ const PUBLIC_VIEWS = ['home', 'studio', 'toolbox', 'vip', 'square', 'market', 'w
 // 判据是「应用还能不能启动」：脚本/样式无 4xx、有可见控件、有激活导航项，缺一即红；
 // 哈希形态额外要求落到该视图（expectedView），路径形态只要求能启动。
 const DEEP_LINKS = ['/works/12345', '/market/a/b', '/#/works/12345', '/market?id=123', '/#/works?id=123'];
-// 只有「哈希段恰好是白名单视图（可带 ?查询串）」才断定落点；
-// 多级哈希（#/works/12345）本就是故意回落的，不断言视图，避免制造假红。
-const HASH_VIEW_RE = /^#\/(home|studio|toolbox|works|vip|square|market|admin)(?:\?|$)/;
+// 只有「哈希首段是白名单视图（可带 ?查询串 或 /后续段）」才断定落点；
+// v2.491 起多级哈希（#/works/12345）按首段落地，因此也纳入落点断言——
+// 这是真实分享链接最常见的形态，过去它静默回首页，巡检只判「能启动」永远发现不了。
+const HASH_VIEW_RE = /^#\/(home|studio|toolbox|works|vip|square|market|admin)(?:\?|\/|$)/;
 function expectedViewOf(p) {
   const i = p.indexOf('#');
   if (i < 0) return '';

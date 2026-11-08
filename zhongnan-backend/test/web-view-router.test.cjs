@@ -28,6 +28,16 @@ test('视图切换写 URL：switchView 接受 fromRoute/replace 选项并同步 
   assert.match(fn, /!!o\.replace|o\.replace/, '需要 replace 通道，避免权限回退时堆积历史记录');
 });
 
+// v2.491 多级哈希（#/works/12345）过去被判为「非白名单」→ 静默回落首页：
+// 用户点开别人分享的作品链接，看到的是首页，既不知道发生了什么、也找不到作品在哪。
+// 首段是白名单视图时就应按该视图落地（作品列表至少能看到自己的剧本），
+// 只有首段本身不在白名单（如 #/workshop）才回落——不能因为「后缀不认识」把人送回首页。
+test('多级哈希按首段落地视图（#/works/12345 → works）', () => {
+  const fn = pick('viewFromHash');
+  assert.match(fn, /split\('\/'\)\[0\]/, '必须按 / 取首段再比对白名单');
+  assert.match(fn, /VIEWS\.indexOf\(v\)\s*>=\s*0|VIEWS\.includes\(v\)/, '首段仍须过白名单');
+});
+
 test('hash 解析只认白名单视图，脏 hash 一律回落到首页', () => {
   const fn = pick('viewFromHash');
   assert.match(fn, /location\.hash/, '必须从 hash 解析');
