@@ -4,7 +4,7 @@ import { authRequired, AuthRequest } from '../middleware/auth';
 import { isAdminUser } from '../middleware/admin';
 import { prisma as defaultPrisma } from '../lib/prisma';
 import { parsePageParams } from '../lib/pagination';
-import { EngineTier, MemberLevel, MEMBERSHIP, episodePoints, FEN_PER_POINT, resolveEpisodeCharge, activeProjectLimit, VALUE_ADDED, vaPointsForLevel } from '../config/pricing';
+import { EngineTier, MemberLevel, MEMBERSHIP, episodePoints, FEN_PER_POINT, resolveEpisodeCharge, activeProjectLimit, VALUE_ADDED, vaPointsForLevel, engineAvailable, engineMinLevel } from '../config/pricing';
 import { freeze, settle, unfreeze, consumeFlexible, refundFlexible } from '../lib/billing';
 import { withBillingTransaction } from '../lib/prisma-tx';
 import { runEpisode, Bible } from '../agents/pipeline';
@@ -333,6 +333,15 @@ generateRouter.post('/projects', authRequired, async (req: AuthRequest, res) => 
       message: `当前会员等级不可用该剧本类型，升级到${scriptTypeUnlockLevel(scriptType) ?? '更高等级'}后解锁`,
     });
   }
+  // v2.489 引擎档位门控前移到立项：此前立项不校验，免费/基础用户可把项目建成旗舰档，
+  // 之后每一集生成都 403（"能立项、跑不了"的死项目）；前端下拉同时按档位锁定。
+  if (d.engineTier && !isStaff && !engineAvailable(d.engineTier, ownerLevel)) {
+    const need = engineMinLevel(d.engineTier);
+    return res.status(403).json({
+      error: 'ENGINE_LOCKED', needLevel: need, engineTier: d.engineTier,
+      message: `当前会员等级不可用该引擎档，升级到${need}后解锁`,
+    });
+  }
   const outputLang = d.outputLang ? canonicalLanguageCode(d.outputLang) : undefined;
   if (d.outputLang && !outputLang) return res.status(400).json({ error: `未知输出语言：${d.outputLang}` });
   if (outputLang && !isStaff && !languageAvailable(outputLang, ownerLevel)) {
@@ -490,7 +499,8 @@ generateRouter.post('/projects', authRequired, async (req: AuthRequest, res) => 
   const project = await prisma.project.create({
     data: {
       userId: req.userId!, title: d.title, mode: canonMode, totalEps: d.totalEps ?? 0,
-      engineTier: d.engineTier ?? EngineTier.STANDARD, tags: d.tags ?? [],
+      // v2.489 兜底档位也要落在当前会员可用范围内（免费档兜底经济档，其余保留标准档）
+      engineTier: d.engineTier ?? (engineAvailable(EngineTier.STANDARD, ownerLevel) ? EngineTier.STANDARD : EngineTier.ECONOMY), tags: d.tags ?? [],
       format: fmt, status: 'draft',
       investWan: d.investWan ?? null, specialTopic: d.specialTopic ?? false, filing: filing as object,
       ...(Object.keys(bibleCue).length ? { bible: bibleCue as object } : {}),
@@ -1941,7 +1951,7 @@ async function buildPlayableEpisodes(projectId: string, lang: 'zh' | 'en') {
   return out;
 }
 
-// v2.55 听剧本：高级会员及以上权益，本地确定性生成 TTS 朗读脚本，不额外扣积分
+// v2.55 听剧本：基础会员及以上权益（闸门真源 assistant-capability.ts 的 listen_script=BASIC），本地确定性生成 TTS 朗读脚本，不额外扣积分
 generateRouter.get('/scripts/:id/listen', authRequired, async (req: AuthRequest, res) => {
   const me = await prisma.user.findUnique({ where: { id: req.userId! }, select: { level: true } });
   const level = ((me?.level ?? MemberLevel.FREE) as MemberLevel);
@@ -2588,8 +2598,10 @@ generateRouter.post('/episodes', authRequired, async (req: AuthRequest, res) => 
   // 不读积分余额、不依赖 Membership 赠送额度、不走毛利熔断——身份判定函数层直接短路。
   const isStaff = isAdminUser(user);
   const tier = parsed.data.engineTier ?? EngineTier.ECONOMY;
-  const allowed = (MEMBERSHIP[level] as { engines: readonly EngineTier[] }).engines;
-  if (!isStaff && !allowed.includes(tier)) return res.status(403).json({ error: '当前会员等级不可用该引擎，请升级' });
+  // v2.489 与立项接口共用 engineAvailable 单一口径，并回报 needLevel 供前端直接指路升级
+  if (!isStaff && !engineAvailable(tier, level)) {
+    return res.status(403).json({ error: '当前会员等级不可用该引擎，请升级', needLevel: engineMinLevel(tier), engineTier: tier });
+  }
 
   const project = await prisma.project.findFirst({ where: { id: projectId, userId: user.id, status: { not: 'deleted' } } });
   if (!project) return res.status(404).json({ error: '项目不存在' });

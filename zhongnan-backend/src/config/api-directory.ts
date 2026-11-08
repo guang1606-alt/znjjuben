@@ -169,7 +169,7 @@ export const API_DIRECTORY: ApiEntry[] = [
   },
   {
     id: 'infra_tts_asr', layer: 'infra', vendor: '火山引擎语音（首选）/阿里云智能语音（备选）', product: 'TTS 听剧本 + ASR 语音输入',
-    region: 'domestic', usedBy: ['高级会员“听剧本”(TTS)', '采访式创作全程语音口述转写(ASR)', '小南语音交互'],
+    region: 'domestic', usedBy: ['基础会员起“听剧本”(TTS)', '采访式创作全程语音口述转写(ASR)', '小南语音交互'],
     consoleUrl: 'https://console.volcengine.com/speech', necessity: 'core', note: '备选 https://nls-portal.console.aliyun.com/；按字符/时长计费，计入小南/听剧本积分成本分摊',
   },
   {

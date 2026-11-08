@@ -101,6 +101,19 @@ export function canTrade(level: MemberLevel | string | undefined | null): boolea
   return i >= order.indexOf(MIN_TRADE_LEVEL); // 未知档位 indexOf=-1 → 拒绝
 }
 
+/** 某引擎档位最低开放会员档（v2.489：从 MEMBERSHIP.engines 反查，新增档位不必改这里）。
+ *  立项接口与生成接口共用同一口径，避免「能建立项、每一集都 403」的死项目。 */
+export function engineMinLevel(tier: EngineTier): MemberLevel {
+  const order = [MemberLevel.FREE, MemberLevel.BASIC, MemberLevel.ADVANCED, MemberLevel.PRO];
+  for (const lv of order) if ((MEMBERSHIP[lv].engines as readonly EngineTier[]).includes(tier)) return lv;
+  return order[order.length - 1];
+}
+/** 当前会员档是否可用该引擎档（未知档位一律拒绝） */
+export function engineAvailable(tier: EngineTier, level: MemberLevel | string | undefined | null): boolean {
+  const lv = (level || MemberLevel.FREE) as MemberLevel;
+  return ((MEMBERSHIP[lv]?.engines as readonly EngineTier[]) || []).includes(tier);
+}
+
 /** 消耗 token 的增值功能按会员等级差异化定价：等级越高越优惠，但永不跌破“成本×2”铁底 */
 export const VA_LEVEL_RATE: Record<MemberLevel, number> = {
   [MemberLevel.FREE]: 1, [MemberLevel.BASIC]: 1, [MemberLevel.ADVANCED]: 0.8, [MemberLevel.PRO]: 0.6,

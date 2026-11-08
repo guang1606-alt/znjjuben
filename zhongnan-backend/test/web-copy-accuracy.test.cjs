@@ -292,6 +292,97 @@ describe('v2.471 文案准确性', () => {
     assert.ok(!/consumeValueAdded\(tx, userId, key/.test(room), '选题会/围读不得再走固定价扣费');
   });
 
+  it('G14 会员权益文案的档位/专属项必须与后端真实门控一致（听剧本、PRO 专属能力）', () => {
+    // ① 听剧本：真源 assistant-capability.ts 的 listen_script 门控档位（曾写死「高级起」，实际基础可用）
+    const cap = fs.readFileSync(path.join(ROOT, 'src', 'config', 'assistant-capability.ts'), 'utf8');
+    const listenNeed = (cap.match(/listen_script:\s*MemberLevel\.(\w+)/) || [])[1];
+    assert.ok(listenNeed, 'assistant-capability.ts 必须声明 listen_script 门控档位');
+    const ZH = { FREE: '免费', BASIC: '基础', ADVANCED: '高级', PRO: '专业' };
+    const EN = { FREE: 'Free', BASIC: 'Basic', ADVANCED: 'Advanced', PRO: 'Pro' };
+    // 前端不得再把听剧本的档位写死（必须从 /assistant/capabilities 的 needLevel 反查）
+    const app = read('app.js');
+    assert.match(app, /function listenNeedLevel\(\)/, 'app.js 必须从能力矩阵反查听剧本档位（listenNeedLevel）');
+    assert.match(app, /find\(\(x\) => x\.action === 'listen_script'\)[\s\S]{0,40}needLevel/, 'listenNeedLevel 必须读取 needLevel');
+    assert.match(app, /levelLabel\(listenNeedLevel\(\)\)/, '听剧本锁定按钮文案必须使用服务端下发的档位');
+    const hardZh = ['免费', '基础', '高级', '专业'].filter((n) => n !== ZH[listenNeed]);
+    const hardEn = ['Free', 'Basic', 'Advanced', 'Pro'].filter((n) => n !== EN[listenNeed]);
+    for (const n of hardZh) assert.ok(!new RegExp(`听剧本（${n}起|听剧本（${n}会员`).test(app), `app.js 不得把听剧本写死为「${n}」档（实际 ${ZH[listenNeed]} 可用）`);
+    for (const n of hardEn) assert.ok(!new RegExp(`Listen \\(${n}\\+`).test(app), `app.js 不得把听剧本写死为 ${n}+（实际 ${EN[listenNeed]}+ 可用）`);
+    // 服务端权益说明（弹窗标题）同样必须由门控反查
+    const listen = fs.readFileSync(path.join(ROOT, 'src', 'engine', 'listen-script.ts'), 'utf8');
+    assert.match(listen, /actionNeedLevel\('listen_script'\)/, 'listen-script.ts 的权益标题必须由 actionNeedLevel 反查档位');
+    for (const n of hardZh) assert.ok(!new RegExp(`听剧本（${n}会员及以上）`).test(listen), `listen-script.ts 权益标题不得写死「${n}」档`);
+    for (const n of hardEn) assert.ok(!new RegExp(`Listen mode \\(${n}\\+`).test(listen), `listen-script.ts 英文标题不得写死 ${n}+`);
+
+    // ② PRO 专属项：只有后端真实仅 PRO 可用的能力才能写进「专业会员」权益
+    const modes = fs.readFileSync(path.join(ROOT, 'src', 'config', 'modes.ts'), 'utf8');
+    const minLevelOf = (id) => {
+      const i = modes.indexOf(`id: '${id}'`);
+      assert.ok(i >= 0, `modes.ts 缺少 ${id}`);
+      const seg = modes.slice(i, modes.indexOf('\n  }', i));
+      return (seg.match(/minLevel:\s*L\.([A-Z]+)/) || [])[1];
+    };
+    const proOnly = ['feature_film', 'long_series', 'hit_reverse'].filter((id) => minLevelOf(id) === 'PRO');
+    assert.ok(proOnly.length >= 2, 'PRO 专属能力解析异常（守卫失效会假绿）：' + proOnly.join(',') + ' / ' + proOnly.length);
+    const proExtra = (app.match(/const proExtra = [^\n]+/) || [])[0] || '';
+    assert.ok(proExtra, 'app.js 必须声明 proExtra 权益文案');
+    if (proOnly.includes('feature_film') || proOnly.includes('long_series')) {
+      assert.ok(/电影|长剧/.test(proExtra), 'Pro 权益应包含只对 PRO 开放的电影/长剧剧本类型');
+    }
+    if (proOnly.includes('hit_reverse')) {
+      assert.ok(/批量|batch/.test(proExtra), 'Pro 权益应包含只对 PRO 开放的爆款逆向批量');
+    }
+    // 旧文案的两处名实不符：高级档同样可用三档引擎（"最强模型组合"不成立）、
+    // 投稿通道匹配对全部登录用户开放（非 PRO 专属）——只允许出现在 proExtra 之外的注释里
+    for (const w of ['专属投稿', 'exclusive submission', '最强模型组合', 'strongest mix']) {
+      assert.ok(!proExtra.includes(w), `Pro 权益不得声称未门控的专属能力：${w}`);
+    }
+    // ③ 小南门控锁定文案的四档名称必须齐全（缺键会把 PRO/FREE 原样输出到界面）
+    const lvName = (app.match(/const LV_NAME = \{([\s\S]*?)\};/) || [])[1] || '';
+    for (const lv of ['FREE', 'BASIC', 'ADVANCED', 'PRO']) {
+      assert.match(lvName, new RegExp(lv + ':'), 'LV_NAME 缺少 ' + lv + '（用户会看到原始枚举值）');
+    }
+  });
+
+  it('G15 引擎档下拉的 id 与解锁档位必须由后端 MEMBERSHIP.engines 反查（禁止自造 HIGH/PRO）', () => {
+    const pricing = fs.readFileSync(path.join(ROOT, 'src', 'config', 'pricing.ts'), 'utf8');
+    const LEVELS = ['FREE', 'BASIC', 'ADVANCED', 'PRO'];
+    const memStart = pricing.indexOf('export const MEMBERSHIP');
+    assert.ok(memStart >= 0, 'pricing.ts 缺少 MEMBERSHIP');
+    const memText = pricing.slice(memStart, pricing.indexOf('\n} as const', memStart));
+    const enginesOf = {};
+    for (const lv of LEVELS) {
+      const i = memText.indexOf(`  ${lv}: {`);
+      assert.ok(i >= 0, `pricing.ts 缺少 MEMBERSHIP.${lv}`);
+      const seg = memText.slice(i, memText.indexOf('\n  },', i));
+      const eng = (seg.match(/engines:\s*\[([^\]]*)\]/) || [])[1] || '';
+      enginesOf[lv] = [...eng.matchAll(/EngineTier\.([A-Z]+)/g)].map((m) => m[1]);
+      assert.ok(enginesOf[lv].length > 0, `MEMBERSHIP.${lv}.engines 解析为空（守卫失效会假绿）`);
+    }
+    const derivedMin = {};
+    for (const lv of LEVELS) for (const t of enginesOf[lv]) if (!derivedMin[t]) derivedMin[t] = lv.toLowerCase();
+    // 前端真源：web/data/constants.js 的 C.ENGINE_TIERS
+    const web = read('data', 'constants.js');
+    const start = web.indexOf('C.ENGINE_TIERS = [');
+    assert.ok(start >= 0, 'constants.js 缺少 C.ENGINE_TIERS');
+    const block = web.slice(start, web.indexOf('];', start));
+    const rows = [...block.matchAll(/\{ id: '([A-Z]+)',[^}]*min: '([a-z]+)'/g)].map((m) => ({ id: m[1], min: m[2] }));
+    assert.deepStrictEqual(rows.map((r) => r.id).sort(), Object.keys(derivedMin).sort(),
+      '引擎档下拉的档位集合与后端可售引擎不一致（会产出选不到的档位或缺失档位）');
+    for (const r of rows) {
+      assert.strictEqual(r.min, derivedMin[r.id], `${r.id} 的解锁档位应为 ${derivedMin[r.id]}（后端 MEMBERSHIP.engines 反查）`);
+    }
+    // 旧 UI 值 HIGH / PRO 不得再作为引擎档出现（后端 EngineTier 无此值 → 立项/生成 400）
+    for (const [file, src] of webSources()) {
+      assert.ok(!/\[\s*'HIGH'\s*,/.test(src), `${file} 仍把 HIGH 当作引擎档值（后端枚举无 HIGH）`);
+    }
+    const app = read('app.js');
+    assert.match(app, /ENGINE_TIERS\.map\(\(t\) => \[t\.id, t\.zh\]\)/, 'app.js 兜底下拉必须由 ENGINE_TIERS 派生');
+    // 作品卡不得直接渲染 engineTier/mode 原始枚举
+    assert.ok(!/\$\{p\.engineTier \|\|/.test(app), '作品卡仍直接渲染 engineTier 原始枚举');
+    assert.ok(!/\$\{p\.mode\}/.test(app), '作品卡仍直接渲染 mode 原始枚举');
+  });
+
   it('G12 用户可见文案不得泄漏内部版本号/检查点代号（v2.xx、c123、Sprint/Phase）', () => {
     // 背景：站点迭代上百版后，管理台与提示语里混进了「（v2.52 策展排序）」「（v2.41）」这类
     // 只有开发者看得懂的代号。它们会被截图进用户反馈、被投喂给外部模型，也破坏产品观感。

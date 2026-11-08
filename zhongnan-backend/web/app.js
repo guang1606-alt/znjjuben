@@ -316,7 +316,28 @@
   // v2.336 剧本类型 → 强制制式（data/constants.js 与后端 modes.ts SCRIPT_TYPE_FORMAT 同源）
   const SCRIPT_TYPE_FORMAT = (typeof window !== 'undefined' && window.ZN_DATA && window.ZN_DATA.SCRIPT_TYPE_FORMAT) || {};
   const OUT_LANGS = (typeof window !== 'undefined' && window.ZN_DATA && window.ZN_DATA.OUT_LANGS) || [];
+  // v2.489 引擎档位（真源 web/data/constants.js 的 C.ENGINE_TIERS；与后端 EngineTier/会员门控同源）
+  const ENGINE_TIERS = (typeof window !== 'undefined' && window.ZN_DATA && window.ZN_DATA.ENGINE_TIERS) || [
+    { id: 'ECONOMY', zh: '经济（高性价比）', en: 'Economy (best value)', min: 'free' },
+    { id: 'STANDARD', zh: '标准（均衡）', en: 'Standard (balanced)', min: 'basic' },
+    { id: 'FLAGSHIP', zh: '旗舰（顶配组合）', en: 'Flagship (top mix)', min: 'advanced' },
+  ];
   const TIER_NAME = { basic: '基础', advanced: '高级', pro: '专业' };
+  /** v2.489 引擎档本地化名（badge 传 short 去掉括注）；未知档位返回空串，由调用方兜底 */
+  function engineLabel(tier, short) {
+    const t = ENGINE_TIERS.find((x) => x.id === tier);
+    if (!t) return '';
+    const s = lang === 'en' ? t.en : t.zh;
+    return short ? s.replace(/\s*[（(].*$/, '') : s;
+  }
+  /** 把项目里存的档位收敛到当前账号可用范围（降档/换账号后不留下不可用选项） */
+  function clampEngineTier(tier) {
+    const rankOf = (v) => { const t = ENGINE_TIERS.find((x) => x.id === v); return t ? (_RANK[t.min] ?? 0) : -1; };
+    const my = acctRank();
+    if (rankOf(tier) >= 0 && rankOf(tier) <= my) return tier;
+    const allowed = ENGINE_TIERS.filter((t) => (_RANK[t.min] ?? 0) <= my);
+    return (allowed[allowed.length - 1] || ENGINE_TIERS[0]).id;
+  }
   // v2.330 多方评议（Council）理由缓存：登录后拉取一次（v2.332 起 48 项），锁定项以 title 展示「为什么是这个档」
   let councilHints = {};
   function councilText(id) {
@@ -1823,8 +1844,7 @@
   const SELECT_OPTS = (typeof window !== 'undefined' && window.ZN_DATA && window.ZN_DATA.SELECT_OPTS) || {
     platform: { zh: [['红果短剧','红果短剧'],['抖音','抖音'],['快手','快手'],['ReelShort','ReelShort'],['DramaBox','DramaBox']],
       en: [['红果短剧','Hongguo'],['抖音','Douyin'],['快手','Kuaishou'],['ReelShort','ReelShort'],['DramaBox','DramaBox']] },
-    engine: { zh: [['STANDARD','标准（性价比）'],['HIGH','高阶（更强组合）'],['PRO','专业（最强组合）']],
-      en: [['STANDARD','Standard (balanced)'],['HIGH','High (stronger mix)'],['PRO','Pro (strongest mix)']] },
+    engine: { zh: ENGINE_TIERS.map((t) => [t.id, t.zh]), en: ENGINE_TIERS.map((t) => [t.id, t.en]) },
     outLang: { zh: [['zh','中文'],['en','English'],['ja','日本語'],['ko','한국어'],['es','Español'],['pt','Português'],['th','ไทย'],['id','Bahasa Indonesia'],['vi','Tiếng Việt'],['ar','العربية']],
       en: [['zh','Chinese'],['en','English'],['ja','Japanese'],['ko','Korean'],['es','Spanish'],['pt','Portuguese'],['th','Thai'],['id','Indonesian'],['vi','Vietnamese'],['ar','Arabic']] },
   };
@@ -1834,15 +1854,20 @@
       const cur = el.value || SELECT_OPTS[key][lang][0][0];
       const my = acctRank();
       el.innerHTML = SELECT_OPTS[key][lang].map(([v, lab]) => {
-        // v2.329 输出语言按会员档解锁（与后端 LANGUAGE_LOCKED 同源）
-        if (id !== 'outLang' || !OUT_LANGS.length) return `<option value="${v}">${lab}</option>`;
-        const meta = OUT_LANGS.find((l) => l.code === v);
-        const locked = meta ? (_RANK[meta.min] ?? 0) > my : false;
-        return `<option value="${v}"${locked ? ' disabled' : ''}${councilTitle('language:' + v)}>${lab}${locked ? (lang === 'en' ? ` · 🔒 ${meta.min}` : ` · 🔒 需${TIER_NAME[meta.min] || ''}会员`) : ''}</option>`;
+        // v2.329 输出语言 / v2.489 引擎档均按会员档解锁（与后端 LANGUAGE_LOCKED / ENGINE_LOCKED 同源）
+        const meta = id === 'outLang' ? OUT_LANGS.find((l) => l.code === v)
+          : id === 'engine' ? ENGINE_TIERS.find((t) => t.id === v) : null;
+        if (!meta) return `<option value="${v}">${lab}</option>`;
+        const locked = (_RANK[meta.min] ?? 0) > my;
+        const hint = councilTitle((id === 'outLang' ? 'language:' : 'engine:') + v);
+        return `<option value="${v}"${locked ? ' disabled' : ''}${hint}>${lab}${locked ? (lang === 'en' ? ` · 🔒 ${meta.min}` : ` · 🔒 需${TIER_NAME[meta.min] || ''}会员`) : ''}</option>`;
       }).join('');
       el.value = cur;
-      // 当前值被降级锁定时回落到第一个可用项（如换账号/退出后）
-      if (!el.value) { const i = [...el.options].findIndex((o) => !o.disabled); if (i >= 0) el.selectedIndex = i; }
+      // 当前值被降级锁定时回落到第一个可用项（如换账号/退出/降档后）
+      if (!el.value || (el.selectedOptions[0] || {}).disabled) {
+        const i = [...el.options].findIndex((o) => !o.disabled);
+        if (i >= 0) el.selectedIndex = i;
+      }
     });
   }
   // v2.329 剧本类型（10 种，按会员档解锁）；选类型会影响品牌简报/分支简报的显隐
@@ -3336,7 +3361,7 @@
     switchView('studio'); renderModes(); renderScriptTypes(); syncTagBench(); syncModeBrief();
     $('modeBrief').value = draft?.brief || '';
     $('episodes').value = project.totalEps || 20;
-    $('engine').value = project.engineTier || 'STANDARD';
+    $('engine').value = clampEngineTier(project.engineTier || 'STANDARD');
     if ($('scriptFormatSel')) {
       $('scriptFormatSel').value = project.format || 'LIVE_ACTION';
       $('scriptFormatSel').dispatchEvent?.(new Event('change'));
@@ -3393,9 +3418,11 @@
     if (!list.length) empty.innerHTML = znEmptyHtml(t('worksEmpty'));
     list.forEach((p) => {
       const c = document.createElement('div'); c.className = 'work-card';
+      // v2.489 作品卡此前直接渲染后端 mode 原始枚举（tag / hit_lab…），中文界面里等于把内部 id 给用户看
+      const modeText = (((I18N.DICT[lang] || I18N.DICT.zh).mode) || {})[p.mode] || (lang === 'en' ? 'Script' : '剧本');
       c.innerHTML = `<h3>${escapeHtml(p.title)}</h3>
-        <div class="muted">${p.mode} · ${p.totalEps || 0} eps · ${PV().formatDateTime(p.createdAt, lang)}</div>
-        <div class="work-badges"><span class="badge">${p.engineTier || 'STANDARD'}</span><span class="badge">${p.format || 'LIVE_ACTION'}</span></div>
+        <div class="muted">${escapeHtml(modeText)} · ${p.totalEps || 0} eps · ${PV().formatDateTime(p.createdAt, lang)}</div>
+        <div class="work-badges"><span class="badge">${escapeHtml(engineLabel(p.engineTier, true) || (lang === 'en' ? 'Standard' : '标准'))}</span><span class="badge">${p.format === 'AIGC' ? 'Z-AIGC' : (lang === 'en' ? 'Live action' : '真人实拍')}</span></div>
         <div class="work-actions">
           <button class="chip work-action-btn" data-act="rename">${lang === 'en' ? 'Rename' : '重命名'}</button>
           <button class="chip work-action-btn" data-act="clone">${lang === 'en' ? 'Clone' : '克隆'}</button>
@@ -3909,7 +3936,10 @@
       const MODE_RANK = { free: 0, basic: 1, advanced: 2, pro: 3 };
       const modesUpTo = I18N.MODES.filter((m2) => m2.id !== 'auto' && (MODE_RANK[m2.free] ?? 0) <= (MODE_TIER[p.level] ?? 0));
       const modeNames = modesUpTo.map((m2) => (I18N.DICT[lang] || I18N.DICT.zh).mode[m2.id] || m2.id).join(' / ');
-      const proExtra = p.level === 'PRO' ? (lang === 'en' ? ' · strongest mix · batch · exclusive submissions' : ' · 最强模型组合 · 批量生成 · 专属投稿') : '';
+      // v2.489 只列「后端真实仅 PRO 可用」的三项：默认旗舰引擎（默认档位）、电影/长剧剧本类型、
+      // 爆款逆向批量。旧文案把「高级档同样可用全部三档引擎」写成专业档独占，又把对所有
+      // 登录用户开放的投稿匹配写成专属通道——两处名实不符，故按真实门控重写。
+      const proExtra = p.level === 'PRO' ? (lang === 'en' ? ' · flagship by default · feature-film & long-series · hit-reverse batch' : ' · 默认旗舰引擎 · 电影/长剧类型 · 爆款逆向批量') : '';
       const modePerk = !modesUpTo.length ? '' : ((modesUpTo.length === 1
         ? (lang === 'en' ? `Only ${modeNames}` : `仅${modeNames}`)
         : (lang === 'en' ? `${modesUpTo.length} modes: ${modeNames}` : `${modesUpTo.length} 种模式：${modeNames}`)) + proExtra);
@@ -7726,20 +7756,37 @@
     const c = capsCache.capabilities.find((x) => x.action === 'listen_script');
     return c ? c.allowed : null;
   }
+  /** v2.489 门控档位一律取服务端能力矩阵（listen_script 的真源是 assistant-capability.ts），
+   *  前端不得再写死「高级起」——实际门控是基础会员，写高会让已付费的基础会员以为还要再升一档。 */
+  function listenNeedLevel() {
+    if (!capsCache || !Array.isArray(capsCache.capabilities)) return null;
+    const c = capsCache.capabilities.find((x) => x.action === 'listen_script');
+    return c && c.needLevel ? c.needLevel : null;
+  }
+  function levelLabel(lv) { return ((lang === 'en' ? LEVEL_EN : LEVEL_ZH)[lv]) || ''; }
   function refreshListenBtn() {
     const btn = $('listenBtn'); if (!btn) return;
     const allowed = listenAllowed();
     const hasScript = currentScripts.length > 0;
     btn.disabled = !hasScript;
-    if (allowed === false) { btn.innerHTML = '🔒 🎧 ' + (lang === 'en' ? 'Listen (Advanced+)' : '听剧本（高级起）'); btn.classList.add('tier-lock'); }
-    else { btn.textContent = '🎧 ' + (lang === 'en' ? 'Listen' : '听剧本'); btn.classList.remove('tier-lock'); }
+    if (allowed === false) {
+      const need = levelLabel(listenNeedLevel());
+      btn.innerHTML = '🔒 🎧 ' + (need
+        ? (lang === 'en' ? `Listen (${need}+)` : `听剧本（${need}起）`)
+        : (lang === 'en' ? 'Listen' : '听剧本'));
+      btn.classList.add('tier-lock');
+    } else { btn.textContent = '🎧 ' + (lang === 'en' ? 'Listen' : '听剧本'); btn.classList.remove('tier-lock'); }
   }
   // c208：403 统一降级（关弹窗→提示→900ms 后跳会员页）；连播片单与单集共用
   async function listenHandleGate(r, modal) {
     const j = await r.json().catch(() => ({}));
     modal.classList.add('hidden');
     const up = j.upsell || {};
-    xnSay(lang === 'en' ? (up.en || 'Advanced membership required.') : (up.zh || '听剧本是高级会员及以上权益，升级后即可使用～'));
+    const need = levelLabel(j.needLevel);
+    const fallback = need
+      ? (lang === 'en' ? `${need} membership required.` : `听剧本是${need}会员及以上权益，升级后即可使用～`)
+      : (lang === 'en' ? 'A higher membership tier is required.' : '听剧本需要更高等级会员，升级后即可使用～');
+    xnSay(lang === 'en' ? (up.en || fallback) : (up.zh || fallback));
     setTimeout(() => switchView('vip'), 900);
   }
   async function openListen(scriptId) {
@@ -8326,7 +8373,13 @@
     const btnTxt = isStaffAcct()
       ? (enLang ? 'Let Xiaonan fix this · Free' : '让小南优化这处 · 内部免费')
       : (enLang ? 'Let Xiaonan fix this · from 15 pts' : '让小南优化这处 · 15积分起');
-    const LV_NAME = { BASIC: enLang ? 'Basic' : '基础会员', ADVANCED: enLang ? 'Advanced' : '高级会员' };
+    // v2.489 四档全量登记：门控 needLevel 可能是 PRO/FREE，缺键会把 PRO 原样输出到中文界面
+    const LV_NAME = {
+      FREE: enLang ? 'Free' : '免费',
+      BASIC: enLang ? 'Basic' : '基础会员',
+      ADVANCED: enLang ? 'Advanced' : '高级会员',
+      PRO: enLang ? 'Pro' : '专业会员',
+    };
     // c201 版本漂移条：房内意见扫描的是冻结旧版，付费改写会落到最新版——必须让用户在点之前看见这个事实。
     // c202 F3：房主可一键用最新版开新围读房（latestScriptId 仅房主响应携带）；费用事实先讲清：开房免费，AI 围读才扣 30。
     const reReadHtml = d.latestScriptId

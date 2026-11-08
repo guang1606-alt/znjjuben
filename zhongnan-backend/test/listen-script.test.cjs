@@ -1,6 +1,8 @@
 const test = require('node:test');
 const assert = require('node:assert');
 const L = require('../dist/engine/listen-script.js');
+// v2.489 权益文案必须由门控反查：档位真源在 assistant-capability，测试同步反查而不是写死档名
+const CAP = require('../dist/config/assistant-capability.js');
 
 const SAMPLE = [
   '第1集 雨夜归来',
@@ -230,8 +232,10 @@ test('c207 buildListenScript：英文全名角色进 speakerSet 且分角色声�
 test('听剧本：权益说明双语完整', () => {
   const zh = L.listenEntitleNote('zh');
   const en = L.listenEntitleNote('en');
-  assert.ok(zh.title.includes('高级会员') && zh.lines.length === 2);
-  assert.ok(/Advanced/.test(en.title) && en.lines.length === 2);
+  const needZh = CAP.LEVEL_NAME_ZH[CAP.actionNeedLevel('listen_script')];
+  const needEn = CAP.LEVEL_NAME_EN[CAP.actionNeedLevel('listen_script')];
+  assert.ok(zh.title.includes(needZh) && zh.lines.length === 2);
+  assert.ok(en.title.includes(needEn) && en.lines.length === 2);
 });
 
 // c208 功能轮：LLM 成稿/改写稿偶发残留 Markdown 排版标记（**强调**、## 标题、--- 分隔线、反引号、引用符），

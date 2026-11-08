@@ -191,11 +191,19 @@ C.OUT_LANGS = [
     { code: 'ar', zh: '阿拉伯语', native: 'العربية', min: 'advanced' },
   ];
 
+// v2.489 创作引擎档（与后端 pricing.ts 的 EngineTier / MEMBERSHIP.engines 一一对应；min = 最低开放会员档）
+// 旧 UI 自造了 STANDARD/HIGH/PRO 三个值，其中 HIGH/PRO 不在后端 EngineTier 枚举里，
+// 选「高阶/专业」后立项与生成本集都会被 zod 判 400 —— 前端下拉必须传真实档位。
+C.ENGINE_TIERS = [
+    { id: 'ECONOMY', zh: '经济（高性价比）', en: 'Economy (best value)', min: 'free' },
+    { id: 'STANDARD', zh: '标准（均衡）', en: 'Standard (balanced)', min: 'basic' },
+    { id: 'FLAGSHIP', zh: '旗舰（顶配组合）', en: 'Flagship (top mix)', min: 'advanced' },
+  ];
+
 C.SELECT_OPTS = {
     platform: { zh: [['红果短剧','红果短剧'],['抖音','抖音'],['快手','快手'],['ReelShort','ReelShort'],['DramaBox','DramaBox']],
       en: [['红果短剧','Hongguo'],['抖音','Douyin'],['快手','Kuaishou'],['ReelShort','ReelShort'],['DramaBox','DramaBox']] },
-    engine: { zh: [['STANDARD','标准（性价比）'],['HIGH','高阶（更强组合）'],['PRO','专业（最强组合）']],
-      en: [['STANDARD','Standard (balanced)'],['HIGH','High (stronger mix)'],['PRO','Pro (strongest mix)']] },
+    engine: { zh: C.ENGINE_TIERS.map((t) => [t.id, t.zh]), en: C.ENGINE_TIERS.map((t) => [t.id, t.en]) },
     outLang: { zh: C.OUT_LANGS.map((l) => [l.code, l.native]), en: C.OUT_LANGS.map((l) => [l.code, l.native]) },
   };
 

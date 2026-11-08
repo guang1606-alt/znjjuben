@@ -33,6 +33,14 @@ function setup(names, extra = {}) {
   const context = { $, lang: 'zh', console, AbortController, TextDecoder, Event, CustomEvent, PV: () => ProgressView,
     // v2.471 loadCatalog 的会员权益改为由 I18N.MODES 派生数量与名单，浏览器里 I18N 是全局，这里同源注入
     I18N: require('../web/i18n.js'),
+    // v2.489 resumeAdaptationProject 用 clampEngineTier 回落当前档可用的引擎档，需要档位真源与账号档位
+    ENGINE_TIERS: [
+      { id: 'ECONOMY', zh: '经济（高性价比）', en: 'Economy (best value)', min: 'free' },
+      { id: 'STANDARD', zh: '标准（均衡）', en: 'Standard (balanced)', min: 'basic' },
+      { id: 'FLAGSHIP', zh: '旗舰（顶配组合）', en: 'Flagship (top mix)', min: 'advanced' },
+    ],
+    _RANK: { free: 0, basic: 1, advanced: 2, pro: 3, paid: 3 },
+    meCache: null, isStaffAcct: () => false,
     capturePrivateSession: () => ({ owner: 'fixture', epoch: 0 }), isPrivateSessionCurrent: () => true,
     document: { getElementById: () => null, querySelector: () => null, querySelectorAll: () => [], removeEventListener() {}, createElement: () => $('created') },
     setTimeout: fn => { timers.push(fn); return timers.length; }, clearTimeout() {},
@@ -59,7 +67,7 @@ function setup(names, extra = {}) {
     ...extra };
   vm.createContext(context);
   // v2.221 加载/空态统一：被抽取函数（openProject/switchSession 等）依赖 znSkeleton/znEmpty*，先注入真实实现
-  for (const name of ['_znEsc', 'znSkeletonHtml', 'znSkeleton', 'znEmptyHtml', 'znEmpty']) if (functions.has(name)) vm.runInContext(functions.get(name), context);
+  for (const name of ['_znEsc', 'znSkeletonHtml', 'znSkeleton', 'znEmptyHtml', 'znEmpty', 'clampEngineTier', 'acctRank', 'engineLabel']) if (functions.has(name)) vm.runInContext(functions.get(name), context);
   for (const name of names) if (functions.has(name)) vm.runInContext(functions.get(name), context);
   return { context, $, flush: () => { while (timers.length) timers.shift()(); } };
 }

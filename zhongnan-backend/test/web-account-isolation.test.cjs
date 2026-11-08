@@ -92,6 +92,13 @@ function setup(handler = async () => response([])) {
       jsonOrThrow: async result => result.json(),
     },
     window: { addEventListener: (name, fn) => events.set(name, fn), confirm: () => true },
+    // v2.489 作品卡本地化 mode/engine 文案，依赖 I18N 与档位真源（浏览器中为全局）
+    I18N: require('../web/i18n.js'),
+    ENGINE_TIERS: [
+      { id: 'ECONOMY', zh: '经济（高性价比）', en: 'Economy (best value)', min: 'free' },
+      { id: 'STANDARD', zh: '标准（均衡）', en: 'Standard (balanced)', min: 'basic' },
+      { id: 'FLAGSHIP', zh: '旗舰（顶配组合）', en: 'Flagship (top mix)', min: 'advanced' },
+    ],
     PV: () => ({
       ...ProgressView,
       createProgress: () => ({}),
@@ -144,6 +151,8 @@ function setup(handler = async () => response([])) {
     // v2.221 加载/空态统一：loadWorks/openProject 等依赖 znSkeleton/znEmpty*，一并注入真实实现
     '_znEsc', 'znSkeletonHtml', 'znSkeleton', 'znEmptyHtml', 'znEmpty',
     'loadMe', 'loadCastAssets', 'loadPropAssets', 'loadSceneAssets', 'latestScriptsByEpisode',
+    // v2.489 作品卡引擎档本地化（engineLabel 依赖 ENGINE_TIERS）
+    'engineLabel',
     'refreshResultScripts', 'handleEvent', 'startGenerate', 'openDirectorPack', 'openMaterials',
   ]) {
     assert.ok(functions.has(name), `missing production function ${name}`);

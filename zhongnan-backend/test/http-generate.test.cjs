@@ -1235,7 +1235,8 @@ describe('v2.55 听剧本朗读接口', { concurrency: 1 }, () => {
     assert.ok(j.narration.includes('林晚（压低声音）：妈，我回来了'));
     assert.ok(!j.segments.some((s) => s.text.startsWith('镜头：')));
     assert.strictEqual(j.ttsReady, false);
-    assert.ok(j.note.title.includes('高级会员'));
+    // v2.489 权益文案由门控反查（listen_script=BASIC），不再写死「高级会员」
+    assert.ok(j.note.title.includes('基础会员'));
   });
   it('听剧本：剧本不存在 404、非本人项目 403、空正文 400', async () => {
     const uid = 'u_lis_adv2';

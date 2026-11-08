@@ -2,8 +2,8 @@
  * v2.54 小南能力 × 会员等级硬闸门（防白嫖：用户无法通过小南调用超出其会员等级的能力）
  * 对齐 PRD 6.2.2：
  *  免费：基础操作引导、FAQ、简单创作建议、基础提醒
- *  基础：创作灵感建议、基础台词润色、余额/进度通知
- *  高级：深度创作建议、人设/剧情优化、个性化题材推荐、长期创作记忆、定制化习惯学习、听剧本
+ *  基础：创作灵感建议、基础台词润色、余额/进度通知、听剧本
+ *  高级：深度创作建议、人设/剧情优化、个性化题材推荐、长期创作记忆、定制化习惯学习
  *  专业：全功能语音操控、专属创作助理、深度市场分析
  * 企业版等同专业。所有判定在服务端执行，前端仅做隐藏/引导，永远不信前端。
  */
@@ -54,14 +54,19 @@ export interface CapabilityVerdict {
   upsell: { zh: string; en: string };
 }
 
-const LEVEL_NAME_ZH: Record<MemberLevel, string> = {
+export const LEVEL_NAME_ZH: Record<MemberLevel, string> = {
   [MemberLevel.FREE]: '免费用户', [MemberLevel.BASIC]: '基础会员',
   [MemberLevel.ADVANCED]: '高级会员', [MemberLevel.PRO]: '专业会员',
 };
-const LEVEL_NAME_EN: Record<MemberLevel, string> = {
+export const LEVEL_NAME_EN: Record<MemberLevel, string> = {
   [MemberLevel.FREE]: 'Free', [MemberLevel.BASIC]: 'Basic',
   [MemberLevel.ADVANCED]: 'Advanced', [MemberLevel.PRO]: 'Pro',
 };
+
+/** 某能力的最低档位（v2.489：权益文案一律从门控反查，避免"听剧本（高级起）"这类写高的陈旧文案） */
+export function actionNeedLevel(action: AssistantAction): MemberLevel {
+  return ACTION_MIN_LEVEL[action];
+}
 
 export function assistantGate(level: MemberLevel | string | undefined | null, action: AssistantAction): CapabilityVerdict {
   const lv = (level && LEVEL_RANK[level as MemberLevel] !== undefined ? level : MemberLevel.FREE) as MemberLevel;

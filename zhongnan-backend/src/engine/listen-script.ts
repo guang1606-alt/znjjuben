@@ -7,6 +7,8 @@
  * 设计原则：只做文本结构化与时长估算；真实音频合成由后台配置的 TTS 基础设施完成（未配置时返回朗读文本，绝不伪造音频）。
  */
 
+import { actionNeedLevel, LEVEL_NAME_EN, LEVEL_NAME_ZH } from '../config/assistant-capability';
+
 export type ListenKind = 'scene' | 'action' | 'dialogue';
 export interface ListenSegment {
   idx: number;
@@ -247,14 +249,18 @@ export function buildListenScript(raw: string, opts: { lang?: 'zh' | 'en' } = {}
   };
 }
 
-/** 单集朗读额度：高级/专业会员权益内，不另扣积分；返回权益说明（前端展示用，双语） */
+/** 单集朗读额度：基础及以上会员权益内，不另扣积分；返回权益说明（前端展示用，双语）。
+ *  v2.489 档位由 assistant-capability 的门控反查，不再手写「高级会员及以上」——
+ *  真实闸门是 listen_script=BASIC，写高会让已付费的基础会员以为自己还要再升一档。 */
 export function listenEntitleNote(lang: 'zh' | 'en'): { title: string; lines: string[] } {
+  const needZh = LEVEL_NAME_ZH[actionNeedLevel('listen_script')];
+  const needEn = LEVEL_NAME_EN[actionNeedLevel('listen_script')];
   return lang === 'en'
-    ? { title: 'Listen mode (Advanced+)', lines: [
+    ? { title: `Listen mode (${needEn}+)`, lines: [
       'Narration script is generated locally with no extra points.',
       'Audio playback uses the configured TTS service; without a TTS key you still get the reading script.',
     ] }
-    : { title: '听剧本（高级会员及以上）', lines: [
+    : { title: `听剧本（${needZh}及以上）`, lines: [
       '朗读脚本由本地确定性引擎生成，不额外消耗积分。',
       '真人语音播放走后台配置的 TTS 服务；未配置时仍可查看/复制分段朗读稿。',
     ] };
