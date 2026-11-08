@@ -111,4 +111,40 @@ describe('v2.471 文案准确性', () => {
     const docx = fs.readFileSync(path.join(ROOT, 'src', 'lib', 'api-directory-docx.ts'), 'utf8');
     assert.ok(!/十岗位|10\s*岗位/.test(docx), 'api-directory-docx.ts 的岗位数文案仍与实际不符');
   });
+
+  it('G8 导出权益文案的会员档位必须与后端门控常量一致', () => {
+    const doc = fs.readFileSync(path.join(ROOT, 'src', 'lib', 'script-doc.ts'), 'utf8');
+    const min = doc.match(/EXPORT_MIN_LEVEL[^{]*\{([\s\S]*?)\};/);
+    assert.ok(min, 'script-doc.ts 缺少 EXPORT_MIN_LEVEL');
+    const levelOf = (body, fmt) => (body.match(new RegExp(fmt + ':\\s*MemberLevel\\.(\\w+)')) || [])[1];
+    const docxLevel = levelOf(min[1], 'docx');
+    const pdfLevel = levelOf(min[1], 'pdf');
+    assert.ok(docxLevel && pdfLevel, 'EXPORT_MIN_LEVEL 必须声明 docx/pdf 档位');
+    // 去水印 / 分镜附录：比较表达式里的档位才是真源（函数开头的 ?? FREE 兜底不算）
+    const wmLevel = (doc.match(/canRemoveWatermark[\s\S]{0,260}?LEVEL_RANK\[MemberLevel\.(\w+)\]/) || [])[1];
+    const shotLevel = (doc.match(/canExportShotList[\s\S]{0,320}?LEVEL_RANK\[MemberLevel\.(\w+)\]/) || [])[1];
+    assert.ok(wmLevel && shotLevel, '去水印/分镜附录的门控档位应可从 script-doc.ts 读出');
+
+    const ZH = { FREE: '免费', BASIC: '基础', ADVANCED: '高级', PRO: '专业' };
+    const EN = { FREE: 'Free', BASIC: 'Basic', ADVANCED: 'Advanced', PRO: 'Pro' };
+    const i18n = read('i18n.js');
+    const copy = (key, lang) => {
+      const block = i18n.slice(i18n.indexOf(lang === 'zh' ? '  zh: {' : '  en: {'));
+      const m = block.match(new RegExp(key + ":\\s*'([^']*)'"));
+      assert.ok(m, '词典缺少 ' + key + '（' + lang + '）');
+      return m[1];
+    };
+    const cases = [
+      ['dlDocx', docxLevel],
+      ['dlPdf', pdfLevel],
+      ['dlShotHint', shotLevel],
+    ];
+    for (const [key, level] of cases) {
+      assert.ok(copy(key, 'zh').includes(ZH[level]), `${key} 中文文案未写对档位（应为${ZH[level]}会员）`);
+      assert.ok(copy(key, 'en').includes(EN[level] + '+'), `${key} 英文文案未写对档位（应为 ${EN[level]}+）`);
+    }
+    // 去水印文案没有档位声明是允许的，但不能写着更低的档位（会诱导基础会员点空）
+    const noWm = copy('dlNoWm', 'zh');
+    for (const low of ['免费', '基础']) assert.ok(!noWm.includes(low), '去水印文案不得暗示低于 ' + ZH[wmLevel] + ' 的档位');
+  });
 });
