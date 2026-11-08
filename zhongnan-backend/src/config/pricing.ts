@@ -88,6 +88,16 @@ export function activeProjectLimit(level: MemberLevel | string | undefined | nul
   return (MEMBERSHIP[k]?.maxActiveProjects as number) ?? MEMBERSHIP.FREE.maxActiveProjects;
 }
 
+/** 剧本交易（集市上架）最低档位：免费版只能买不能卖。
+ *  v2.483 门控单一事实源——此前 market.ts 硬编码 'FREE'，而 vip 页按 commission=0 渲染出
+ *  「交易佣金 0%」权益，用户看到的是「免费档不抽成」，实际点进去直接被 403 拦下（名实不符）。 */
+export const MIN_TRADE_LEVEL = MemberLevel.BASIC;
+export function canTrade(level: MemberLevel | string | undefined | null): boolean {
+  const order = [MemberLevel.FREE, MemberLevel.BASIC, MemberLevel.ADVANCED, MemberLevel.PRO];
+  const i = order.indexOf((level || MemberLevel.FREE) as MemberLevel);
+  return i >= order.indexOf(MIN_TRADE_LEVEL); // 未知档位 indexOf=-1 → 拒绝
+}
+
 /** 消耗 token 的增值功能按会员等级差异化定价：等级越高越优惠，但永不跌破“成本×2”铁底 */
 export const VA_LEVEL_RATE: Record<MemberLevel, number> = {
   [MemberLevel.FREE]: 1, [MemberLevel.BASIC]: 1, [MemberLevel.ADVANCED]: 0.8, [MemberLevel.PRO]: 0.6,

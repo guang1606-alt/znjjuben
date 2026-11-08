@@ -1,7 +1,7 @@
 const test = require('node:test');
 const assert = require('node:assert');
 const { splitTrade, withinRefund, ESCROW_WINDOW_MS } = require('../dist/routes/market.js');
-const { MEMBERSHIP } = require('../dist/config/pricing.js');
+const { MEMBERSHIP, canTrade } = require('../dist/config/pricing.js');
 
 test('担保交易分账：佣金按会员等级，卖家得税后', () => {
   assert.deepStrictEqual(splitTrade(100, 15), { commission: 15, sellerGain: 85 }); // 基础15%
@@ -24,6 +24,14 @@ test('佣金率与会员体系一致，免费用户不可交易', () => {
   assert.strictEqual(MEMBERSHIP.ADVANCED.commission, 10);
   assert.strictEqual(MEMBERSHIP.PRO.commission, 5);
   assert.strictEqual(MEMBERSHIP.FREE.commission, 0, '免费用户不参与交易（路由层拦截上架）');
+});
+
+test('可交易档位门控单源：免费不可交易，付费档可交易（路由与目录共用 canTrade）', () => {
+  assert.strictEqual(canTrade('FREE'), false);
+  assert.strictEqual(canTrade(undefined), false, '缺省/未知档位按免费处理，不得放行上架');
+  assert.strictEqual(canTrade('BASIC'), true);
+  assert.strictEqual(canTrade('ADVANCED'), true);
+  assert.strictEqual(canTrade('PRO'), true);
 });
 
 test('24小时退款窗口边界', () => {

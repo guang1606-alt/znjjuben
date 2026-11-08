@@ -204,4 +204,32 @@ describe('v2.471 文案准确性', () => {
     assert.match(app, /kindName\[k\.kind\]/, '知识库类型标签必须本地化（不得直接输出 TEXT/URL）');
     assert.ok(!/\[?\$\{k\.status\}<\/span>/.test(app), '知识库列表不得直接渲染 k.status');
   });
+
+  it('G11 交易权益文案必须与后端「可交易档位」门控一致（免费版不得显示 0% 佣金）', () => {
+    // 真源：pricing.ts 的 MIN_TRADE_LEVEL + canTrade；免费用户 market.ts 上架直接 403
+    const pricing = fs.readFileSync(path.join(ROOT, 'src', 'config', 'pricing.ts'), 'utf8');
+    assert.match(pricing, /export const MIN_TRADE_LEVEL\s*=\s*MemberLevel\.\w+/, 'pricing.ts 必须声明交易最低档位 MIN_TRADE_LEVEL');
+    assert.match(pricing, /export function canTrade\(/, 'pricing.ts 必须提供 canTrade()');
+    // 路由必须复用同一门控，不得再硬编码 'FREE'（否则升档门槛一调，文案就再次脱节）
+    const market = fs.readFileSync(path.join(ROOT, 'src', 'routes', 'market.ts'), 'utf8');
+    assert.ok(!/level === 'FREE'/.test(market), "market.ts 不得再硬编码 level === 'FREE'");
+    assert.match(market, /canTrade\(level\)/, 'market.ts 上架门控必须调用 canTrade(level)');
+    // 目录必须下发 canTrade，前端才能按档位渲染「升级后可上架」而不是展示 0% 佣金
+    const order = fs.readFileSync(path.join(ROOT, 'src', 'routes', 'order.ts'), 'utf8');
+    assert.match(order, /canTrade:\s*canTrade\(lv\)/, '/order/catalog 必须下发 canTrade=canTrade(lv)');
+    const app = read('app.js');
+    assert.match(app, /p\.canTrade === false/, 'app.js 必须按 catalog.canTrade 区分交易权益');
+    assert.ok(!/交易佣金 0%/.test(app + read('index.html') + read('i18n.js')), '免费版不得把「交易佣金 0%」当作权益展示（实际不可上架）');
+    // 副标题事实核对：ADVANCED 与 PRO 的 engines 数组完全相同，写「引擎组合越强」属名实不符
+    const i18n = read('i18n.js');
+    assert.ok(!/引擎组合越强/.test(i18n), 'vip 副标题不得声称「档位越高引擎组合越强」（高级/专业可用引擎档相同）');
+    assert.ok(!/stronger engine mixes/i.test(i18n), '英文副标题同样不得声称 stronger engine mixes');
+    assert.ok(/旗舰/.test(i18n) && /flagship/i.test(i18n), '副标题应写清旗舰引擎组合的开放档位（与 engines 真源一致）');
+    // 权益折扣必须真接线：vip 页承诺「AI 共创（拆爆款/围读/选题会）积分消耗折扣」，
+    // 选题会与围读此前走固定价 consumeValueAdded，承诺从未生效（静默失效）。
+    const room = fs.readFileSync(path.join(ROOT, 'src', 'routes', 'room.ts'), 'utf8');
+    assert.match(room, /vaPointsForLevel\(key, await levelOf\(userId\)\)/, '选题会/围读必须按会员档位计价');
+    assert.match(room, /refundFlexible\(tx, userId, points, key, refId, idem\)/, '退款必须按实扣积分，不得按标准价多退');
+    assert.ok(!/consumeValueAdded\(tx, userId, key/.test(room), '选题会/围读不得再走固定价扣费');
+  });
 });

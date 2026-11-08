@@ -143,6 +143,7 @@ export async function refundValueAdded(
     balanceAfter: acc.balance + item.points,
   });
 }
+
 /** 赠送积分（签到/任务/邀请奖励）—— 受累计上限约束，保证补贴不赔钱 */
 /**
  * 按“指定积分数”灵活扣费（用于按会员等级差异化定价的 token 类增值功能，如拆爆款）。
@@ -168,6 +169,7 @@ export async function consumeFlexible(
  * 灵活扣费的失败退款，与 consumeFlexible 配对。
  * 传入与扣款相同的 idem，退款键内部固定为 refund:${idem}；
  * 原扣款流水不存在则拒绝退款（防 /fix 重放类套利：未扣分的请求不得退分）。
+ * v2.483：points 必须是实扣积分（会员折扣后可能低于标准价），按标准价退会多退差价＝凭空造钱。
  */
 export async function refundFlexible(tx: Tx, userId: string, points: number, reason: string, refId: string, idem: string) {
   const refundKey = `refund:${idem}`;

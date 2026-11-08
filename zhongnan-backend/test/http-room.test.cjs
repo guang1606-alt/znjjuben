@@ -462,3 +462,25 @@ describe('编剧室·内部账户免费（串行）', { concurrency: 1 }, () => 
     assert.strictEqual(staffRows(uid).length, 1);
   });
 });
+
+describe('会员折扣定价与退款对称（v2.483 权益承诺对齐）', { concurrency: 1 }, () => {
+  it('高级会员选题会按 8 折实扣（vip 页折扣承诺真实生效，不再按标准价原价扣）', async () => {
+    mem._seedUser({ id: 'vip-adv', level: 'ADVANCED', balance: 500 });
+    const before = bal('vip-adv');
+    const r = await post('/api/room/pitch/open', { idea: '被辞退的女厨师想要夺回餐厅，前合伙人打压，她暗中布局', audience: '25-40女性' }, 'vip-adv');
+    assert.strictEqual(r.status, 200);
+    const j = await r.json();
+    assert.strictEqual(j.points, 16, '高级会员 PITCH_MEETING 应为 20×0.8=16 积分');
+    assert.strictEqual(bal('vip-adv'), before - 16);
+  });
+  it('退款按实扣积分对称回补，不按标准价多退（避免折扣用户凭空赚差价）', async () => {
+    const { withBillingTransaction } = require('../dist/lib/prisma-tx.js');
+    const { consumeFlexible, refundFlexible } = require('../dist/lib/billing.js');
+    const before = bal('vip-adv');
+    await withBillingTransaction(mem, 'vip-adv', async (tx) => {
+      await consumeFlexible(tx, 'vip-adv', 16, 4, 'PITCH_MEETING', 'refund-sym-1', 'unit:refund-sym-1');
+      await refundFlexible(tx, 'vip-adv', 16, 'PITCH_MEETING', 'refund-sym-1', 'unit:refund-sym-1');
+    });
+    assert.strictEqual(bal('vip-adv'), before, '扣 16 退 16，余额必须完全复原');
+  });
+});

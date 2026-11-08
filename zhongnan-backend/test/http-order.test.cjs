@@ -57,13 +57,16 @@ describe('订单下单-支付回调-发货-幂等 资金链路', { concurrency: 
     assert.strictEqual(catalog.items.find((x) => x.sku === 'PRO_Y').amountFen, 299900);
     // v2.482 会员权益说明（项目上限/增值折扣）由目录下发，必须与 pricing.ts 单一真源逐档一致，
     // 否则 vip 页会展示与真实扣费不符的承诺（旧文案把 2/10/30/100 与 8折/6折 手写在 HTML 里）。
-    const { VA_LEVEL_RATE, MEMBERSHIP } = require('../dist/config/pricing.js');
+    const { VA_LEVEL_RATE, MEMBERSHIP, canTrade } = require('../dist/config/pricing.js');
     const ORDER = ['FREE', 'BASIC', 'ADVANCED', 'PRO'];
     assert.deepStrictEqual(catalog.plans.map((p) => p.level), ORDER);
     for (const p of catalog.plans) {
       assert.strictEqual(p.vaRate, VA_LEVEL_RATE[p.level], p.level + ' 的增值折扣必须来自 VA_LEVEL_RATE');
       assert.strictEqual(p.maxActiveProjects, MEMBERSHIP[p.level].maxActiveProjects, p.level + ' 的项目上限必须来自 MEMBERSHIP');
+      // v2.483 交易权益同样走目录：前端据此把免费档渲染成「升级后可上架」，不再展示 0% 佣金
+      assert.strictEqual(p.canTrade, canTrade(p.level), p.level + ' 的可交易标记必须来自 canTrade');
     }
+    assert.strictEqual(catalog.plans.find((p) => p.level === 'FREE').canTrade, false);
     const count = mem._orders.length;
     const r = await create('yearbuyer', 'FREE', 'PRO_Y');
     assert.strictEqual(r.status, 503);

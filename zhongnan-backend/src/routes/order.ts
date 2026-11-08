@@ -2,7 +2,7 @@ import { asyncRouter } from '../lib/async-router';
 import { z } from 'zod';
 import { prisma as defaultPrisma } from '../lib/prisma';
 import { authRequired, AuthRequest } from '../middleware/auth';
-import { MemberLevel, MEMBERSHIP, X_SCRIPT, VA_LEVEL_RATE } from '../config/pricing';
+import { MemberLevel, MEMBERSHIP, X_SCRIPT, VA_LEVEL_RATE, canTrade } from '../config/pricing';
 
 type PrismaLike = typeof defaultPrisma;
 /** 商品目录：金额只认服务端，前端只传 sku（绝不信前端传的金额） */
@@ -156,6 +156,9 @@ export function createOrderRouter(prisma: PrismaLike | any) {
       // v2.482 增值服务折扣也走目录下发：vip 页权益说明与项目上限提示不再手抄档位数字，
       // 统一从 pricing.ts 的 VA_LEVEL_RATE 派生（避免会员权益说明与真实扣费长期脱节）。
       vaRate: VA_LEVEL_RATE[lv],
+      // v2.483 交易权限同源：免费档不可上架（market.ts 403），前端据此渲染「升级后可上架」，
+      // 不再把 FREE.commission=0 误当成「0% 佣金」权益展示。
+      canTrade: canTrade(lv),
     }));
     res.json({ items, plans, xScript: X_SCRIPT, pointsPerYuan: 10, paymentAvailable: false });
   });

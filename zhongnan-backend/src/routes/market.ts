@@ -10,7 +10,7 @@ import { prisma as defaultPrisma } from '../lib/prisma';
 import { parsePageParams } from '../lib/pagination';
 import { authRequired, AuthRequest } from '../middleware/auth';
 import { withBillingTransaction } from '../lib/prisma-tx';
-import { MEMBERSHIP, FEN_PER_POINT, MemberLevel } from '../config/pricing';
+import { MEMBERSHIP, FEN_PER_POINT, MemberLevel, canTrade } from '../config/pricing';
 import { settlePurchase, withinRefund, ESCROW_WINDOW_MS } from '../lib/escrow';
 import { investorLens, investorOneLiner } from '../engine/investor-lens';
 import { buildScriptValue, type ScriptValueResult } from '../lib/script-value';
@@ -121,7 +121,9 @@ export function createMarketRouter(prisma: PrismaLike | any) {
   marketRouter.post('/listings', authRequired, async (req: AuthRequest, res) => {
     const { scriptId, projectId, priceFen, sample } = req.body as { scriptId?: string; projectId?: string; priceFen?: number; sample?: string };
     const level = (req.level ?? 'FREE') as MemberLevel;
-    if (level === 'FREE') return res.status(403).json({ error: '免费用户暂不可交易，升级会员后即可上架出售剧本' });
+    // v2.483 门控走 pricing.ts 的 canTrade（与 /api/order/catalog 的 canTrade 同源），
+    // 不再硬编码 'FREE'——否则升档门槛一调，vip 页权益与真实上架权限就会再次脱节。
+    if (!canTrade(level)) return res.status(403).json({ error: '免费用户暂不可交易，升级会员后即可上架出售剧本' });
     if (!(scriptId || projectId)) return res.status(400).json({ error: '请选择剧本' });
     const validPrice = validatePriceFen(priceFen);
     if (validPrice === null)

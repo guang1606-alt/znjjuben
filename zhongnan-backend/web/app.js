@@ -3914,7 +3914,10 @@
         ? (lang === 'en' ? `Only ${modeNames}` : `仅${modeNames}`)
         : (lang === 'en' ? `${modesUpTo.length} modes: ${modeNames}` : `${modesUpTo.length} 种模式：${modeNames}`)) + proExtra);
       if (modePerk) perks.push(modePerk);
-      if (p.commission !== undefined) perks.push(`${t('commission')} ${p.commission}%`);
+      // v2.483 交易权益走目录 canTrade：免费档不能上架（上架即 403），
+      // 旧逻辑直接展示 commission=0 → 看起来像不抽成的 0% 佣金，点进去却被拒（名实不符）。
+      if (p.canTrade === false) perks.push(lang === 'en' ? 'Marketplace: upgrade to list' : '剧本交易：升级后可上架');
+      else if (p.commission !== undefined) perks.push(`${t('commission')} ${p.commission}%`);
       const isCur = cur === p.level;
       // 年卡折算月价与节省比例
       let yearLine = '';

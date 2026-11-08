@@ -9,9 +9,9 @@ import { asyncRouter } from '../lib/async-router';
 import { z } from 'zod';
 import { authRequired, AuthRequest } from '../middleware/auth';
 import { prisma as defaultPrisma } from '../lib/prisma';
-import { consumeValueAdded, refundValueAdded } from '../lib/billing';
+import { consumeFlexible, refundFlexible } from '../lib/billing';
 import { withBillingTransaction } from '../lib/prisma-tx';
-import { VALUE_ADDED, ValueAddedKey, MemberLevel } from '../config/pricing';
+import { VALUE_ADDED, ValueAddedKey, MemberLevel, vaPointsForLevel } from '../config/pricing';
 import { staffOf, staffChargeTx, staffRefundTx } from '../lib/staff-billing';
 import { assistantGate, fixActionByDim } from '../config/assistant-capability';
 import {
@@ -66,24 +66,36 @@ export function createRoomRouter(prisma: PrismaLike | any) {
     const v = (typeof h === 'string' ? h.trim() : '') || b.trim();
     return v ? `t${contentHash(v.slice(0, 200))}` : '';
   };
-  async function charge(userId: string, key: ValueAddedKey, refId: string, staff: boolean): Promise<{ charged: boolean; idem: string }> {
+  /** 决策：增值服务按会员档位定价（VA_LEVEL_RATE），与 vip 页「AI 共创积分消耗折扣」承诺同源。
+   *  v2.483 修复：此前选题会/围读走 consumeValueAdded（固定标准价），高级/专业用户在 vip 页看到的
+   *  8 折/6 折从未生效——承诺与结算脱节，且被拆爆款（已按档位计价）反衬得更明显。 */
+  async function levelOf(userId: string): Promise<MemberLevel> {
+    const u = await prisma.user.findUnique({ where: { id: userId }, select: { level: true } });
+    return ((u?.level ?? MemberLevel.FREE) as MemberLevel);
+  }
+  async function charge(userId: string, key: ValueAddedKey, refId: string, staff: boolean): Promise<{ charged: boolean; idem: string; points: number }> {
+    const points = staff ? 0 : vaPointsForLevel(key, await levelOf(userId));
     return await withBillingTransaction(prisma, userId, async (tx) => {
-      if (staff) return staffChargeTx(tx, userId, refId, 'staff-room');
+      if (staff) {
+        const r = await staffChargeTx(tx, userId, refId, 'staff-room');
+        return { charged: r.charged, idem: r.idem, points: 0 };
+      }
       const raw = tx.raw as any;
       const charges = await raw.ledgerEntry.findMany({ where: { userId, reason: key, refType: 'value_added', refId } });
       const refunds = await raw.ledgerEntry.findMany({ where: { userId, reason: `${key}:REFUND`, refType: 'value_added', refId } });
-      if (charges.length > refunds.length) return { charged: false, idem: '' };
+      if (charges.length > refunds.length) return { charged: false, idem: '', points: 0 };
       const idem = `room:${refId}:a${charges.length + 1}`;
-      await consumeValueAdded(tx, userId, key, refId, idem);
-      return { charged: true, idem };
+      await consumeFlexible(tx, userId, points, VALUE_ADDED[key].costFen, key, refId, idem);
+      return { charged: true, idem, points };
     });
   }
-  async function refund(userId: string, key: ValueAddedKey, refId: string, idem: string, staff: boolean) {
+  /** 退款必须按实扣积分退回：折扣价扣 16 分却按标准价退 20 分＝凭空造钱 */
+  async function refund(userId: string, key: ValueAddedKey, refId: string, idem: string, staff: boolean, points: number) {
     if (staff) {
       await withBillingTransaction(prisma, userId, (tx) => staffRefundTx(tx, userId, refId, idem));
       return;
     }
-    await withBillingTransaction(prisma, userId, (tx) => refundValueAdded(tx, userId, key, refId, idem));
+    await withBillingTransaction(prisma, userId, (tx) => refundFlexible(tx, userId, points, key, refId, idem));
   }
   async function addMsg(roomId: string, m: { speakerType: 'USER' | 'XN'; speakerUserId?: string | null; seat?: string | null; speakerName?: string | null; content: string; meta?: any }) {
     return prisma.roomMessage.create({ data: { roomId, ...m } });
@@ -135,10 +147,11 @@ export function createRoomRouter(prisma: PrismaLike | any) {
     const staff = await staffOf(prisma, userId);
     let idem = '';
     let charged = false;
+    let paid = 0;
     try {
       const r0 = await charge(userId, 'PITCH_MEETING', refId, staff);
       if (!r0.charged) return res.status(409).json({ error: 'IDEMPOTENT_REPLAY', message: '相同请求正在处理或刚已提交，请勿重复操作' });
-      idem = r0.idem; charged = true;
+      idem = r0.idem; charged = true; paid = r0.points;
       const opened = openPitchMeeting(p.data, lang);
       const seats = pitchSeats(lang);
       let code = genInviteCode();
@@ -151,7 +164,7 @@ export function createRoomRouter(prisma: PrismaLike | any) {
         data: {
           ownerId: userId, kind: 'PITCH', title: p.data.title || p.data.idea.slice(0, 20),
           scriptText: p.data.idea, state: 'ACTIVE', inviteCode: code,
-          participantIds: [userId], pointsCost: staff ? 0 : VALUE_ADDED.PITCH_MEETING.points,
+          participantIds: [userId], pointsCost: paid,
           payload: { audience: p.data.audience, medium: p.data.medium, tags: p.data.tags, opened, lang },
         },
       });
@@ -161,9 +174,9 @@ export function createRoomRouter(prisma: PrismaLike | any) {
         await addMsg(room.id, { speakerType: 'XN', seat: q.seat, speakerName: seat?.name || q.seat, content: lang === 'en' ? `${q.question}\n(Why I ask: ${q.why})` : `${q.question}\n（为什么问：${q.why}）` });
       }
       for (const h of opened.hints) await addMsg(room.id, { speakerType: 'XN', seat: 'host', speakerName: lang === 'en' ? 'Xiaonan (host)' : '小南(主持)', content: h });
-      res.json({ ok: true, roomId: room.id, inviteCode: code, points: staff ? 0 : VALUE_ADDED.PITCH_MEETING.points, staff, opened });
+      res.json({ ok: true, roomId: room.id, inviteCode: code, points: paid, staff, opened });
     } catch (e) {
-      if (charged) await refund(userId, 'PITCH_MEETING', refId, idem, staff).catch(() => {});
+      if (charged) await refund(userId, 'PITCH_MEETING', refId, idem, staff, paid).catch(() => {});
       res.status(400).json({ error: (e as Error).message });
     }
   });
@@ -179,10 +192,11 @@ export function createRoomRouter(prisma: PrismaLike | any) {
     const staff = await staffOf(prisma, userId);
     let idem = '';
     let charged = false;
+    let paid = 0;
     try {
       const r0 = await charge(userId, 'PITCH_MEETING', refId, staff);
       if (!r0.charged) return res.status(409).json({ error: 'IDEMPOTENT_REPLAY', message: '相同发言刚已提交，请勿重复发送' });
-      idem = r0.idem; charged = true;
+      idem = r0.idem; charged = true; paid = r0.points;
       await addMsg(got.room.id, { speakerType: 'USER', speakerUserId: userId, content });
       // 主持人结合当前信息判断还缺哪些关键判断（规则确定性产出，无模型也能主持）
       const lang = normLang((got.room.payload || {}).lang);
@@ -207,9 +221,9 @@ export function createRoomRouter(prisma: PrismaLike | any) {
           ? 'Key information is fairly complete — tap “Form pitch verdict” for the call and an executable pitch card.'
           : '关键信息已经比较齐了，建议点“形成选题决议”，我来出立项判断和可执行选题卡。');
       const msg = await addMsg(got.room.id, { speakerType: 'XN', seat: 'host', speakerName: '小南(主持)', content: reply, meta: { missing } });
-      res.json({ ok: true, reply, messageId: msg.id, points: staff ? 0 : VALUE_ADDED.PITCH_MEETING.points, staff, questions: fa.questions });
+      res.json({ ok: true, reply, messageId: msg.id, points: paid, staff, questions: fa.questions });
     } catch (e) {
-      if (charged) await refund(userId, 'PITCH_MEETING', refId, idem, staff).catch(() => {});
+      if (charged) await refund(userId, 'PITCH_MEETING', refId, idem, staff, paid).catch(() => {});
       res.status(400).json({ error: (e as Error).message });
     }
   });
@@ -223,10 +237,11 @@ export function createRoomRouter(prisma: PrismaLike | any) {
     const staff = await staffOf(prisma, userId);
     let idem = '';
     let charged = false;
+    let paid = 0;
     try {
       const r0 = await charge(userId, 'PITCH_MEETING', refId, staff);
       if (!r0.charged) return res.status(409).json({ error: 'IDEMPOTENT_REPLAY', message: '决议刚已生成，请勿重复提交' });
-      idem = r0.idem; charged = true;
+      idem = r0.idem; charged = true; paid = r0.points;
       const prev = got.room.payload || {};
       const lang = normLang(prev.lang);
       // c197：决议必须消费会上全部历史发言，否则用户讨论出的主动目标/对抗方在决议卡中全部消失
@@ -245,9 +260,9 @@ export function createRoomRouter(prisma: PrismaLike | any) {
         ? `[Pitch verdict · ${verdict.decisionText}]\nLogline: ${verdict.logline}\nRelationships: ${verdict.relations}\nConflict space: ${verdict.conflictSpace}\nSuggested episodes: ${verdict.episodes} | Audience: ${verdict.audience} | Medium: ${verdict.medium} | Difficulty: ${verdict.difficulty}\nScores: Market ${verdict.scores.market} Story ${verdict.scores.story} Feasibility ${verdict.scores.feasibility} Novelty ${verdict.scores.novelty} (overall ${verdict.scores.total})\nRisks: ${(verdict.risks.length ? verdict.risks : ['No obvious hard flaw']).join('; ')}\nFixes: ${verdict.fixes.join('; ')}`
         : `【选题决议·${verdict.decisionText}】\n一句话卖点：${verdict.logline}\n人物关系：${verdict.relations}\n冲突空间：${verdict.conflictSpace}\n建议集数：${verdict.episodes}集｜受众：${verdict.audience}｜载体：${verdict.medium}｜制作难度：${verdict.difficulty}\n评分：市场${verdict.scores.market} 故事${verdict.scores.story} 可行${verdict.scores.feasibility} 新颖${verdict.scores.novelty}（综合${verdict.scores.total}）\n风险：${(verdict.risks.length ? verdict.risks : ['无明显硬伤']).join('；')}\n修改建议：${verdict.fixes.join('；')}`;
       await addMsg(got.room.id, { speakerType: 'XN', seat: 'host', speakerName: lang === 'en' ? 'Xiaonan (host)' : '小南(主持)', content: text, meta: { verdict } });
-      res.json({ ok: true, verdict, points: staff ? 0 : VALUE_ADDED.PITCH_MEETING.points, staff });
+      res.json({ ok: true, verdict, points: paid, staff });
     } catch (e) {
-      if (charged) await refund(userId, 'PITCH_MEETING', refId, idem, staff).catch(() => {});
+      if (charged) await refund(userId, 'PITCH_MEETING', refId, idem, staff, paid).catch(() => {});
       res.status(400).json({ error: (e as Error).message });
     }
   });
@@ -347,10 +362,11 @@ export function createRoomRouter(prisma: PrismaLike | any) {
     const staff = await staffOf(prisma, userId);
     let idem = '';
     let charged = false;
+    let paid = 0;
     try {
       const r0 = await charge(userId, 'TABLE_READ', refId, staff);
       if (!r0.charged) return res.status(409).json({ error: 'IDEMPOTENT_REPLAY', message: '围读刚已提交，请勿重复操作' });
-      idem = r0.idem; charged = true;
+      idem = r0.idem; charged = true; paid = r0.points;
       const lang = normLang((got.room.payload || {}).lang);
       // c199：重跑围读允许换制式（LIVE/AIGC 字数尺子不同，用户在面板切换 select 后必须生效，
       // 不能被开房时的 payload 永久覆盖成死控件）；白名单外的值容错忽略，并把有效选择回写 payload。
@@ -384,9 +400,9 @@ export function createRoomRouter(prisma: PrismaLike | any) {
         : `【围读结论】${result.summary}\n场景成本：${result.sceneCost.sceneCount}个场景，成本等级「${result.sceneCost.level}」${result.sceneCost.highCostHits.length ? `（高成本元素：${result.sceneCost.highCostHits.join('、')}）` : ''}\n评分：节奏${result.scores.rhythm} 去AI${result.scores.deAi} 落地${result.scores.grounded}（综合${result.scores.overall}）\n修改清单：\n${result.actionItems.join('\n') || '无P0/P1项'}${discussionLine}`;
       await addMsg(got.room.id, { speakerType: 'XN', seat: 'host', speakerName: lang === 'en' ? 'Xiaonan notes' : '小南记录', content: hostText });
       await prisma.writersRoom.update({ where: { id: got.room.id }, data: { payload: { ...prevPayload, scriptMode, lastRead: result } } });
-      res.json({ ok: true, result, points: staff ? 0 : VALUE_ADDED.TABLE_READ.points, staff });
+      res.json({ ok: true, result, points: paid, staff });
     } catch (e) {
-      if (charged) await refund(userId, 'TABLE_READ', refId, idem, staff).catch(() => {});
+      if (charged) await refund(userId, 'TABLE_READ', refId, idem, staff, paid).catch(() => {});
       res.status(400).json({ error: (e as Error).message });
     }
   });
