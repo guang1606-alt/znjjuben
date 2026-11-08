@@ -70,6 +70,12 @@ describe('v2.472 UI 巡检脚本守卫', () => {
     assert.ok(script.includes('overlayControls'), '缺少遮罩内控件计数（判定空壳依据）');
   });
 
+  it('CLS 量化：列表骨架→有数据的跳动要能被量出来', () => {
+    assert.ok(script.includes('layout-shift'), '缺少 LayoutShift PerformanceObserver');
+    assert.ok(script.includes('layoutShift'), '缺少 layoutShift 结果字段');
+    assert.ok(/layoutShift > 0\.25/.test(script), 'CLS 阈值应为 Core Web Vitals 的 0.25');
+  });
+
   it('一键收口命令存在且链路正确', () => {
     assert.strictEqual(pkg.scripts.verify, 'npm run typecheck && npm test');
     assert.match(pkg.scripts['verify:full'] || '', /audit:ui|ui-audit\.cjs/, 'verify:full 必须包含 UI 巡检');

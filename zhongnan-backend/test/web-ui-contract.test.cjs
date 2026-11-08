@@ -23,6 +23,13 @@ describe('v2.472 前端 UI 契约', () => {
     assert.match(css, /\.input\s*\{/, 'styles.css 缺少 .input 规则：输入框会回落成浏览器默认裸控件');
   });
 
+  // v2.476：管理后台深链首屏表格异步回填会把页脚从视口内顶出（实测 CLS 0.577）。
+  // 修法是给视图一个「视口高地板」；这里守住规则不被后续改样式时顺手删掉。
+  it('G4 管理后台视图有视口高地板（防异步回填 CLS）', () => {
+    assert.match(css, /#view-admin\s*\{[^}]*min-height:\s*calc\(100vh\s*-\s*\d+px\)/, 'styles.css 缺少 #view-admin 的 min-height 视口地板');
+    assert.match(css, /@supports\s*\(min-height:\s*100dvh\)/, '需要 dvh 兜底移动端地址栏收缩');
+  });
+
   it('G2 切视图后把激活导航项滚进可视区（横滑条上仍能看见自己所在栏目）', () => {
     const fn = app.slice(app.indexOf('function switchView('), app.indexOf('function switchView(') + 4000);
     assert.ok(fn.includes('scrollIntoView'), 'switchView 内缺少 scrollIntoView');

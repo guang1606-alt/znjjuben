@@ -338,6 +338,18 @@ async function auditViewport(browser, base, label, viewport, views, cred) {
   page.on('console', (m) => { if (m.type() === 'error') consoleErrors.push(m.text().slice(0, 200)); });
   page.on('pageerror', (e) => consoleErrors.push('pageerror: ' + String(e.message).slice(0, 200)));
 
+  // v2.476 CLS 量化：列表「骨架 → 有数据」的跳动过去只能靠肉眼，纳入巡检后
+  // 每次切视图都能量化（>0.25 视为需要改，Core Web Vitals 的 needs-improvement 阈值）。
+  // layout-shift 只在 Chromium 有；不支持时按 0 处理，不制造假红。
+  await page.addInitScript(() => {
+    window.__znCls = 0;
+    try {
+      new PerformanceObserver((list) => {
+        for (const e of list.getEntries()) if (!e.hadRecentInput) window.__znCls += e.value;
+      }).observe({ type: 'layout-shift', buffered: true });
+    } catch { /* 非 Chromium / 旧内核 */ }
+  });
+
   const results = [];
   for (const v of views) {
     await page.goto(base + '/#/' + v, { waitUntil: 'domcontentloaded' });
@@ -345,6 +357,7 @@ async function auditViewport(browser, base, label, viewport, views, cred) {
     await page.waitForTimeout(1100);
     const data = await page.evaluate(inPageAudit);
     data.requested = v;
+    data.layoutShift = Math.round((await page.evaluate(() => window.__znCls || 0)) * 1000) / 1000;
     results.push(data);
   }
   await ctx.close();
@@ -585,6 +598,8 @@ async function auditModals(browser, base, cred, viewport) {
       if (r.activeNavHidden) issues.push({ pass: pass.label, view: r.requested, kind: 'activeNavHidden', detail: '当前栏目被导航滚动容器裁出可视区' });
       if (pass.label === 'mobile') r.tinyTargets.forEach((x) => issues.push({ pass: pass.label, view: r.requested, kind: 'tinyTargets', detail: x }));
       if (r.motion === 0) issues.push({ pass: pass.label, view: r.requested, kind: 'motion', detail: '该视图可见元素无任何 transition/animation' });
+      // CLS > 0.25 = Core Web Vitals 的 needs-improvement 档：列表骨架换内容时整体跳动
+      if (typeof r.layoutShift === 'number' && r.layoutShift > 0.25) issues.push({ pass: pass.label, view: r.requested, kind: 'layoutShift', detail: 'CLS=' + r.layoutShift });
     }
     pass.consoleErrors.forEach((t) => issues.push({ pass: pass.label, kind: 'consoleError', detail: t }));
   }
@@ -601,7 +616,7 @@ async function auditModals(browser, base, cred, viewport) {
         if (r.shell) { log(`- ${r.requested.padEnd(22)} 空壳弹窗（内容按需渲染，跳过）`); continue; }
         const bad = (r.horizontalOverflow > 0 ? 1 : 0) + r.clickStolen.length + r.unnamedControls.length + r.offscreenX.length
           + (r.activeNavHidden ? 1 : 0) + (pass.label === 'mobile' ? r.tinyTargets.length : 0) + (r.motion === 0 ? 1 : 0);
-        log(`${bad ? '✗' : '✓'} ${r.requested.padEnd(8)} 控件=${String(r.visibleControls).padStart(3)} 动效=${String(r.motion).padStart(3)} 横向溢出=${r.horizontalOverflow} 点击被吃=${r.clickStolen.length} 无名称=${r.unnamedControls.length} 越界=${r.offscreenX.length} 导航裁切=${r.activeNavHidden ? 1 : 0}${pass.label === 'mobile' ? ' 小目标=' + r.tinyTargets.length : ''}${r.triggeredBy ? ' 入口=' + r.triggeredBy : ''}`);
+        log(`${bad ? '✗' : '✓'} ${r.requested.padEnd(8)} 控件=${String(r.visibleControls).padStart(3)} 动效=${String(r.motion).padStart(3)} 横向溢出=${r.horizontalOverflow} 点击被吃=${r.clickStolen.length} 无名称=${r.unnamedControls.length} 越界=${r.offscreenX.length} 导航裁切=${r.activeNavHidden ? 1 : 0}${pass.label === 'mobile' ? ' 小目标=' + r.tinyTargets.length : ''} CLS=${r.layoutShift == null ? '-' : r.layoutShift}${r.triggeredBy ? ' 入口=' + r.triggeredBy : ''}`);
         r.clickStolen.slice(0, 6).forEach((x) => log(`    · 点击被吃：${x.el} ← ${x.hit} @${x.rect.join(',')}`));
         r.unnamedControls.slice(0, 6).forEach((x) => log(`    · 无名称：${x}`));
         r.offscreenX.slice(0, 6).forEach((x) => log(`    · 越界：${x.el} left=${x.left} right=${x.right}`));

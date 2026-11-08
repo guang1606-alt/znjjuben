@@ -219,6 +219,12 @@ html[data-theme="tech"] .net-banner {
 
 /* ================= 版面骨架 ================= */
 .wrap { max-width: 1180px; margin: 0 auto; padding: 26px 22px 90px; }
+/* v2.476 CLS：管理后台深链（#/admin）首屏只有标题+tab，用户表异步回填后整块长高 426px，
+   把页脚从视口内顶到 1219px，实测 CLS 0.577（远超 0.25 的 needs-improvement 阈值）。
+   给视图一个「视口高地板」：回填只会在折叠线以下增长，视口内元素不再位移。
+   用 dvh 兜住移动端地址栏收缩，老内核退回 vh。 */
+#view-admin { min-height: calc(100vh - 140px); }
+@supports (min-height: 100dvh) { #view-admin { min-height: calc(100dvh - 140px); } }
 
 /* ================= v2.190 清爽首页 ================= */
 .home-hero {

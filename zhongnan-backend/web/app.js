@@ -6127,7 +6127,9 @@
           ? sec(castLabel, coldCast, dashColdRow, 'cast', coldCastObj.total) + sec(propLabel, coldProp, dashColdRow, 'prop', coldPropObj.total) + sec(sceneLabel, coldScene, dashColdRow, 'scene', coldSceneObj.total)
           : `<div class="muted" style="padding:6px 8px">${t('dashNoCold')}</div>`}
       `;
-      // v2.169 补全闭环：thinQueue 行的"去补全"按钮——关闭 dashboard + 设置 dashJumpTarget + 调用对应族库面板（renderXxxLibrary 内会消费 dashJumpTarget 滚动 + 高亮）
+      // v2.476 显式声明「内容已渲染完成」：空数据看板文本天然短，真机巡检靠它区分
+      // 「还在骨架」与「数据为空但已渲染」，避免把正常空态误判为空壳弹窗。
+      modal.setAttribute('data-content-ready', '1');
       body.querySelectorAll('.dash-jump').forEach((b) => {
         b.onclick = (e) => {
           e.preventDefault();
