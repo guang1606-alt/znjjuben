@@ -11,7 +11,7 @@
  *   npm run release:prep            # 跑 preflight + 检查今日日报段落，打印发布后命令
  *   node scripts/release-prep.cjs --json
  *
- * 退出码：0 = 可以发布（日报缺失只提示）；1 = 有硬性问题（跑偏/版本不一致/日报缺段落）；2 = 脚本异常。
+ * 退出码：0 = 可以发布；1 = 有硬性问题（跑偏/版本不一致/今日日报未建或缺段落）；2 = 脚本异常。
  *
  * 注意：全量测试与真机巡检是 `npm run verify:full`（耗时），本脚本不重复跑，避免双倍等待。
  */
@@ -28,15 +28,19 @@ function today() {
   return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
 }
 
-/** 今日日报必须出现当前版本号（如 v2.476）；文件不存在时返回 skipped，不平白阻碍发布 */
+/** 今日日报必须存在且出现当前版本号（如 v2.486）。
+ *  v2.486 起「今日日报不存在」不再放行：此前 missing 只提示不拦，等于「只要忘了建文件就永远绿」，
+ *  而发布纪律要求每版都落盘——放行等于把这条纪律变成装饰。 */
 function checkDailyNote(dir, version, dateStr) {
   const file = path.join(dir, `${dateStr}.md`);
-  if (!fs.existsSync(file)) return { ok: true, skipped: true, file, reason: '今日日报尚未创建' };
+  if (!fs.existsSync(file)) {
+    return { ok: false, missing: true, file, reason: `今日日报未创建：先写 ${path.join('docs', 'daily-review', `${dateStr}.md`)} 再发布` };
+  }
   const text = fs.readFileSync(file, 'utf8');
-  // 版本号可能写作 v2.476 / v2.476.0，统一按主次版本匹配
+  // 版本号可能写作 v2.486 / v2.486.0，统一按主次版本匹配
   const short = version.split('.').slice(0, 2).join('.');
   const ok = new RegExp(`v${short.replace(/\./g, '\\.')}(?![\\d.])`).test(text);
-  return { ok, skipped: false, file, reason: ok ? '' : `日报未记录 v${short} 段落（升版必须落盘）` };
+  return { ok, missing: false, file, reason: ok ? '' : `日报未记录 v${short} 段落（升版必须落盘）` };
 }
 
 /** 发布后要敲的命令：把易错的 tag/push 目标固化下来，避免手滑推到父仓库 */
@@ -91,7 +95,7 @@ function main(argv) {
   } else {
     console.log(`release-prep ${ok ? '✓ 可以发布' : '✗ 有问题'}（版本 v${version}）`);
     console.log((pre.ok ? '  ✓ ' : '  ✗ ') + 'preflight：' + pre.out.trim().split('\n').pop());
-    if (note.skipped) console.log('  · 日报：' + note.reason);
+    if (note.missing) console.log('  ✗ 日报：' + note.reason);
     else console.log((note.ok ? '  ✓ ' : '  ✗ ') + '日报：' + (note.ok ? '已记录当前版本段落' : note.reason));
     if (ok) {
       console.log('\n发布命令：');

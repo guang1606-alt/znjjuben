@@ -2,7 +2,8 @@
  * v2.476 发布收口脚本测试（scripts/release-prep.cjs）。
  *
  * 目的不是测「打印了什么」，而是锁住两条会反复踩的规则：
- *  ①升版后今日日报必须出现当前版本号（v2.472–v2.474 连续三版漏记的真实缺口）；
+ *  ①升版后今日日报必须出现当前版本号（v2.472–v2.474 连续三版漏记的真实缺口）；v2.486 起
+ *    「今日日报不存在」也按硬失败处理（此前的 missing-放行等于忘记建文件就永远绿）；
  *  ②发布后命令必须指向 gitee master/tag（历史事故是在父仓库「养正」里顺手改了东西）。
  */
 const { describe, it } = require('node:test');
@@ -25,7 +26,7 @@ describe('v2.476 发布收口脚本', { concurrency: 1 }, () => {
     fs.writeFileSync(path.join(dir, '2026-11-08.md'), '## 第一百四十段 · v2.476 CLS 量化\n');
     const r = checkDailyNote(dir, '2.476.0', '2026-11-08');
     assert.strictEqual(r.ok, true);
-    assert.strictEqual(r.skipped, false);
+    assert.strictEqual(r.missing, false);
   });
 
   it('日报存在但缺当前版本段落 → 转红（不许静默漏记）', () => {
@@ -42,10 +43,12 @@ describe('v2.476 发布收口脚本', { concurrency: 1 }, () => {
     assert.strictEqual(checkDailyNote(dir, '2.476.0', '2026-11-08').ok, false);
   });
 
-  it('今日日报不存在 → 跳过而不阻碍发布', () => {
+  // v2.486 收紧：此前「文件不存在」直接放行，等于忘了建文件就永远绿
+  it('今日日报不存在 → 硬失败（不许以「忘了建」绕过落盘纪律）', () => {
     const r = checkDailyNote(tmpDir(), '2.476.0', '2026-11-08');
-    assert.strictEqual(r.ok, true);
-    assert.strictEqual(r.skipped, true);
+    assert.strictEqual(r.ok, false);
+    assert.strictEqual(r.missing, true);
+    assert.match(r.reason, /2026-11-08\.md/);
   });
 
   it('发布命令必须推 gitee 的 master 与同名 tag，并核对远端', () => {
