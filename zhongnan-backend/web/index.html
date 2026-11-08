@@ -41,6 +41,7 @@
     <div class="spacer"></div>
     <div class="ctl">
       <button class="chip hidden" id="installBtn" data-i="installApp">安装到桌面</button>
+      <button class="chip" id="qsBtn" data-i="qsOpen"></button>
       <button class="chip" id="langBtn" title="中文 / English">中 / EN</button>
       <button class="chip" id="themeBtn" data-i="theme"></button>
       <button class="chip" id="feedbackEntryBtn" data-i="feedbackEntry"></button>
@@ -1001,7 +1002,7 @@
           <button class="modal-x" data-close="pkModal">×</button>
           <h3 id="pkModalTitle" data-i="pkTitle">⚔️ 剧本PK</h3>
           <div class="pk-setup" id="pkSetup">
-            <p class="muted" data-i="pkSetupHint">选择对手：用你另一个项目对阵，或直接挑战平台标杆本。PK 消耗 20 积分，结果仅作游戏化参考。</p>
+            <p class="muted" id="pkSetupHint" data-i="pkSetupHint">选择对手：用你另一个项目对阵，或直接挑战平台标杆本。PK 消耗 20 积分，结果仅作游戏化参考。</p>
             <div class="pk-opponents" id="pkOpponents"></div>
             <div class="row-actions">
               <button class="btn-primary" id="pkStartBtn" data-i="pkStart">开始PK</button>

@@ -91,7 +91,10 @@ describe('v2.268 [K3] qsMask 内层不得硬编码 role="dialog"（mask 层语�
   });
 
   it('Esc 关闭提示与键盘行为保留（无回归）', () => {
-    assert.ok(/Esc 关闭/.test(w), 'placeholder 的 Esc 关闭提示须保留');
+    // v2.478 占位符改走 i18n（中英双语），提示文本下沉到词典，这里校验「词典仍保留提示 + 模板确实引用该键」
+    const dict = fs.readFileSync(path.join(webDir, 'i18n.js'), 'utf8');
+    assert.ok(/qsPh:\s*'[^']*Esc 关闭'/.test(dict), 'placeholder 的 Esc 关闭提示须保留');
+    assert.ok(/t\('qsPh'\)/.test(w), 'placeholder 须引用 qsPh 词典项');
     assert.ok(/e\.key\s*===?\s*['"]Escape['"]/.test(w), 'Esc 关闭行为须保留');
   });
 });

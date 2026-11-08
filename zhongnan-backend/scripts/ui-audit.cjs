@@ -68,6 +68,9 @@ const DEMO = {
 // 注意：二级配置栏（资产库/系统默认提示）默认 hidden，需先点一张模式卡（#modeGrid .mode-card）才挂载。
 const REAL_TRIGGERS = {
   authModal: { view: 'home', sel: ['#loginBtn'], guestOnly: true },
+  // v2.478 快速跳转由 JS 动态挂载（不在 index.html 的静态 modal 列表里），
+  // 过去只有 ⌘/Ctrl+K 一个入口 → 触屏/无键盘场景永远打不开，巡检也从未真正走进去。
+  qsMask: { view: 'home', sel: ['#qsBtn'] },
   sampleModal: { view: 'home', sel: ['#homeSampleBtn', '#sampleEntryBtn'] },
   feedbackModal: { view: 'home', sel: ['#feedbackEntryBtn'] },
   castLibModal: { view: 'studio', pre: '#modeGrid .mode-card', sel: ['#castLibBtn'] },

@@ -52,6 +52,15 @@ function parseTriggers() {
 const triggers = parseTriggers();
 const htmlIds = new Set([...html.matchAll(/\bid="([^"]+)"/g)].map((m) => m[1]));
 
+// v2.478 运行时动态挂载的弹窗（如 wireQuickSwitcher 造的 qsMask）不在 index.html 里，
+// 但巡检确实会枚举到它们；这类 id 由「变量.className='modal-mask…' + 变量.id='x'」推导，
+// 否则给它们登记真实入口会被 T2 误判成「目录腐化」。
+const appSrc = fs.readFileSync(path.join(ROOT, 'web', 'app.js'), 'utf8');
+const dynamicModalIds = [...appSrc.matchAll(/(\w+)\.className\s*=\s*'modal-mask[^']*'/g)]
+  .map((m) => ((new RegExp('\\b' + m[1] + '\\.id\\s*=\\s*[\'"]([A-Za-z0-9_]+)[\'"]')).exec(appSrc) || [])[1])
+  .filter(Boolean);
+const knownModalIds = new Set([...modalIds, ...dynamicModalIds]);
+
 test('T1 每个弹窗都必须有巡检策略（真实入口或 needsData 盲区登记）', () => {
   assert.ok(modalIds.length >= 18, '应能解析出全部弹窗，实际 ' + modalIds.length);
   const missing = modalIds.filter((id) => !triggers[id]);
@@ -59,7 +68,7 @@ test('T1 每个弹窗都必须有巡检策略（真实入口或 needsData 盲区
 });
 
 test('T2 REAL_TRIGGERS 不得残留页面里不存在的弹窗', () => {
-  const stale = Object.keys(triggers).filter((id) => !modalIds.includes(id));
+  const stale = Object.keys(triggers).filter((id) => !knownModalIds.has(id));
   assert.deepStrictEqual(stale, [], '目录里有过期弹窗 id：' + stale.join(','));
 });
 

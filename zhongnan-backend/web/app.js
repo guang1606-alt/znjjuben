@@ -56,6 +56,13 @@
       lb.setAttribute('aria-label', label);
       lb.setAttribute('title', label);
     }
+    // v2.478 快速跳转入口：把快捷键写进名称/提示，否则用户只知道有这么个按钮、不知道该按什么
+    const qb = $('qsBtn');
+    if (qb) {
+      const label = t('qsOpen') + (lang === 'en' ? ' (Cmd/Ctrl+K)' : '（⌘/Ctrl+K）');
+      qb.setAttribute('aria-label', label);
+      qb.setAttribute('title', label);
+    }
   }
   function applyTheme() {
     const eff = theme === 'auto' ? (mq && mq.matches ? 'dark' : 'light') : theme;
@@ -221,6 +228,12 @@
     // v2.469 快速跳转遮罩的可访问名称随语言重刷（元素由 wireQuickSwitcher 异步挂载，取不到就跳过）
     const qsMaskEl = $('qsMask');
     if (qsMaskEl) qsMaskEl.setAttribute('aria-label', t('qsDialog'));
+    // v2.478 弹窗内部是运行时构造的静态 DOM：占位符/无障碍名不会随 data-i 自动重刷，这里显式同步
+    const qsInputEl = $('qsInput');
+    if (qsInputEl) {
+      qsInputEl.setAttribute('aria-label', t('qsInputAria'));
+      qsInputEl.setAttribute('placeholder', t('qsPh'));
+    }
     renderStaticText(); renderModes(); renderHome(); renderSelects(); renderScriptTypes(); renderAuthButton();
     _applyToolboxHints(); // A3 工具箱卡片分层：静态卡注入方法论一句话提示行（随语言刷新）
     // v2.188 初始化同步守卫：applyLang 期间 syncTagBench/syncModeBrief 不主动调 openWorkbench（避免 layer 自动展开覆盖模式主页）
@@ -3006,7 +3019,7 @@
     // 名称走 i18n（applyLang 里随语言重刷），不写死中文字面量。
     mask.setAttribute('aria-label', t('qsDialog'));
     mask.innerHTML = `<div class="modal" style="max-width:460px">
-      <input id="qsInput" class="mini-input" aria-label="搜索页面或创作模式" style="width:100%;margin-bottom:8px" placeholder="搜索页面/创作模式，回车直达（Esc 关闭）" />
+      <input id="qsInput" class="mini-input" aria-label="${escapeHtml(t('qsInputAria'))}" style="width:100%;margin-bottom:8px" placeholder="${escapeHtml(t('qsPh'))}" />
       <div id="qsList" class="qs-list"></div></div>`;
     document.body.appendChild(mask);
     const input = mask.querySelector('#qsInput'), list = mask.querySelector('#qsList');
@@ -3024,7 +3037,7 @@
       const all = targets();
       shown = q ? all.filter((t) => t.k.toLowerCase().includes(q.toLowerCase())) : all;
       cur = 0;
-      list.innerHTML = shown.slice(0, 12).map((t, i) => `<div class="qs-item${i === 0 ? ' on' : ''}" data-idx="${i}">${escapeHtml(t.k)}</div>`).join('') || '<div class="muted" style="padding:8px">无匹配</div>';
+      list.innerHTML = shown.slice(0, 12).map((t, i) => `<div class="qs-item${i === 0 ? ' on' : ''}" data-idx="${i}">${escapeHtml(t.k)}</div>`).join('') || `<div class="muted" style="padding:8px">${escapeHtml(t('qsEmpty'))}</div>`;
       list.querySelectorAll('.qs-item').forEach((el) => el.onclick = () => pick(+el.getAttribute('data-idx')));
     }
     function pick(i) {
@@ -3039,6 +3052,10 @@
     function open() { mask.classList.remove('hidden'); input.value = ''; render(''); setTimeout(() => input.focus(), 30); }
     function close() { mask.classList.add('hidden'); }
     mask.onclick = (e) => { if (e.target === mask) close(); };
+    // v2.478 可见入口：⌘/Ctrl+K 只对实体键盘有效，触屏设备上功能等于不存在；
+    // 顶栏 #qsBtn 与快捷键走同一个开关，保证「看得见、点得开」。
+    const qsBtn = $('qsBtn');
+    if (qsBtn) qsBtn.onclick = () => { mask.classList.contains('hidden') ? open() : close(); };
     input.addEventListener('input', () => render(input.value));
     input.addEventListener('keydown', (e) => {
       if (e.key === 'ArrowDown') { e.preventDefault(); cur = Math.min(cur + 1, shown.length - 1); paintActive(); }
