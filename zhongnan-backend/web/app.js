@@ -2102,6 +2102,15 @@
       switchView(v, { fromRoute: true }); // 后退/前进不再写历史，否则每按一次后退就自增一条
     });
   }
+  // v2.472 移动端导航可发现性：`.nav` 在窄屏是隐藏滚动条的横滑条，右侧加渐隐提示"还有内容"，
+  // 滑到最右（或本就放得下）时移除，避免末项被永久遮淡。
+  function _syncNavScrollHint() {
+    const nav = document.querySelector('.nav');
+    if (!nav) return;
+    const more = nav.scrollWidth - nav.clientWidth - nav.scrollLeft > 4;
+    if (more) nav.setAttribute('data-scroll', 'more');
+    else nav.removeAttribute('data-scroll');
+  }
   function switchView(v, opts) {
     if (!VIEWS.includes(v)) return;
     const o = opts || {};
@@ -2119,7 +2128,14 @@
       b.classList.toggle('on', on);
       b.classList.toggle('active', on);
       if (on) b.setAttribute('aria-current', 'page'); else b.removeAttribute('aria-current');
+      // v2.472：窄屏导航是横向滚动条，切到靠右的视图（市场/广场）时把激活项滚进可视区，
+      // 否则用户点「全部模式」跳过去后看不到当前在哪一栏，导航形同失效。
+      if (on && typeof b.scrollIntoView === 'function') {
+        try { b.scrollIntoView({ block: 'nearest', inline: 'center' }); } catch { /* 老浏览器忽略 */ }
+      }
     });
+    // typeof 守卫：单函数抽取的测试沙箱里没有该辅助函数，不能因此抛 ReferenceError
+    if (typeof _syncNavScrollHint === 'function') _syncNavScrollHint();
     // 路由同步：用户点击走 push（可后退），权限回退等程序化替换走 replace（不堆历史）
     if (!o.fromRoute) writeRoute(v, !!o.replace);
     // 新视图淡入：先 hidden 移除后强制 reflow，再加 view-in 动画类
@@ -2407,6 +2423,14 @@
     });
   }
   document.querySelectorAll('.nav [data-view]').forEach((b) => b.onclick = () => switchView(b.getAttribute('data-view')));
+  // v2.472 导航横滑提示：滚动/缩放后重算右侧渐隐；首屏与字体加载完成各算一次
+  {
+    const nav = document.querySelector('.nav');
+    if (nav) nav.addEventListener('scroll', _syncNavScrollHint, { passive: true });
+    addEventListener('resize', _syncNavScrollHint);
+    _syncNavScrollHint();
+    if (document.fonts && document.fonts.ready) document.fonts.ready.then(_syncNavScrollHint).catch(() => {});
+  }
   // v2.272 skip link：激活后把焦点（含读屏光标）真正移到 <main>——裸 hash 跳转在部分浏览器只滚动不聚焦
   document.querySelectorAll('.skip-link').forEach((a) => a.addEventListener('click', (e) => {
     // @module ui

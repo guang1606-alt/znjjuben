@@ -896,6 +896,10 @@ textarea { box-sizing: border-box; max-width: 100%; resize: vertical; background
 .tag-search-row{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:10px}
 .tag-search-row input[type=search]{flex:1;min-width:200px;background:var(--panel-2);color:var(--text);border:1px solid var(--line);border-radius:var(--radius-sm);padding:9px 12px}
 .tag-search-row select{min-width:150px;background:var(--panel-2);color:var(--text);border:1px solid var(--line);border-radius:var(--radius-sm);padding:9px 10px}
+/* v2.472：web/index.html 的 #worksSearch 挂着 .input 类，但样式表自始未定义该选择器，
+   浏览器回落成 ~21px 高的裸控件（与全站输入框观感割裂、低于 24px 触控下限）。补齐为与检索框同口径。 */
+.input{width:100%;box-sizing:border-box;background:var(--panel-2);color:var(--text);border:1px solid var(--line);border-radius:var(--radius-sm);padding:9px 12px;min-height:38px}
+.input::placeholder{color:var(--text-2)}
 .tag-pool{display:flex;flex-wrap:wrap;gap:8px;min-height:38px;padding:11px;background:var(--panel-2);border:1px dashed var(--line);border-radius:var(--radius-sm);margin-bottom:12px}
 .tag-pool-hint{color:var(--text-2);font-size:.82rem;align-self:center}
 .tag-pick{background:var(--panel);color:var(--text);border:1px solid var(--line);border-radius:999px;padding:5px 13px;font-size:.82rem;cursor:pointer;transition:all .15s}
@@ -2373,6 +2377,12 @@ body:has(.ui-dlg-overlay) .toast { --toast-y: 10px; }
     padding: 7px 10px;
     font-size: .82rem;
     flex: 0 0 auto;
+  }
+  /* v2.472 窄屏导航是隐藏滚动条的横滑条（7 个栏目放不下），右侧渐隐提示"还有内容"，
+     由 app.js 的 _syncNavScrollHint() 按 scrollLeft 实时挂/摘 data-scroll，避免末项被永久遮淡 */
+  .nav[data-scroll="more"] {
+    -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 22px), transparent 100%);
+    mask-image: linear-gradient(to right, #000 calc(100% - 22px), transparent 100%);
   }
 
   #view-studio > .section-title {
