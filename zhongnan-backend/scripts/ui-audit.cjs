@@ -100,16 +100,22 @@ const REAL_TRIGGERS = {
   mineModal: { view: 'market', sel: ['#mkMineBtn'], needsAuth: true },
   // 资产看板按钮嵌在资产库弹窗内：先选模式 → 开库 → 点看板（看板本身需登录，游客只能看到 needLogin）
   assetDashboardModal: { view: 'studio', pre: ['#modeGrid .mode-card', '#castLibBtn'], sel: ['[data-open-dash]'], needsAuth: true },
-  // 以下入口依赖已生成剧本/已购交易，演示账号无从到达 → 显式登记，等有数据再自动升级为真实入口
-  pkModal: { view: 'studio', sel: [], needsData: '需先生成剧本（openPk 无 currentProjectId 直接提示）' },
-  valueModal: { view: 'studio', sel: [], needsData: '需先生成剧本（openValueCard 无 projectId 直接提示）' },
-  detailModal: { view: 'market', sel: [], needsData: '交易广场无上架作品（演示库为空）' },
-  listModal: { view: 'market', sel: [], needsAuth: true, needsData: '账号无自己的剧本可上架' },
-  listenModal: { view: 'works', sel: [], needsData: '账号无成稿项目可听' },
-  fullModal: { view: 'market', sel: [], needsData: '无已购剧本全文' },
-  dpModal: { view: 'studio', sel: [], needsData: '无生成项目（需先跑一集）' },
-  matModal: { view: 'studio', sel: [], needsData: '无生成项目（需先跑一集）' },
-  xMatureModal: { view: 'studio', sel: [], needsData: '需触发成熟题材拦截（生成前）' },
+  // v2.492 以下九项原为 needsData 盲区，现已升级为真实入口（dev-server 种演示内容 + 作品详情补回访入口 + studio 补成熟授权入口）：
+  // 作品详情（.work-card 进入）→ PK/价值证书/导演交付包/制作物料；分集行内 [data-listen-id] → 听剧本；
+  // 交易广场 .listing-card 内「查看详情」按钮 → 剧本详情；#mkListBtn → 上架；#mkMineBtn 后 [data-view-purchase] → 已购全文；#matureManageBtn → 成熟授权管理。
+  pkModal: { view: 'works', pre: ['.work-card'], sel: ['#worksPkBtn'], needsAuth: true },
+  valueModal: { view: 'works', pre: ['.work-card'], sel: ['#worksValueBtn'], needsAuth: true },
+  // v2.492 修正：.listing-card 卡片 div 本身无点击处理器，只有内部「查看详情」按钮
+  // 接 openListingDetail（app.js）；点 div 永远打不开详情，sel 必须指向真实按钮。
+  detailModal: { view: 'market', sel: ['.listing-card button'] },
+  listModal: { view: 'market', sel: ['#mkListBtn'], needsAuth: true },
+  listenModal: { view: 'works', pre: ['.work-card'], sel: ['[data-listen-id]'], needsAuth: true },
+  fullModal: { view: 'market', pre: ['#mkMineBtn'], sel: ['[data-view-purchase]'], needsAuth: true },
+  dpModal: { view: 'works', pre: ['.work-card'], sel: ['#worksDpBtn'], needsAuth: true },
+  matModal: { view: 'works', pre: ['.work-card'], sel: ['#worksMatBtn'], needsAuth: true },
+  // xMatureModal 的入口在模式网格首屏；若前面入口已进入模式二级页（#modeDetail 未收起），
+  // 该按钮 0×0 不可见 —— 真实路径得先点返回回到网格（已在网格时 #modeBackBtn 不可见，pre 自动跳过）。
+  xMatureModal: { view: 'studio', pre: ['#modeBackBtn'], sel: ['#matureManageBtn'], needsAuth: true },
 };
 
 function log(...a) { if (!JSON_ONLY) console.log(...a); }

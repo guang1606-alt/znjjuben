@@ -604,6 +604,9 @@
     [['xckPurpose', T.cks[0]], ['xckMinor', T.cks[1]], ['xckBoundary', T.cks[2]], ['xckLegal', T.cks[3]]]
       .forEach(([id, tx]) => { $(id).textContent = tx; });
     $('xMatureSubmit').textContent = T.submit;
+    // v2.492 无障碍名同步：静态 aria-label 是中文兜底，真实打开时必须与可见文字同语言，
+    // 否则英文界面下读屏读中文名、可见文字是英文（WCAG 2.5.3 label-in-name 冲突）
+    $('xMatureSubmit').setAttribute('aria-label', T.submit);
     $('xMatureBuy').textContent = T.buy;
     $('xMatureEnter').textContent = T.enter;
     $('xMatureRevoke').textContent = T.revoke;
@@ -3627,6 +3630,8 @@
       return;
     }
     if (!isCurrentProject()) return;
+    // v2.492 有成稿的项目开放增值工具回访入口（PK/价值证书/导演交付包/物料），无成稿不显示
+    $('worksVaRow').classList.toggle('hidden', !eps.length);
     if (!eps.length) {
       // v2.322 novel 模式与 adapt 对称：sourceText 已立项持久化进 bible，
       // 作品库必须给"继续创作"入口，否则用户刷新页面后想生成第 2 集只能重新立项（造孤儿项目+原文重贴）
@@ -9746,6 +9751,20 @@
     const text = [$('matSummary').textContent, ...Array.from(body.children).map((d) => d.textContent)].join('\n');
     copy(text, lang === 'en' ? 'Materials copied' : '物料清单已复制');
   };
+
+  // v2.492 回访老作品也能用增值工具：锁定项目上下文（currentProjectId 过去只在生成完成时赋值，
+  // 回访时为空 → openPk/openValueCard 等直接弹「先生成剧本」），再复用创作台原 open 函数，不另造平行实现。
+  const withWorksProject = (fn) => () => {
+    if (!currentWorksProject) return;
+    currentProjectId = currentWorksProject.id;
+    fn();
+  };
+  if ($('worksPkBtn')) $('worksPkBtn').onclick = withWorksProject(openPk);
+  if ($('worksValueBtn')) $('worksValueBtn').onclick = withWorksProject(openValueCard);
+  if ($('worksDpBtn')) $('worksDpBtn').onclick = withWorksProject(openDirectorPack);
+  if ($('worksMatBtn')) $('worksMatBtn').onclick = withWorksProject(openMaterials);
+  // 成熟题材授权管理：授权后此前无查看/撤回入口（合规缺口），studio 常驻入口接 openXMature
+  if ($('matureManageBtn')) $('matureManageBtn').onclick = () => openXMature();
 
   document.addEventListener('click', (e) => { const m = $('dlMenu'); if (m && !m.classList.contains('hidden') && !m.contains(e.target) && e.target !== $('dlBtn')) m.classList.add('hidden'); });
   $('retryBtn').onclick = genClickGuard(() => startGenerate());

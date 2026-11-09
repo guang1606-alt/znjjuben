@@ -68,6 +68,59 @@ demoUsers.forEach(async (u) => {
   seeded.passwordHash = await hashPassword('demo123456');
 });
 
+// v2.492 演示内容种子：让「需要数据才能点开」的弹窗在 DEMO 下拥有真实入口。
+// 覆盖九类此前巡检盲区：PK/价值证书/导演交付包/物料（需项目+成稿）、听剧本（需成稿）、
+// 剧本详情（需在架 listing）、上架（需自有剧本）、已购全文（需 SETTLED purchase）。
+// 全部为内存数据，随重启清空；只种一次，幂等。
+void (async function seedDemoContent() {
+  const SCRIPT_CONTENT = [
+    '第1集 雨夜归来',
+    '内景 老旧居民楼·楼道 夜',
+    '镜头：缓推至302门口，声控灯忽明忽暗。',
+    '△林晚攥紧钥匙，指节发白，鞋尖还滴着水。',
+    '林晚（压低声音）：妈，是我，我回来了。',
+    '母亲（哽咽）：你还知道回来……三年了。',
+    '配乐：钢琴单音渐入。',
+    '△窗外一道闪电劈过，照亮她脸上未干的泪痕。',
+  ].join('\n');
+  try {
+    await mem.project.create({
+      data: {
+        id: 'demo_proj_1', userId: 'demo_pro', title: '雨夜出租车',
+        genre: '都市情感', mode: 'tag', engineTier: 'STANDARD', format: 'LIVE_ACTION',
+        status: 'active', totalEps: 1, maleChannel: false, premiumLens: false,
+        bible: { theme: '归乡与和解', premise: '离家三年的女儿在雨夜敲开家门', characters: [{ name: '林晚' }, { name: '母亲' }] },
+        createdAt: new Date(Date.now() - 86400000), updatedAt: new Date(),
+      },
+    });
+    await mem.script.create({
+      data: {
+        id: 'demo_script_1', projectId: 'demo_proj_1', epNo: 1, title: '雨夜归来',
+        synopsis: '林晚冒雨回家，与母亲重逢。', content: SCRIPT_CONTENT,
+        wordCount: 120, qcPassed: true, version: 1, qcReport: null,
+      },
+    });
+    await mem.listing.create({
+      data: {
+        id: 'demo_ls_1', sellerId: 'demo_admin', scriptId: 'demo_seller_script',
+        title: '夜班出租车（全 12 集完稿）', priceFen: 12800, sample: SCRIPT_CONTENT,
+        commissionPct: 10, status: 'ON_SHELF', createdAt: new Date(),
+        valueIndex: 88, valueGrade: 'A', valueEpisodes: 12, valueScannedAt: new Date(),
+      },
+    });
+    await mem.purchase.create({
+      data: {
+        id: 'demo_purchase_1', buyerId: 'demo_pro', sellerId: 'demo_admin', listingId: 'demo_ls_1',
+        priceFen: 12800, pricePoints: 128, feeFen: 1280, status: 'SETTLED',
+        contentSnapshot: { title: '夜班出租车', episodes: 12, content: SCRIPT_CONTENT },
+        createdAt: new Date(Date.now() - 86400000 * 2), updatedAt: new Date(),
+      },
+    });
+  } catch (e) {
+    console.warn('[demo] 内容种子失败（不影响启动）:', (e as Error).message);
+  }
+})();
+
 const port = Number(process.env.PORT) || 8099;
 app.listen(port, () => {
   console.log(`🎬 终南集 DEMO 模式: http://127.0.0.1:${port}（内存数据，重启清空）`);

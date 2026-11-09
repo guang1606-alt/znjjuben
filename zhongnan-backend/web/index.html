@@ -142,7 +142,7 @@
 
       <div class="ad-roll hidden" id="adRoll" aria-label="公告与合作位" data-i-aria="adRollAria"></div>
 
-      <div class="section-title"><span class="eyebrow" data-i="modesEyebrow">MODES</span><h2 data-i="modesTitle"></h2><small data-i="modeTip"></small><button class="chip" id="sampleEntryBtn" data-i="sampleEntry" style="margin-left:auto"></button></div>
+      <div class="section-title"><span class="eyebrow" data-i="modesEyebrow">MODES</span><h2 data-i="modesTitle"></h2><small data-i="modeTip"></small><button type="button" class="chip" id="matureManageBtn" data-i="matureManage" style="margin-left:auto"></button><button class="chip" id="sampleEntryBtn" data-i="sampleEntry"></button></div>
       <div class="grid" id="modeGrid"></div>
 
       <!-- v2.343 模式独立二级界面：点击模式卡后全屏进入，返回键回到网格 -->
@@ -720,6 +720,13 @@
       <div class="hidden" id="worksEmpty"></div>
       <section class="panel hidden" id="worksDetail">
         <div class="section-title" style="margin-top:0"><h2 id="worksDetailTitle"></h2><button type="button" class="btn-ghost" id="worksBackBtn" style="margin-left:auto">← <span data-i="backToList"></span></button></div>
+        <!-- v2.492 回访老作品的增值工具入口：有成稿时显示，锁定项目上下文后复用创作台 open 函数 -->
+        <div class="row-actions hidden" id="worksVaRow" style="margin-top:0">
+          <button type="button" class="btn-ghost" id="worksPkBtn" data-i="worksPk"></button>
+          <button type="button" class="btn-ghost" id="worksValueBtn" data-i="worksValue"></button>
+          <button type="button" class="btn-ghost" id="worksDpBtn" data-i="worksDp"></button>
+          <button type="button" class="btn-ghost" id="worksMatBtn" data-i="worksMat"></button>
+        </div>
         <div id="epsList"></div>
       </section>
     </div>
@@ -1087,7 +1094,7 @@
           </div>
           <div class="notice hidden" id="xMatureStatus"></div>
           <div class="row-actions">
-            <button class="btn-primary" id="xMatureSubmit"></button>
+            <button class="btn-primary" id="xMatureSubmit" aria-label="提交问卷并核验准入"></button>
             <button class="btn-ghost hidden" id="xMatureBuy"></button>
             <button class="btn-ghost hidden" id="xMatureEnter"></button>
             <button class="btn-ghost hidden" id="xMatureRevoke"></button>

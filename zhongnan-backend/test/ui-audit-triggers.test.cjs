@@ -80,7 +80,10 @@ test('T3 真实入口选择器必须能在 index.html 命中', () => {
         if (!htmlIds.has(sel.slice(1))) bad.push(`${id} → ${sel}`);
       } else if (sel.startsWith('[')) {
         const attr = sel.replace(/^\[|\]$/g, '').split('=')[0];
-        if (!new RegExp('\\b' + attr.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\b').test(html)) bad.push(`${id} → ${sel}`);
+        // v2.492 行内动态入口（如 [data-listen-id] / [data-view-purchase]）由 app.js 按需渲染，
+        // 选择器校验必须同时覆盖 index.html 与 app.js，否则动态入口被误报「不存在」。
+        const re = new RegExp('\\b' + attr.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\b');
+        if (!re.test(html) && !re.test(appSrc)) bad.push(`${id} → ${sel}`);
       }
     }
     // 前置入口（pre，可为数组）里的 #id 同样必须存在
@@ -139,3 +142,53 @@ test('T7 深链形态（路径/多级/哈希/查询串）必须被真实访问�
   // 深链不得被「落地视图 = 请求视图」的权限页豁免误跳过
   assert.match(src, /if \(!r\.isModal && !r\.deepLink\)/, '深链结果不得走 gated 跳过分支');
 });
+
+// T8 v2.492 九个原 needsData 盲区弹窗必须全部升级为真实入口。
+// dev-server 已种演示内容（demo_proj_1 成稿 / demo_ls_1 在架 / demo_purchase_1 已购结算），
+// 作品详情页补齐了 PK/价值证书/导演交付包/物料的回访入口，studio 补了成熟授权管理入口，
+// 再标 needsData 等于把「已覆盖」登记成「盲区」，巡检报告会直接撒谎。
+const FORMER_BLIND = ['pkModal', 'valueModal', 'detailModal', 'listModal', 'listenModal', 'fullModal', 'dpModal', 'matModal', 'xMatureModal'];
+test('T8 九个原盲区弹窗必须有真实入口，且不得再标 needsData', () => {
+  const bad = FORMER_BLIND.filter((id) => {
+    const t = triggers[id];
+    return !t || !t.sels.length || t.needsData.trim();
+  });
+  assert.deepStrictEqual(bad, [], '这些弹窗仍未真实覆盖（缺 sel 或仍标 needsData）：' + bad.join(','));
+});
+
+test('T9 dev-server 必须种演示内容（项目+成稿+在架 listing+已购订单）', () => {
+  const dev = fs.readFileSync(path.join(ROOT, 'src', 'dev-server.ts'), 'utf8');
+  for (const k of ['seedDemoContent', 'demo_proj_1', 'demo_script_1', 'demo_ls_1', 'demo_purchase_1']) {
+    assert.ok(dev.includes(k), 'dev-server 缺演示种子：' + k + '（真实入口巡检的数据地基）');
+  }
+});
+
+// T10 真实入口的前端半边：作品详情页必须有回访可用的增值工具按钮，studio 必须有成熟授权管理入口；
+// 且接线必须复用创作台原 open 函数（先锁定 currentProjectId），不得另造平行实现。
+test('T10 作品详情增值工具与成熟授权管理入口必须存在并正确接线', () => {
+  for (const id of ['worksPkBtn', 'worksValueBtn', 'worksDpBtn', 'worksMatBtn', 'matureManageBtn']) {
+    assert.ok(htmlIds.has(id), 'index.html 缺入口 #' + id);
+  }
+  assert.match(appSrc, /currentProjectId = currentWorksProject\.id/,
+    '回访老作品必须先锁定项目上下文，否则 openPk/openValueCard 等读不到 currentProjectId 直接弹「先生成剧本」');
+  for (const [btn, fn] of [['worksPkBtn', 'openPk'], ['worksValueBtn', 'openValueCard'], ['worksDpBtn', 'openDirectorPack'], ['worksMatBtn', 'openMaterials']]) {
+    assert.ok(appSrc.includes(`$('${btn}').onclick = withWorksProject(${fn})`), `${btn} 必须经 withWorksProject 接 ${fn}`);
+  }
+  assert.match(appSrc, /\$\('matureManageBtn'\)\.onclick = \(\) => openXMature\(\)/, 'matureManageBtn 必须接 openXMature');
+  assert.match(appSrc, /worksVaRow'\)\.classList\.toggle\('hidden', !eps\.length\)/, '无成稿项目不得显示增值工具行');
+});
+
+// v2.493 弹窗层级守卫：全站 17 个弹窗都写在 #view-market 里、又被 .wrap 包围，
+// .wrap 一旦重新带上 z-index 就会创建层叠上下文，把遮罩的 z-index 困在层级 1 内，
+// sticky 顶栏（40）与页脚会盖住关闭键/保存键（实测 feedbackModal × 与 listModal 保存被吃）。
+// 这条守卫把「遮罩必须压在页面常驻栏之上」钉成静态约束，避免以后调样式时静默回归。
+test('T11 弹窗遮罩层级必须高于顶栏与页脚，.wrap 不得创建层叠上下文', () => {
+  const css = fs.readFileSync(path.join(ROOT, 'web', 'styles.css'), 'utf8');
+  const maskZ = Number((css.match(/\.modal-mask\{[^}]*z-index:\s*(\d+)/) || [])[1]);
+  const topZ = Number((css.match(/\.topbar\s*\{[^}]*z-index:\s*(\d+)/) || [])[1]);
+  assert.ok(maskZ > 0 && topZ > 0, '未解析到 .modal-mask / .topbar 的 z-index');
+  assert.ok(maskZ > topZ, `遮罩 z-index(${maskZ}) 必须高于顶栏(${topZ})`);
+  const wrapRule = (css.match(/\.wrap\{[^}]*\}/g) || []).join(' ');
+  assert.match(wrapRule, /z-index:\s*auto/, '.wrap 必须保持 z-index:auto，否则会把遮罩困在自身层叠上下文内');
+});
+

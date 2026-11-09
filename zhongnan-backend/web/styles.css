@@ -595,6 +595,12 @@ textarea { box-sizing: border-box; max-width: 100%; resize: vertical; background
 
 /* ================= 登录 / 模态 ================= */
 .modal-mask{position:fixed;inset:0;background:rgba(38,32,18,.42);backdrop-filter:blur(4px);display:flex;align-items:center;justify-content:center;z-index:60;padding:20px}
+/* v2.493 弹窗层级修复：全站 17 个 .modal-mask 都嵌在 <main class="wrap"> 内，而 .wrap 的
+   position:relative + z-index:1 会创建独立层叠上下文，把遮罩的 z-index:60 困在层级 1 里——
+   sticky 顶栏（z-index:40）与页脚会画在弹窗之上，实测 feedbackModal 的「×」被顶栏盖住、
+   listModal 的「保存」被页脚盖住，用户点了没反应。解除 .wrap 的层叠上下文后遮罩回到根层级；
+   .wrap 保留 relative 以维持与 body::before 纹理层的绘制顺序（同为 z-index auto 时按 DOM 顺序，wrap 在后）。 */
+.wrap{z-index:auto}
 [data-theme='dark'] .modal-mask{background:rgba(4,9,8,.62)}
 /* v2.462 低高度视口可达：此前 max-height 只写在 ≤560px 媒体查询里，横屏（如 844×390，宽度够但高度不够）
    命中不到 → 卡片 396.8px 溢出 350px 可用高度，遮罩是 fixed、滚页面也推不动，登录提交按钮底部 40px
