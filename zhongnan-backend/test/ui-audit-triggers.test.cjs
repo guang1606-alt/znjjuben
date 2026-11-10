@@ -192,3 +192,15 @@ test('T11 弹窗遮罩层级必须高于顶栏与页脚，.wrap 不得创建层�
   assert.match(wrapRule, /z-index:\s*auto/, '.wrap 必须保持 z-index:auto，否则会把遮罩困在自身层叠上下文内');
 });
 
+// v2.494 可访问性与锚点跳转守卫：
+// 1) #xnFloat 是纯 emoji（🐼）悬浮球，title 在部分读屏下不被当作可访问名，必须显式 aria-label；
+// 2) html 必须有 scroll-padding-top，否则 skip-link（href="#mainContent"）跳转后主内容被 sticky 顶栏盖住。
+test('T12 悬浮球必须有 aria-label，html 必须有 scroll-padding-top 防止锚点跳转被顶栏遮挡', () => {
+  const xnFloat = html.match(/<button[^>]*\bid="xnFloat"[^>]*>/);
+  assert.ok(xnFloat, 'index.html 缺 #xnFloat 悬浮球');
+  assert.match(xnFloat[0], /\saria-label="[^"]+"/, '#xnFloat 必须有非空 aria-label（纯 emoji 按钮，title 不足以覆盖读屏）');
+  const css = fs.readFileSync(path.join(ROOT, 'web', 'styles.css'), 'utf8');
+  const htmlRule = (css.match(/html\s*\{[^}]*\}/) || [])[0] || '';
+  assert.match(htmlRule, /scroll-padding-top:\s*\d+/, 'html 必须有 scroll-padding-top，否则 skip-link 跳到 #mainContent 时被 sticky 顶栏盖住');
+});
+
