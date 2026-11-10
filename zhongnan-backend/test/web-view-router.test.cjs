@@ -63,6 +63,23 @@ test('管理后台不在未登录时从 URL 恢复，避免刷新即弹登录框
   assert.match(init, /initial !== 'admin' \|\| Api\.isAuthed\(\)/, 'admin 视图需登录后才可恢复');
 });
 
+// v2.495 无效路由过去静默回退首页：用户点开坏链/输错 URL，看到首页却不知道发生了什么，
+// 也找不到目标页在哪。必须在回落前给一条明确提示，把「静默失败」变成「可感知的降级」。
+test('无效路由回落首页前必须提示用户（不静默吞掉坏链）', () => {
+  const init = pick('initViewRouter');
+  // 启动时：viewFromHash() 返回 null（非白名单）即无效路由
+  assert.match(init, /initial\s*&&|!\s*initial|initial\s*===?\s*null/, '必须区分有效路由与无效路由');
+  // 必须拆成启动段和 popstate 段分别断言，否则启动段漏写时 popstate 段的 xnSay 会掩盖缺陷
+  const splitIdx = init.indexOf("addEventListener('popstate'");
+  assert.ok(splitIdx > 0, '必须注册 popstate 监听');
+  const startup = init.slice(0, splitIdx);
+  const popstate = init.slice(splitIdx);
+  assert.match(startup, /xnSay|toast|Xn\.say/, '启动路径遇无效路由必须先提示再回落（不能静默）');
+  assert.match(popstate, /xnSay|toast|Xn\.say/, '后退/前进遇无效路由也必须提示，不能静默回首页');
+  // popstate 必须处理
+  assert.match(init, /popstate/, 'popstate 必须处理');
+});
+
 test('writeRoute 用 history 而非 location.hash 赋值，且失败可降级', () => {
   const fn = pick('writeRoute');
   assert.match(fn, /pushState/, '前进需新增历史记录');

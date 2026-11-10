@@ -2143,14 +2143,21 @@
   }
   function initViewRouter() {
     const initial = viewFromHash();
-    // 管理后台是权限页：未登录时不从 URL 恢复，否则刷新即弹登录框
+    // v2.495 无效路由不再静默回退首页：坏链/输错 URL 时先提示用户，再落首页
+    if (!initial && location.hash && location.hash.indexOf(ROUTE_PREFIX) === 0) {
+      xnSay(lang === 'en' ? 'Page not found. Returning to home.' : '未找到该页面，已返回首页');
+    }
     const restore = initial && (initial !== 'admin' || Api.isAuthed()) ? initial : 'home';
     writeRoute(restore, true); // 启动一律 replace，避免刷新本身制造一条历史记录
     if (restore !== currentView()) switchView(restore, { fromRoute: true });
     addEventListener('popstate', () => {
-      const v = viewFromHash() || 'home';
-      if (v === currentView()) return;
-      switchView(v, { fromRoute: true }); // 后退/前进不再写历史，否则每按一次后退就自增一条
+      const v = viewFromHash();
+      if (!v && location.hash && location.hash.indexOf(ROUTE_PREFIX) === 0) {
+        xnSay(lang === 'en' ? 'Page not found. Returning to home.' : '未找到该页面，已返回首页');
+      }
+      const target = v || 'home';
+      if (target === currentView()) return;
+      switchView(target, { fromRoute: true }); // 后退/前进不再写历史，否则每按一次后退就自增一条
     });
   }
   // v2.472 移动端导航可发现性：`.nav` 在窄屏是隐藏滚动条的横滑条，右侧加渐隐提示"还有内容"，
