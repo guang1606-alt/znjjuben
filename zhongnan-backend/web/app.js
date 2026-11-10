@@ -3957,8 +3957,12 @@
       // 爆款逆向批量。旧文案把「高级档同样可用全部三档引擎」写成专业档独占，又把对所有
       // 登录用户开放的投稿匹配写成专属通道——两处名实不符，故按真实门控重写。
       const proExtra = p.level === 'PRO' ? (lang === 'en' ? ' · flagship by default · feature-film & long-series · hit-reverse batch' : ' · 默认旗舰引擎 · 电影/长剧类型 · 爆款逆向批量') : '';
+      const autoName = (I18N.DICT[lang] || I18N.DICT.zh).mode['auto'] || 'auto';
       const modePerk = !modesUpTo.length ? '' : ((modesUpTo.length === 1
-        ? (lang === 'en' ? `Only ${modeNames}` : `仅${modeNames}`)
+        // v2.496 免费档：auto（自动匹配）对所有用户开放但不计入「创作模式」计数，
+        // 旧文案「仅标签创建」让免费用户困惑——studio 里明明还有「自动匹配」可用。
+        // 单模式档（即免费）显式把 auto 列上，付费档仍只数创作模式。
+        ? (lang === 'en' ? `${autoName} + ${modeNames}` : `${autoName} + ${modeNames}`)
         : (lang === 'en' ? `${modesUpTo.length} modes: ${modeNames}` : `${modesUpTo.length} 种模式：${modeNames}`)) + proExtra);
       if (modePerk) perks.push(modePerk);
       // v2.483 交易权益走目录 canTrade：免费档不能上架（上架即 403），
@@ -4004,8 +4008,8 @@
       const discountZh = disc ? `；AI 共创（拆爆款 / 围读 / 选题会）积分消耗：${disc}，${rest || '免费与基础'}按标准价` : '';
       const discountEn = disc ? `. AI co-creation (teardown / table read / pitch meeting) point cost: ${disc}; ${rest || 'Free & Basic'} pay standard` : '';
       limitNote.textContent = lang === 'en'
-        ? `Your tier sets how many projects can run at once: ${limitTxt}${discountEn}. Higher tiers unlock stronger engine mixes.`
-        : `会员等级决定同时可进行的剧本项目数：${limitTxt}${discountZh}；等级越高可用引擎组合越强。`;
+        ? `Your tier sets how many projects can run at once: ${limitTxt}${discountEn}. Advanced and above unlock the flagship engine mix; Pro adds feature-film/long-series types and hit-reverse batch.`
+        : `会员等级决定同时可进行的剧本项目数：${limitTxt}${discountZh}；高级及以上开放旗舰引擎组合，专业档额外解锁电影/长剧类型与爆款逆向批量。`;
     }
     document.querySelectorAll('[data-sku]').forEach((b) => b.onclick = () => placeOrder(b.getAttribute('data-sku')));
   }

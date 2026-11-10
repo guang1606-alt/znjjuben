@@ -16,7 +16,7 @@
   const DICT = {
     zh: {
       brand: '终南集 · AGI编剧大师', 
-      footerLine: '终南集 · 人工通用智能（AGI）编剧大师 —— 终南映画自研大模型与 AGI 体系化提示词应用工程 · 出品方：陕西终南映画人工智能科技有限公司 · 商务联系：18629152777',
+      footerLine: '终南集 · 人工通用智能（AGI）编剧大师 —— 终南映画自研 AGI 体系化提示词工程与多模型异构协同 · 出品方：陕西终南映画人工智能科技有限公司 · 商务联系：18629152777',
       home: '首页', homeEyebrow: 'ZHONGNAN · FILM ATELIER',
       // v2.442 网络韧性 + 安装引导
       netOffline: '网络已断开：生成会暂停，恢复后自动继续。',
@@ -204,7 +204,7 @@
     },
     en: {
       brand: 'ZhongnanJi · AGI Master',
-      footerLine: 'ZhongnanJi · AGI Screenwriting Master — proprietary AGI model and systematic prompt-engineering stack by Zhongnan Yinghua · Shaanxi Zhongnan Yinghua AI Technology Co., Ltd. · +86 18629152777', 
+      footerLine: 'ZhongnanJi · AGI Screenwriting Master — proprietary AGI prompt-engineering stack and multi-model heterogeneous collaboration by Zhongnan Yinghua · Shaanxi Zhongnan Yinghua AI Technology Co., Ltd. · +86 18629152777',
       zoneCreate: 'Studio', works: 'My Works', market: 'Script Market', square: 'Plaza', vip: 'Membership', backToList: 'Back to list',
       navRoom: 'Writers’ Room', navToolbox: 'Toolbox', navCraft: 'Craft Cards', navNovel: 'Sources', toolboxSub: 'Break down hits, fight copycatting, validate branching—judge and revise like a real writers’ room.',
       skipToMain: 'Skip to main content', navAria: 'Main navigation', breadcrumbAria: 'Breadcrumb', adRollAria: 'Announcements & partners', roomPanelAria: 'Writers’ Room', worksSearchPh: '🔍 Search projects…',

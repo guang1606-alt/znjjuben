@@ -281,8 +281,10 @@ describe('v2.471 文案准确性', () => {
     assert.ok(!/交易佣金 0%/.test(app + read('index.html') + read('i18n.js')), '免费版不得把「交易佣金 0%」当作权益展示（实际不可上架）');
     // 副标题事实核对：ADVANCED 与 PRO 的 engines 数组完全相同，写「引擎组合越强」属名实不符
     const i18n = read('i18n.js');
-    assert.ok(!/引擎组合越强/.test(i18n), 'vip 副标题不得声称「档位越高引擎组合越强」（高级/专业可用引擎档相同）');
-    assert.ok(!/stronger engine mixes/i.test(i18n), '英文副标题同样不得声称 stronger engine mixes');
+    for (const src of [i18n, app]) {
+      assert.ok(!/引擎组合越强/.test(src), 'vip 文案不得声称「档位越高引擎组合越强」（高级/专业可用引擎档相同）');
+      assert.ok(!/stronger engine mixes/i.test(src), '英文文案同样不得声称 stronger engine mixes');
+    }
     assert.ok(/旗舰/.test(i18n) && /flagship/i.test(i18n), '副标题应写清旗舰引擎组合的开放档位（与 engines 真源一致）');
     // 权益折扣必须真接线：vip 页承诺「AI 共创（拆爆款/围读/选题会）积分消耗折扣」，
     // 选题会与围读此前走固定价 consumeValueAdded，承诺从未生效（静默失效）。
@@ -454,5 +456,42 @@ describe('v2.471 文案准确性', () => {
       }
     }
     assert.deepStrictEqual(hits, [], '用户可见文案不得出现内部版本号/代号（请改为纯产品表述，开发痕迹留在注释里）：\n' + hits.join('\n'));
+  });
+
+  it('G17 免费档（单创作模式档）权益文案必须把 auto（自动匹配）显式列出', () => {
+    // 背景：MODES 里 auto 是路由入口（对所有用户开放），不计入「创作模式」计数。
+    // modesUpTo 排除 auto 后，免费档只剩 tag（标签创建），modesUpTo.length===1。
+    // 旧文案 `仅${modeNames}` 输出「仅标签创建」，让免费用户困惑——studio 里明明还有「自动匹配」可用。
+    // 修复：单模式档显式把 auto 拼上：`${autoName} + ${modeNames}`；付费档仍只数创作模式。
+    const app = read('app.js');
+    // ① autoName 必须从 I18N 词典的 mode['auto'] 派生（不许写死「自动匹配」）
+    assert.match(app, /const autoName = \(I18N\.DICT\[lang\] \|\| I18N\.DICT\.zh\)\.mode\['auto'\]/,
+      'autoName 必须从 I18N.DICT[lang].mode["auto"] 派生（词典改了文案要同步）');
+    // ② 单模式档（modesUpTo.length === 1）的输出必须包含 autoName，不能只输出 modeNames
+    assert.ok(/modesUpTo\.length === 1/.test(app), '未找到 modesUpTo.length === 1 的单模式档分支');
+    assert.match(app, /\$\{autoName\}\s*\+\s*\$\{modeNames\}/,
+      '免费档（单模式）权益文案必须包含 autoName + modeNames，不得只写 modeNames（用户会以为 auto 不可用）');
+    assert.ok(!/仅\$\{modeNames\}|Only \$\{modeNames\}/.test(app),
+      '免费档不得回退为「仅标签创建」类文案（auto 对所有用户开放，应显式列出）');
+  });
+
+  it('G18 不得宣称「自研大模型」（model-catalog 全为第三方供应商 API，自研的是 AGI 提示词工程层）', () => {
+    // 背景：页脚旧文案「终南映画自研大模型」与实现不符——src/config/model-catalog.ts
+    // 的 TEXT_MODELS / IMAGE_MODELS 全部是 DeepSeek/豆包/Qwen/Kimi/MiniMax/GPT/Claude/Gemini
+    // 等第三方 API，管理员后台也是粘贴任意供应商 API 路由到各岗位。
+    // 真实自研的是 AGI 体系化提示词工程（九大智能体协同 + 多模型异构协同 + 分级把关），
+    // 不是基础大模型。把「自研大模型」写进用户可见文案属名实不符，会被懂行用户/竞品抓到。
+    const banned = [/自研大模型/, /自研.*基础.*模型/, /self-developed (large )?model/i, /proprietary (LLM|foundation|large) model/i];
+    const hits = [];
+    for (const [file, src] of webSources()) {
+      for (const re of banned) {
+        if (re.test(src)) hits.push(`${file} 命中 ${re}`);
+      }
+    }
+    assert.deepStrictEqual(hits, [], '用户可见文案不得宣称「自研大模型」（实际全部调用第三方模型 API）：\n' + hits.join('\n'));
+    // 真源佐证：model-catalog 的 vendor 字段不应出现「终南映画/自研/自有」类自指
+    const catalog = fs.readFileSync(path.join(ROOT, 'src', 'config', 'model-catalog.ts'), 'utf8');
+    assert.ok(!/vendor:\s*'[^']*(终南映画|自研|自有|self)/.test(catalog),
+      'model-catalog 出现自指供应商（守卫的事实前提变了，需重新评估「自研大模型」宣称）');
   });
 });
