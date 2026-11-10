@@ -64,7 +64,7 @@
       sqEmpty: '还没有帖子，来发第一条交流吧～', mkEmpty: '交易广场还没有剧本，快去上架第一部吧～', loadFail: '加载失败，请稍后重试',
       theme: '主题', light: '浅色', dark: '深色', eye: '护眼', tech: '墨夜', auto: '跟随系统',
       
-      adminZone: '管理后台', adminSub: '仅超级管理员可见 · 用户 / 数据 / 财务 / 内容审核',
+      adminZone: '管理后台', adminSub: '仅管理员可见 · 用户 / 数据 / 财务 / 内容审核',
       admTab_users: '用户管理', admTab_stats: '数据总览', admTab_finance: '财务汇总', admTab_posts: '帖子审核',
       admSearch: '搜索', admSearchPh: '手机号 / 昵称 / 笔名', reload: '刷新',
       admPostAll: '全部', admPostVisible: '正常显示', admPostHidden: '已隐藏',
@@ -252,7 +252,7 @@
       sqEmpty: 'No posts yet — start the conversation', mkEmpty: 'No scripts on the market yet — be the first to list one', loadFail: 'Failed to load, please retry later',
       theme: 'Theme', light: 'Light', dark: 'Dark', eye: 'Eye-care', tech: 'Ink Night', auto: 'System',
       
-      adminZone: 'Admin', adminSub: 'Super-admin only · users / data / finance / moderation',
+      adminZone: 'Admin', adminSub: 'Admin only · users / data / finance / moderation',
       admTab_users: 'Users', admTab_stats: 'Overview', admTab_finance: 'Finance', admTab_posts: 'Moderation',
       admSearch: 'Search', admSearchPh: 'Phone / nickname / pen name', reload: 'Reload',
       admPostAll: 'All', admPostVisible: 'Visible', admPostHidden: 'Hidden',

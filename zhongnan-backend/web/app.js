@@ -10184,7 +10184,7 @@
     // 入口虽只对管理员显示，仍做一次服务端口径校验
     const ensure = meCache ? Promise.resolve(meCache) : Api.request('/api/auth/me').then((r) => r.json()).then((m) => { meCache = m; return m; });
     ensure.then((me) => {
-      if (!me || !me.isAdmin) { xnSay(lang === 'en' ? 'Admin only.' : '仅超级管理员可进入后台'); switchView('studio', { replace: true }); return; }
+      if (!me || !me.isAdmin) { xnSay(lang === 'en' ? 'Admin only.' : '仅管理员可进入后台'); switchView('studio', { replace: true }); return; }
       if (!admInited) { initAdmin(); admInited = true; }
       // c199 「开设账号」仅主账号可见（isSuperAdmin 由服务端口径判定，副管理员不可见此入口）
       const createBox = $('admCreateBox'); if (createBox) createBox.classList.toggle('hidden', !me.isSuperAdmin);

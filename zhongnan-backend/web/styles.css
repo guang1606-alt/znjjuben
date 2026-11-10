@@ -1237,7 +1237,7 @@ details[open]>summary{margin-bottom:6px}
 summary{cursor:pointer;transition:color var(--motion-fast) ease}
 summary:hover{color:var(--accent-strong)}
 /* 10. 页脚 */
-.site-footer{margin:30px 8px 12px;padding:16px 18px;border-top:1px solid var(--line);color:var(--text-2);font-size:12px;line-height:1.7;display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+.site-footer{margin:30px 8px 90px;padding:16px 18px;border-top:1px solid var(--line);color:var(--text-2);font-size:12px;line-height:1.7;display:flex;flex-wrap:wrap;gap:6px;align-items:center}
 .site-footer .dot{opacity:.5}
 /* 11. 无障碍：减少动效 */
 @media (prefers-reduced-motion:reduce){
