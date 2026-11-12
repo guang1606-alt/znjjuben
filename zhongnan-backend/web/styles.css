@@ -154,6 +154,12 @@ html[data-theme="tech"] .net-banner {
   .brand b { font-size: .98rem; }
   .nav { gap: 0; margin-left: 4px; }
   .nav button { padding: 6px 9px; font-size: .82rem; }
+  /* v2.498 首页分屏移动端堆叠 */
+  .home-split { grid-template-columns: 1fr; min-height: auto; }
+  .home-auth { padding: 28px 20px; border-right: none; border-bottom: 1px solid color-mix(in srgb, var(--line) 60%, transparent); }
+  .home-showcase { padding: 28px 20px; }
+  .home-showcase .home-title { font-size: 1.5rem; }
+  .home-showcase .home-hero-watermark { font-size: 120px; bottom: -40px; right: -10px; }
 }
 .brand { position: relative; display: flex; flex-direction: column; line-height: 1.25; padding-left: 38px; min-width: 0; flex-shrink: 0; }
 .brand span { max-width: 34vw; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
@@ -255,6 +261,133 @@ html[data-theme="tech"] .net-banner {
   position: absolute; right: -20px; top: -40px; z-index: 0; pointer-events: none;
   font-family: var(--serif); font-size: clamp(120px, 18vw, 240px); line-height: 1; font-weight: 700;
   color: color-mix(in srgb, var(--accent) 6%, transparent); user-select: none;
+}
+
+/* v2.498 首页登录分屏 */
+.home-split {
+  display: grid;
+  grid-template-columns: minmax(320px, 420px) 1fr;
+  gap: 0;
+  min-height: calc(100vh - 200px);
+  background: var(--panel);
+  border: 1px solid color-mix(in srgb, var(--line) 80%, transparent);
+  border-radius: 24px;
+  overflow: hidden;
+}
+.home-auth {
+  padding: 40px 36px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  border-right: 1px solid color-mix(in srgb, var(--line) 60%, transparent);
+}
+.home-auth-brand {
+  display: flex; align-items: center; gap: 14px;
+  margin-bottom: 28px;
+}
+.home-auth-logo {
+  width: 52px; height: 52px; border-radius: 14px;
+  display: grid; place-items: center;
+  font-family: var(--serif); font-size: 28px; font-weight: 700;
+  background: linear-gradient(135deg, var(--accent), var(--gold));
+  color: var(--on-accent);
+  box-shadow: 0 8px 24px -8px color-mix(in srgb, var(--accent) 50%, transparent);
+}
+.home-auth-brand-text h1 {
+  margin: 0; font-family: var(--serif); font-size: 1.4rem; font-weight: 700;
+}
+.home-auth-brand-text p {
+  margin: 2px 0 0; font-size: .78rem; color: var(--text-2); letter-spacing: .04em;
+}
+
+.home-showcase {
+  position: relative;
+  padding: 48px 44px;
+  overflow: hidden;
+  background:
+    radial-gradient(ellipse at 20% 0%, color-mix(in srgb, var(--accent) 10%, transparent) 0%, transparent 50%),
+    radial-gradient(ellipse at 80% 100%, color-mix(in srgb, var(--gold) 8%, transparent) 0%, transparent 50%),
+    var(--bg-soft);
+}
+.home-showcase-hero { position: relative; z-index: 1; }
+.home-showcase-modes {
+  position: relative; z-index: 1;
+  margin: 20px 0 24px; padding: 10px 16px;
+  font-size: .85rem; color: var(--gold);
+  background: color-mix(in srgb, var(--gold) 8%, transparent);
+  border: 1px solid color-mix(in srgb, var(--gold) 20%, transparent);
+  border-radius: 10px; display: inline-block;
+}
+/* 动效轮播：模式标签循环高亮 */
+.home-mode-carousel {
+  position: relative; z-index: 1;
+  display: flex; flex-wrap: wrap; gap: 10px;
+  margin-bottom: 28px;
+}
+.home-mode-chip {
+  padding: 7px 14px; border-radius: 999px;
+  font-size: .82rem; color: var(--text-2);
+  background: color-mix(in srgb, var(--panel) 60%, transparent);
+  border: 1px solid color-mix(in srgb, var(--line) 70%, transparent);
+  transition: all .5s cubic-bezier(.22,.61,.36,1);
+}
+.home-mode-chip.active {
+  color: var(--on-accent);
+  background: linear-gradient(135deg, var(--accent), var(--gold));
+  border-color: transparent;
+  transform: scale(1.06);
+  box-shadow: 0 8px 20px -6px color-mix(in srgb, var(--accent) 45%, transparent);
+}
+/* 更新通知 */
+.home-update-notice {
+  position: relative; z-index: 1;
+  display: flex; align-items: center; gap: 10px;
+  padding: 12px 16px;
+  background: color-mix(in srgb, var(--accent) 10%, transparent);
+  border: 1px solid color-mix(in srgb, var(--accent) 25%, transparent);
+  border-radius: 12px;
+  margin-bottom: 16px;
+  animation: zn-fade .5s ease both;
+}
+.home-update-notice.hidden { display: none; }
+.home-update-badge {
+  font-size: .78rem; font-weight: 600; color: var(--accent);
+  padding: 3px 10px; border-radius: 999px;
+  background: color-mix(in srgb, var(--accent) 15%, transparent);
+  white-space: nowrap;
+}
+.home-update-text { font-size: .85rem; color: var(--text); flex: 1; }
+.home-update-close {
+  background: none; border: none; color: var(--text-2);
+  font-size: 18px; cursor: pointer; padding: 2px 6px; border-radius: 6px;
+  transition: color .2s, background .2s;
+}
+.home-update-close:hover { color: var(--text); background: color-mix(in srgb, var(--line) 50%, transparent); }
+/* 广告位 */
+.home-ad-slot {
+  position: relative; z-index: 1;
+  padding: 14px 18px;
+  background: color-mix(in srgb, var(--line) 30%, transparent);
+  border: 1px dashed color-mix(in srgb, var(--line) 80%, transparent);
+  border-radius: 12px;
+  display: flex; align-items: center; gap: 12px;
+}
+.home-ad-label {
+  font-size: .7rem; font-weight: 700; color: var(--text-2);
+  padding: 3px 8px; border-radius: 6px;
+  background: color-mix(in srgb, var(--line) 60%, transparent);
+  letter-spacing: .08em;
+}
+.home-ad-slot p { margin: 0; font-size: .85rem; color: var(--text-2); }
+/* 展示区水印浮动动效 */
+.home-showcase .home-hero-watermark {
+  right: -30px; top: auto; bottom: -60px;
+  font-size: clamp(140px, 20vw, 280px);
+  animation: zn-float 8s ease-in-out infinite;
+}
+@keyframes zn-float {
+  0%, 100% { transform: translateY(0) rotate(-2deg); }
+  50% { transform: translateY(-18px) rotate(2deg); }
 }
 .home-section { margin-top: 40px; }
 .home-section-head {
@@ -619,6 +752,12 @@ textarea { box-sizing: border-box; max-width: 100%; resize: vertical; background
 .modal .field{margin-bottom:12px}
 .modal .field label{display:block;font-size:12px;color:var(--text-2);margin-bottom:5px;letter-spacing:.04em}
 .modal .field input{width:100%;box-sizing:border-box;padding:10px 12px;border-radius:10px;border:1px solid var(--line);background:var(--panel-2);color:var(--text);font-size:14px}
+/* v2.498 密码可见性切换：.pwd-wrap 包住 input + 切换按钮，按钮绝对定位在输入框右侧 */
+.pwd-wrap{position:relative}
+.pwd-wrap input{padding-right:38px !important}
+.pwd-toggle{position:absolute;right:6px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;font-size:16px;line-height:1;padding:4px 6px;border-radius:6px;color:var(--text-3);opacity:.6;transition:opacity .15s, background .15s}
+.pwd-toggle:hover{opacity:1;background:var(--panel-3)}
+.pwd-toggle:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
 /* v2.462 横屏压缩档：844×390 这类「宽度够、高度只有 390」的视口里，桌面 24px 内边距 + 20px 遮罩留白
    会让登录表单差 40px 才放得下，必须滚动才能点到提交；这里收窄留白与字段间距，常见登录/改密表单
    一屏完整可见，极端窄高时仍由 .modal 的 max-height + overflow-y 兜底滚动。

@@ -18,6 +18,10 @@
       brand: '终南集 · AGI编剧大师', 
       footerLine: '终南集 · 人工通用智能（AGI）编剧大师 —— 终南映画自研 AGI 体系化提示词工程与多模型异构协同 · 出品方：陕西终南映画人工智能科技有限公司 · 商务联系：18629152777',
       home: '首页', homeEyebrow: 'ZHONGNAN · FILM ATELIER',
+      // v2.498 首页登录分屏
+      brandName: '终南集', brandSub: 'AGI 编剧大师', phone: '手机号', password: '密码',
+      signIn: '登录',
+      updateBadge: '📢 更新', adPlaceholder: '品牌合作 / 推广位', homeShowcaseModes: '8 种创作模式 · 自动匹配 · 像真实编剧团队一样协同',
       // v2.442 网络韧性 + 安装引导
       netOffline: '网络已断开：生成会暂停，恢复后自动继续。',
       netOnline: '网络已恢复，可以继续创作。',
@@ -209,6 +213,10 @@
       navRoom: 'Writers’ Room', navToolbox: 'Toolbox', navCraft: 'Craft Cards', navNovel: 'Sources', toolboxSub: 'Break down hits, fight copycatting, validate branching—judge and revise like a real writers’ room.',
       skipToMain: 'Skip to main content', navAria: 'Main navigation', breadcrumbAria: 'Breadcrumb', adRollAria: 'Announcements & partners', roomPanelAria: 'Writers’ Room', worksSearchPh: '🔍 Search projects…',
       home: 'Home', homeEyebrow: 'ZHONGNAN · FILM ATELIER',
+      // v2.498 home login split
+      brandName: 'Zhongnan', brandSub: 'AGI Screenwriting Master', phone: 'Phone', password: 'Password',
+      signIn: 'Sign in',
+      updateBadge: '📢 Update', adPlaceholder: 'Brand partnership / sponsored slot', homeShowcaseModes: '8 creation modes · auto-match · collaborate like a real writers’ room',
       // v2.442 network resilience + install prompt
       netOffline: 'You are offline. Generation pauses and resumes automatically when the connection returns.',
       netOnline: 'Back online. You can keep writing.',

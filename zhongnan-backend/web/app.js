@@ -502,13 +502,10 @@
     }
     // CTA 绑定（仅首次）
     if (!_homeRendered) {
-      const startBtn = $('homeStartBtn');
-      if (startBtn) startBtn.onclick = () => switchView('studio');
-      const sampleBtn = $('homeSampleBtn');
-      if (sampleBtn) {
-        const studioSample = $('sampleEntryBtn');
-        sampleBtn.onclick = () => { if (studioSample) studioSample.click(); else openModal('sampleModal'); };
-      }
+      // v2.498 首页登录分屏：接线首页登录表单 + 模式轮播 + 更新通知
+      wireHomeAuth();
+      renderHomeModeCarousel();
+      wireHomeUpdateNotice();
       // 「全部模式」链接（文案随 i18n 更新，数量与 I18N.MODES 一致）
       document.querySelectorAll('[data-view-go]').forEach((b) => {
         b.onclick = () => switchView(b.getAttribute('data-view-go'));
@@ -518,6 +515,109 @@
     // 拉取最新动态
     loadHomeUpdates();
   }
+
+  // ═══ v2.498 首页登录分屏 ═══
+  let _homeAuthMode = 'login';
+  function syncHomeAuthTabs() {
+    $('homeTabLogin').classList.toggle('on', _homeAuthMode === 'login');
+    $('homeTabRegister').classList.toggle('on', _homeAuthMode === 'register');
+    $('homeTabRegister').textContent = t('register');
+    $('homeInviteWrap').classList.toggle('hidden', _homeAuthMode !== 'register');
+    $('homeAuthSubmit').textContent = _homeAuthMode === 'login' ? t('signIn') : t('register');
+  }
+  function showHomeAuthErr(msg) {
+    const el = $('homeAuthErr');
+    if (!el) return;
+    el.textContent = msg;
+    el.classList.remove('hidden');
+  }
+  function wireHomeAuth() {
+    const tabLogin = $('homeTabLogin'), tabReg = $('homeTabRegister');
+    if (tabLogin) tabLogin.onclick = () => { _homeAuthMode = 'login'; syncHomeAuthTabs(); };
+    if (tabReg) tabReg.onclick = () => { _homeAuthMode = 'register'; syncHomeAuthTabs(); };
+    syncHomeAuthTabs();
+    const form = $('homeAuthForm');
+    if (form) {
+      form.onsubmit = (e) => {
+        e.preventDefault();
+        const phone = $('homeAuthPhone').value.trim();
+        const pwd = $('homeAuthPwd').value;
+        const invite = $('homeAuthInvite').value.trim();
+        const isPhone = /^1[3-9]\d{9}$/.test(phone);
+        const isAdminAcct = /^[A-Za-z0-9_]{6,20}$/.test(phone);
+        if (!isPhone && !isAdminAcct) return showHomeAuthErr(t('authErrPhone'));
+        if (pwd.length < 8 || !/[a-zA-Z]/.test(pwd) || !/[0-9]/.test(pwd)) return showHomeAuthErr(t('authErrPwd'));
+        const btn = $('homeAuthSubmit');
+        btn.disabled = true;
+        (async () => {
+          try {
+            if (_homeAuthMode === 'register') await Api.auth.register(phone, pwd, invite);
+            else await Api.auth.login(phone, pwd);
+            renderAuthButton(); loadMe();
+            if (!$('view-works').classList.contains('hidden')) loadWorks().catch((e) => { if (e.code !== 'SESSION_CHANGED') toastError(e.message); });
+            xnSay(_homeAuthMode === 'register' ? t('regOk') : t('loginOk'));
+            // 登录成功后如果还在首页，跳转到创作专区
+            if (!$('view-home').classList.contains('hidden')) switchView('studio');
+          } catch (e) {
+            if (e && e.retryAfter) {
+              startLockCountdown(e.retryAfter, 'homeAuthSubmit', 'homeAuthErr');
+            } else {
+              showHomeAuthErr(e.message);
+            }
+          } finally {
+            if (!_lockTimer) btn.disabled = false;
+          }
+        })();
+      };
+    }
+  }
+
+  // 模式轮播动效：8 种模式循环高亮
+  let _homeCarouselTimer = null;
+  function renderHomeModeCarousel() {
+    const box = $('homeModeCarousel');
+    if (!box) return;
+    const D = I18N.DICT[lang] || I18N.DICT.zh;
+    const modeNames = I18N.MODES.map((m) => D.mode[m.id] || m.id);
+    box.innerHTML = modeNames.map((n, i) => `<span class="home-mode-chip${i === 0 ? ' active' : ''}">${escapeHtml(n)}</span>`).join('');
+    let idx = 0;
+    if (_homeCarouselTimer) clearInterval(_homeCarouselTimer);
+    _homeCarouselTimer = setInterval(() => {
+      const chips = box.querySelectorAll('.home-mode-chip');
+      if (!chips.length) return;
+      chips[idx].classList.remove('active');
+      idx = (idx + 1) % chips.length;
+      chips[idx].classList.add('active');
+    }, 1800);
+  }
+
+  // 版本更新通知：对比 localStorage 记录的版本，有新版则提示
+  function wireHomeUpdateNotice() {
+    const notice = $('homeUpdateNotice');
+    const text = $('homeUpdateText');
+    const closeBtn = $('homeUpdateClose');
+    if (!notice || !text) return;
+    const currentVer = (typeof ZN_DATA !== 'undefined' && ZN_DATA.ZN_VERSION) ? ZN_DATA.ZN_VERSION : '2.498.0';
+    const lastSeen = localStorage.getItem('zn:lastSeenVer') || '';
+    // 版本号有更新时显示通知
+    if (lastSeen && lastSeen !== currentVer) {
+      text.textContent = lang === 'en'
+        ? `Updated to v${currentVer} — new home login layout.`
+        : `已更新到 v${currentVer} — 全新首页登录分屏布局。`;
+      notice.classList.remove('hidden');
+    } else if (!lastSeen) {
+      // 首次访问也展示一条欢迎提示
+      text.textContent = lang === 'en'
+        ? 'Welcome! Sign in to start creating.'
+        : '欢迎使用！登录后即可开始创作。';
+      notice.classList.remove('hidden');
+    } else {
+      notice.classList.add('hidden');
+    }
+    localStorage.setItem('zn:lastSeenVer', currentVer);
+    if (closeBtn) closeBtn.onclick = () => notice.classList.add('hidden');
+  }
+
   // v2.266 最新公告共享取数：loadHomeUpdates 与 initUpdateBanner 同源，60s TTL + 在途合并（启动不再双发）
   let _latestAnnCache = null; let _latestAnnAt = 0; let _latestAnnInflight = null;
   async function fetchLatestAnnouncement() {
@@ -3280,6 +3380,17 @@
   $('tabRegister').onclick = () => { authMode = 'register'; syncAuthTabs(); };
   $('authClose').onclick = closeAuth;
   $('authModal').onclick = (e) => { if (e.target.id === 'authModal') closeAuth(); };
+  // v2.498 密码可见性切换：事件委托覆盖登录/注册/改密所有 .pwd-toggle，点击切 type 并换图标与 aria-label
+  document.addEventListener('click', (e) => {
+    const btn = e.target.closest('.pwd-toggle');
+    if (!btn) return;
+    const input = document.getElementById(btn.dataset.target);
+    if (!input) return;
+    const show = input.type === 'password';
+    input.type = show ? 'text' : 'password';
+    btn.textContent = show ? '🙈' : '👁';
+    btn.setAttribute('aria-label', show ? '隐藏密码' : '显示密码');
+  });
   // v2.454 锁定倒计时：后端 429 已给出真实解锁秒数（retryAfter），前端必须接住并保持按钮禁用。
   // 否则用户看到「点了没反应」会反复点，每次都打后端、每次都失败，等待感知更差。
   // v2.455 泛化：登录与改密各有一套按钮/错误区，倒计时必须作用于调用方指定的元素，

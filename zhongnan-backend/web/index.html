@@ -53,28 +53,62 @@
     <!-- v2.442 断网常驻提示：toast 会自动消失，持续状态需要常驻承接；role=status 让读屏也能感知 -->
     <div class="net-banner hidden" id="netBanner" role="status" aria-live="polite"></div>
     <!-- v2.190 清爽首页：品牌主张 + 快捷创作入口 + 工具箱 + 最新动态 -->
+    <!-- v2.498 首页必须是登录界面：左右分屏，左登录表单、右品牌展示+动效+更新通知+广告位 -->
     <div id="view-home">
-      <section class="home-hero">
-        <div class="home-hero-inner">
-          <span class="home-eyebrow" data-i="homeEyebrow">ZHONGNAN · FILM ATELIER</span>
-          <h1 class="home-title" data-i="homeTitle">把一个灵感，交给一整支 AI 编剧团队</h1>
-          <p class="home-sub" data-i="homeSub">九大岗位智能体协同创作，分级把关、去 AI 化、贴合市场，进度全程可见。</p>
-          <div class="home-cta-row">
-            <button class="btn-primary btn-lg" id="homeStartBtn" data-i="start">开始创作</button>
-            <button class="btn-ghost btn-lg" id="homeSampleBtn" data-i="sampleEntry">📖 制式样例</button>
+      <div class="home-split">
+        <!-- 左侧：登录/注册表单 -->
+        <div class="home-auth">
+          <div class="home-auth-brand">
+            <div class="home-auth-logo" aria-hidden="true">终</div>
+            <div class="home-auth-brand-text">
+              <h1 data-i="brandName">终南集</h1>
+              <p data-i="brandSub">AGI 编剧大师</p>
+            </div>
           </div>
+          <div class="auth-tabs">
+            <button type="button" class="on" id="homeTabLogin" data-i="signIn">登录</button>
+            <button type="button" id="homeTabRegister" data-i="register">注册</button>
+          </div>
+          <form id="homeAuthForm" novalidate>
+            <div class="field"><label for="homeAuthPhone" data-i="phone">手机号</label><input id="homeAuthPhone" type="tel" inputmode="numeric" autocomplete="tel" placeholder="11 位手机号" maxlength="11" aria-required="true" aria-describedby="homeAuthErr" /></div>
+            <div class="field"><label for="homeAuthPwd" data-i="password">密码</label><div class="pwd-wrap"><input id="homeAuthPwd" type="password" autocomplete="current-password" placeholder="至少 8 位，需含字母和数字" maxlength="64" aria-required="true" aria-describedby="homeAuthErr" /><button type="button" class="pwd-toggle" data-target="homeAuthPwd" aria-label="显示密码">👁</button></div></div>
+            <div class="field hidden" id="homeInviteWrap"><label for="homeAuthInvite" data-i="inviteCode">邀请码</label><input id="homeAuthInvite" maxlength="20" autocomplete="off" placeholder="选填" /></div>
+            <div class="notice err hidden" id="homeAuthErr" role="alert"></div>
+            <button class="btn-primary" id="homeAuthSubmit" type="submit" style="width:100%;margin-top:12px"></button>
+          </form>
         </div>
-        <div class="home-hero-watermark" aria-hidden="true">剧</div>
-      </section>
 
+        <!-- 右侧：品牌展示 + 动效轮播 + 更新通知 + 广告位 -->
+        <div class="home-showcase">
+          <div class="home-showcase-hero">
+            <span class="home-eyebrow" data-i="homeEyebrow">ZHONGNAN · FILM ATELIER</span>
+            <h2 class="home-title" data-i="homeTitle">把一个灵感，交给一整支 AI 编剧团队</h2>
+            <p class="home-sub" data-i="homeSub">九大岗位智能体协同创作，分级把关、去 AI 化、贴合市场，进度全程可见。</p>
+          </div>
+          <p class="home-showcase-modes" data-i="homeShowcaseModes">8 种创作模式 · 自动匹配 · 像真实编剧团队一样协同</p>
+          <!-- 动效轮播：8 种创作模式循环高亮 -->
+          <div class="home-mode-carousel" id="homeModeCarousel" aria-label="创作模式预览"></div>
+          <!-- 版本更新通知入口 -->
+          <div class="home-update-notice" id="homeUpdateNotice" data-home-update>
+            <span class="home-update-badge" data-i="updateBadge">📢 更新</span>
+            <span class="home-update-text" id="homeUpdateText"></span>
+            <button type="button" class="home-update-close" id="homeUpdateClose" aria-label="关闭更新提示">×</button>
+          </div>
+          <!-- 广告位 -->
+          <div class="home-ad-slot" id="homeAdSlot" aria-label="广告位">
+            <span class="home-ad-label">AD</span>
+            <p data-i="adPlaceholder">品牌合作 / 推广位</p>
+          </div>
+          <div class="home-hero-watermark" aria-hidden="true">剧</div>
+        </div>
+      </div>
+
+      <!-- 次要内容：快捷创作 + 工具箱（未登录用户也可预览，点击触发登录） -->
       <section class="home-section">
         <div class="home-section-head">
           <h2 data-i="homeQuickTitle">快捷创作</h2>
           <button class="chip home-more" data-view-go="studio" data-i="homeAllModes">全部 8 种模式 + 自动匹配 →</button>
         </div>
-        <!-- v2.461 首屏零位移：卡片直接静态输出（与 renderHome 生成的 DOM/文案逐字一致），
-             app.js 迟到执行时重建不会改变任何尺寸；同时兜住 JS 失败/离线时的可读性。
-             文案必须与 i18n zh 的 mode/modeDesc 逐字一致（守卫见 test/web-home-first-paint-static.test.cjs）。 -->
         <div class="home-quick-grid" id="homeQuickGrid">
           <button type="button" class="home-quick-card"><b>标签创建</b><span>标签组合，快速定向出本（最低算力）</span><em class="home-go">开始 →</em></button>
           <button type="button" class="home-quick-card"><b>采访式创作</b><span>对话式引导，把模糊创意聊成剧本</span><em class="home-go">开始 →</em></button>
@@ -98,7 +132,6 @@
         </div>
       </section>
 
-      <!-- A2 v2.200 首页瘦身：最新动态折叠为 details（默认收起，点标题展开） -->
       <details class="home-section home-updates" id="homeUpdates">
         <summary class="home-section-head">
           <h2 data-i="homeUpdatesTitle">最新动态</h2>
@@ -705,8 +738,8 @@
             <!-- v2.451 同 v2.449 一族：改密是密码管理器识别「更新凭据」的标准场景，必须有 form + submit -->
             <form id="chgPwForm" novalidate>
               <!-- v2.456 字段级可访问性：错误区挂成输入框的 aria-describedby，读屏在焦点处就能跟读错误 -->
-              <div class="field" style="margin-bottom:8px"><label data-i="curPw" for="inCurPw"></label><input type="password" id="inCurPw" autocomplete="current-password" aria-required="true" aria-describedby="chgPwErr" /></div>
-              <div class="field" style="margin-bottom:10px"><label data-i="newPw" for="inNewPw"></label><input type="password" id="inNewPw" autocomplete="new-password" maxlength="64" aria-required="true" aria-describedby="chgPwErr" /></div>
+              <div class="field" style="margin-bottom:8px"><label data-i="curPw" for="inCurPw"></label><div class="pwd-wrap"><input type="password" id="inCurPw" autocomplete="current-password" aria-required="true" aria-describedby="chgPwErr" /><button type="button" class="pwd-toggle" data-target="inCurPw" aria-label="显示密码">👁</button></div></div>
+              <div class="field" style="margin-bottom:10px"><label data-i="newPw" for="inNewPw"></label><div class="pwd-wrap"><input type="password" id="inNewPw" autocomplete="new-password" maxlength="64" aria-required="true" aria-describedby="chgPwErr" /><button type="button" class="pwd-toggle" data-target="inNewPw" aria-label="显示密码">👁</button></div></div>
               <!-- v2.455 改密错误要常驻：原先只走 xnSay（3 秒消失），用户错过就不知道失败原因 -->
               <div class="notice err hidden" id="chgPwErr" role="alert"></div>
               <button class="btn-ghost" id="changePwBtn" type="submit" data-i="changePwBtn"></button>
@@ -1395,7 +1428,7 @@
            Enter 也不生效。novalidate 因为校验口径统一在 app.js（与后端同规则，避免双源漂移）。 -->
       <form id="authForm" novalidate>
         <div class="field"><label for="authPhone">手机号</label><input id="authPhone" type="tel" inputmode="numeric" autocomplete="tel" placeholder="11 位手机号" maxlength="11" aria-required="true" aria-describedby="authErr" /></div>
-        <div class="field"><label for="authPwd">密码</label><input id="authPwd" type="password" autocomplete="current-password" placeholder="至少 8 位，需含字母和数字" maxlength="64" aria-required="true" aria-describedby="authErr" /></div>
+        <div class="field"><label for="authPwd">密码</label><div class="pwd-wrap"><input id="authPwd" type="password" autocomplete="current-password" placeholder="至少 8 位，需含字母和数字" maxlength="64" aria-required="true" aria-describedby="authErr" /><button type="button" class="pwd-toggle" data-target="authPwd" aria-label="显示密码">👁</button></div></div>
         <div class="field hidden" id="inviteWrap"><label for="authInvite">邀请码（选填）</label><input id="authInvite" maxlength="20" autocomplete="off" /></div>
         <div class="notice err hidden" id="authErr" role="alert"></div>
         <button class="btn-primary" id="authSubmit" type="submit" style="width:100%;margin-top:12px"></button>

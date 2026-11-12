@@ -86,6 +86,16 @@ function main() {
   updateDocBaseline(to);
   changes.push(['docs/FRONTEND-ADAPTATION.md', true]);
 
+  // v2.498 同步 web/data/constants.js 的 ZN_VERSION（首页更新通知用）
+  const constFile = path.join(ROOT, 'web', 'data', 'constants.js');
+  if (fs.existsSync(constFile)) {
+    let constText = fs.readFileSync(constFile, 'utf8');
+    const before = constText;
+    constText = constText.replace(/C\.ZN_VERSION = '[^']*'/, `C.ZN_VERSION = '${to}'`);
+    if (constText !== before && !dryRun) fs.writeFileSync(constFile, constText);
+    changes.push(['web/data/constants.js (ZN_VERSION)', constText !== before]);
+  }
+
   console.log(`${dryRun ? '[dry-run] ' : ''}${from} → ${to}`);
   for (const [f, c] of changes) {
     console.log(`  ${c ? '✓' : '='} ${f}`);
