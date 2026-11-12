@@ -737,6 +737,8 @@
             <div style="font-weight:600;margin-bottom:8px" data-i="pwSection"></div>
             <!-- v2.451 同 v2.449 一族：改密是密码管理器识别「更新凭据」的标准场景，必须有 form + submit -->
             <form id="chgPwForm" novalidate>
+              <!-- v2.502 Chrome a11y：改密表单需用户名字段供密码管理器识别凭据对；当前用户已知，视觉隐藏 -->
+              <input type="text" id="inChgPwUsername" autocomplete="username" aria-label="当前账号" tabindex="-1" style="position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0" />
               <!-- v2.456 字段级可访问性：错误区挂成输入框的 aria-describedby，读屏在焦点处就能跟读错误 -->
               <div class="field" style="margin-bottom:8px"><label data-i="curPw" for="inCurPw"></label><div class="pwd-wrap"><input type="password" id="inCurPw" autocomplete="current-password" aria-required="true" aria-describedby="chgPwErr" /><button type="button" class="pwd-toggle" data-target="inCurPw" aria-label="显示密码">👁</button></div></div>
               <div class="field" style="margin-bottom:10px"><label data-i="newPw" for="inNewPw"></label><div class="pwd-wrap"><input type="password" id="inNewPw" autocomplete="new-password" maxlength="64" aria-required="true" aria-describedby="chgPwErr" /><button type="button" class="pwd-toggle" data-target="inNewPw" aria-label="显示密码">👁</button></div></div>

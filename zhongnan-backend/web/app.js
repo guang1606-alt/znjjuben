@@ -3936,6 +3936,7 @@
     $('meStorage').textContent = fmtBytes(me.storageUsedBytes + (me.extraStorageBytes || 0));
     $('meInvite').textContent = me.inviteCode || '—';
     $('inNickname').value = me.nickname || ''; $('inPen').value = me.penName || ''; $('inBio').value = me.bio || '';
+    $('inChgPwUsername').value = me.phone || ''; // v2.502 改密表单隐藏用户名字段值为当前手机号
     populateProfileOptions();
     $('inRegion').value = me.region || ''; $('inAgeBand').value = me.ageBand || '';
     $('inGender').value = me.gender || ''; $('inPersonalized').checked = me.personalized !== false;
