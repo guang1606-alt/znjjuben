@@ -154,12 +154,6 @@ html[data-theme="tech"] .net-banner {
   .brand b { font-size: .98rem; }
   .nav { gap: 0; margin-left: 4px; }
   .nav button { padding: 6px 9px; font-size: .82rem; }
-  /* v2.498 首页分屏移动端堆叠 */
-  .home-split { grid-template-columns: 1fr; min-height: auto; }
-  .home-auth { padding: 28px 20px; border-right: none; border-bottom: 1px solid color-mix(in srgb, var(--line) 60%, transparent); }
-  .home-showcase { padding: 28px 20px; }
-  .home-showcase .home-title { font-size: 1.5rem; }
-  .home-showcase .home-hero-watermark { font-size: 120px; bottom: -40px; right: -10px; }
 }
 .brand { position: relative; display: flex; flex-direction: column; line-height: 1.25; padding-left: 38px; min-width: 0; flex-shrink: 0; }
 .brand span { max-width: 34vw; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
@@ -359,7 +353,10 @@ html[data-theme="tech"] .net-banner {
 .home-update-text { font-size: .85rem; color: var(--text); flex: 1; }
 .home-update-close {
   background: none; border: none; color: var(--text-2);
-  font-size: 18px; cursor: pointer; padding: 2px 6px; border-radius: 6px;
+  font-size: 18px; cursor: pointer;
+  min-width: 44px; min-height: 44px;
+  display: inline-flex; align-items: center; justify-content: center;
+  border-radius: 8px;
   transition: color .2s, background .2s;
 }
 .home-update-close:hover { color: var(--text); background: color-mix(in srgb, var(--line) 50%, transparent); }
@@ -388,6 +385,14 @@ html[data-theme="tech"] .net-banner {
 @keyframes zn-float {
   0%, 100% { transform: translateY(0) rotate(-2deg); }
   50% { transform: translateY(-18px) rotate(2deg); }
+}
+/* v2.498 首页分屏移动端堆叠（放在默认规则之后，避免被覆盖） */
+@media (max-width: 768px) {
+  .home-split { grid-template-columns: 1fr; min-height: auto; }
+  .home-auth { padding: 28px 20px; border-right: none; border-bottom: 1px solid color-mix(in srgb, var(--line) 60%, transparent); }
+  .home-showcase { padding: 28px 20px; }
+  .home-showcase .home-title { font-size: 1.5rem; }
+  .home-showcase .home-hero-watermark { font-size: 120px; bottom: -40px; right: -10px; }
 }
 .home-section { margin-top: 40px; }
 .home-section-head {

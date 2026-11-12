@@ -12,6 +12,7 @@
  *  G5  展示区含广告位占位（.home-ad-slot）
  *  G6  首页登录表单密码字段含可见性切换（.pwd-toggle data-target）
  *  G7  分屏在移动端降级为单列堆叠（@media max-width 下 grid-template-columns 为 1fr）
+ *  G8  更新通知关闭按钮点击目标 ≥44×44px（移动端可访问性，ui-audit tinyTargets 防线）
  */
 const { describe, it } = require('node:test');
 const assert = require('node:assert');
@@ -91,5 +92,22 @@ describe('v2.498 首页登录分屏布局', () => {
       idx = end + 1;
     }
     assert.ok(found, '.home-split 缺少移动端单列堆叠（grid-template-columns: 1fr）');
+  });
+
+  it('G8 更新通知关闭按钮点击目标 ≥44×44px', () => {
+    // 提取 .home-update-close 规则块
+    const m = css.match(/\.home-update-close\s*\{([^}]*)\}/);
+    assert.ok(m, '缺少 .home-update-close 样式规则');
+    const rule = m[1];
+    // 必须有 min-width / min-height ≥44px，或 padding 足够大使触控目标达标
+    const hasMinW = /min-width\s*:\s*(\d+)px/.test(rule) && parseInt(rule.match(/min-width\s*:\s*(\d+)px/)[1]) >= 44;
+    const hasMinH = /min-height\s*:\s*(\d+)px/.test(rule) && parseInt(rule.match(/min-height\s*:\s*(\d+)px/)[1]) >= 44;
+    // 兜底：padding + font-size 估算（padding 上下+字号 ≥44）
+    const padMatch = rule.match(/padding\s*:\s*(\d+)px\s+(\d+)px/);
+    const fsMatch = rule.match(/font-size\s*:\s*(\d+)px/);
+    const padEstimateOk = padMatch && fsMatch && (parseInt(padMatch[1]) * 2 + parseInt(fsMatch[1])) >= 44
+      && (parseInt(padMatch[2]) * 2 + parseInt(fsMatch[1])) >= 44;
+    assert.ok((hasMinW && hasMinH) || padEstimateOk,
+      '.home-update-close 点击目标需 ≥44×44px（min-width/min-height≥44 或 padding+字号达标）');
   });
 });
