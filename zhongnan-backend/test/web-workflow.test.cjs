@@ -64,6 +64,8 @@ function setup(names, extra = {}) {
     selectedScriptType: 'live_action_drama', outputLangValue: () => 'zh', renderScriptTypes() {},
     renderAigcDash() {}, renderLiveProdDash() {}, loadDiagnosis: async () => {}, loadEmotionWave: async () => {}, loadInvestorLens: async () => {},
     _uiLangEn: () => ((typeof extra.lang === 'string' ? extra.lang : 'zh') === 'en'),
+    // v2.501 onAuthRequired 回调内调用 currentView() 判断是否在首页；沙箱预置非 home 视图
+    currentView: () => 'studio',
     ...extra };
   vm.createContext(context);
   // v2.221 加载/空态统一：被抽取函数（openProject/switchSession 等）依赖 znSkeleton/znEmpty*，先注入真实实现

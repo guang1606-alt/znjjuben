@@ -2560,7 +2560,8 @@
     Api.onAuthRequired(() => {
       toastError(_uiLangEn() ? 'Session expired — please sign in again.' : '登录已过期，请重新登录', _uiLangEn() ? 'Sign in required' : '需重新登录');
       renderAuthButton();
-      openAuth('login');
+      // v2.501 首页已有 #homeAuthForm 登录表单，未登录落地首页时不再弹 authModal 覆盖分屏布局
+      if (currentView() !== 'home') openAuth('login');
     });
     Api.onNetworkError((err, path) => {
       const enUi = _uiLangEn();

@@ -22,6 +22,7 @@ const path = require('node:path');
 const WEB = path.join(__dirname, '..', 'web');
 const html = fs.readFileSync(path.join(WEB, 'index.html'), 'utf8');
 const css = fs.readFileSync(path.join(WEB, 'styles.css'), 'utf8');
+const appJs = fs.readFileSync(path.join(WEB, 'app.js'), 'utf8');
 
 // 只截取 #view-home 区块
 const homeStart = html.indexOf('<div id="view-home">');
@@ -109,5 +110,23 @@ describe('v2.498 首页登录分屏布局', () => {
       && (parseInt(padMatch[2]) * 2 + parseInt(fsMatch[1])) >= 44;
     assert.ok((hasMinW && hasMinH) || padEstimateOk,
       '.home-update-close 点击目标需 ≥44×44px（min-width/min-height≥44 或 padding+字号达标）');
+  });
+
+  it('G9 首页已有登录表单，onAuthRequired 在首页不得弹出 authModal', () => {
+    // 首页（#view-home）左侧已含 #homeAuthForm 真登录表单；
+    // 若 onAuthRequired 无条件 openAuth('login')，未登录用户落地首页时
+    // authModal 会盖在 homeAuthForm 之上，造成双登录入口、遮挡分屏布局。
+    // 断言：onAuthRequired 回调内 openAuth 调用前必须有 currentView() !== 'home' 守卫。
+    const m = appJs.match(/Api\.onAuthRequired\(\s*\(\s*\)\s*=>\s*\{([\s\S]*?)\n\s*\}\s*\)/);
+    assert.ok(m, '未找到 Api.onAuthRequired 回调');
+    const cb = m[1];
+    const openAuthIdx = cb.indexOf('openAuth(');
+    assert.ok(openAuthIdx >= 0, 'onAuthRequired 回调内应含 openAuth 调用');
+    const beforeOpen = cb.slice(0, openAuthIdx);
+    assert.ok(
+      /currentView\(\)\s*!==\s*['"]home['"]/.test(beforeOpen) ||
+      /currentView\(\)\s*===\s*['"]home['"][\s\S]{0,120}return/.test(beforeOpen),
+      'onAuthRequired 在调用 openAuth 前必须守卫 currentView() !== \'home\'（首页已有登录表单，不弹模态）'
+    );
   });
 });
