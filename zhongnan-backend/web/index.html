@@ -215,7 +215,7 @@
         <div class="tag-chosen-head"><span data-i="tagChosen">已选标签（确认后据此出本，可点 × 移除）</span><span id="tagCount"></span></div>
         <div class="tag-chosen" id="tagChosen"></div>
         <div class="field"><label data-i="tagIdeaLabel" for="tagIdea">补充一句话创意（选填，让方向更具体）</label>
-          <input id="tagIdea" type="text" maxlength="80" data-ph="tagIdeaPh" placeholder="例：被顶替名额的女医生回乡逆袭" /></div>
+          <input id="tagIdea" autocomplete="off" type="text" maxlength="80" data-ph="tagIdeaPh" placeholder="例：被顶替名额的女医生回乡逆袭" /></div>
         <div class="tag-why hidden" id="tagWhy"></div>
         <div class="tag-report" id="tagReport"></div>
         <div class="tag-board-status muted" id="tagBoardStatus"></div>
@@ -251,7 +251,7 @@
           <h3 data-i="novelSrcTitle" id="novelSrcBenchTitle">免费合法小说素材库 · 多语言</h3>
           <span class="muted" data-i="novelSrcSub2">公版可改编 · 正版免费仅阅读</span>
           <span class="spacer"></span>
-          <input id="novelSrcSearch" type="search" class="novel-src-search" data-ph="novelSrcSearchPh" placeholder="搜来源，如 青空 / Gutenberg" />
+          <input id="novelSrcSearch" autocomplete="off" type="search" class="novel-src-search" data-ph="novelSrcSearchPh" placeholder="搜来源，如 青空 / Gutenberg" />
         </div>
         <div class="muted craft-sub" data-i="novelSrcSub">只收录公版书、作者CC授权、平台正版免费区三类干净来源；绿色「可改编」标签的公版作品可直接用于改编，其余仅可阅读、改编须另行取得授权。本工具不托管任何书籍内容，点击跳转原站。</div>
         <div class="novel-src-filters">
@@ -332,20 +332,20 @@
           <div class="field"><label data-i="tbPitchIdeaL" for="pitchIdea">一句话创意（谁、遇到什么麻烦、准备怎么反击）</label>
             <textarea id="pitchIdea" rows="3" data-ph="tbPitchIdeaPh" placeholder="例：被辞退的女厨师想要夺回自己创办的餐厅，前合伙人处处打压，她暗中布局"></textarea></div>
           <div class="configbar" style="padding:0;border:0">
-            <div class="field"><label data-i="tbPitchAudL" for="pitchAud">目标受众(选填)</label><input id="pitchAud" data-ph="tbPitchAudPh" placeholder="25-40岁女性" /></div>
-            <div class="field"><label data-i="tbPitchMedL" for="pitchMed">载体(选填)</label><input id="pitchMed" data-ph="tbPitchMedPh" placeholder="真人/AI仿真人/漫剧" /></div>
+            <div class="field"><label data-i="tbPitchAudL" for="pitchAud">目标受众(选填)</label><input id="pitchAud" autocomplete="off" data-ph="tbPitchAudPh" placeholder="25-40岁女性" /></div>
+            <div class="field"><label data-i="tbPitchMedL" for="pitchMed">载体(选填)</label><input id="pitchMed" autocomplete="off" data-ph="tbPitchMedPh" placeholder="真人/AI仿真人/漫剧" /></div>
             <div class="field" style="align-self:flex-end"><button class="btn-primary" id="pitchOpenBtn" data-i="tbPitchOpen">开始选题会（20积分）</button></div>
           </div>
           <div class="room-stream" id="pitchStream"></div>
           <div class="hidden" id="pitchMore">
             <div class="configbar" style="padding:0;border:0">
-              <div class="field"><label data-i="tbPitchRelL" for="pitchRel">人物关系</label><input id="pitchRel" data-ph="tbPitchRelPh" placeholder="师徒反目/合伙人对立" /></div>
-              <div class="field"><label data-i="tbPitchConfL" for="pitchConf">冲突空间(几层/兑付什么)</label><input id="pitchConf" /></div>
-              <div class="field"><label data-i="tbPitchSceneL" for="pitchScene">场景与制作</label><input id="pitchScene" /></div>
-              <div class="field"><label data-i="tbPitchEpsL" for="pitchEps">计划集数</label><input id="pitchEps" type="number" min="1" max="300" /></div>
+              <div class="field"><label data-i="tbPitchRelL" for="pitchRel">人物关系</label><input id="pitchRel" autocomplete="off" data-ph="tbPitchRelPh" placeholder="师徒反目/合伙人对立" /></div>
+              <div class="field"><label data-i="tbPitchConfL" for="pitchConf">冲突空间(几层/兑付什么)</label><input id="pitchConf" autocomplete="off" /></div>
+              <div class="field"><label data-i="tbPitchSceneL" for="pitchScene">场景与制作</label><input id="pitchScene" autocomplete="off" /></div>
+              <div class="field"><label data-i="tbPitchEpsL" for="pitchEps">计划集数</label><input id="pitchEps" autocomplete="off" type="number" min="1" max="300" /></div>
             </div>
             <div class="row-actions">
-              <input id="pitchSay" data-ph="tbPitchSayPh" placeholder="继续向会上补充想法…" style="flex:1" />
+              <input id="pitchSay" autocomplete="off" data-ph="tbPitchSayPh" placeholder="继续向会上补充想法…" style="flex:1" />
               <button class="btn-ghost" id="pitchSayBtn" data-i="tbPitchSayBtn">补充发言(20积分)</button>
               <button class="btn-primary" id="pitchDecideBtn" data-i="tbPitchDecide">形成选题决议(20积分)</button>
             </div>
@@ -366,9 +366,9 @@
           <div class="room-stream hidden" id="readStream"></div>
           <div class="hidden" id="readMore">
             <div class="row-actions">
-              <input id="readJoinCode" data-ph="tbReadJoinPh" placeholder="输入邀请码加入他人围读室" style="width:160px" />
+              <input id="readJoinCode" autocomplete="off" data-ph="tbReadJoinPh" placeholder="输入邀请码加入他人围读室" style="width:160px" />
               <button class="btn-ghost" id="readJoinBtn" data-i="tbReadJoinBtn">凭码加入</button>
-              <input id="readSay" data-ph="tbReadSayPh" placeholder="我的围读发言…" style="flex:1" />
+              <input id="readSay" autocomplete="off" data-ph="tbReadSayPh" placeholder="我的围读发言…" style="flex:1" />
               <button class="btn-ghost" id="readSayBtn" data-i="tbReadSayBtn">发言</button>
               <button class="btn-primary" id="readAiBtn" data-i="tbReadAi">开始AI围读（30积分）</button>
             </div>
@@ -390,7 +390,7 @@
             <option value="drama_url" data-i="tbTdSrcDrama">短剧链接</option>
             <option value="video_url" data-i="tbTdSrcVideo">视频链接</option>
           </select></div>
-        <div class="field"><label data-i="tbTdUrlL" for="tdUrl">原始链接（选填，仅记录来源）</label><input id="tdUrl" placeholder="https://…" /></div>
+        <div class="field"><label data-i="tbTdUrlL" for="tdUrl">原始链接（选填，仅记录来源）</label><input id="tdUrl" autocomplete="off" placeholder="https://…" /></div>
         <div class="field"><label data-i="tbTdTextL" for="tdText">爆款正文 / 字幕文案（至少80字）</label>
           <textarea id="tdText" rows="7" data-ph="tbTdTextPh" placeholder="粘贴剧本正文，或视频口播/字幕全文…"></textarea></div>
         <div class="row-actions">
@@ -460,13 +460,13 @@
         </div>
         <div class="muted" id="bbTip" style="margin:6px 0 10px"></div>
         <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px">
-          <div class="field" style="margin:0"><label id="bbLBrand" for="bbBrand"></label><input id="bbBrand" maxlength="40" aria-required="true" /></div>
-          <div class="field" style="margin:0"><label id="bbLProduct" for="bbProduct"></label><input id="bbProduct" maxlength="60" /></div>
-          <div class="field" style="margin:0;grid-column:1/-1"><label id="bbLSelling" for="bbSelling"></label><input id="bbSelling" maxlength="120" aria-required="true" /></div>
-          <div class="field" style="margin:0"><label id="bbLAudience" for="bbAudience"></label><input id="bbAudience" maxlength="60" /></div>
-          <div class="field" style="margin:0"><label id="bbLSymbol" for="bbSymbol"></label><input id="bbSymbol" maxlength="60" /></div>
-          <div class="field" style="margin:0"><label id="bbLCta" for="bbCta"></label><input id="bbCta" maxlength="60" /></div>
-          <div class="field" style="margin:0;grid-column:1/-1"><label id="bbLShell" for="bbShell"></label><input id="bbShell" maxlength="200" /></div>
+          <div class="field" style="margin:0"><label id="bbLBrand" for="bbBrand"></label><input id="bbBrand" autocomplete="off" maxlength="40" aria-required="true" /></div>
+          <div class="field" style="margin:0"><label id="bbLProduct" for="bbProduct"></label><input id="bbProduct" autocomplete="off" maxlength="60" /></div>
+          <div class="field" style="margin:0;grid-column:1/-1"><label id="bbLSelling" for="bbSelling"></label><input id="bbSelling" autocomplete="off" maxlength="120" aria-required="true" /></div>
+          <div class="field" style="margin:0"><label id="bbLAudience" for="bbAudience"></label><input id="bbAudience" autocomplete="off" maxlength="60" /></div>
+          <div class="field" style="margin:0"><label id="bbLSymbol" for="bbSymbol"></label><input id="bbSymbol" autocomplete="off" maxlength="60" /></div>
+          <div class="field" style="margin:0"><label id="bbLCta" for="bbCta"></label><input id="bbCta" autocomplete="off" maxlength="60" /></div>
+          <div class="field" style="margin:0;grid-column:1/-1"><label id="bbLShell" for="bbShell"></label><input id="bbShell" autocomplete="off" maxlength="200" /></div>
           <div class="field" style="margin:0"><label id="bbLSoft" for="bbSoft"></label><select id="bbSoft"><option value="subtle"></option><option value="balanced" selected></option><option value="direct"></option></select></div>
         </div>
         <div id="bbError" style="color:#c0392b;margin-top:8px;display:none;font-size:13px"></div>
@@ -480,12 +480,12 @@
         </div>
         <div class="muted" id="tbTip" style="margin:6px 0 10px"></div>
         <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px">
-          <div class="field" style="margin:0;grid-column:1/-1"><label id="tbLName" for="tbName"></label><input id="tbName" maxlength="60" aria-required="true" /></div>
+          <div class="field" style="margin:0;grid-column:1/-1"><label id="tbLName" for="tbName"></label><input id="tbName" autocomplete="off" maxlength="60" aria-required="true" /></div>
           <div class="field" style="margin:0"><label id="tbLKind" for="tbKind"></label><select id="tbKind"><option value="social" selected></option><option value="film"></option><option value="festival"></option><option value="industry"></option></select></div>
           <div class="field" style="margin:0"><label id="tbLApproach" for="tbApproach"></label><select id="tbApproach"><option value="persona_spin"></option><option value="setting_remix"></option><option value="formula_clone" selected></option><option value="reversal"></option></select></div>
           <div class="field" style="margin:0;grid-column:1/-1"><label id="tbLHeat" for="tbHeat"></label><textarea id="tbHeat" rows="2" maxlength="200" style="width:100%" aria-required="true"></textarea></div>
           <div class="field" style="margin:0;grid-column:1/-1"><label id="tbLAngle" for="tbAngle"></label><textarea id="tbAngle" rows="2" maxlength="200" style="width:100%"></textarea></div>
-          <div class="field" style="margin:0;grid-column:1/-1"><label id="tbLAvoid" for="tbAvoid"></label><input id="tbAvoid" maxlength="200" /></div>
+          <div class="field" style="margin:0;grid-column:1/-1"><label id="tbLAvoid" for="tbAvoid"></label><input id="tbAvoid" autocomplete="off" maxlength="200" /></div>
         </div>
         <div id="tbError" style="color:#c0392b;margin-top:8px;display:none;font-size:13px"></div>
       </section>
@@ -500,12 +500,12 @@
         <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px">
           <div class="field" style="margin:0;grid-column:1/-1"><label id="brLMain" for="brMain"></label><textarea id="brMain" rows="2" maxlength="200" style="width:100%" aria-required="true"></textarea></div>
           <div class="field" style="margin:0;grid-column:1/-1"><label id="brLChoice" for="brChoice"></label><textarea id="brChoice" rows="2" maxlength="200" style="width:100%" aria-required="true"></textarea></div>
-          <div class="field" style="margin:0"><label id="brLMainN" for="brMainN"></label><input id="brMainN" type="number" min="1" max="3" value="1" /></div>
-          <div class="field" style="margin:0"><label id="brLHiddenN" for="brHiddenN"></label><input id="brHiddenN" type="number" min="0" max="2" value="1" /></div>
-          <div class="field" style="margin:0"><label id="brLBadN" for="brBadN"></label><input id="brBadN" type="number" min="0" max="2" value="1" /></div>
+          <div class="field" style="margin:0"><label id="brLMainN" for="brMainN"></label><input id="brMainN" autocomplete="off" type="number" min="1" max="3" value="1" /></div>
+          <div class="field" style="margin:0"><label id="brLHiddenN" for="brHiddenN"></label><input id="brHiddenN" autocomplete="off" type="number" min="0" max="2" value="1" /></div>
+          <div class="field" style="margin:0"><label id="brLBadN" for="brBadN"></label><input id="brBadN" autocomplete="off" type="number" min="0" max="2" value="1" /></div>
           <div class="field" style="margin:0"><label id="brLStyle" for="brStyle"></label><select id="brStyle"><option value="consequence" selected></option><option value="relationship"></option><option value="moral"></option><option value="mystery"></option></select></div>
           <div class="field" style="margin:0"><label id="brLStakes" for="brStakes"></label><select id="brStakes"><option value="low"></option><option value="medium" selected></option><option value="high"></option></select></div>
-          <div class="field" style="margin:0;grid-column:1/-1"><label id="brLCustom" for="brCustom"></label><input id="brCustom" maxlength="200" /></div>
+          <div class="field" style="margin:0;grid-column:1/-1"><label id="brLCustom" for="brCustom"></label><input id="brCustom" autocomplete="off" maxlength="200" /></div>
           <!-- v2.333 线索链：互动影游/互动剧专用，每行一条，提交前做确定性可达性校验 -->
           <div class="field" style="margin:0;grid-column:1/-1"><label id="brLClues" for="brClues"></label><textarea id="brClues" rows="3" maxlength="4000" style="width:100%"></textarea><div class="muted" id="brCluesTip" style="font-size:12px;margin-top:4px"></div></div>
           <!-- v2.335 已排好的分支图：粘贴 JSON（可视化编辑器「JSON 视图」可直接复制），有图则结构锁定 -->
@@ -530,7 +530,7 @@
 
       <!-- v2.344 出本配置（剧集/平台/语言/引擎/制式/资产/生成按钮）：仅二级界面显示，由 showModeDetail 挂载 -->
       <section class="configbar hidden" id="genConfigBar">
-        <div class="field"><label data-i="episodes" for="episodes"></label><input id="episodes" type="number" min="1" max="300" value="20" /></div>
+        <div class="field"><label data-i="episodes" for="episodes"></label><input id="episodes" autocomplete="off" type="number" min="1" max="300" value="20" /></div>
         <div class="field"><label data-i="platform" for="platform"></label><select id="platform"></select></div>
         <div class="field"><label data-i="outLang" for="outLang"></label><select id="outLang"></select></div>
         <div class="field"><label data-i="engine" for="engine"></label><select id="engine"></select></div>
@@ -542,7 +542,7 @@
         <div class="field" id="castAssetField"><label data-i="castAssetSel" for="castAssetSelect">角色资产(跨剧人设·可选)</label><select id="castAssetSelect" multiple size="3" style="min-width:200px"><option value="" data-i="castAssetNone">不引用(自由创作)</option></select><div class="muted" style="font-size:11px" data-i="castAssetHint">⌘/Ctrl+点选可多选</div><button class="btn-ghost" id="castLibBtn" style="margin-top:6px" data-i="castLibBtn">角色资产库</button></div>
         <div class="field" id="propAssetField"><label data-i="propAssetSel" for="propAssetSelect">道具资产(跨剧信物·可选)</label><select id="propAssetSelect" multiple size="3" style="min-width:200px"><option value="" data-i="propAssetNone">不引用(自由创作)</option></select><div class="muted" style="font-size:11px" data-i="propAssetHint">⌘/Ctrl+点选可多选</div><button class="btn-ghost" id="propLibBtn" style="margin-top:6px" data-i="propLibBtn">道具资产库</button></div>
         <div class="field" id="sceneAssetField"><label data-i="sceneAssetSel" for="sceneAssetSelect">场景资产(跨剧舞台·可选)</label><select id="sceneAssetSelect" multiple size="3" style="min-width:200px"><option value="" data-i="sceneAssetNone">不引用(自由创作)</option></select><div class="muted" style="font-size:11px" data-i="sceneAssetHint">⌘/Ctrl+点选可多选</div><button class="btn-ghost" id="sceneLibBtn" style="margin-top:6px" data-i="sceneLibBtn">场景资产库</button></div>
-        <div class="field"><label data-i="investWan" for="investWan">预估投资额(万·选填,用于备案分类)</label><input id="investWan" type="number" min="0" max="100000" step="1" placeholder="不填按三类" /></div>
+        <div class="field"><label data-i="investWan" for="investWan">预估投资额(万·选填,用于备案分类)</label><input id="investWan" autocomplete="off" type="number" min="0" max="100000" step="1" placeholder="不填按三类" /></div>
         <div class="field" style="align-self:flex-end"><label class="chk-line"><input type="checkbox" id="specialTopic" /> <span data-i="specialTopic">特殊题材(政治/军事/民族宗教等)</span></label></div>
         <button class="btn-ghost" id="smartDefaultBtn" data-i="smartDefaultBtn">✨ 看看系统替你默认了什么</button>
         <button class="btn-primary" id="genBtn" data-i="gen"></button>
@@ -723,9 +723,9 @@
           <div><b id="meInvite">—</b><span data-i="inviteCode"></span></div>
         </div>
         <div class="profile-edit hidden" id="profileEdit">
-          <div class="field"><label data-i="nickname" for="inNickname"></label><input id="inNickname" maxlength="24" /></div>
-          <div class="field"><label data-i="penName" for="inPen"></label><input id="inPen" maxlength="20" placeholder="中英文数字 _ · -" /></div>
-          <div class="field"><label data-i="bio" for="inBio"></label><input id="inBio" maxlength="300" /></div>
+          <div class="field"><label data-i="nickname" for="inNickname"></label><input id="inNickname" autocomplete="off" maxlength="24" /></div>
+          <div class="field"><label data-i="penName" for="inPen"></label><input id="inPen" autocomplete="off" maxlength="20" placeholder="中英文数字 _ · -" /></div>
+          <div class="field"><label data-i="bio" for="inBio"></label><input id="inBio" autocomplete="off" maxlength="300" /></div>
           <div class="field field-row3">
             <div><label data-i="pfRegion" for="inRegion"></label><select id="inRegion"></select></div>
             <div><label data-i="pfAge" for="inAgeBand"></label><select id="inAgeBand"></select></div>
@@ -748,7 +748,7 @@
         </div>
       </section>
       <div class="section-title"><h2 data-i="works"></h2><small id="worksCount"></small></div>
-      <input id="worksSearch" class="input" style="margin-bottom:12px" placeholder="🔍 搜索项目标题…" data-ph="worksSearchPh" />
+      <input id="worksSearch" autocomplete="off" class="input" style="margin-bottom:12px" placeholder="🔍 搜索项目标题…" data-ph="worksSearchPh" />
       <div class="grid" id="worksGrid"></div>
       <div class="hidden" id="worksEmpty"></div>
       <section class="panel hidden" id="worksDetail">
@@ -781,7 +781,7 @@
       <div class="section-title"><h2 data-i="square"></h2><small data-i="squareSub"></small></div>
       <div class="tabs" id="sqTabs"></div>
       <section class="panel" id="sqPostBox">
-        <div class="field"><label data-i="postTitle" for="sqTitle"></label><input id="sqTitle" maxlength="100" /></div>
+        <div class="field"><label data-i="postTitle" for="sqTitle"></label><input id="sqTitle" autocomplete="off" maxlength="100" /></div>
         <div class="field"><label data-i="postBody" for="sqBody"></label><textarea id="sqBody" rows="3" maxlength="5000"></textarea></div>
         <button class="btn-primary" id="sqSubmit" data-i="postSubmit"></button>
       </section>
@@ -822,7 +822,7 @@
           <!-- v2.167 资产看板入口：跨族热度榜 + 空壳补全优先级 -->
           <button type="button" class="adm-btn" data-open-dash="cast" style="margin:6px 0 8px;padding:6px 12px;font-size:13px" data-i="dashOpenBtn">📊 资产看板（跨族热度/补全优先级）</button>
           <!-- v2.163 资产库检索：跨剧按关键词搜资产 -->
-          <input id="castLibSearch" type="search" class="adm-input" data-ph="libSearchPh" placeholder="搜角色/人设/声音/台词/锚点/标签" style="width:100%;margin:8px 0 10px" />
+          <input id="castLibSearch" autocomplete="off" type="search" class="adm-input" data-ph="libSearchPh" placeholder="搜角色/人设/声音/台词/锚点/标签" style="width:100%;margin:8px 0 10px" />
           <div id="castLibConflicts"></div>
           <div id="castLibGrid"></div>
           <div id="castLibEmpty" class="hidden"></div>
@@ -837,7 +837,7 @@
           <!-- v2.167 资产看板入口：跨族热度榜 + 空壳补全优先级 -->
           <button type="button" class="adm-btn" data-open-dash="prop" style="margin:6px 0 8px;padding:6px 12px;font-size:13px" data-i="dashOpenBtn">📊 资产看板（跨族热度/补全优先级）</button>
           <!-- v2.163 资产库检索：跨剧按关键词搜资产 -->
-          <input id="propLibSearch" type="search" class="adm-input" data-ph="libSearchPh" placeholder="搜道具/含义/禁忌/锚点/标签" style="width:100%;margin:8px 0 10px" />
+          <input id="propLibSearch" autocomplete="off" type="search" class="adm-input" data-ph="libSearchPh" placeholder="搜道具/含义/禁忌/锚点/标签" style="width:100%;margin:8px 0 10px" />
           <div id="propLibConflicts"></div>
           <div id="propLibGrid"></div>
           <div id="propLibEmpty" class="hidden"></div>
@@ -852,7 +852,7 @@
           <!-- v2.167 资产看板入口：跨族热度榜 + 空壳补全优先级 -->
           <button type="button" class="adm-btn" data-open-dash="scene" style="margin:6px 0 8px;padding:6px 12px;font-size:13px" data-i="dashOpenBtn">📊 资产看板（跨族热度/补全优先级）</button>
           <!-- v2.163 资产库检索：跨剧按关键词搜资产 -->
-          <input id="sceneLibSearch" type="search" class="adm-input" data-ph="libSearchPh" placeholder="搜场景/功能/氛围/锚点/标签" style="width:100%;margin:8px 0 10px" />
+          <input id="sceneLibSearch" autocomplete="off" type="search" class="adm-input" data-ph="libSearchPh" placeholder="搜场景/功能/氛围/锚点/标签" style="width:100%;margin:8px 0 10px" />
           <div id="sceneLibConflicts"></div>
           <div id="sceneLibGrid"></div>
           <div id="sceneLibEmpty" class="hidden"></div>
@@ -909,7 +909,7 @@
             </div>
             <div class="field">
               <label data-i="fbContactLabel" for="fbContact"></label>
-              <input id="fbContact" type="text" maxlength="100" data-ph="fbContactPh" />
+              <input id="fbContact" autocomplete="off" type="text" maxlength="100" data-ph="fbContactPh" />
             </div>
             <div class="notice" data-i="fbPromise"></div>
             <button class="btn-primary" id="fbSubmitBtn" data-i="fbSubmitBtn"></button>
@@ -940,7 +940,7 @@
           <h3 id="listModalTitle" data-i="mkList"></h3>
           <div class="field"><label data-i="pickScript" for="listScript"></label><select id="listScript"></select></div>
           <div class="list-value hidden" id="listValue"></div>
-          <div class="field"><label data-i="listPrice" for="listPrice"></label><input id="listPrice" type="number" min="1" step="0.1" placeholder="¥ ≥1，0.1 元整数倍" /></div>
+          <div class="field"><label data-i="listPrice" for="listPrice"></label><input id="listPrice" autocomplete="off" type="number" min="1" step="0.1" placeholder="¥ ≥1，0.1 元整数倍" /></div>
           <div class="field"><label data-i="listSample" for="listSample"></label><textarea id="listSample" rows="3" maxlength="600"></textarea></div>
           <div class="notice" data-i="listRule"></div>
           <button class="btn-primary" id="listSubmit" data-i="save"></button>
@@ -1117,7 +1117,7 @@
           <button class="modal-x" data-close="xMatureModal">×</button>
           <h3 id="xMatureTitle"></h3>
           <div class="notice" id="xMatureBoundary"></div>
-          <div class="field"><label id="xAgeLb" for="xMatureAge"></label><input id="xMatureAge" type="number" min="18" max="120" placeholder="18+" /></div>
+          <div class="field"><label id="xAgeLb" for="xMatureAge"></label><input id="xMatureAge" autocomplete="off" type="number" min="18" max="120" placeholder="18+" /></div>
           <div class="field"><label id="xRegionLb" for="xMatureRegion"></label><select id="xMatureRegion"></select></div>
           <div class="x-consent-list">
             <label class="x-consent"><input type="checkbox" id="xCkPurpose" /><span id="xckPurpose"></span></label>
@@ -1144,15 +1144,15 @@
       <div class="tabs" id="admTabs"></div>
       <section class="panel" id="admUsersPane">
         <div class="adm-toolbar">
-          <input id="admUserQ" class="adm-input" data-ph="admSearchPh" placeholder="手机号 / 昵称 / 笔名" />
+          <input id="admUserQ" autocomplete="off" class="adm-input" data-ph="admSearchPh" placeholder="手机号 / 昵称 / 笔名" />
           <button class="btn-primary" id="admUserSearch" data-i="admSearch"></button>
         </div>
         <details id="admCreateBox" class="adm-create hidden" open>
           <summary data-i="admCreateTitle">开设账号</summary>
           <div class="adm-toolbar">
-            <input id="admCreatePhone" class="adm-input" data-ph="admCreatePhonePh" placeholder="手机号（11 位）" />
-            <input id="admCreatePw" class="adm-input" data-ph="admCreatePwPh" placeholder="初始密码（至少 8 位）" />
-            <input id="admCreateNick" class="adm-input" data-ph="admCreateNickPh" placeholder="昵称（选填）" />
+            <input id="admCreatePhone" autocomplete="off" class="adm-input" data-ph="admCreatePhonePh" placeholder="手机号（11 位）" />
+            <input id="admCreatePw" autocomplete="off" class="adm-input" data-ph="admCreatePwPh" placeholder="初始密码（至少 8 位）" />
+            <input id="admCreateNick" autocomplete="off" class="adm-input" data-ph="admCreateNickPh" placeholder="昵称（选填）" />
             <select id="admCreateLevel" class="adm-input" data-i-aria="admCreateLevelAria" aria-label="账号等级"></select>
             <label class="adm-create-admin"><input type="checkbox" id="admCreateIsAdmin" /><span data-i="admCreateAdmin">设为副管理员</span></label>
             <button class="btn-primary" id="admCreateBtn" data-i="admCreateBtn">开设账号</button>
@@ -1196,15 +1196,15 @@
         <div class="adm-grid2">
           <div class="subpanel">
             <form id="pvForm" novalidate>
-            <div class="field"><label for="pvName">供应商名称</label><input id="pvName" maxlength="60" placeholder="如：火山-成稿主力" /></div>
+            <div class="field"><label for="pvName">供应商名称</label><input id="pvName" autocomplete="off" maxlength="60" placeholder="如：火山-成稿主力" /></div>
             <div class="field"><label for="pvModality">模态</label><select id="pvModality" class="mini-select"><option value="text">文本 text</option><option value="image">图片 image</option><option value="video">视频 video</option></select></div>
             <div class="field"><label for="pvCatalog">目录型号（选中自动带端点/单价，可改）</label><select id="pvCatalog" class="mini-select"></select></div>
-            <div class="field"><label for="pvModel">模型名</label><input id="pvModel" placeholder="如 doubao-seed-2-pro / gpt-image-1" /></div>
-            <div class="field"><label for="pvBase">BaseUrl（目录型号可留空，自建/中转必填）</label><input id="pvBase" placeholder="https://…/v1" /></div>
+            <div class="field"><label for="pvModel">模型名</label><input id="pvModel" autocomplete="off" placeholder="如 doubao-seed-2-pro / gpt-image-1" /></div>
+            <div class="field"><label for="pvBase">BaseUrl（目录型号可留空，自建/中转必填）</label><input id="pvBase" autocomplete="off" placeholder="https://…/v1" /></div>
             <div class="field"><label for="pvKey">API Key（加密落库，回显脱敏）</label><input id="pvKey" type="password" autocomplete="new-password" /></div>
             <div class="adm-toolbar">
-              <label>输入价 <input id="pvIn" type="number" min="0" step="0.1" style="width:90px" /> 元/百万tok</label>
-              <label>输出价 <input id="pvOut" type="number" min="0" step="0.1" style="width:90px" /> 元/百万tok</label>
+              <label>输入价 <input id="pvIn" autocomplete="off" type="number" min="0" step="0.1" style="width:90px" /> 元/百万tok</label>
+              <label>输出价 <input id="pvOut" autocomplete="off" type="number" min="0" step="0.1" style="width:90px" /> 元/百万tok</label>
               <label><input id="pvEnabled" type="checkbox" checked /> 启用</label>
             </div>
             <button class="btn-primary" id="pvSave" type="button">新增/保存供应商</button>
@@ -1228,9 +1228,9 @@
                 <option value="TEXT">TEXT</option><option value="URL">URL</option>
                 <option value="VIDEO">VIDEO</option><option value="FILE">FILE</option>
               </select></div>
-            <div class="field"><label data-i="admKnowTitle" for="knTitle"></label><input id="knTitle" maxlength="200" /></div>
+            <div class="field"><label data-i="admKnowTitle" for="knTitle"></label><input id="knTitle" autocomplete="off" maxlength="200" /></div>
             <div class="field"><label data-i="admKnowCat" for="knCategory"></label><select id="knCategory" class="mini-select"></select></div>
-            <div class="field kn-url hidden"><label data-i="admKnowUrl" for="knUrl"></label><input id="knUrl" placeholder="https://" /></div>
+            <div class="field kn-url hidden"><label data-i="admKnowUrl" for="knUrl"></label><input id="knUrl" autocomplete="off" placeholder="https://" /></div>
             <div class="field kn-file hidden"><label data-i="admKnowFile" for="knFile"></label><input id="knFile" type="file" /></div>
             <div class="field"><label data-i="admKnowContent" for="knContent"></label><textarea id="knContent" rows="6"></textarea></div>
             <button class="btn-primary" id="knSubmit" data-i="admKnowSubmit"></button>
@@ -1291,13 +1291,13 @@
         <div class="subpanel hidden" id="adFormBox" style="margin:10px 0">
           <div class="grid two" style="gap:10px">
             <div class="field"><label data-i="admAds_slot" for="adSlot"></label><select id="adSlot" class="mini-select"></select></div>
-            <div class="field"><label data-i="admAds_fTitle" for="adTitle"></label><input id="adTitle" class="mini-input" maxlength="80"/></div>
-            <div class="field"><label data-i="admAds_image" for="adImageUrl"></label><input id="adImageUrl" class="mini-input" maxlength="500" placeholder="https://"/></div>
-            <div class="field"><label data-i="admAds_link" for="adLinkUrl"></label><input id="adLinkUrl" class="mini-input" maxlength="500" placeholder="https://"/></div>
-            <div class="field"><label data-i="admAds_badge" for="adBadge"></label><input id="adBadge" class="mini-input" maxlength="20" value="广告"/></div>
-            <div class="field"><label data-i="admAds_sponsor" for="adSponsor"></label><input id="adSponsor" class="mini-input" maxlength="80"/></div>
-            <div class="field"><label data-i="admAds_price" for="adPrice"></label><input id="adPrice" class="mini-input" type="number" min="0" step="1" value="0"/></div>
-            <div class="field"><label data-i="admAds_sort" for="adSort"></label><input id="adSort" class="mini-input" type="number" min="0" step="1" value="0"/></div>
+            <div class="field"><label data-i="admAds_fTitle" for="adTitle"></label><input id="adTitle" autocomplete="off" class="mini-input" maxlength="80"/></div>
+            <div class="field"><label data-i="admAds_image" for="adImageUrl"></label><input id="adImageUrl" autocomplete="off" class="mini-input" maxlength="500" placeholder="https://"/></div>
+            <div class="field"><label data-i="admAds_link" for="adLinkUrl"></label><input id="adLinkUrl" autocomplete="off" class="mini-input" maxlength="500" placeholder="https://"/></div>
+            <div class="field"><label data-i="admAds_badge" for="adBadge"></label><input id="adBadge" autocomplete="off" class="mini-input" maxlength="20" value="广告"/></div>
+            <div class="field"><label data-i="admAds_sponsor" for="adSponsor"></label><input id="adSponsor" autocomplete="off" class="mini-input" maxlength="80"/></div>
+            <div class="field"><label data-i="admAds_price" for="adPrice"></label><input id="adPrice" autocomplete="off" class="mini-input" type="number" min="0" step="1" value="0"/></div>
+            <div class="field"><label data-i="admAds_sort" for="adSort"></label><input id="adSort" autocomplete="off" class="mini-input" type="number" min="0" step="1" value="0"/></div>
             <div class="field"><label data-i="admAds_start" for="adStart"></label><input id="adStart" class="mini-input" type="datetime-local"/></div>
             <div class="field"><label data-i="admAds_end" for="adEnd"></label><input id="adEnd" class="mini-input" type="datetime-local"/></div>
             <div class="field"><label data-i="admAds_active" for="adActive"></label><select id="adActive" class="mini-select"><option value="1" data-i="admAds_on"></option><option value="0" data-i="admAds_off"></option></select></div>
@@ -1313,9 +1313,9 @@
       <section class="panel hidden" id="admSafetyPane">
         <div class="adm-toolbar" style="flex-wrap:wrap;gap:8px">
           <select id="sfSeverity" class="mini-select" data-i-aria="sfSeverityAria" aria-label="规则级别"><option value="BLOCK">BLOCK 硬拦截</option><option value="WARN">WARN 预警</option></select>
-          <input id="sfLabel" class="mini-input" data-i-aria="sfLabelAria" aria-label="规则名称" maxlength="40" placeholder="规则名称(如:新型违规词)" style="min-width:130px"/>
-          <input id="sfPatterns" class="mini-input" data-i-aria="sfPatternsAria" aria-label="命中词列表" maxlength="300" placeholder="命中词,逗号分隔,至少2字" style="min-width:180px"/>
-          <input id="sfAdvice" class="mini-input" data-i-aria="sfAdviceAria" aria-label="修改建议" maxlength="300" placeholder="修改建议(可选)" style="min-width:180px"/>
+          <input id="sfLabel" autocomplete="off" class="mini-input" data-i-aria="sfLabelAria" aria-label="规则名称" maxlength="40" placeholder="规则名称(如:新型违规词)" style="min-width:130px"/>
+          <input id="sfPatterns" autocomplete="off" class="mini-input" data-i-aria="sfPatternsAria" aria-label="命中词列表" maxlength="300" placeholder="命中词,逗号分隔,至少2字" style="min-width:180px"/>
+          <input id="sfAdvice" autocomplete="off" class="mini-input" data-i-aria="sfAdviceAria" aria-label="修改建议" maxlength="300" placeholder="修改建议(可选)" style="min-width:180px"/>
           <button class="btn-primary" id="sfAdd">新增规则</button>
           <span class="spacer"></span>
           <button class="btn-ghost" id="sfReset">恢复默认</button>
@@ -1350,7 +1350,7 @@
             <div class="field"><label for="hdNext">下一轮计划</label><textarea id="hdNext" rows="4"></textarea></div>
             <div class="field"><label for="hdNotes">其他备注</label><textarea id="hdNotes" rows="4"></textarea></div>
             <div class="field"><label>追加迭代日志（保存时一并写入；版本号相同自动覆盖）</label>
-              <div style="display:flex;gap:6px"><input id="hdLogVer" class="mini-input" data-i-aria="hdLogVerAria" aria-label="迭代日志版本号" maxlength="20" placeholder="如 2.43" style="max-width:110px"/><input id="hdLogSum" class="mini-input" data-i-aria="hdLogSumAria" aria-label="迭代日志摘要" maxlength="2000" placeholder="本版做了什么（一句话）"/><button class="btn-ghost" id="hdAppend">追加</button></div>
+              <div style="display:flex;gap:6px"><input id="hdLogVer" autocomplete="off" class="mini-input" data-i-aria="hdLogVerAria" aria-label="迭代日志版本号" maxlength="20" placeholder="如 2.43" style="max-width:110px"/><input id="hdLogSum" autocomplete="off" class="mini-input" data-i-aria="hdLogSumAria" aria-label="迭代日志摘要" maxlength="2000" placeholder="本版做了什么（一句话）"/><button class="btn-ghost" id="hdAppend">追加</button></div>
             </div>
             <div class="field"><label for="hdBrief">接续口令预览（新对话窗口整段粘贴即可继续）</label><textarea id="hdBrief" rows="10" readonly style="font-family:monospace;font-size:12px"></textarea></div>
           </div>
@@ -1366,13 +1366,13 @@
         <div class="notice" style="margin:8px 0" data-i="admUpdates_hint">每次工具优化、调整、更新后，发布一条公告，用户端会弹窗提示。版本号须与后端 package.json 保持一致。</div>
         <div class="subpanel" style="margin-top:8px">
           <div class="field"><label data-i="admUpdates_version" for="admUpdVer">版本号</label>
-            <input id="admUpdVer" class="adm-input" placeholder="如 2.187.0" maxlength="32" />
+            <input id="admUpdVer" autocomplete="off" class="adm-input" placeholder="如 2.187.0" maxlength="32" />
           </div>
           <div class="field"><label data-i="admUpdates_titleZh" for="admUpdTitleZh">标题（中文）</label>
-            <input id="admUpdTitleZh" class="adm-input" maxlength="120" placeholder="如：弹窗机制上线" />
+            <input id="admUpdTitleZh" autocomplete="off" class="adm-input" maxlength="120" placeholder="如：弹窗机制上线" />
           </div>
           <div class="field"><label data-i="admUpdates_titleEn" for="admUpdTitleEn">标题（英文，选填）</label>
-            <input id="admUpdTitleEn" class="adm-input" maxlength="120" />
+            <input id="admUpdTitleEn" autocomplete="off" class="adm-input" maxlength="120" />
           </div>
           <div class="field"><label data-i="admUpdates_bodyZh" for="admUpdBodyZh">正文（中文）</label>
             <textarea id="admUpdBodyZh" class="adm-input" rows="4" maxlength="2000" placeholder="每次工具优化都会弹窗通知你。"></textarea>
@@ -1406,9 +1406,9 @@
           <div class="subpanel">
             <b>手动填值</b>
             <div class="field"><label for="balProvider">供应商</label><select id="balProvider" class="mini-select"></select></div>
-            <div class="field"><label for="balYuan">余额（元）</label><input id="balYuan" type="number" min="0" step="0.01" placeholder="如 12.34" /></div>
-            <div class="field"><label for="balThreshold">告警阈值（元，默认 5）</label><input id="balThreshold" type="number" min="0" step="0.1" placeholder="5" /></div>
-            <div class="field"><label for="balNote">备注（选填）</label><input id="balNote" maxlength="120" placeholder="如：充值前快照" /></div>
+            <div class="field"><label for="balYuan">余额（元）</label><input id="balYuan" autocomplete="off" type="number" min="0" step="0.01" placeholder="如 12.34" /></div>
+            <div class="field"><label for="balThreshold">告警阈值（元，默认 5）</label><input id="balThreshold" autocomplete="off" type="number" min="0" step="0.1" placeholder="5" /></div>
+            <div class="field"><label for="balNote">备注（选填）</label><input id="balNote" autocomplete="off" maxlength="120" placeholder="如：充值前快照" /></div>
             <button class="btn-primary" id="balSave">保存手动值</button>
             <div id="balMissing" style="margin-top:12px"></div>
           </div>
