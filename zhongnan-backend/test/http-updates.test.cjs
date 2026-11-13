@@ -106,3 +106,40 @@ test('工具更新公告：完整闭环', async (t) => {
   // 收尾
   server.close();
 });
+
+// v2.503 announcement 表不可访问时降级到 package.json 版本，不抛 500 污染首页
+test('GET /api/updates/latest 公告表查询失败时降级返回 200 + FALLBACK_VERSION', async () => {
+  const throwingPrisma = {
+    announcement: {
+      findMany: () => Promise.reject(new Error('relation "announcement" does not exist')),
+    },
+    user: { findUnique: () => Promise.resolve(null) },
+  };
+  const app = createApp({ updates: createUpdatesRouter(throwingPrisma) });
+  const server = app.listen(0);
+  await new Promise((r) => server.once('listening', r));
+  const port = server.address().port;
+  const res = await fetch(`http://127.0.0.1:${port}/api/updates/latest`);
+  const json = await res.json();
+  assert.strictEqual(res.status, 200, '公告表失败应降级 200 而非 500');
+  assert.strictEqual(json.announcement, null);
+  assert.ok(typeof json.version === 'string' && json.version.length > 0, '降级应返回 FALLBACK_VERSION');
+  server.close();
+});
+
+test('GET /api/updates/since 公告表查询失败时降级返回 200 + 空列表', async () => {
+  const throwingPrisma = {
+    announcement: {
+      findMany: () => Promise.reject(new Error('relation "announcement" does not exist')),
+    },
+  };
+  const app = createApp({ updates: createUpdatesRouter(throwingPrisma) });
+  const server = app.listen(0);
+  await new Promise((r) => server.once('listening', r));
+  const port = server.address().port;
+  const res = await fetch(`http://127.0.0.1:${port}/api/updates/since?version=2.0.0`);
+  const json = await res.json();
+  assert.strictEqual(res.status, 200);
+  assert.deepStrictEqual(json.items, []);
+  server.close();
+});

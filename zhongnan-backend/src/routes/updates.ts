@@ -68,7 +68,8 @@ export function createUpdatesRouter(prisma: PrismaLike | any) {
       const version = latest?.version ?? FALLBACK_VERSION;
       res.json({ announcement: publicAnnouncement(latest), version });
     } catch {
-      res.status(500).json({ error: 'INTERNAL_ERROR' });
+      // v2.503 announcement 表缺失/无权限时降级到 package.json 版本，不抛 500 污染首页
+      res.json({ announcement: null, version: FALLBACK_VERSION });
     }
   });
 
@@ -84,7 +85,8 @@ export function createUpdatesRouter(prisma: PrismaLike | any) {
       const items = all.filter((a: any) => cmpVersion(a.version, v) > 0).map(publicAnnouncement);
       res.json({ items });
     } catch {
-      res.status(500).json({ error: 'INTERNAL_ERROR' });
+      // v2.503 同上降级：表不可用时返回空列表，前端无新公告即可
+      res.json({ items: [] });
     }
   });
 
