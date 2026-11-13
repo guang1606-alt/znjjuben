@@ -2511,6 +2511,8 @@
       _uiModalLock();
       const input = document.createElement('input');
       input.type = o.type || 'text';
+      input.id = _uiNextId('uiPromptInput');
+      input.name = 'uiPromptInput';
       input.value = o.value != null ? String(o.value) : '';
       if (o.placeholder != null) input.placeholder = String(o.placeholder);
       input.style.cssText = 'width:100%;box-sizing:border-box;font-size:14px;padding:9px 10px;margin-bottom:14px;border:1px solid var(--muted,#888);border-radius:6px;background:transparent;color:var(--fg,#222);outline:none';
