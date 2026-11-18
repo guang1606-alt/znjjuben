@@ -10144,6 +10144,8 @@
     } catch (e) {
       if (e.message === 'AUTH_REQUIRED') { closeModalEl($('xnChatModal')); openAuth('login'); return; }
       if (e.message === 'INSUFFICIENT') xnSay(enLang ? 'Not enough points — top up to keep creating with Xiaonan.' : '积分不够啦，充值后小南就能继续陪你聊～');
+      else if (e.error === 'SANDBOX') xnSay(enLang ? 'The writing model is not connected yet — you were not charged. Ask again once it is live.' : '创作模型还没接入，本次未消耗积分；开放后可直接再问～');
+      else if (e.error === 'UNUSABLE') xnSay(enLang ? 'No usable answer this time — your points were refunded. Please retry later.' : '这次没拿到有效回答，积分已原路退回，请稍后再试～');
       else xnSay(e.message);
     } finally {
       btn.disabled = false;

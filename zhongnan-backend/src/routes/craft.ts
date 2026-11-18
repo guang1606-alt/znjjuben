@@ -11,6 +11,16 @@ import {
 import { pickDiverseSeeds, diversityAudit, type VersionInput } from '../engine/multi-version';
 import { validateBranches, buildBranchSkeleton, applyMutator, autoLayout, validateClueGraph, type BranchGraph, type MutateOp } from '../engine/interactive-branch';
 import { normalizeClues, BranchBriefError, type ClueSpec } from '../engine/branch-brief';
+import { matchArchetype, archetypeLint } from '../engine/archetype-craft';
+import { emotionCraftLint } from '../engine/emotion-craft';
+import { webnovelLint } from '../engine/webnovel-craft';
+import type { LintIssue } from '../engine/craft-lint';
+
+/** 体检正文上限：只读工具，超出部分截断而不是拒绝，避免用户粘贴长剧本时空白报错 */
+const LINT_MAX_CHARS = 20000;
+const LEVEL_ORDER: Record<string, number> = { P0: 0, P1: 1, P2: 2 };
+const sortIssues = (list: LintIssue[]): LintIssue[] =>
+  [...list].sort((a, b) => (LEVEL_ORDER[a.level] ?? 9) - (LEVEL_ORDER[b.level] ?? 9) || a.score - b.score);
 
 const CARD_GROUPS = [
   { key: 'character', name: '人物内驱·缺陷·弧光', cards: CHARACTER_DEPTH_CARDS },
@@ -120,6 +130,52 @@ export function createCraftRouter() {
     const graph = buildBranchSkeleton({ choicePoints, withBad, withHidden, lang });
     res.json({ graph, report: validateBranches(graph, lang), layout: autoLayout(graph) });
   });
+
+  /* ---------- 免费剧本体检（不登录、不连库、不耗 token） ---------- */
+  // 把已实现的三组工艺尺子（原型/情绪/网文，约18条）跑在用户粘贴的正文上，产出与项目诊断同口径的问题单
+  r.post('/lint', (req, res) => {
+    const b = req.body ?? {};
+    const lang: 'zh' | 'en' = b.lang === 'en' ? 'en' : 'zh';
+    const text = String(b.text ?? '').slice(0, LINT_MAX_CHARS);
+    const episodes = (Array.isArray(b.episodes) ? b.episodes : [])
+      .slice(0, 10).map((x: unknown) => String(x ?? '').slice(0, LINT_MAX_CHARS)).filter(Boolean);
+    if (!text.trim() && !episodes.length) {
+      return res.status(400).json({ error: lang === 'en' ? 'Provide the script text to review' : '请提供需要体检的剧本正文' });
+    }
+    const ending = String(b.ending ?? '').slice(0, 2000) || undefined;
+    const outline = String(b.outline ?? '').slice(0, 6000) || undefined;
+    const isIntrigue = b.isIntrigue === undefined ? undefined : Boolean(b.isIntrigue);
+    const groups = [
+      { key: 'archetype', name: lang === 'en' ? 'Character & tension' : '人物原型·张力', r: archetypeLint({ text, opening: text.slice(0, 600), lang }) },
+      { key: 'emotion', name: lang === 'en' ? 'Emotion & payoff' : '情绪·爽点兑付', r: emotionCraftLint({ text, episodes, isIntrigue, lang }) },
+      { key: 'webnovel', name: lang === 'en' ? 'Serial & hook craft' : '网文·钩子工艺', r: webnovelLint({ text, outline, ending, lang }) },
+    ];
+    const issues = sortIssues(groups.flatMap((g) => g.r.issues));
+    const counts = {
+      p0: issues.filter((i) => i.level === 'P0').length,
+      p1: issues.filter((i) => i.level === 'P1').length,
+      p2: issues.filter((i) => i.level === 'P2').length,
+      total: issues.length,
+    };
+    const scored = groups.map((g) => g.r.avg).filter((n) => n > 0);
+    res.json({
+      lang, chars: text.length,
+      groups: groups.map((g) => ({ key: g.key, name: g.name, avg: g.r.avg, p1Count: g.r.p1.length, issues: g.r.issues })),
+      issues, counts,
+      avg: scored.length ? Math.round(scored.reduce((s, n) => s + n, 0) / scored.length) : 0,
+    });
+  });
+
+  // 免费原型选型：按一句话创意/标签匹配 6型主角 + 6型反派，含系统流时附 3 套高级机制（中文创作知识库单一事实来源）
+  r.post('/archetype-match', (req, res) => {
+    const b = req.body ?? {};
+    const text = String(b.text ?? '').slice(0, 6000);
+    const tags = asStrArr(b.tags).slice(0, 40);
+    if (!text.trim() && !tags.length) return res.status(400).json({ error: '请提供一句话创意、简介或标签' });
+    const m = matchArchetype({ text, tags }, 'zh');
+    res.json({ protag: m.protag, villain: m.villain, system: m.system, hasSystem: m.system.length > 0 });
+  });
+
   return r;
 }
 export const craftRouter = createCraftRouter();

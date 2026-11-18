@@ -33,13 +33,27 @@ describe('增值服务消费-失败退款 资金链路', { concurrency: 1 }, () 
     assert.strictEqual(r.status, 400);
     assert.strictEqual(bal('poor'), 5);
   });
-  it('小南深度共创成功扣10积分并返回答案', async () => {
+  it('小南深度共创：沙盘（无可用模型）不扣分，返回 SANDBOX 与可读说明', async () => {
     const r = await post('/api/va/xiaonan', { question: '怎么设计黄金三秒钩子？' }, 'mid');
-    assert.strictEqual(r.status, 200);
+    assert.strictEqual(r.status, 503);
     const j = await r.json();
-    assert.strictEqual(j.points, 10);
-    assert.strictEqual(typeof j.answer, 'string'); // 无密钥沙盘返回空串，真实质量待 Key 盲测；此处验扣费链路
-    assert.strictEqual(bal('mid'), 90);
+    assert.strictEqual(j.error, 'SANDBOX');
+    assert.match(j.message, /未消耗积分|未接入/);
+    assert.strictEqual(bal('mid'), 100, '空产出不得扣分');
+    assert.strictEqual(refundLedgers('mid').length, 1, '先扣后立即原路退回，留一条退款流水');
+  });
+  it('小南深度共创：真实模型有回答才扣 10 积分并返回答案', async () => {
+    const MP = require('../dist/lib/model-proxy.js');
+    const orig = MP.callText;
+    MP.callText = async () => ({ text: '先让主角把最疼的那句话亲口说给对手听，钩子要落在动作上。', costFen: 0 });
+    try {
+      const r = await post('/api/va/xiaonan', { question: '怎么设计黄金三秒钩子？' }, 'mid');
+      assert.strictEqual(r.status, 200);
+      const j = await r.json();
+      assert.strictEqual(j.points, 10);
+      assert.ok(j.answer.length > 10);
+      assert.strictEqual(bal('mid'), 90);
+    } finally { MP.callText = orig; }
   });
   it('余额不足在扣费阶段失败：400 且余额不变（本就没扣，不退）', async () => {
     const r = await post('/api/va/xiaonan', { question: '再来一次' }, 'poor');

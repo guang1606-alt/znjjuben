@@ -241,6 +241,19 @@ export function createValueAddedRouter(prisma: PrismaLike | any) {
       if (!r0.charged) return res.status(409).json({ error: 'IDEMPOTENT_REPLAY', message: '相同问题刚已提交，请勿重复发送' });
       idem = r0.idem; charged = true;
       const r = await callText(EngineTier.STANDARD, 'designer', `你是短剧编剧策划小南，专业、口语化地回答：${question}`);
+      // v2.510 空产出不得收费：沙盘（无可用模型）或模型返回空白时，绝不交付空回答并吞积分
+      if (!String(r.text ?? '').trim()) {
+        const sandbox = (r as { sandbox?: boolean }).sandbox === true;
+        if (staff) return res.json({ ok: true, answer: '', points: 0, staff, sandbox });
+        if (charged) await refund(req.userId!, 'XIAONAN_DEEP', refId, idem, staff).catch(() => {});
+        charged = false;
+        return res.status(503).json({
+          error: sandbox ? 'SANDBOX' : 'UNUSABLE',
+          message: sandbox
+            ? '创作模型尚未接入，本次未消耗积分；开放后可直接再问'
+            : '本次未拿到有效回答，积分已原路退回，请稍后重试',
+        });
+      }
       res.json({ ok: true, answer: r.text, points: staff ? 0 : VALUE_ADDED.XIAONAN_DEEP.points, staff });
     } catch (e) {
       if (charged) await refund(req.userId!, 'XIAONAN_DEEP', refId, idem, staff).catch(() => {});

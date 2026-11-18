@@ -182,3 +182,81 @@ describe('互动分支概率机制（v1.86）', () => {
     assert.strictEqual(bad.status, 400);
   });
 });
+
+// v2.510 免费剧本体检：把已实现的三组工艺尺子（原型/情绪/网文，约18条）开放为不登录、不耗 token 的只读工具
+describe('免费剧本体检 craft/lint（v2.510）', () => {
+  it('空文本 400，只有空白也 400', async () => {
+    for (const body of ['{}', JSON.stringify({ text: '   ' })]) {
+      const r = await fetch(base + M + '/lint', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body });
+      assert.strictEqual(r.status, 400);
+    }
+  });
+
+  it('三组尺子全部返回，问题按 P0/P1/P2 排序且分数升序', async () => {
+    const r = await fetch(base + M + '/lint', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text: '第1场 内景 夜 办公室\n反派：穷逼，废物，给我上，一起上，哈哈哈。\n主角：算了，原谅他吧。' }),
+    });
+    assert.strictEqual(r.status, 200);
+    const j = await r.json();
+    assert.deepStrictEqual(j.groups.map((g) => g.key), ['archetype', 'emotion', 'webnovel']);
+    assert.ok(j.counts.total >= 15, '三组尺子合计应至少 15 条，实际 ' + j.counts.total);
+    assert.ok(j.issues.length === j.counts.total);
+    assert.ok(j.groups.every((g) => typeof g.avg === 'number' && Array.isArray(g.issues) && g.issues.every((i) => i.rule && i.dim && i.advice)));
+    const order = { P0: 0, P1: 1, P2: 2 };
+    for (let i = 1; i < j.issues.length; i++) {
+      const a = j.issues[i - 1], b = j.issues[i];
+      assert.ok(order[a.level] < order[b.level] || (order[a.level] === order[b.level] && a.score <= b.score));
+    }
+  });
+
+  it('廉价反派/强行原谅的文本被判 P1，并给出可执行建议', async () => {
+    const j = await (await fetch(base + M + '/lint', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text: '复仇线。反派嘴臭：穷逼，废物，给我上，一起上，哈哈哈。她心软了，算了，原谅他吧。' }),
+    })).json();
+    assert.ok(j.counts.p1 >= 1, '应至少命中一条 P1');
+    const p1 = j.issues.find((i) => i.level === 'P1');
+    assert.ok(p1.advice.length > 20);
+  });
+
+  it('支持 episodes 分集数组（情绪线/开篇留存），超长正文被截断不报错', async () => {
+    const r = await fetch(base + M + '/lint', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text: '短剧正文'.repeat(12000), episodes: ['第1集 主角被顶替名额', '第2集 主角反击'] }),
+    });
+    assert.strictEqual(r.status, 200);
+    const j = await r.json();
+    assert.ok(j.chars <= 20000, '正文应被截断到 20000 字以内，实际 ' + j.chars);
+    assert.ok(j.issues.some((i) => i.rule === 'emotionOutline'), 'episodes 应触发分集情绪线尺子');
+  });
+});
+
+// v2.510 免费原型选型：6型主角 / 6型反派 / 5套系统机制，按一句话创意实时匹配
+describe('免费原型选型 craft/archetype-match（v2.510）', () => {
+  it('空输入 400', async () => {
+    const r = await fetch(base + M + '/archetype-match', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' });
+    assert.strictEqual(r.status, 400);
+  });
+
+  it('复仇逆袭命中主角/反派原型，系统词命中三套系统机制', async () => {
+    const j = await (await fetch(base + M + '/archetype-match', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text: '重生复仇逆袭，带着系统金手指，反派出场', tags: ['复仇', '大女主'] }),
+    })).json();
+    assert.ok(j.protag.length >= 1 && j.protag.every((p) => p.id && p.name && p.formula && p.core));
+    assert.ok(j.villain.length >= 1 && j.villain.every((v) => v.id && v.name));
+    assert.strictEqual(j.system.length, 3);
+    assert.strictEqual(j.hasSystem, true);
+  });
+
+  it('无系统词时不推荐系统机制，标签也能参与匹配', async () => {
+    const j = await (await fetch(base + M + '/archetype-match', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ tags: ['谍战', '双雄'] }),
+    })).json();
+    assert.strictEqual(j.hasSystem, false);
+    assert.deepStrictEqual(j.system, []);
+    assert.ok(j.protag.length + j.villain.length >= 1);
+  });
+});

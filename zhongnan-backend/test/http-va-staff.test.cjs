@@ -169,3 +169,46 @@ describe('增值服务内部账户免费通道（/api/va，串行）', { concurr
     } finally { MP.callText = orig; }
   });
 });
+
+// v2.510 空产出不得收费：沙盘（无可用模型）或模型返回空白，都要原路退分并给出可读原因
+describe('小南深度共创：空产出退款（v2.510）', { concurrency: 1 }, () => {
+  it('沙盘（sandbox=true）→ 503 SANDBOX，余额原路退回并留退款流水', async () => {
+    const uid = 'va_sandbox1'; seedUser(uid, { level: 'PRO', balance: 100 });
+    const orig = MP.callText; MP.callText = async () => ({ text: '', costFen: 0, sandbox: true });
+    try {
+      const r = await fetch(base + '/api/va/xiaonan', { method: 'POST', headers: auth(uid, 'PRO'), body: JSON.stringify({ question: '沙盘下问一句' }) });
+      assert.strictEqual(r.status, 503);
+      const j = await r.json();
+      assert.strictEqual(j.error, 'SANDBOX');
+      assert.ok(j.message && j.message.length > 10, '必须给可读说明');
+      assert.strictEqual(mem._accounts.get(uid).balance, 100, '不得扣分');
+      const refunded = mem._ledgers.filter((l) => l.userId === uid && l.direction === 'IN' && l.reason === 'XIAONAN_DEEP:REFUND' && l.amount === P.VALUE_ADDED.XIAONAN_DEEP.points);
+      assert.strictEqual(refunded.length, 1, '应留一条等额退款流水');
+    } finally { MP.callText = orig; }
+  });
+
+  it('真实模型返回空白 → 503 UNUSABLE，同样退款', async () => {
+    const uid = 'va_empty1'; seedUser(uid, { level: 'PRO', balance: 100 });
+    const orig = MP.callText; MP.callText = async () => ({ text: '   ', costFen: 0 });
+    try {
+      const r = await fetch(base + '/api/va/xiaonan', { method: 'POST', headers: auth(uid, 'PRO'), body: JSON.stringify({ question: '空白回答' }) });
+      assert.strictEqual(r.status, 503);
+      const j = await r.json();
+      assert.strictEqual(j.error, 'UNUSABLE');
+      assert.strictEqual(mem._accounts.get(uid).balance, 100);
+    } finally { MP.callText = orig; }
+  });
+
+  it('staff 沙盘仍 200、points=0、sandbox=true（保留内部演示能力）', async () => {
+    const uid = 'va_sandbox2'; seedUser(uid, { level: 'FREE', balance: 0, isAdmin: true });
+    const orig = MP.callText; MP.callText = async () => ({ text: '', costFen: 0, sandbox: true });
+    try {
+      const r = await fetch(base + '/api/va/xiaonan', { method: 'POST', headers: auth(uid), body: JSON.stringify({ question: '内部演示' }) });
+      assert.strictEqual(r.status, 200);
+      const j = await r.json();
+      assert.strictEqual(j.staff, true);
+      assert.strictEqual(j.points, 0);
+      assert.strictEqual(j.sandbox, true);
+    } finally { MP.callText = orig; }
+  });
+});

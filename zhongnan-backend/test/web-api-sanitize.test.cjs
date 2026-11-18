@@ -214,3 +214,18 @@ describe('v2.251 消费侧收口第二弹：throw 族 + xnSay 族 12 处裸码�
     assert.ok(/msg = znSanitizeErr\(msg, res\.status\)/.test(appSrc), 'startGenerate 响应失败脱敏应保留');
   });
 });
+
+/* v2.510 小南空产出退款的前端配套：后端 503 的 SANDBOX / UNUSABLE 是机器码，
+ * jsonOrThrow 会把它当作 message 直接上屏，必须在 askXiaonan 的 catch 里翻成双语可读文案，
+ * 并明确告知「未扣分/已退回」，否则退款了用户仍以为被扣。 */
+describe('v2.510 小南空产出退款前端配套', () => {
+  const i = appSrc.indexOf('async function askXiaonan');
+  const region = i >= 0 ? appSrc.slice(i, i + 2600) : '';
+  it('askXiaonan 对 SANDBOX / UNUSABLE 有双语可读提示，不裸显机器码', () => {
+    assert.ok(region, '应定位到 askXiaonan');
+    assert.ok(/e\.error === 'SANDBOX'/.test(region), '应显式分支 SANDBOX');
+    assert.ok(/e\.error === 'UNUSABLE'/.test(region), '应显式分支 UNUSABLE');
+    assert.ok(/未消耗积分|没有扣积分/.test(region), '中文须说明未扣分');
+    assert.ok(/not charged|refunded/i.test(region), '英文须说明未扣分/已退回');
+  });
+});
