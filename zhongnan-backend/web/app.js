@@ -3783,6 +3783,9 @@
     const groups = new Map();
     eps.forEach((s) => { if (!groups.has(s.epNo)) groups.set(s.epNo, []); groups.get(s.epNo).push(s); });
     const latestEps = [...groups.values()].map((vs) => vs[vs.length - 1]);
+    // v2.517 作品库单集 → 体检：把成稿正文带进体检面板，用户不必手动复制（免费只读，不耗积分）
+    const epTextMap = new Map();
+    [...groups.entries()].forEach(([epNo, vs]) => epTextMap.set(Number(epNo), vs[vs.length - 1].content || ''));
     const epBlocks = [...groups.entries()].map(([epNo, vs]) => {
       const latest = vs[vs.length - 1];
       const oldVers = vs.slice(0, -1);
@@ -3792,7 +3795,7 @@
         ? `<details class="ep-history"><summary>${lang === 'en' ? `Past versions (${oldVers.length})` : `历史版本（${oldVers.length}）`}</summary>${oldVers.map((v) =>
             `<div class="ep-oldver"><span>${PV().formatVersion(v.version)} · ${v.wordCount || 0} ${lang === 'en' ? 'chars' : '字'}</span>${cmpBtn(v.version, latest.version)}</div>`).join('')}</details>`
         : '';
-      return `<div class="ep-item" data-ep="${epNo}"><h4>EP${epNo} · ${escapeHtml(latest.title || '')} <span class="muted">(${PV().formatVersion(latest.version)} · ${latest.wordCount || 0} ${lang === 'en' ? 'chars' : '字'})</span>${oldVers.length ? cmpBtn(oldVers[oldVers.length - 1].version, latest.version) : ''}<button class="btn-ghost ep-listen-btn" type="button" data-listen-id="${latest.id}">🎧 ${lang === 'en' ? 'Listen' : '听剧本'}</button></h4>
+      return `<div class="ep-item" data-ep="${epNo}"><h4>EP${epNo} · ${escapeHtml(latest.title || '')} <span class="muted">(${PV().formatVersion(latest.version)} · ${latest.wordCount || 0} ${lang === 'en' ? 'chars' : '字'})</span>${oldVers.length ? cmpBtn(oldVers[oldVers.length - 1].version, latest.version) : ''}<button class="btn-ghost ep-listen-btn" type="button" data-listen-id="${latest.id}">🎧 ${lang === 'en' ? 'Listen' : '听剧本'}</button><button class="btn-ghost ep-lint-btn" type="button" data-lint-ep="${epNo}">${t('tbCardLint')}</button></h4>
         <div class="muted">${escapeHtml(latest.synopsis || '')}</div><pre>${escapeHtml(latest.content || '')}</pre>${hist}
         <div class="ep-diff hidden" data-diff-box="ep${epNo}"></div></div>`;
     }).join('');
@@ -3810,6 +3813,17 @@
     // 现在直接对最新成稿打开多角色有声播放器；权益不足由 openListen 的 403 分支统一弹升级引导
     $('epsList').querySelectorAll('.ep-listen-btn').forEach((b) => {
       b.onclick = (e) => { e.stopPropagation(); openListen(b.getAttribute('data-listen-id')); };
+    });
+    // v2.517 作品库单集体检：正文取当前最新版，点开即填好并开跑（免费只读，不耗积分）
+    $('epsList').querySelectorAll('.ep-lint-btn').forEach((b) => {
+      b.onclick = (e) => {
+        e.stopPropagation();
+        const text = epTextMap.get(Number(b.getAttribute('data-lint-ep'))) || '';
+        if (!text.trim()) return;
+        openWorkbench('lintPanel');
+        const ta = $('lintText'); if (ta) ta.value = text;
+        const run = $('lintRunBtn'); if (run) run.click();
+      };
     });
     // c208：整剧连播入口（片单+续听定位+自动开播）；权益不足由 openListenSeries 的 403 分支统一引导
     const listenAllBtn = $('worksListenAllBtn');
