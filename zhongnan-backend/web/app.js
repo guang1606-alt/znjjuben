@@ -3843,7 +3843,7 @@
         if (err.message === 'AUTH_REQUIRED') { openAuth('login'); return; }
         if (err.message === 'INSUFFICIENT') xnSay(enLang ? 'Not enough points — top up to keep polishing.' : '积分不够啦，充值后小南就能继续帮你打磨～');
         else if (err.message === 'ASSISTANT_LEVEL_REQUIRED') { xnSay(err.upsell ? (enLang ? err.upsell.en : err.upsell.zh) : (enLang ? 'Upgrade to unlock this Xiaonan capability.' : '升级会员后小南才能用这项能力哦～')); setTimeout(() => typeof switchView === 'function' && switchView('vip'), 900); }
-        else if (err.message === 'SANDBOX') xnSay(enLang ? 'Sandbox without model keys: nothing charged.' : '当前是无密钥沙盘，本次没扣分；配置模型后即可一键优化。');
+        else if (err.message === 'SANDBOX') xnSay(enLang ? 'No real model is connected yet. Ask the admin to configure the API key in the admin console; nothing was charged.' : '当前未接入真实模型：请联系管理员在超管后台配置 API Key；本次没扣分。');
         else if (err.message === 'MODEL_FAIL') xnSay(enLang ? 'The model did not return a result; points were refunded. Try again in a moment.' : '模型这次没给出结果，积分已自动退回，稍后再试一次～');
         else if (err.message === 'SAVE_FAILED') xnSay(enLang ? 'The new version could not be saved; points were refunded.' : '新版本保存失败，积分已自动退回，稍后再试一次～');
         else xnSay(enLang ? 'Polish did not complete; points were refunded. Try again.' : '这次优化没成功，积分已自动退回，稍后再试一次～');
@@ -8680,7 +8680,7 @@
       if (err.message === 'AUTH_REQUIRED') { openAuth('login'); return; }
       if (err.message === 'INSUFFICIENT') xnSay(enLang ? 'Not enough points — top up to keep polishing.' : '积分不够啦，充值后小南就能继续帮你打磨～');
       else if (err.message === 'ASSISTANT_LEVEL_REQUIRED') { xnSay(err.upsell ? (enLang ? err.upsell.en : err.upsell.zh) : (enLang ? 'Upgrade to unlock this Xiaonan capability.' : '升级会员后小南才能用这项能力哦～')); setTimeout(() => typeof switchView === 'function' && switchView('vip'), 900); }
-      else if (err.message === 'SANDBOX') xnSay(enLang ? 'Sandbox without model keys: nothing charged.' : '当前是无密钥沙盘，本次没扣分；配置模型后即可一键优化。');
+      else if (err.message === 'SANDBOX') xnSay(enLang ? 'No real model is connected yet. Ask the admin to configure the API key in the admin console; nothing was charged.' : '当前未接入真实模型：请联系管理员在超管后台配置 API Key；本次没扣分。');
       else if (err.message === 'MODEL_FAIL') xnSay(enLang ? 'The model did not return a result; points were refunded. Try again in a moment.' : '模型这次没给出结果，积分已自动退回，稍后再试一次～');
       else if (err.message === 'SAVE_FAILED') xnSay(enLang ? 'The new version could not be saved; points were refunded. Try again in a moment.' : '新版本保存失败，积分已自动退回，稍后再试一次～');
       else xnSay(enLang ? 'Polish did not complete; points were refunded. Try again.' : '这次优化没成功，积分已自动退回，稍后再试一次～');
@@ -8739,7 +8739,7 @@
       if (err.code === 'AUTH_REQUIRED') { openAuth('login'); return; }
       if (err.message === 'INSUFFICIENT') xnSay(lang === 'en' ? 'Not enough points — top up to keep polishing.' : '积分不够啦，充值后小南就能继续帮你打磨～');
         else if (err.message === 'ASSISTANT_LEVEL_REQUIRED') { xnSay(err.upsell ? (lang==='en'?err.upsell.en:err.upsell.zh) : (lang==='en'?'Upgrade to unlock this Xiaonan capability.':'升级会员后小南才能用这项能力哦～')); setTimeout(()=>typeof switchView==='function'&&switchView('vip'), 900); }
-      else if (err.message === 'SANDBOX') xnSay(lang === 'en' ? 'Sandbox without model keys: nothing charged.' : '当前是无密钥沙盘，本次没扣分；配置模型后即可一键优化。');
+      else if (err.message === 'SANDBOX') xnSay(lang === 'en' ? 'No real model is connected yet. Ask the admin to configure the API key in the admin console; nothing was charged.' : '当前未接入真实模型：请联系管理员在超管后台配置 API Key；本次没扣分。');
       else if (err.message === 'SAVE_FAILED') xnSay(lang === 'en' ? 'The new version could not be saved; points were refunded. Try again in a moment.' : '新版本保存失败，积分已自动退回，稍后再试一次～');
       else xnSay(lang === 'en' ? 'Polish did not complete; points were refunded. Try again.' : '这次优化没成功，积分已自动退回，稍后再试一次～');
     }
@@ -10056,7 +10056,7 @@
       if (err.code === 'AUTH_REQUIRED') { openAuth('login'); return; }
       if (err.message === 'INSUFFICIENT') xnSay(lang === 'en' ? 'Not enough points — top up to keep polishing.' : '积分不够啦，充值后小南就能继续帮你打磨～');
         else if (err.message === 'ASSISTANT_LEVEL_REQUIRED') { xnSay(err.upsell ? (lang==='en'?err.upsell.en:err.upsell.zh) : (lang==='en'?'Upgrade to unlock this Xiaonan capability.':'升级会员后小南才能用这项能力哦～')); setTimeout(()=>typeof switchView==='function'&&switchView('vip'), 900); }
-      else if (err.message === 'SANDBOX') xnSay(lang === 'en' ? 'Sandbox without model keys: nothing charged. Configure keys to enable one-tap polish.' : '当前是无密钥沙盘，本次没扣分；配置模型后即可一键优化。');
+      else if (err.message === 'SANDBOX') xnSay(lang === 'en' ? 'No real model is connected yet. Ask the admin to configure the API key in the admin console; nothing was charged.' : '当前未接入真实模型：请联系管理员在超管后台配置 API Key；本次没扣分。');
       else xnSay(lang === 'en' ? 'Polish did not complete; points were refunded. Try again.' : '这次优化没成功，积分已自动退回，稍后再试一次～');
     }
   }

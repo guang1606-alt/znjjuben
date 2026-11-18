@@ -105,12 +105,25 @@ export function friendlyModelError(e: unknown, lang: ErrorLang = 'zh'): Friendly
 /**
  * HTTP 失败出口常用：模型错误 → 中文可操作话术；业务校验错误（如「积分不足」）→ 原样返回。
  * 保证 error 字段永远可直接展示，内部机器码另走 modelErrorCode。
+ * 非模型且不含中文的异常（Prisma / 堆栈 / 英文断言）一律换成通用中文，避免内部细节外泄。
  */
 export function userMessageOf(e: unknown, lang: ErrorLang = 'zh'): string {
-  return matchModelError(e, lang)?.message ?? String((e as Error)?.message ?? e ?? GENERIC[lang]);
+  const hit = matchModelError(e, lang);
+  if (hit) return hit.message;
+  const raw = String((e as Error)?.message ?? e ?? '');
+  if (/[\u4e00-\u9fa5]/.test(raw)) return raw;
+  return GENERIC[lang];
 }
 
 /** 内部机器码（未知错误为 MODEL_UNKNOWN），供前端分支与日志检索 */
 export function modelErrorCode(e: unknown): string {
   return codeOf(String((e as Error)?.message ?? e ?? ''));
+}
+
+/**
+ * HTTP 响应体附加字段：只有确属模型失败才下发 { code }，业务错误（「积分不足」「项目不存在」）返回 {}。
+ * 否则业务失败会被前端拿到 MODEL_UNKNOWN，误判成模型故障并走错误的提示/重试路径。
+ */
+export function modelErrorMeta(e: unknown): { code?: string } {
+  return matchModelError(e) ? { code: modelErrorCode(e) } : {};
 }

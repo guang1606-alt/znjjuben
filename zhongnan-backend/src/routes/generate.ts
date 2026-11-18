@@ -116,7 +116,7 @@ import { assistantGate, assistantCapabilitiesOf, fixActionByDim } from '../confi
 import { COUNCIL_MODULES, type CouncilModuleId } from '../config/council';
 import { councilBoard, reviewCouncil, councilBrief } from '../engine/council'; // v2.330 多方评议（分级依据可查询）
 import { sanitizeClientError } from '../lib/blackbox';
-import { userMessageOf, modelErrorCode } from '../lib/model-error-message';
+import { userMessageOf, modelErrorMeta } from '../lib/model-error-message';
 import { buildListenScript, listenEntitleNote } from '../engine/listen-script';
 import { buildVoiceCast } from '../engine/listen-voice-cast';
 import { buildShotManifest, planAigcVolume, analyzeAigcSceneCurve } from '../engine/aigc-screenplay'; // c219 AIGC 构成仪表盘数据落库：生成期/fix 期持久化到 qcReport._aigc，刷新后可重渲染
@@ -1530,7 +1530,7 @@ generateRouter.post('/hooks/palette', authRequired, async (req: AuthRequest, res
       ...(manual ? { manual, rejected } : {}),
     });
   } catch (e: any) {
-    res.status(400).json({ error: `钩子调色板生成失败：${userMessageOf(e)}`, code: modelErrorCode(e) });
+    res.status(400).json({ error: `钩子调色板生成失败：${userMessageOf(e)}`, ...modelErrorMeta(e) });
   }
 });
 function locOpt(o: { id: string; layer: string; score: number; name: string; nameEn: string; definition: string; definitionEn: string; example: string; reason: { zh: string; en: string } }) {
@@ -1585,7 +1585,7 @@ generateRouter.post('/beats/palette', authRequired, async (req: AuthRequest, res
       ...(manual ? { manual, rejected } : {}),
     });
   } catch (e: any) {
-    res.status(400).json({ error: `节拍调色板生成失败：${userMessageOf(e)}`, code: modelErrorCode(e) });
+    res.status(400).json({ error: `节拍调色板生成失败：${userMessageOf(e)}`, ...modelErrorMeta(e) });
   }
 });
 
@@ -2202,7 +2202,7 @@ generateRouter.post('/projects/:id/fix', authRequired, async (req: AuthRequest, 
         refundFlexible(tx, req.userId!, points, 'TARGETED_FIX', `fix:${targetScript.id}`, idemKey));
     }
     return res.status(503).json({ error: result?.sandbox ? 'SANDBOX' : 'UNUSABLE', message: result?.sandbox
-      ? (isStaff ? '当前为无密钥沙盘，配置模型后即可一键优化' : '当前为无密钥沙盘，配置模型后即可一键优化，积分已原路退回')
+      ? (isStaff ? '超管后台尚未配置模型密钥，填写后即可一键优化' : '创作引擎尚未接入真实模型服务：请联系管理员在超管后台填写 API Key 后重试。积分已原路退回。')
       : '本次改写未达可用标准，已退回积分，请重试' });
   }
   // 落新版本，旧版保留用于对比

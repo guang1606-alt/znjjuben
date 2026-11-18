@@ -8,7 +8,7 @@ import { staffOf, staffChargeTx, staffRefundTx } from '../lib/staff-billing';
 import { withBillingTransaction } from '../lib/prisma-tx';
 import { VALUE_ADDED, ValueAddedKey, EngineTier } from '../config/pricing';
 import { callImage, callText, STABILITY_SUFFIX } from '../lib/model-proxy';
-import { userMessageOf, modelErrorCode } from '../lib/model-error-message';
+import { userMessageOf, modelErrorMeta } from '../lib/model-error-message';
 import { buildVisualStylePrompt } from '../engine/visual-style-library'; // v2.148 视觉画风编码库（海报画风编码注入）
 import { runPk } from '../lib/script-pk';
 import { buildRankBoard, nextTierProgress } from '../lib/pk-rank';
@@ -110,7 +110,7 @@ export function createValueAddedRouter(prisma: PrismaLike | any) {
       res.json({ ok: true, posterId: poster.id, images: permanentImages, realCostFen: costFen, points: staff ? 0 : VALUE_ADDED[key].points, staff });
     } catch (e) {
       if (charged) await refund(req.userId!, key, refId, idem, staff).catch(() => {}); // 下游失败：付费退积分 / staff 落 0 元 REFUND
-      res.status(400).json({ error: userMessageOf(e), code: modelErrorCode(e) });
+      res.status(400).json({ error: userMessageOf(e), ...modelErrorMeta(e) });
     }
   });
 
@@ -202,7 +202,7 @@ export function createValueAddedRouter(prisma: PrismaLike | any) {
       res.json({ ok: true, battleId: battle.id, titleA, titleB, result, analysis: result.xiaonanCommentZh, points: staff ? 0 : VALUE_ADDED.PK_BATTLE.points, staff, mine: board.mine, nextTier });
     } catch (e) {
       await giveBack();
-      res.status(400).json({ error: userMessageOf(e), code: modelErrorCode(e) });
+      res.status(400).json({ error: userMessageOf(e), ...modelErrorMeta(e) });
     }
   });
 
@@ -244,7 +244,7 @@ export function createValueAddedRouter(prisma: PrismaLike | any) {
       res.json({ ok: true, answer: r.text, points: staff ? 0 : VALUE_ADDED.XIAONAN_DEEP.points, staff });
     } catch (e) {
       if (charged) await refund(req.userId!, 'XIAONAN_DEEP', refId, idem, staff).catch(() => {});
-      res.status(400).json({ error: userMessageOf(e), code: modelErrorCode(e) });
+      res.status(400).json({ error: userMessageOf(e), ...modelErrorMeta(e) });
     }
   });
 

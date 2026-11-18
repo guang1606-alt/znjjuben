@@ -44,6 +44,23 @@ test('未知错误兜底中文话术，绝不回传原始英文栈', () => {
   assert.ok(!/internal stack/i.test(r.message));
 });
 
+test('modelErrorMeta：业务错误不带 code，只有真模型失败才下发机器码', () => {
+  // 业务错误（余额不足/项目不存在）不能挂 MODEL_UNKNOWN，否则前端会把业务失败误判成模型故障
+  assert.deepStrictEqual(M.modelErrorMeta(new Error('积分不足：需要 39 分，当前 5 分')), {});
+  assert.deepStrictEqual(M.modelErrorMeta(new Error('项目不存在')), {});
+  assert.strictEqual(M.modelErrorMeta(new Error('IMAGE_NOT_CONFIGURED:STANDARD')).code, 'IMAGE_NOT_CONFIGURED');
+  assert.strictEqual(M.modelErrorMeta(new Error('MODEL_TIMEOUT')).code, 'MODEL_TIMEOUT');
+});
+
+test('userMessageOf：中文业务错误原样透出，英文内部异常（Prisma/堆栈）一律换成通用中文', () => {
+  assert.strictEqual(M.userMessageOf(new Error('积分不足：需要 39 分，当前 5 分')), '积分不足：需要 39 分，当前 5 分');
+  const leaked = M.userMessageOf(new Error('PrismaClientKnownRequestError: Unique constraint failed on the fields: (`id`)'));
+  assert.match(leaked, /失败|稍后重试/);
+  assert.ok(!/Prisma|Unique constraint/i.test(leaked), '不得把英文内部异常原样给用户');
+  const en = M.userMessageOf(new Error('something exploded'), 'en');
+  assert.ok(!/something exploded/.test(en));
+});
+
 test('英文语言包可用（海外档/英文界面）', () => {
   const r = M.friendlyModelError(new Error('MODEL_NOT_CONFIGURED:economy'), 'en');
   assert.match(r.message, /not configured|admin/i);

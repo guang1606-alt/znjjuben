@@ -21,7 +21,7 @@ import { withBillingTransaction } from '../lib/prisma-tx';
 import { scanWithStore } from '../lib/safety-store';
 import { prisma as defaultPrisma } from '../lib/prisma';
 import { staffOf, staffChargeTx, staffRefundTx } from '../lib/staff-billing';
-import { userMessageOf, modelErrorCode } from '../lib/model-error-message';
+import { userMessageOf, modelErrorMeta } from '../lib/model-error-message';
 import {
   interviewTurn, buildBrief, emptyMaterials, readyCheck, gapReport,
   InterviewMaterials, Lang, TurnOutcome,
@@ -163,7 +163,7 @@ export function createInterviewRouter(prisma: PrismaLike) {
       });
     } catch (e) {
       if (charged) await refund(args.userId, 'INTERVIEW_TURN', refId, idem, args.staff).catch(() => {});
-      res.status(400).json({ error: userMessageOf(e) || (args.staff ? '采访服务暂不可用，请稍后重试' : '采访服务暂不可用，积分已退回'), code: modelErrorCode(e) });
+      res.status(400).json({ error: userMessageOf(e) || (args.staff ? '采访服务暂不可用，请稍后重试' : '采访服务暂不可用，积分已退回'), ...modelErrorMeta(e) });
     }
   }
 

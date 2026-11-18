@@ -44,6 +44,8 @@ describe('增值服务消费-失败退款 资金链路', { concurrency: 1 }, () 
   it('余额不足在扣费阶段失败：400 且余额不变（本就没扣，不退）', async () => {
     const r = await post('/api/va/xiaonan', { question: '再来一次' }, 'poor');
     assert.strictEqual(r.status, 400);
+    const j = await r.json();
+    assert.strictEqual(j.code, undefined, '业务错误不得挂 MODEL_UNKNOWN，避免前端误判为模型故障');
     assert.strictEqual(bal('poor'), 5);
     assert.strictEqual(refundLedgers('poor').length, 0);
   });
