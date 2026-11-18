@@ -52,4 +52,13 @@ describe('v2.511 剧本体检：工具箱入口与免费端点接线', () => {
     assert.match(i18n, /不耗积分/, '中文须明示不耗积分');
     assert.match(i18n, /no credits/i, '英文须明示 no credits');
   });
+
+  it('成稿抽检卡可一键把正文送进完整体检（生成后 → 体检闭环）', () => {
+    assert.match(app, /data-lint-send>/, '抽检提示须带「送进完整体检」入口按钮');
+    assert.match(app, /ta\.value = text/, '发送时须回填 lintText');
+    assert.match(app, /run\.click\(\)/, '回填后须真正触发体检');
+    assert.match(i18n, /lintOpenFull:/, '须有入口专属文案');
+    const view = fs.readFileSync(path.join(root, 'lint-view.js'), 'utf8');
+    assert.match(view, /\$\('lintRunBtn'\)\.onclick = runLint/, '体检按钮须绑定执行函数');
+  });
 });

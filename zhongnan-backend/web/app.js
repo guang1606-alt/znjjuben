@@ -3159,6 +3159,18 @@
   ['roomClose', 'teardownClose', 'dvClose', 'brClose', 'lintClose'].forEach((id) => {
     const b = $(id); if (b) b.addEventListener('click', closeWorkbench);
   });
+  // v2.511 成稿抽检 → 完整体检：把结果区正文回填进体检面板并立即开跑（体检本身免费、不耗积分）
+  document.addEventListener('click', (e) => {
+    const hit = e.target && e.target.closest && e.target.closest('[data-lint-send]');
+    if (!hit) return;
+    const text = (($('scriptText') && $('scriptText').textContent) || '').trim();
+    if (!text) { toastInfo(t('lintNoText')); return; }
+    openWorkbench('lintPanel');
+    const ta = $('lintText');
+    if (ta) ta.value = text;
+    const run = $('lintRunBtn');
+    if (run) run.click();
+  });
   // 首次 DOM 就绪后初始化（含静态转移）
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', () => { _initWorkbenchLayer(); _syncTopbarOffset(); });
   else { _initWorkbenchLayer(); _syncTopbarOffset(); }
@@ -7668,6 +7680,8 @@
             : `<b style="color:${color}">编剧改稿尺子 ${avg}/100</b> · 无硬伤，${cl.issues.length} 条优化建议`);
           clTip.title = cl.issues.map((i) => `[${i.level}] ${i.dim}(${i.score}): ${i.advice}`).join('\n');
         }
+        // v2.511 生成后 → 完整体检闭环：抽检卡只给汇总，要看逐条硬伤与改法就一键送进剧本体检
+        clTip.innerHTML += ` <button type="button" class="chip" data-lint-send>${escapeHtml(t('lintOpenFull'))}</button>`;
       } else clTip.classList.add('hidden');
     }
     // v2.98 四套进阶创作尺子聚合评分卡：情绪/网文/原型/叙事
