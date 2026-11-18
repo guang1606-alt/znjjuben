@@ -1182,6 +1182,8 @@ textarea { box-sizing: border-box; max-width: 100%; resize: vertical; background
 .dv-issue.sev-low{border-left-color:var(--accent);background:color-mix(in srgb,var(--accent) 7%,transparent)}
 .lint-ta{width:100%;min-height:180px;resize:vertical;padding:10px 12px;border:1px solid var(--line);border-radius:var(--radius-sm);background:var(--panel-2);color:var(--text);font-family:var(--sans);font-size:14px;line-height:1.65}
 .lint-ta:focus{outline:2px solid var(--accent-weak);outline-offset:1px}
+.lint-two{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:10px}
+@media (max-width:720px){.lint-two{grid-template-columns:1fr}}
 .dv-table{width:100%;border-collapse:collapse;margin-top:8px;font-size:12.5px}
 .dv-table th,.dv-table td{border:1px solid var(--line);padding:5px 8px;text-align:center}
 @media(max-width:680px){.dv-tagline{grid-template-columns:1fr}}

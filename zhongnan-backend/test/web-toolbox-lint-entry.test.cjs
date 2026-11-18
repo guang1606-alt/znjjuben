@@ -77,4 +77,15 @@ describe('v2.511 剧本体检：工具箱入口与免费端点接线', () => {
     assert.match(view, /copyReport:/, '须有复制按钮文案');
     assert.match(view, /closest\('\[data-lint-copy\]'\)/, '复制按钮须用事件委托（结果重渲染不丢绑定）');
   });
+
+  it('选填大纲与本集结尾可解锁「终局倒推」「集尾断章」两条规则', () => {
+    const view = fs.readFileSync(path.join(root, 'lint-view.js'), 'utf8');
+    const html = fs.readFileSync(path.join(root, 'index.html'), 'utf8');
+    assert.match(html, /id="lintEnding"/, '面板须有本集结尾输入框');
+    assert.match(html, /id="lintOutline"/, '面板须有终局大纲输入框');
+    assert.match(view, /\$\('lintEnding'\)/, '须读取本集结尾');
+    assert.match(view, /\$\('lintOutline'\)/, '须读取大纲');
+    assert.match(view, /\.ending = ending/, '须把本集结尾发给后端（否则断章规则永不触发）');
+    assert.match(view, /\.outline = outline/, '须把大纲发给后端（否则终局倒推规则永不触发）');
+  });
 });
