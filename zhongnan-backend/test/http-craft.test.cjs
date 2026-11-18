@@ -192,15 +192,15 @@ describe('免费剧本体检 craft/lint（v2.510）', () => {
     }
   });
 
-  it('三组尺子全部返回，问题按 P0/P1/P2 排序且分数升序', async () => {
+  it('五组尺子全部返回（v2.520 补上改稿尺子与叙事逻辑），问题按 P0/P1/P2 排序且分数升序', async () => {
     const r = await fetch(base + M + '/lint', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ text: '第1场 内景 夜 办公室\n反派：穷逼，废物，给我上，一起上，哈哈哈。\n主角：算了，原谅他吧。' }),
     });
     assert.strictEqual(r.status, 200);
     const j = await r.json();
-    assert.deepStrictEqual(j.groups.map((g) => g.key), ['archetype', 'emotion', 'webnovel']);
-    assert.ok(j.counts.total >= 15, '三组尺子合计应至少 15 条，实际 ' + j.counts.total);
+    assert.deepStrictEqual(j.groups.map((g) => g.key), ['archetype', 'emotion', 'webnovel', 'craft', 'narrative']);
+    assert.ok(j.counts.total >= 15, '五组尺子合计应至少 15 条，实际 ' + j.counts.total);
     assert.ok(j.issues.length === j.counts.total);
     assert.ok(j.groups.every((g) => typeof g.avg === 'number' && Array.isArray(g.issues) && g.issues.every((i) => i.rule && i.dim && i.advice)));
     const order = { P0: 0, P1: 1, P2: 2 };
@@ -208,6 +208,17 @@ describe('免费剧本体检 craft/lint（v2.510）', () => {
       const a = j.issues[i - 1], b = j.issues[i];
       assert.ok(order[a.level] < order[b.level] || (order[a.level] === order[b.level] && a.score <= b.score));
     }
+  });
+
+  it('改稿尺子与叙事逻辑在免费体检中生效（小说腔/然后链）', async () => {
+    const j = await (await fetch(base + M + '/lint', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text: '他心想，这一切都过去了。然后他走下楼，然后点了一根烟，然后看着窗外。' }),
+    })).json();
+    const craft = j.groups.find((g) => g.key === 'craft');
+    const narr = j.groups.find((g) => g.key === 'narrative');
+    assert.ok(craft && craft.issues.some((i) => i.rule === 'novelistic'), '小说腔应由改稿尺子命中');
+    assert.ok(narr && narr.issues.some((i) => i.rule === 'ntThenChain'), '「然后」因果链应由叙事逻辑命中');
   });
 
   it('廉价反派/强行原谅的文本被判 P1，并给出可执行建议', async () => {
@@ -229,6 +240,10 @@ describe('免费剧本体检 craft/lint（v2.510）', () => {
     const j = await r.json();
     assert.ok(j.chars <= 20000, '正文应被截断到 20000 字以内，实际 ' + j.chars);
     assert.ok(j.issues.some((i) => i.rule === 'emotionOutline'), 'episodes 应触发分集情绪线尺子');
+    assert.ok(j.issues.some((i) => i.rule === 'firstThree'), 'episodes 应触发前三集节奏尺子（改稿尺子组）');
+    const outlines = j.issues.filter((i) => i.rule === 'emotionOutline');
+    assert.ok(outlines.length >= 2, '两集应各出一条情绪大纲问题');
+    assert.ok(outlines.every((i, k) => i.dim.includes(`第${k + 1}集`)), '多集情绪大纲须标出集号，否则同名同建议分不清：' + JSON.stringify(outlines.map((i) => i.dim)));
   });
 });
 

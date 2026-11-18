@@ -21,7 +21,7 @@ const EMOTION_CLASS_EN: Record<string, string[]> = {
   Mystery: ['secret', 'on earth', 'riddle', 'hidden', 'who is', 'truth', 'foreshadow'],
   Sorrow: ['cry', 'tear', 'afraid', 'despair', 'die', 'break down', 'tremble'],
 };
-export function emotionOutlineCheck(episodeText: string, lang: LintLang = 'zh'): LintIssue {
+export function emotionOutlineCheck(episodeText: string, lang: LintLang = 'zh', epNo?: number): LintIssue {
   const en = lang === 'en';
   const probe = en ? episodeText.toLowerCase() : episodeText;
   const classes = en ? EMOTION_CLASS_EN : EMOTION_CLASS;
@@ -31,7 +31,7 @@ export function emotionOutlineCheck(episodeText: string, lang: LintLang = 'zh'):
   const tooMixed = present.length >= 4;
   const level: LintLevel = flat ? 'P1' : 'P2';
   return {
-    rule: 'emotionOutline', dim: en ? 'Emotion outline' : '情绪大纲', level,
+    rule: 'emotionOutline', dim: (en ? 'Emotion outline' : '情绪大纲') + (epNo ? (en ? ` · EP${epNo}` : ` · 第${epNo}集`) : ''), level,
     hit: present,
     advice: tooMixed
       ? (en
@@ -226,7 +226,7 @@ export function emotionCraftLint(input: { text?: string; episodes?: string[]; is
     issues.push(payoffChainCheck(text, lang), villainDepthCheck(text, undefined, lang), powerGrammarCheck(text, input.isIntrigue, lang),
       payoffTaxonomy(text, lang).issue, sainthoodCheck(text, lang));
   }
-  (input.episodes || []).slice(0, 10).forEach((e) => issues.push(emotionOutlineCheck(e, lang)));
+  (input.episodes || []).slice(0, 10).forEach((e, i) => issues.push(emotionOutlineCheck(e, lang, i + 1)));
   if (input.episodes && input.episodes.length) issues.push(earlyRetention(input.episodes, lang));
   const scored = issues.filter((i) => typeof i.score === 'number');
   const avg = scored.length ? Math.round(scored.reduce((s, i) => s + i.score, 0) / scored.length) : 0;

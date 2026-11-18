@@ -15,6 +15,8 @@ import { matchArchetype, archetypeLint, PROTAG_EN, VILLAIN_EN, SYSTEM_EN } from 
 import { emotionCraftLint } from '../engine/emotion-craft';
 import { webnovelLint } from '../engine/webnovel-craft';
 import type { LintIssue } from '../engine/craft-lint';
+import { craftLint } from '../engine/craft-lint';
+import { narrativeLint } from '../engine/narrative-craft';
 
 /** 体检正文上限：只读工具，超出部分截断而不是拒绝，避免用户粘贴长剧本时空白报错 */
 const LINT_MAX_CHARS = 20000;
@@ -160,6 +162,9 @@ export function createCraftRouter() {
       { key: 'archetype', name: lang === 'en' ? 'Character & tension' : '人物原型·张力', r: archetypeLint({ text, opening: text.slice(0, 600), lang }) },
       { key: 'emotion', name: lang === 'en' ? 'Emotion & payoff' : '情绪·爽点兑付', r: emotionCraftLint({ text, episodes, isIntrigue, lang }) },
       { key: 'webnovel', name: lang === 'en' ? 'Serial & hook craft' : '网文·钩子工艺', r: webnovelLint({ text, outline, ending, lang }) },
+      // v2.520 补齐：改稿尺子与叙事逻辑此前只在生成结果页（要花积分）才跑，免费体检看不到
+      { key: 'craft', name: lang === 'en' ? 'Line-edit rulers' : '一线改稿尺子', r: craftLint({ text, episodes, lang }) },
+      { key: 'narrative', name: lang === 'en' ? 'Narrative logic' : '叙事逻辑', r: narrativeLint({ text, ending, lang }) },
     ];
     const issues = sortIssues(groups.flatMap((g) => g.r.issues));
     const counts = {
@@ -171,7 +176,7 @@ export function createCraftRouter() {
     const scored = groups.map((g) => g.r.avg).filter((n) => n > 0);
     res.json({
       lang, chars: text.length,
-      groups: groups.map((g) => ({ key: g.key, name: g.name, avg: g.r.avg, p1Count: g.r.p1.length, issues: g.r.issues })),
+      groups: groups.map((g) => ({ key: g.key, name: g.name, avg: g.r.avg, p1Count: g.r.issues.filter((i) => i.level === 'P1').length, issues: g.r.issues })),
       issues, counts,
       avg: scored.length ? Math.round(scored.reduce((s, n) => s + n, 0) / scored.length) : 0,
     });
