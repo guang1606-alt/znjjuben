@@ -202,7 +202,7 @@
     if (btn) btn.disabled = true;
     $('lintResult').innerHTML = `<div class="muted">${esc(T().matching)}</div>`;
     try {
-      const d = await postJson('/api/craft/archetype-match', { text });
+      const d = await postJson('/api/craft/archetype-match', { text, lang: en() ? 'en' : 'zh' });
       last = { kind: 'arch', data: d };
       renderArch(d);
     } catch (e) {

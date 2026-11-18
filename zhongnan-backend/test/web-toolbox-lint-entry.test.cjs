@@ -98,6 +98,11 @@ describe('v2.511 剧本体检：工具箱入口与免费端点接线', () => {
     assert.match(view, /meta\.outline/, '须记录大纲是否填写');
   });
 
+  it('原型选型跟随界面语言（英文界面不得返回中文原型）', () => {
+    const view = fs.readFileSync(path.join(root, 'lint-view.js'), 'utf8');
+    assert.match(view, /archetype-match', \{ text, lang: en\(\) \? 'en' : 'zh' \}/, '须把界面语言发给原型选型端点');
+  });
+
   it('作品库每集成稿可直接一键体检（不必手动复制正文）', () => {
     const app = fs.readFileSync(path.join(root, 'app.js'), 'utf8');
     assert.match(app, /ep-lint-btn/, '每集成稿须有体检入口');

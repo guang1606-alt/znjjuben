@@ -250,6 +250,21 @@ describe('免费原型选型 craft/archetype-match（v2.510）', () => {
     assert.strictEqual(j.hasSystem, true);
   });
 
+  it('lang=en 用英文关键词匹配并返回英文原型名/公式，不混入中文', async () => {
+    const j = await (await fetch(base + M + '/archetype-match', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text: 'a rebirth revenge story, she is an iron queen who never forgives', tags: ['female', 'revenge', 'system panel'], lang: 'en' }),
+    })).json();
+    assert.ok(j.protag.some((p) => p.id === 'iron_queen'), '英文关键词应命中 iron_queen，实际 ' + JSON.stringify(j.protag.map((p) => p.id)));
+    assert.strictEqual(j.hasSystem, true);
+    assert.strictEqual(j.system.length, 3);
+    const cjk = /[\u4e00-\u9fa5]/;
+    for (const p of [...j.protag, ...j.villain, ...j.system]) {
+      assert.ok(!cjk.test(p.name), '英文界面原型名不应含中文：' + p.name);
+      assert.ok(!cjk.test(p.formula || p.tip || ''), '英文界面原型说明不应含中文：' + (p.formula || p.tip));
+    }
+  });
+
   it('无系统词时不推荐系统机制，标签也能参与匹配', async () => {
     const j = await (await fetch(base + M + '/archetype-match', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },

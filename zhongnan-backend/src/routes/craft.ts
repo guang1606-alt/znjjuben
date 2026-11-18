@@ -11,7 +11,7 @@ import {
 import { pickDiverseSeeds, diversityAudit, type VersionInput } from '../engine/multi-version';
 import { validateBranches, buildBranchSkeleton, applyMutator, autoLayout, validateClueGraph, type BranchGraph, type MutateOp } from '../engine/interactive-branch';
 import { normalizeClues, BranchBriefError, type ClueSpec } from '../engine/branch-brief';
-import { matchArchetype, archetypeLint } from '../engine/archetype-craft';
+import { matchArchetype, archetypeLint, PROTAG_EN, VILLAIN_EN, SYSTEM_EN } from '../engine/archetype-craft';
 import { emotionCraftLint } from '../engine/emotion-craft';
 import { webnovelLint } from '../engine/webnovel-craft';
 import type { LintIssue } from '../engine/craft-lint';
@@ -169,11 +169,25 @@ export function createCraftRouter() {
   // 免费原型选型：按一句话创意/标签匹配 6型主角 + 6型反派，含系统流时附 3 套高级机制（中文创作知识库单一事实来源）
   r.post('/archetype-match', (req, res) => {
     const b = req.body ?? {};
+    const lang: 'zh' | 'en' = b.lang === 'en' ? 'en' : 'zh';
     const text = String(b.text ?? '').slice(0, 6000);
     const tags = asStrArr(b.tags).slice(0, 40);
-    if (!text.trim() && !tags.length) return res.status(400).json({ error: '请提供一句话创意、简介或标签' });
-    const m = matchArchetype({ text, tags }, 'zh');
-    res.json({ protag: m.protag, villain: m.villain, system: m.system, hasSystem: m.system.length > 0 });
+    if (!text.trim() && !tags.length) return res.status(400).json({ error: lang === 'en' ? 'Provide a one-line idea, synopsis or tags' : '请提供一句话创意、简介或标签' });
+    const m = matchArchetype({ text, tags }, lang);
+    // 引擎用英文关键词匹配但仍返回中文条目；英文界面按 id 覆盖名称/公式/用法，避免中英混排
+    const localize = <T extends { id: string }>(list: T[], dict: Record<string, object>) =>
+      list.map((x) => ({ ...x, ...(dict[x.id] || {}) }));
+    const en = lang === 'en';
+    // 系统机制只有「名称+机制」两栏，英文库无 formula；只取这两栏，避免把中文公式带进英文界面
+    const sys = en
+      ? m.system.map((s) => { const e = SYSTEM_EN[s.id]; return e ? { id: s.id, name: e.name, tip: e.tip } : { id: s.id, name: s.name, tip: s.tip }; })
+      : m.system;
+    res.json({
+      protag: en ? localize(m.protag, PROTAG_EN) : m.protag,
+      villain: en ? localize(m.villain, VILLAIN_EN) : m.villain,
+      system: sys,
+      hasSystem: m.system.length > 0,
+    });
   });
 
   return r;
