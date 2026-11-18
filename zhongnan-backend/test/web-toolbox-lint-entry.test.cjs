@@ -61,4 +61,12 @@ describe('v2.511 剧本体检：工具箱入口与免费端点接线', () => {
     const view = fs.readFileSync(path.join(root, 'lint-view.js'), 'utf8');
     assert.match(view, /\$\('lintRunBtn'\)\.onclick = runLint/, '体检按钮须绑定执行函数');
   });
+
+  it('多集正文自动拆分后按 episodes 体检（情绪线与开篇留存规则才有效）', () => {
+    const view = fs.readFileSync(path.join(root, 'lint-view.js'), 'utf8');
+    assert.match(view, /function splitEpisodes/, '须按「第 X 集 / EPn」切分分集');
+    assert.match(view, /episodes: eps/, '须把分集数组发给 /api/craft/lint');
+    assert.match(view, /epsNote: \(n\)/, '须告知用户已按几集体检（否则用户不知道多集规则生效）');
+    assert.match(view, /renderLint\(d, eps\.length\)/, '体检结果须带上实际集数才显示提示');
+  });
 });

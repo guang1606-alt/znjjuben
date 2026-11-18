@@ -17,6 +17,7 @@
       noMatch: '未匹配到足够鲜明的原型：补充人物身份、欲望与最怕的东西再试。',
       archHint: '原型只是选型参考——同名原型可以写出完全不同的戏，关键是 formula 里的对冲关系。',
       formula: '公式', core: '用法', tip: '机制', chars: (n) => `已读 ${n} 字`,
+      epsNote: (n) => `已识别 ${n} 集，情绪线与开篇留存规则已生效`,
     },
     en: {
       checking: 'Checking…', matching: 'Matching archetypes…',
@@ -29,6 +30,7 @@
       noMatch: 'No distinctive archetype matched yet — add identity, want and deepest fear, then retry.',
       archHint: 'Archetypes are reference only: the same archetype can carry a totally different story; the tension in the formula is what matters.',
       formula: 'Formula', core: 'How to use', tip: 'Mechanic', chars: (n) => `${n} chars read`,
+      epsNote: (n) => `${n} episodes detected — emotion arc and opening-retention rules are active`,
     },
   };
   const T = () => (en() ? L.en : L.zh);
@@ -50,12 +52,28 @@
     return avg >= 80 ? 'dv-good' : avg >= 60 ? 'dv-mid' : 'dv-bad';
   }
 
-  function renderLint(d) {
+  // 多集正文：用户常把整段剧本一次粘进来。只有切成 episodes 数组交给后端，
+  // 情绪线（跨集起伏）与开篇留存（首集钩子）两条规则才会真正生效；单集正文仍走整篇体检。
+  function splitEpisodes(raw) {
+    const s = String(raw || '');
+    const re = /^\s*(?:第\s*[0-9一二三四五六七八九十百千]+\s*集|EP?\s*\d+|Episode\s*\d+)[^\n]*$/gim;
+    const marks = [];
+    let m;
+    while ((m = re.exec(s))) marks.push(m.index);
+    if (marks.length < 2) return [];
+    return marks
+      .map((start, i) => s.slice(start, i + 1 < marks.length ? marks[i + 1] : s.length).trim())
+      .filter(Boolean)
+      .slice(0, 10);
+  }
+
+  function renderLint(d, epsN) {
     const t = T();
     const c = d.counts || { p0: 0, p1: 0, p2: 0, total: 0 };
+    const note = Number(epsN) >= 2 ? `<div class="muted">${esc(t.epsNote(Number(epsN)))}</div>` : '';
     const head = `<div class="dv-score-row">
       <div class="dv-score ${scoreClass(Number(d.avg) || 0)}"><span class="dv-score-num">${Number(d.avg) || 0}</span><span class="dv-score-cap">${esc(t.avgCap)}</span></div>
-      <div><div class="muted">${esc(t.counts(c))}</div><div class="muted">${esc(t.chars(Number(d.chars) || 0))}</div></div>
+      <div><div class="muted">${esc(t.counts(c))}</div><div class="muted">${esc(t.chars(Number(d.chars) || 0))}</div>${note}</div>
     </div>`;
     if (!c.total) {
       $('lintResult').innerHTML = `<div class="dv-report">${head}<div class="dv-good">${esc(t.allClear)}</div></div>`;
@@ -99,7 +117,7 @@
 
   function reRender() {
     if (!last) return;
-    if (last.kind === 'lint') renderLint(last.data); else renderArch(last.data);
+    if (last.kind === 'lint') renderLint(last.data, last.eps || 0); else renderArch(last.data);
   }
 
   async function runLint() {
@@ -110,9 +128,12 @@
     if (btn) btn.disabled = true;
     $('lintResult').innerHTML = `<div class="muted">${esc(T().checking)}</div>`;
     try {
-      const d = await postJson('/api/craft/lint', { text, lang: en() ? 'en' : 'zh' });
-      last = { kind: 'lint', data: d };
-      renderLint(d);
+      const eps = splitEpisodes(text);
+      const lang = en() ? 'en' : 'zh';
+      const body = eps.length >= 2 ? { text, lang, episodes: eps } : { text, lang };
+      const d = await postJson('/api/craft/lint', body);
+      last = { kind: 'lint', data: d, eps: eps.length };
+      renderLint(d, eps.length);
     } catch (e) {
       $('lintResult').innerHTML = `<div class="dv-bad">${esc(T().fail)}：${esc((e && e.message) || '')}</div>`;
     } finally {
