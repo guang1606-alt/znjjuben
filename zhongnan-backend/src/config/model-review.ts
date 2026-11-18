@@ -6,12 +6,12 @@
  *   · <7 天 fresh；>=7 天 due（该核对了）；>=14 天 overdue（必须核对）；
  *   · portfolioSelfCheck 不通过（国产替补缺失等结构性问题）立即升级 due；
  *   · 超管联网核对价格/停服公告/新旗舰后点"已核对" → 写 MODEL_REVIEW_ACK，基准日刷新。
- * 厂商价格/控制台链接 2026-09-29 核实；如厂商改版以官网最新地址为准。
+ * 厂商价格/控制台链接 2026-11-18 核实；如厂商改版以官网最新地址为准。
  */
 import { portfolioSelfCheck } from './model-catalog';
 
-/** catalog 型号/单价基准日（与 admin 组合全景 FAQ 的"2026-08 公开价"口径一致）；每次 ACK 后基准日前移 */
-export const CATALOG_PRICING_AS_OF = '2026-08-01';
+/** catalog 型号/单价基准日（与 admin 组合全景 FAQ 的"2026-11 公开价"口径一致）；每次 ACK 后基准日前移 */
+export const CATALOG_PRICING_AS_OF = '2026-11-18';
 /** 超过该天数未核对 → due（亮黄） */
 export const REVIEW_DUE_DAYS = 7;
 /** 超过该天数未核对 → overdue（亮红） */
@@ -42,7 +42,7 @@ export interface ModelReviewStatus {
   upgradeHints: number;
 }
 
-/** 各厂商"当期在卖什么 + 价格页 + 控制台"，提醒超管逐家核对（2026-09-29 口径） */
+/** 各厂商"当期在卖什么 + 价格页 + 控制台"，提醒超管逐家核对（2026-11-18 口径） */
 export const VENDOR_REVIEW_LINKS: VendorReviewLink[] = [
   {
     vendor: 'DeepSeek 深度求索', models: 'DeepSeek-V4.1-Flash（旧 deepseek-v4-flash 名已自动路由）/ V4-Pro 正式版',
@@ -88,7 +88,7 @@ export const VENDOR_REVIEW_LINKS: VendorReviewLink[] = [
 ];
 
 const CHECKLIST = [
-  '停服/EOL：逐家核对模型广场在售状态，已停服或退出目录的型号先登记替代品、跑通验证后再切换（当前重点：豆包 Seed-2.0 系列）',
+  '停服/EOL：逐家核对模型广场在售状态，已停服或退出目录的型号先登记替代品、跑通验证后再切换（当前重点：豆包 Seed-2.0 系列已退出、Seedream 4.x 逐步下架）',
   '单价变动：按价格页核对 catalog 单价（注意高峰/空闲、按上下文分段计价就高取值）；任何涨价都要重算×2铁底，击穿先涨价不降配',
   '新一代/新旗舰：出现新型号先同题横评（中文去AI味/长文结构/逻辑挑漏/稳定性），不唯榜单，确认更强再在后台换型',
   '真实账单：拉近 7 天 ModelCallLog 实际消耗，用实付单价校准成本估算，缓存命中率一并核对',

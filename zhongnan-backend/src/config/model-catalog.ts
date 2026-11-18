@@ -6,11 +6,11 @@
  *  · 【定价单一源】档位单价不再在本文件硬编码，一律查 pricing.EP_PRICE[会员][档]，本文件只负责“用哪些模型、裸成本多少”；
  *  · 档位能否用查 pricing.MEMBERSHIP[等级].engines，不再自造一套解锁表；
  *  · 最强组合 ≠ 每岗都堆最贵模型：2026-08 多源横评交叉结论——DeepSeek(V4)逻辑/因果闭环但文笔情绪偏干，
- *    豆包 Seed-2.0「写文章最像人、几乎无AI味」、MiniMax 角色对白强、Claude(Sonnet5)叙事去AI腔第一梯队、
+ *    豆包 Seed-2.1「写文章最像人、几乎无AI味」、MiniMax 角色对白强、Claude(Sonnet5)叙事去AI腔第一梯队、
  *    Gemini3/Kimi K3 超长上下文与多语。故：架构/挑漏用 DeepSeek，中文成稿(writer)/人设/润色以豆包为主、MiniMax/Claude 补强；
  *  · Claude Opus 5 极贵，不进“每集”组合（会击穿成本×2铁底），仅登记为旗舰档备用/对照，不进任何组合流水线。
  *
- * 单价为 2026-08 公开价保守参考量级（元/百万 token，就高不就低），以后台真实账单校准；型号可在后台一键替换。
+ * 单价为 2026-11-18 官网公开价保守参考量级（元/百万 token，就高不就低；峰谷价按高峰取值），以后台真实账单校准；型号可在后台一键替换。
  * 合规/市场评分默认走本地引擎(LOCAL，零模型成本)，把钱花在架构/人设/撰写/润色上。
  */
 import { MemberLevel, EngineTier, EP_PRICE, MEMBERSHIP, FEN_PER_POINT } from './pricing';
@@ -33,13 +33,13 @@ export interface ModelInfo {
 }
 
 export const TEXT_MODELS: ModelInfo[] = [
-  { id: 'deepseek_v4flash', vendor: 'DeepSeek', name: 'DeepSeek-V4-Flash', modality: 'text', goodAt: ['architect', 'audience', 'market_post'], inYuanPerMTok: 1, outYuanPerMTok: 2, contextK: 1024, region: 'domestic', grade: 'eco', defaultBaseUrl: 'https://api.deepseek.com/v1', note: '2026代单价地板，逻辑快，经济档架构/挑漏' },
-  { id: 'deepseek_v4pro', vendor: 'DeepSeek', name: 'DeepSeek-V4-Pro', modality: 'text', goodAt: ['architect', 'audience', 'market_post'], inYuanPerMTok: 3, outYuanPerMTok: 6, contextK: 1024, region: 'domestic', grade: 'std', defaultBaseUrl: 'https://api.deepseek.com/v1', note: '强推理、因果闭环；文笔情绪偏干，不做writer主力，专攻结构/挑逻辑漏洞' },
-  { id: 'doubao_seedflash', vendor: '字节豆包', name: 'Doubao-Seed-2.0-Flash', modality: 'text', goodAt: ['writer', 'character', 'polish'], inYuanPerMTok: 0.8, outYuanPerMTok: 2, contextK: 256, region: 'domestic', grade: 'eco', defaultBaseUrl: 'https://ark.cn-beijing.volces.com/api/v3', note: '中文对白自然、去AI味、极便宜，经济档成稿主力' },
-  { id: 'doubao_seed2pro', vendor: '字节豆包', name: 'Doubao-Seed-2.1-Pro', modality: 'text', goodAt: ['writer', 'character', 'polish'], inYuanPerMTok: 3.2, outYuanPerMTok: 16, contextK: 256, region: 'domestic', grade: 'std', defaultBaseUrl: 'https://ark.cn-beijing.volces.com/api/v3', note: 'v2.323: 2.0-Pro 已退出火山方舟，升级 2.1-Pro；供应商池走接入点 ID（此处仅成本估算/展示）' },
-  { id: 'qwen38max', vendor: '阿里通义', name: 'Qwen3.8-Max', modality: 'text', goodAt: ['architect', 'character', 'compliance', 'market_pre'], inYuanPerMTok: 6, outYuanPerMTok: 24, contextK: 256, region: 'domestic', grade: 'std', defaultBaseUrl: 'https://dashscope.aliyuncs.com/compatible-mode/v1', note: '2026最均衡无短板，标准档人设/合规/兜底' },
-  { id: 'kimi_k3', vendor: '月之暗面', name: 'Kimi-K3', modality: 'text', goodAt: ['polish', 'audience', 'market_pre', 'character', 'compliance'], inYuanPerMTok: 4, outYuanPerMTok: 12, contextK: 1024, region: 'domestic', grade: 'std', defaultBaseUrl: 'https://api.moonshot.cn/v1', note: '超长上下文、高性价比（达顶级分输出价低约70%），资料消化/润色/合规替补' },
-  { id: 'minimax_m25', vendor: 'MiniMax', name: 'MiniMax-M2.5', modality: 'text', goodAt: ['character', 'writer', 'polish'], inYuanPerMTok: 2.1, outYuanPerMTok: 8.4, contextK: 256, region: 'domestic', grade: 'std', defaultBaseUrl: 'https://api.minimax.chat/v1', note: '创意写作/角色扮演强，人物对白与差异化声口' },
+  { id: 'deepseek_v4flash', vendor: 'DeepSeek', name: 'DeepSeek-V4.1-Flash', modality: 'text', goodAt: ['architect', 'audience', 'market_post'], inYuanPerMTok: 2, outYuanPerMTok: 4, contextK: 1024, region: 'domestic', grade: 'eco', defaultBaseUrl: 'https://api.deepseek.com/v1', note: '闲时 1/2、高峰翻倍；按高峰价登记保守估算；逻辑快，经济档架构/挑漏' },
+  { id: 'deepseek_v4pro', vendor: 'DeepSeek', name: 'DeepSeek-V4-Pro', modality: 'text', goodAt: ['architect', 'audience', 'market_post'], inYuanPerMTok: 4.5, outYuanPerMTok: 9, contextK: 1024, region: 'domestic', grade: 'std', defaultBaseUrl: 'https://api.deepseek.com/v1', note: '峰谷价：闲时输入 4.5 元起，输出按官方 1:2 保守登记 9 元；强推理、因果闭环，不做writer主力' },
+  { id: 'doubao_seedflash', vendor: '字节豆包', name: 'Doubao-Seed-2.1-lite', modality: 'text', goodAt: ['writer', 'character', 'polish'], inYuanPerMTok: 0.8, outYuanPerMTok: 2, contextK: 256, region: 'domestic', grade: 'eco', defaultBaseUrl: 'https://ark.cn-beijing.volces.com/api/v3', note: '2.1-lite 官网单价待取得，先按 2.0-Flash 历史价保守登记，以真实账单校准；中文对白自然、去AI味' },
+  { id: 'doubao_seed2pro', vendor: '字节豆包', name: 'Doubao-Seed-2.1-Pro', modality: 'text', goodAt: ['writer', 'character', 'polish'], inYuanPerMTok: 6, outYuanPerMTok: 30, contextK: 256, region: 'domestic', grade: 'std', defaultBaseUrl: 'https://ark.cn-beijing.volces.com/api/v3', note: '2026-11-18 官网 6/30；2.0-Pro 已退出方舟，供应商池走接入点 ID（此处仅成本估算/展示）' },
+  { id: 'qwen38max', vendor: '阿里通义', name: 'Qwen3.8-Max', modality: 'text', goodAt: ['architect', 'character', 'compliance', 'market_pre'], inYuanPerMTok: 6, outYuanPerMTok: 24, contextK: 1024, region: 'domestic', grade: 'std', defaultBaseUrl: 'https://dashscope.aliyuncs.com/compatible-mode/v1', note: '1M 上下文；2026-11-18 官网 6/24（Batch 6/18）；均衡无短板，标准档长上下文兜底' },
+  { id: 'kimi_k3', vendor: '月之暗面', name: 'Kimi-K3', modality: 'text', goodAt: ['polish', 'audience', 'market_pre', 'character', 'compliance'], inYuanPerMTok: 20, outYuanPerMTok: 100, contextK: 1024, region: 'domestic', grade: 'std', defaultBaseUrl: 'https://api.moonshot.cn/v1', note: '2026-11-18 官网 20/100（缓存命中 2）；平台迁 kimi.com、旧 moonshot.cn 仍跳转；仅旗舰档长文消化' },
+  { id: 'minimax_m25', vendor: 'MiniMax', name: 'MiniMax-M3', modality: 'text', goodAt: ['character', 'writer', 'polish'], inYuanPerMTok: 2.1, outYuanPerMTok: 8.4, contextK: 256, region: 'domestic', grade: 'std', defaultBaseUrl: 'https://api.minimax.chat/v1', note: 'M3：≤512k 永久五折 2.1/8.4，与 M2.5 同价；创意写作/角色扮演强，人物对白与差异化声口' },
   { id: 'gpt_5flag', vendor: 'OpenAI', name: 'GPT-5.x 旗舰', modality: 'text', goodAt: ['architect', 'polish', 'character'], inYuanPerMTok: 25, outYuanPerMTok: 100, contextK: 256, region: 'overseas', grade: 'flag', defaultBaseUrl: 'https://api.openai.com/v1', note: '综合最强梯队，旗舰架构/复杂统筹' },
   { id: 'claude_sonnet5', vendor: 'Anthropic', name: 'Claude Sonnet 5', modality: 'text', goodAt: ['polish', 'character', 'writer'], inYuanPerMTok: 22, outYuanPerMTok: 110, contextK: 200, region: 'overseas', grade: 'flag', defaultBaseUrl: 'https://api.anthropic.com/v1', note: '叙事/人物/去AI腔第一梯队，旗舰人设润色' },
   { id: 'claude_opus5', vendor: 'Anthropic', name: 'Claude Opus 5', modality: 'text', goodAt: ['polish', 'architect'], inYuanPerMTok: 36, outYuanPerMTok: 180, contextK: 200, region: 'overseas', grade: 'flag', defaultBaseUrl: 'https://api.anthropic.com/v1', note: '2026智能指数第一，但每集成本过高，仅登记备用、不进每集组合' },
@@ -48,7 +48,8 @@ export const TEXT_MODELS: ModelInfo[] = [
 
 export const IMAGE_MODELS: ModelInfo[] = [
   { id: 'gpt_image', vendor: 'OpenAI', name: 'GPT-image-1(image2位)', modality: 'image', goodAt: ['poster'], inYuanPerMTok: 0, outYuanPerMTok: 0, contextK: 0, region: 'overseas', grade: 'flag', defaultBaseUrl: 'https://api.openai.com/v1', note: '文字排版与语义准确，旗舰海报（用户指定必接）' },
-  { id: 'seedream', vendor: '字节即梦', name: 'Seedream 4.x', modality: 'image', goodAt: ['poster', 'storyboard'], inYuanPerMTok: 0, outYuanPerMTok: 0, contextK: 0, region: 'domestic', grade: 'std', defaultBaseUrl: 'https://ark.cn-beijing.volces.com/api/v3', note: '中文国风海报强、性价比高' },
+  { id: 'seedream', vendor: '字节即梦', name: 'Seedream 5.0-lite', modality: 'image', goodAt: ['poster', 'storyboard'], inYuanPerMTok: 0, outYuanPerMTok: 0, contextK: 0, region: 'domestic', grade: 'std', defaultBaseUrl: 'https://ark.cn-beijing.volces.com/api/v3', note: '5.0-lite 0.22 元/张（按张计费在计费层）；4.x 逐步下架；中文国风海报强' },
+  { id: 'seedream_pro', vendor: '字节即梦', name: 'Seedream 5.0-pro', modality: 'image', goodAt: ['poster'], inYuanPerMTok: 0, outYuanPerMTok: 0, contextK: 0, region: 'domestic', grade: 'flag', defaultBaseUrl: 'https://ark.cn-beijing.volces.com/api/v3', note: '5.0-pro 0.30 元起/张；旗舰海报国产位（按张计费在计费层）' },
   { id: 'wanx', vendor: '阿里通义万相', name: '通义万相 wanx', modality: 'image', goodAt: ['poster'], inYuanPerMTok: 0, outYuanPerMTok: 0, contextK: 0, region: 'domestic', grade: 'eco', defaultBaseUrl: 'https://dashscope.aliyuncs.com/compatible-mode/v1', note: '便宜稳定走量' },
   { id: 'kling_image', vendor: '快手可灵', name: '可灵 KLING 图像', modality: 'image', goodAt: ['poster', 'storyboard'], inYuanPerMTok: 0, outYuanPerMTok: 0, contextK: 0, region: 'domestic', grade: 'std', defaultBaseUrl: 'https://api.klingai.com', note: '写实人像/电影感' },
   { id: 'flux', vendor: 'Black Forest', name: 'Flux 1.1 Pro', modality: 'image', goodAt: ['poster'], inYuanPerMTok: 0, outYuanPerMTok: 0, contextK: 0, region: 'overseas', grade: 'std', defaultBaseUrl: 'https://api.bfl.ml/v1', note: '质感细节强' },
@@ -75,7 +76,7 @@ export const ROLE_TOKENS_PER_EP: Record<string, { in: number; out: number }> = {
 };
 
 export interface RolePick { role: string; modelId: string; backupIds: string[] }
-// 经济档：DeepSeek-V4-Flash 管逻辑 + 豆包Seed-Flash 管中文成稿（去AI味），本地合规/市场（裸成本约 0.026 元/集）
+// 经济档：DeepSeek-V4.1-Flash 管逻辑 + 豆包Seed-2.1-lite 管中文成稿（去AI味），本地合规/市场（裸成本约 0.034 元/集，按高峰价保守估）
 // v2.52 第一替补统一为该岗「国产最强」（故障时宁可上调强度不降配），原经济型号留作第二替补
 const ECONOMY: RolePick[] = [
   { role: 'market_pre', modelId: LOCAL_ENGINE, backupIds: ['qwen38max', 'doubao_seedflash'] },
@@ -87,21 +88,22 @@ const ECONOMY: RolePick[] = [
   { role: 'compliance', modelId: LOCAL_ENGINE, backupIds: ['qwen38max'] },
   { role: 'market_post', modelId: LOCAL_ENGINE, backupIds: ['deepseek_v4pro', 'deepseek_v4flash'] },
 ];
-// 标准档：V4-Pro 搭架构挑漏 + 豆包Seed2.0-Pro成稿（最像人）+ MiniMax立人物（裸成本约 0.14 元/集）
+// 标准档：V4-Pro 搭架构挑漏 + 豆包Seed2.1-Pro成稿（最像人）+ MiniMax-M3 立人物（裸成本约 0.25 元/集）
 const STANDARD: RolePick[] = [
   { role: 'market_pre', modelId: LOCAL_ENGINE, backupIds: ['qwen38max'] },
   { role: 'architect', modelId: 'deepseek_v4pro', backupIds: ['qwen38max'] },
   { role: 'character', modelId: 'minimax_m25', backupIds: ['doubao_seed2pro'] },
   { role: 'writer', modelId: 'doubao_seed2pro', backupIds: ['minimax_m25'] },
-  { role: 'audience', modelId: 'deepseek_v4pro', backupIds: ['kimi_k3'] },
-  { role: 'polish', modelId: 'doubao_seed2pro', backupIds: ['kimi_k3'] },
+  // K3 实价是旧估值 5–8 倍，标准档观众替补改用同代 1M 上下文的 Qwen3.8-Max，K3 只留旗舰
+  { role: 'audience', modelId: 'deepseek_v4pro', backupIds: ['qwen38max'] },
+  { role: 'polish', modelId: 'doubao_seed2pro', backupIds: ['minimax_m25'] },
   { role: 'compliance', modelId: LOCAL_ENGINE, backupIds: ['qwen38max'] },
   // v2.52 市场终评首选升级 V4-Pro（六维评分/价值评估要最强推理，单集仅增约0.005元，铁底不破）
   { role: 'market_post', modelId: 'deepseek_v4pro', backupIds: ['deepseek_v4flash', 'qwen38max'] },
 ];
 // 旗舰档：全国产顶配（v2.54 改造：原 GPT-5/Claude/Gemini 海外组合迁移到 OVERSEAS 海外档）
 // v2.54 设计理由：用户当前不接海外 API；旗舰档用 DeepSeek V4-Pro 架构 + 豆包 Seed 2.0 Pro 成稿 +
-// MiniMax M2.5 人设 + Kimi K3 长上下文观众挑漏 + Qwen 3.8 Max 多语市场前置；异构最强且全直连
+// MiniMax M3 人设 + Kimi K3 长上下文观众挑漏 + Qwen 3.8 Max 多语市场前置；异构最强且全直连
 const FLAGSHIP: RolePick[] = [
   // 市场前置升级 Qwen 3.8 Max：长上下文 + 多语市场资料消化（替代原 Gemini 3 Pro）
   // 第一替补 kimi_k3：goodAt 含 market_pre 且为国产最强替补（deepseek_v4pro 不擅长 market_pre）
@@ -109,7 +111,7 @@ const FLAGSHIP: RolePick[] = [
   { role: 'architect', modelId: 'deepseek_v4pro', backupIds: ['qwen38max', 'deepseek_v4flash'] },
   { role: 'character', modelId: 'minimax_m25', backupIds: ['doubao_seed2pro'] },
   { role: 'writer', modelId: 'doubao_seed2pro', backupIds: ['minimax_m25'] },
-  // 观众挑漏升级 Kimi K3：20万级长上下文，比 V4-Pro 挑得更细（旗舰档差异化点）
+  // 观众挑漏升级 Kimi K3：1M 长上下文，比 V4-Pro 挑得更细（旗舰档差异化点）
   { role: 'audience', modelId: 'kimi_k3', backupIds: ['deepseek_v4pro'] },
   { role: 'polish', modelId: 'doubao_seed2pro', backupIds: ['minimax_m25', 'kimi_k3'] },
   { role: 'compliance', modelId: 'qwen38max', backupIds: ['kimi_k3'] },
@@ -124,7 +126,7 @@ const OVERSEAS: RolePick[] = [
   { role: 'architect', modelId: 'gpt_5flag', backupIds: ['deepseek_v4pro'] },
   { role: 'character', modelId: 'claude_sonnet5', backupIds: ['minimax_m25'] },
   { role: 'writer', modelId: 'doubao_seed2pro', backupIds: ['minimax_m25'] },
-  { role: 'audience', modelId: 'deepseek_v4pro', backupIds: ['kimi_k3'] },
+  { role: 'audience', modelId: 'deepseek_v4pro', backupIds: ['qwen38max', 'kimi_k3'] },
   { role: 'polish', modelId: 'claude_sonnet5', backupIds: ['doubao_seed2pro'] },
   { role: 'compliance', modelId: 'qwen38max', backupIds: ['kimi_k3'] },
   { role: 'market_post', modelId: 'deepseek_v4pro', backupIds: ['deepseek_v4flash', 'kimi_k3'] },
@@ -216,7 +218,7 @@ const COMBO_ROLES = ['market_pre', 'architect', 'character', 'writer', 'audience
  * v2.52 岗位「国产最强替补」策展排序（可审计、可随横评更新）
  * 同 grade 不按价格取巧：按岗位能力契合度排序——
  * 架构/挑漏/终评看推理（DeepSeek-V4-Pro）、中文成稿/润色看去AI味（豆包Seed2.0-Pro）、
- * 人设看角色声口（MiniMax-M2.5）、合规/前置看均衡与政策尺度（Qwen3.8-Max）、长上下文消化用 Kimi-K3。
+ * 人设看角色声口（MiniMax-M3）、合规/前置看均衡与政策尺度（Qwen3.8-Max）、长上下文消化用 Kimi-K3（仅旗舰档，实价高）。
  * 数组即该岗国产模型由强到弱的次序；validateStrongestBackup 以此为唯一准绳。
  */
 export const DOMESTIC_FIT_ORDER: Record<string, string[]> = {
@@ -224,8 +226,8 @@ export const DOMESTIC_FIT_ORDER: Record<string, string[]> = {
   architect: ['deepseek_v4pro', 'qwen38max', 'kimi_k3', 'deepseek_v4flash', 'doubao_seed2pro', 'minimax_m25', 'doubao_seedflash'],
   character: ['minimax_m25', 'doubao_seed2pro', 'qwen38max', 'kimi_k3', 'doubao_seedflash', 'deepseek_v4pro', 'deepseek_v4flash'],
   writer: ['doubao_seed2pro', 'minimax_m25', 'kimi_k3', 'qwen38max', 'doubao_seedflash', 'deepseek_v4pro', 'deepseek_v4flash'],
-  audience: ['deepseek_v4pro', 'kimi_k3', 'qwen38max', 'deepseek_v4flash', 'doubao_seed2pro', 'doubao_seedflash'],
-  polish: ['doubao_seed2pro', 'kimi_k3', 'minimax_m25', 'qwen38max', 'doubao_seedflash', 'deepseek_v4pro', 'deepseek_v4flash'],
+  audience: ['deepseek_v4pro', 'qwen38max', 'deepseek_v4flash', 'kimi_k3', 'doubao_seed2pro', 'doubao_seedflash'],
+  polish: ['doubao_seed2pro', 'minimax_m25', 'qwen38max', 'kimi_k3', 'doubao_seedflash', 'deepseek_v4pro', 'deepseek_v4flash'],
   compliance: ['qwen38max', 'kimi_k3', 'deepseek_v4pro', 'deepseek_v4flash', 'doubao_seed2pro', 'doubao_seedflash'],
   market_post: ['deepseek_v4pro', 'deepseek_v4flash', 'qwen38max', 'kimi_k3', 'doubao_seed2pro', 'doubao_seedflash'],
 };

@@ -10308,6 +10308,7 @@
       // c199 「开设账号」仅主账号可见（isSuperAdmin 由服务端口径判定，副管理员不可见此入口）
       const createBox = $('admCreateBox'); if (createBox) createBox.classList.toggle('hidden', !me.isSuperAdmin);
       renderAdmTabs(); loadAdmTab();
+      if (me.isSuperAdmin) remindModelReview();
     }).catch(() => switchView('studio', { replace: true }));
   }
   function renderAdmTabs() {
@@ -10324,7 +10325,7 @@
     if (admTab === 'stats') loadAdmStats();
     if (admTab === 'finance') loadAdmFinance();
     if (admTab === 'posts') loadAdmPosts();
-    if (admTab === 'models') { loadAdmModels(); loadAdmPortfolio().catch((e) => { $('admPfSummary').innerHTML = znErrorHtml((e && e.message) || t('loadFail')); }); loadProviders().catch((e) => { xnSay((e && e.message) || t('loadFail')); }); }
+    if (admTab === 'models') { loadAdmModels(); loadModelReview().catch((e) => { $('admRevStatus').innerHTML = znErrorHtml((e && e.message) || t('loadFail')); }); loadAdmPortfolio().catch((e) => { $('admPfSummary').innerHTML = znErrorHtml((e && e.message) || t('loadFail')); }); loadProviders().catch((e) => { xnSay((e && e.message) || t('loadFail')); }); }
     if (admTab === 'knowledge') { renderKnCategory(); loadAdmKnowledge(); }
     if (admTab === 'feedback') loadAdmFeedback();
     if (admTab === 'safety') loadAdmSafety();
@@ -10346,6 +10347,9 @@
     $('admModelSave').onclick = saveAdmModels;
     // v2.41 组合全景/供应商池
     $('admPfReload').onclick = loadAdmPortfolio;
+    // API 选型体检：立即体检 / 今日已核对（基准日前移，提醒归零）
+    $('admRevRun').onclick = admRunModelReview;
+    $('admRevAck').onclick = admAckModelReview;
     $('pvCatalog').onchange = fillPvByCatalog;
     $('pvSave').onclick = savePv;
     $('routeSave').onclick = saveRoutes;
@@ -10860,6 +10864,48 @@
       xnSay(lang === 'en' ? 'Saved (encrypted).' : '已加密保存');
       await loadAdmModels();
     } catch (e) { xnSay(e.message); }
+  }
+
+  /* ---------- API 选型体检：超管定期提醒（7 天亮黄 / 14 天亮红，基准日=上次人工核对） ---------- */
+  let revCache = null, revReminded = false;
+  // 进后台即提醒一次：不在模型 Tab 也能看到该换/该优化了（同一次会话只提醒一次）
+  async function remindModelReview() {
+    if (revReminded) return;
+    try { revCache = await admApi('/model/portfolio/review'); } catch { return; }
+    if (admTab === 'models') { renderModelReview(); return; }
+    if (revCache && revCache.status && revCache.status.due) {
+      revReminded = true;
+      xnSay(revCache.status.title + '：请到「模型与能力」逐家核对价格/停服，确认后点「今日已核对」');
+    }
+  }
+  async function loadModelReview() {
+    try { revCache = await admApi('/model/portfolio/review'); } catch (e) { $('admRevStatus').innerHTML = znErrorHtml((e && e.message) || t('loadFail')); return; }
+    renderModelReview();
+  }
+  function renderModelReview() {
+    const s = revCache && revCache.status;
+    if (!s) return;
+    const color = s.level === 'overdue' ? 'var(--danger,#e5484d)' : s.level === 'due' ? 'var(--warn,#c08a00)' : 'var(--ok,#3a9e6e)';
+    const dot = s.level === 'overdue' ? '🔴' : s.level === 'due' ? '🟡' : '🟢';
+    $('admRevStatus').innerHTML = `<b style="color:${color}">${dot} ${escapeHtml(s.title)}</b>`;
+    const fmt = (iso) => (iso ? new Date(iso).toLocaleString('zh-CN', { hour12: false }) : '—');
+    const vRows = s.vendors.map((v) => `<tr><td>${escapeHtml(v.vendor)}</td><td>${escapeHtml(v.models)}</td><td><a href="${escapeHtml(v.pricingUrl)}" target="_blank" rel="noopener">价格页</a> · <a href="${escapeHtml(v.consoleUrl)}" target="_blank" rel="noopener">控制台</a></td></tr>`).join('');
+    const ck = s.checklist.map((c) => '· ' + escapeHtml(c)).join('<br>');
+    // @module admin
+    $('admReview').innerHTML = `
+      <div class="notice" style="border-left:3px solid ${color}">${escapeHtml(s.message)}</div>
+      <div class="muted">基准日 ${escapeHtml(s.baseDate)} · 上次人工核对 ${fmt(revCache.lastAckAt)} · 上次自动体检 ${fmt(revCache.lastReviewAt)} · 组合自检 ${s.selfCheckOk ? '✅ 通过' : '⚠ ' + s.selfCheckIssues + ' 项待处理'} · 迭代候选 ${s.upgradeHints} 条</div>
+      <details${s.level === 'fresh' ? '' : ' open'}><summary>逐家核对：当期在售型号 + 价格页 + 控制台</summary><table class="adm-table"><thead><tr><th>厂商</th><th>当期型号</th><th>入口</th></tr></thead><tbody>${vRows}</tbody></table></details>
+      <details${s.level === 'fresh' ? '' : ' open'}><summary>核对清单</summary><div class="notice">${ck}</div></details>`;
+  }
+
+  async function admRunModelReview() {
+    try { await admApi('/model/portfolio/review/run', { method: 'POST' }); xnSay('体检已生成'); } catch (e) { xnSay(e.message); return; }
+    await loadModelReview();
+  }
+  async function admAckModelReview() {
+    try { await admApi('/model/portfolio/review/ack', { method: 'POST' }); xnSay('已记录：基准日前移，提醒归零'); } catch (e) { xnSay(e.message); return; }
+    await loadModelReview();
   }
 
   /* ---------- v2.41 组合全景 + 供应商池 + 九岗路由 ---------- */

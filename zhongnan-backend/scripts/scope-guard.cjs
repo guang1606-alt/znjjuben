@@ -41,12 +41,13 @@ function arg(name, def) {
 }
 
 function git(args) {
-  return execFileSync('git', ['-C', REPO, ...args], { encoding: 'utf8' }).trim();
+  return execFileSync('git', ['-c', 'core.quotePath=false', '-C', REPO, ...args], { encoding: 'utf8' }).trim();
 }
 
 // status 不能 trim：首行以「空格 + 状态」开头（如 " M path"），trim 会吃掉这枚空格，路径被截掉首字母
 function gitStatusLines() {
-  const raw = execFileSync('git', ['-C', REPO, 'status', '--porcelain'], { encoding: 'utf8' });
+  // core.quotePath=false：中文文件名按原文输出，否则 octal 转义后前缀比对会误判为跨目录
+  const raw = execFileSync('git', ['-c', 'core.quotePath=false', '-C', REPO, 'status', '--porcelain'], { encoding: 'utf8' });
   return raw.split('\n').filter((l) => l.trim().length > 0);
 }
 

@@ -140,9 +140,12 @@ export function createApp(routers: AppRouters = {}, preErrorRouter?: Router | Ro
     if (!secret?.trim() || !token || token !== secret) return res.status(404).end();
     try {
       if (task === 'daily') {
-        const { runDailyLearningCycle } = await import('../services/auto-learning');
-        const r = await runDailyLearningCycle(deps.prisma ?? defaultPrisma);
-        return res.json({ ok: true, task: 'daily', collected: r.collected, fresh: r.fresh });
+        const { runDailyLearningCycle, runDailyModelReview } = await import('../services/auto-learning');
+        const db = deps.prisma ?? defaultPrisma;
+        const r = await runDailyLearningCycle(db);
+        // 每日选型体检必须跟随 daily 任务：serverless 下内嵌调度器被关，这里漏掉就等于永不提醒
+        const rv = await runDailyModelReview(db, {}, 'scheduler');
+        return res.json({ ok: true, task: 'daily', collected: r.collected, fresh: r.fresh, review: rv.status.level, reviewDays: rv.status.daysSinceReview });
       }
       if (task === 'weekly') {
         const { runWeeklyModelAudit } = await import('../services/auto-learning');

@@ -19,9 +19,9 @@ const OK_SELF = { ok: true, issues: [], upgradeHints: [], manualNeeded: [] };
 const BAD_SELF = { ok: false, issues: [{ role: 'writer', problem: 'x' }], upgradeHints: [], manualNeeded: [] };
 
 describe('modelReviewStatus · 分级与基准日', () => {
-  it('从无 ACK：以 CATALOG_PRICING_AS_OF=2026-08-01 为基准，2026-09-29 已 59 天 → overdue', () => {
-    const s = MR.modelReviewStatus(null, d(2026, 9, 29), OK_SELF);
-    assert.strictEqual(s.baseDate, '2026-08-01');
+  it('从无 ACK：以 CATALOG_PRICING_AS_OF=2026-11-18 为基准，2027-01-16 已 59 天 → overdue', () => {
+    const s = MR.modelReviewStatus(null, d(2027, 1, 16), OK_SELF);
+    assert.strictEqual(s.baseDate, '2026-11-18');
     assert.strictEqual(s.daysSinceReview, 59);
     assert.strictEqual(s.level, 'overdue');
     assert.strictEqual(s.due, true);
@@ -29,7 +29,7 @@ describe('modelReviewStatus · 分级与基准日', () => {
   });
 
   it('基准日后第 2 天 → fresh、不提醒', () => {
-    const s = MR.modelReviewStatus(null, d(2026, 8, 3), OK_SELF);
+    const s = MR.modelReviewStatus(null, d(2026, 11, 20), OK_SELF);
     assert.strictEqual(s.daysSinceReview, 2);
     assert.strictEqual(s.level, 'fresh');
     assert.strictEqual(s.due, false);
@@ -91,14 +91,14 @@ describe('modelReviewStatus · 提醒内容可执行', () => {
   });
 
   it('buildReviewText 产出非空纯文本且带状态与天数', () => {
-    const s = MR.modelReviewStatus(null, d(2026, 9, 29), OK_SELF);
+    const s = MR.modelReviewStatus(null, d(2027, 1, 16), OK_SELF);
     const text = MR.buildReviewText(s);
     assert.ok(typeof text === 'string' && text.length > 80);
     assert.ok(text.includes('59'));
   });
 
   it('reviewSummary 是可落库的精简 JSON，含 level/daysSinceReview/due', () => {
-    const s = MR.modelReviewStatus(null, d(2026, 9, 29), OK_SELF);
+    const s = MR.modelReviewStatus(null, d(2027, 1, 16), OK_SELF);
     const sum = MR.reviewSummary(s);
     assert.strictEqual(sum.level, 'overdue');
     assert.strictEqual(sum.daysSinceReview, 59);
@@ -110,7 +110,7 @@ describe('modelReviewStatus · 提醒内容可执行', () => {
 describe('runDailyModelReview / ackModelReview · 每日闭环', () => {
   it('首次运行落 1 条 MODEL_REVIEW；同日重跑幂等不新增；报告为 overdue（基准日已过 14 天）', async () => {
     const prisma = createMemoryPrisma();
-    const now = d(2026, 9, 29);
+    const now = d(2027, 1, 16);
     const r1 = await AL.runDailyModelReview(prisma, {}, 'scheduler', now);
     assert.ok(r1.reportId);
     assert.strictEqual(r1.status.level, 'overdue');

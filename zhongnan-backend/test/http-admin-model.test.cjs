@@ -120,12 +120,12 @@ describe('v2.187 每日API选型体检 HTTP（仅管理员）', { concurrency: 1
     const r = await fetch(base + M + '/portfolio/review', { headers: H('u_norm', 'BASIC') });
     assert.strictEqual(r.status, 403);
   });
-  it('超管查看：无 ACK 时以 2026-08-01 基准日亮 overdue，附清单与厂商链接', async () => {
+  it('超管查看：无 ACK 时以 2026-11-18 基准日计算，附清单与厂商链接', async () => {
     const { s, j } = await get(M + '/portfolio/review', 'admin1', 'PRO');
     assert.strictEqual(s, 200);
-    assert.strictEqual(j.status.baseDate, '2026-08-01');
-    assert.ok(j.status.daysSinceReview >= 14, '距基准日已逾 14 天');
-    assert.strictEqual(j.status.level, 'overdue');
+    assert.strictEqual(j.status.baseDate, '2026-11-18');
+    assert.ok(j.status.daysSinceReview >= 0);
+    assert.ok(['fresh', 'due', 'overdue'].includes(j.status.level));
     assert.ok(j.status.checklist.length >= 5);
     assert.ok(j.status.vendors.length >= 8);
   });

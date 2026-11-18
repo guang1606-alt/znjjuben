@@ -31,13 +31,13 @@ export interface ApiEntry {
 export const API_DIRECTORY: ApiEntry[] = [
   /* ================= 一、文本大模型（9 岗位流水线，国内外最适 + 国产最强替补） ================= */
   {
-    id: 'api_deepseek', layer: 'llm_text', catalogId: 'deepseek_v4flash', catalogIds: ['deepseek_v4pro'], vendor: '深度求索 DeepSeek', product: 'DeepSeek 开放平台（V4-Flash / V4-Pro 同入口）',
+    id: 'api_deepseek', layer: 'llm_text', catalogId: 'deepseek_v4flash', catalogIds: ['deepseek_v4pro'], vendor: '深度求索 DeepSeek', product: 'DeepSeek 开放平台（V4.1-Flash / V4-Pro 同入口）',
     region: 'domestic', usedBy: ['剧情架构师(首选/替补)', '观众代言官(首选)', '市场终评(首选)', '经济档逻辑岗'],
     consoleUrl: 'https://platform.deepseek.com/', docUrl: 'https://api-docs.deepseek.com/',
     baseUrl: 'https://api.deepseek.com/v1', necessity: 'core', note: '注册→充值→创建 API Key；推理/因果闭环国产第一，架构与挑漏主力',
   },
   {
-    id: 'api_doubao', layer: 'llm_text', catalogId: 'doubao_seedflash', catalogIds: ['doubao_seed2pro'], vendor: '字节火山方舟', product: '豆包 Seed 2.0（Flash/Pro 同入口，方舟统一鉴权）',
+    id: 'api_doubao', layer: 'llm_text', catalogId: 'doubao_seedflash', catalogIds: ['doubao_seed2pro'], vendor: '字节火山方舟', product: '豆包 Seed 2.1（lite/Pro 同入口，方舟统一鉴权）',
     region: 'domestic', usedBy: ['单集撰写师(首选)', '细节润色师(首选)', '人设设计师(替补)', '经济档成稿'],
     consoleUrl: 'https://console.volcengine.com/ark', docUrl: 'https://www.volcengine.com/docs/82379',
     baseUrl: 'https://ark.cn-beijing.volces.com/api/v3', necessity: 'core', note: '开通模型推理→创建接入点(Endpoint)→拿 API Key；中文成稿“最像人”，去AI味主力',
@@ -51,14 +51,14 @@ export const API_DIRECTORY: ApiEntry[] = [
   {
     id: 'api_kimi', layer: 'llm_text', catalogId: 'kimi_k3', vendor: '月之暗面 Moonshot', product: 'Kimi 开放平台（K3）',
     region: 'domestic', usedBy: ['长上下文资料消化', '润色/观众岗替补', '合规第二替补'],
-    consoleUrl: 'https://platform.moonshot.cn/console', docUrl: 'https://platform.moonshot.cn/docs',
-    baseUrl: 'https://api.moonshot.cn/v1', necessity: 'core', note: '实名→充值→API Key 管理；超长上下文、高性价比',
+    consoleUrl: 'https://platform.kimi.com/', docUrl: 'https://platform.kimi.com/docs',
+    baseUrl: 'https://api.moonshot.cn/v1', necessity: 'core', note: '实名→充值→API Key 管理；平台已迁 kimi.com，旧 moonshot.cn 仍跳转；实价高，仅旗舰档长文消化',
   },
   {
-    id: 'api_minimax', layer: 'llm_text', catalogId: 'minimax_m25', vendor: 'MiniMax 开放平台', product: 'MiniMax-M2.5（国内站）',
+    id: 'api_minimax', layer: 'llm_text', catalogId: 'minimax_m25', vendor: 'MiniMax 开放平台', product: 'MiniMax-M3（国内站，≤512k 五折）',
     region: 'domestic', usedBy: ['人设设计师(标准档首选)', '单集撰写替补', '旗舰档人设国产最强替补'],
     consoleUrl: 'https://platform.minimaxi.com/', docUrl: 'https://platform.minimaxi.com/docs',
-    baseUrl: 'https://api.minimax.chat/v1', necessity: 'core', note: '账户管理→接口密钥→创建 Key 并充值；角色对白/声口差异化最强；国际站为 platform.minimax.io',
+    baseUrl: 'https://api.minimax.chat/v1', necessity: 'core', note: '账户管理→接口密钥→创建 Key 并充值；M3 与 M2.5 同价、角色对白/声口差异化最强；国际站为 platform.minimax.io',
   },
   {
     id: 'api_openai', layer: 'llm_text', catalogId: 'gpt_5flag', vendor: 'OpenAI', product: 'GPT-5.x（旗舰档架构，海外）',
@@ -87,10 +87,16 @@ export const API_DIRECTORY: ApiEntry[] = [
     baseUrl: 'https://api.openai.com/v1', necessity: 'core', note: '用户指定必接；海外结算，国产替补为 Seedream',
   },
   {
-    id: 'img_seedream', layer: 'llm_image', catalogId: 'seedream', vendor: '字节火山方舟', product: '即梦 Seedream 4.x（标准海报/分镜）',
+    id: 'img_seedream', layer: 'llm_image', catalogId: 'seedream', vendor: '字节火山方舟', product: '即梦 Seedream 5.0-lite（标准海报/分镜）',
     region: 'domestic', usedBy: ['剧本海报-标准档(39积分档)', '国风海报', 'AIGC 机器分镜图'],
     consoleUrl: 'https://console.volcengine.com/ark', docUrl: 'https://www.volcengine.com/docs/6791',
-    baseUrl: 'https://ark.cn-beijing.volces.com/api/v3', necessity: 'core', note: '与豆包同一方舟入口开通图像模型；中文海报性价比主力',
+    baseUrl: 'https://ark.cn-beijing.volces.com/api/v3', necessity: 'core', note: '与豆包同一方舟入口开通图像模型；0.22 元/张，中文海报性价比主力，4.x 逐步下架',
+  },
+  {
+    id: 'img_seedream_pro', layer: 'llm_image', catalogId: 'seedream_pro', vendor: '字节火山方舟', product: '即梦 Seedream 5.0-pro（旗舰海报国产位）',
+    region: 'domestic', usedBy: ['剧本海报-旗舰档国产位', '高精度国风海报'],
+    consoleUrl: 'https://console.volcengine.com/ark', docUrl: 'https://www.volcengine.com/docs/6791',
+    baseUrl: 'https://ark.cn-beijing.volces.com/api/v3', necessity: 'alternative', note: '0.30 元起/张；与 5.0-lite 同入口开通，旗舰档替代原 4.x 旗舰位',
   },
   {
     id: 'img_wanx', layer: 'llm_image', catalogId: 'wanx', vendor: '阿里云百炼', product: '通义万相（走量图）',

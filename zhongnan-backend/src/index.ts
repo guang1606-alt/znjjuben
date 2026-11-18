@@ -4,6 +4,7 @@ import { createApp } from './server/app';
 import { settleDueEscrows } from './lib/escrow';
 import { prisma } from './lib/prisma';
 import { startAutoScheduler } from './services/scheduler';
+import { runDailyModelReview } from './services/auto-learning';
 import { assertJwtSecrets } from './lib/auth';
 import { ensureSuperAdmin } from './lib/super-admin';
 
@@ -44,6 +45,10 @@ if (process.env.DISABLE_CRON === '1') {
 
 // 自主进化调度：每日自主学习闭环 + 每周一 API 全面盘点（DISABLE_AUTO_SCHEDULER=1 可关）
 startAutoScheduler(prisma);
+
+// 启动即补一次 API 选型体检：常驻实例没跑到 03:17 就重启、或云上只用定时器时，
+// 后台灯号也不会停在旧状态（同日幂等，重复启动不会重复落库）
+runDailyModelReview(prisma, {}, 'boot').catch((e) => console.error('[model-review] 启动体检失败:', (e as Error).message));
 
 // c198 超管主账号引导：18891995171 无则建（ENTERPRISE + 初始密码）、空密码补设、封禁自愈；
 // 幂等且失败不阻断启动（如数据库暂不可达，下次启动重试，主账号仍可用既有密码登录）

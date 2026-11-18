@@ -199,7 +199,7 @@ export function createAdminModelRouter(prisma: any) {
       routingCoverage: coverage, routedCostFenPerEp: routed.costFen, routedCostByRole: routed.byRole,
       faq: [
         { q: 'BaseUrl 必填吗？', a: '选目录内型号时非必填，系统自动补该厂商 OpenAI 兼容默认端点；自建/中转/代理必填 http(s) 端点。' },
-        { q: '输入/输出单价要我填吗？', a: '选目录型号会自动带出 2026-08 公开价保守参考量级（就高不就低）；自定义/中转必须按你真实账单填写，用于×2铁底核算。' },
+        { q: '输入/输出单价要我填吗？', a: '选目录型号会自动带出 2026-11 公开价保守参考量级（就高不就低）；自定义/中转必须按你真实账单填写，用于×2铁底核算。' },
         { q: '默认逻辑赚钱吗？', a: 'floorChecks 逐档逐等级给出实付/裸成本/毛利率，ok=true 即实付≥成本×2；任何一档击穿会在每周盘点 BLOCK，要求涨价而非降配。' },
         { q: '岗位顺序为什么市场先行？', a: '市场分析两次出现：market_pre 立项前置（题材/受众/爽点/平台尺度先定对不对路），market_post 成稿后置（六维评分/投稿匹配），orderErrors 为空即顺序合法。' },
         { q: '用户能看到这些模型吗？', a: '不能。C端全程黑盒，只感知经济/标准/旗舰三档；供应商名、型号、密钥、BaseUrl 仅超管后台可见，回显一律脱敏。' },
