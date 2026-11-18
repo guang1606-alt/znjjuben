@@ -18,7 +18,10 @@
       noMatch: '未匹配到足够鲜明的原型：补充人物身份、欲望与最怕的东西再试。',
       archHint: '原型只是选型参考——同名原型可以写出完全不同的戏，关键是 formula 里的对冲关系。',
       formula: '公式', core: '用法', tip: '机制', chars: (n) => `已读 ${n} 字`,
-      epsNote: (n) => `已识别 ${n} 集，情绪线与开篇留存规则已生效`,
+      epsNote: (n, total) => (total && total > n
+        ? `已检前 ${n} 集（共识别 ${total} 集，其余未检）——情绪线与开篇留存规则已生效`
+        : `已识别 ${n} 集，情绪线与开篇留存规则已生效`),
+      truncatedNote: '正文超过 2 万字上限，仅体检前 2 万字，后面的内容未检',
       copyReport: '复制问题单', copied: '已复制', copyFailed: '复制失败，请手动选择文本',
       unlockHint: (names) => `未填「${names}」，对应的断章 / 终局倒推检查未运行；补上后再体检可多查两项。`,
     },
@@ -34,7 +37,10 @@
       noMatch: 'No distinctive archetype matched yet — add identity, want and deepest fear, then retry.',
       archHint: 'Archetypes are reference only: the same archetype can carry a totally different story; the tension in the formula is what matters.',
       formula: 'Formula', core: 'How to use', tip: 'Mechanic', chars: (n) => `${n} chars read`,
-      epsNote: (n) => `${n} episodes detected — emotion arc and opening-retention rules are active`,
+      epsNote: (n, total) => (total && total > n
+        ? `Checked the first ${n} of ${total} episodes (the rest were not checked) — emotion arc and opening-retention rules are active`
+        : `${n} episodes detected — emotion arc and opening-retention rules are active`),
+      truncatedNote: 'Text exceeds the 20,000-character limit; only the first 20,000 characters were checked.',
       copyReport: 'Copy issue list', copied: 'Copied', copyFailed: 'Copy failed, please select the text manually',
       unlockHint: (names) => `"${names}" is empty, so the cliffhanger / ending-backcast checks did not run; fill it in and re-run to add two checks.`,
     },
@@ -66,11 +72,12 @@
     const marks = [];
     let m;
     while ((m = re.exec(s))) marks.push(m.index);
-    if (marks.length < 2) return [];
-    return marks
+    if (marks.length < 2) return { eps: [], total: 0 };
+    const all = marks
       .map((start, i) => s.slice(start, i + 1 < marks.length ? marks[i + 1] : s.length).trim())
-      .filter(Boolean)
-      .slice(0, 10);
+      .filter(Boolean);
+    // 后端单次最多 10 集：超出的集不能静默丢掉，把总数一并回报给界面明示
+    return { eps: all.slice(0, 10), total: all.length };
   }
 
   // 分组内按严重度排序：引擎内部按规则顺序产出，直接渲染会让 P2 夹在 P0 前面，用户容易漏掉硬伤
@@ -82,14 +89,15 @@
   function renderLint(d, epsN, meta) {
     const t = T();
     const c = d.counts || { p0: 0, p1: 0, p2: 0, total: 0 };
-    const note = Number(epsN) >= 2 ? `<div class="muted">${esc(t.epsNote(Number(epsN)))}</div>` : '';
+    const note = Number(epsN) >= 2 ? `<div class="muted">${esc(t.epsNote(Number(epsN), meta && meta.epsTotal))}</div>` : '';
+    const cutNote = d.truncated ? `<div class="dv-mid">${esc(t.truncatedNote)}</div>` : '';
     const miss = [];
     if (!(meta && meta.ending)) miss.push(t.lhEnding);
     if (!(meta && meta.outline)) miss.push(t.lhOutline);
     const unlock = miss.length ? `<div class="muted">${esc(t.unlockHint(miss.join(' / ')))}</div>` : '';
     const head = `<div class="dv-score-row">
       <div class="dv-score ${scoreClass(Number(d.avg) || 0)}"><span class="dv-score-num">${Number(d.avg) || 0}</span><span class="dv-score-cap">${esc(t.avgCap)}</span></div>
-      <div><div class="muted">${esc(t.counts(c))}</div><div class="muted">${esc(t.chars(Number(d.chars) || 0))}</div>${note}${unlock}
+      <div><div class="muted">${esc(t.counts(c))}</div><div class="muted">${esc(t.chars(Number(d.chars) || 0))}</div>${cutNote}${note}${unlock}
         <button type="button" class="chip" data-lint-copy>${esc(t.copyReport)}</button></div>
     </div>`;
     if (!c.total) {
@@ -133,14 +141,15 @@
   }
 
   // 问题单落地：把结构化结果拼成纯文本，用户可直接粘给改稿环节或自己的编辑工具
-  function reportText(d, epsN) {
+  function reportText(d, epsN, meta) {
     const t = T();
     const c = d.counts || {};
     const lines = [
       `${t.avgCap}: ${Number(d.avg) || 0}`,
       t.counts({ p0: c.p0 || 0, p1: c.p1 || 0, p2: c.p2 || 0, total: c.total || 0 }),
     ];
-    if (Number(epsN) >= 2) lines.push(t.epsNote(Number(epsN)));
+    if (d.truncated) lines.push(t.truncatedNote);
+    if (Number(epsN) >= 2) lines.push(t.epsNote(Number(epsN), meta && meta.epsTotal));
     (d.groups || []).forEach((g) => {
       lines.push('', `【${g.name || ''}】${t.groupAvg(Number(g.avg) || 0)}`);
       sortByLevel(g.issues).forEach((i) => lines.push(`- ${levelName(i.level)} · ${i.dim || ''}：${i.advice || ''}`));
@@ -177,7 +186,7 @@
     if (btn) btn.disabled = true;
     $('lintResult').innerHTML = `<div class="muted">${esc(T().checking)}</div>`;
     try {
-      const eps = splitEpisodes(text);
+      const { eps, total: totalEps } = splitEpisodes(text);
       const lang = en() ? 'en' : 'zh';
       const ending = String(($('lintEnding') || {}).value || '').trim();
       const outline = String(($('lintOutline') || {}).value || '').trim();
@@ -188,7 +197,7 @@
       if (ending) body.ending = ending;
       if (outline) body.outline = outline;
       const d = await postJson('/api/craft/lint', body);
-      const meta = { ending: !!ending, outline: !!outline };
+      const meta = { ending: !!ending, outline: !!outline, epsTotal: totalEps };
       last = { kind: 'lint', data: d, eps: eps.length, meta };
       renderLint(d, eps.length, meta);
     } catch (e) {
@@ -227,7 +236,7 @@
       const hit = e.target && e.target.closest && e.target.closest('[data-lint-copy]');
       if (!hit) return;
       if (!last || last.kind !== 'lint') return;
-      copyText(reportText(last.data, last.eps || 0)).then(() => {
+      copyText(reportText(last.data, last.eps || 0, last.meta)).then(() => {
         const old = hit.textContent;
         hit.textContent = T().copied; hit.disabled = true;
         setTimeout(() => { hit.textContent = old; hit.disabled = false; }, 1200);

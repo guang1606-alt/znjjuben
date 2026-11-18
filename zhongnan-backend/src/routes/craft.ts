@@ -149,7 +149,10 @@ export function createCraftRouter() {
   r.post('/lint', (req, res) => {
     const b = req.body ?? {};
     const lang: 'zh' | 'en' = b.lang === 'en' ? 'en' : 'zh';
-    const text = String(b.text ?? '').slice(0, LINT_MAX_CHARS);
+    const rawText = String(b.text ?? '');
+    // 超限截断而不是拒绝，但必须回报，否则用户以为整篇都检了
+    const truncated = rawText.length > LINT_MAX_CHARS;
+    const text = rawText.slice(0, LINT_MAX_CHARS);
     const episodes = (Array.isArray(b.episodes) ? b.episodes : [])
       .slice(0, 10).map((x: unknown) => String(x ?? '').slice(0, LINT_MAX_CHARS)).filter(Boolean);
     if (!text.trim() && !episodes.length) {
@@ -177,7 +180,7 @@ export function createCraftRouter() {
     };
     const scored = groups.map((g) => g.r.avg).filter((n) => n > 0);
     res.json({
-      lang, chars: text.length,
+      lang, chars: text.length, truncated,
       groups: groups.map((g) => ({ key: g.key, name: g.name, avg: g.r.avg, p1Count: g.r.issues.filter((i) => i.level === 'P1').length, issues: g.r.issues })),
       issues, counts,
       avg: scored.length ? Math.round(scored.reduce((s, n) => s + n, 0) / scored.length) : 0,

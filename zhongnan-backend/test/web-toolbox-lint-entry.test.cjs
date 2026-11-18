@@ -66,13 +66,13 @@ describe('v2.511 剧本体检：工具箱入口与免费端点接线', () => {
     const view = fs.readFileSync(path.join(root, 'lint-view.js'), 'utf8');
     assert.match(view, /function splitEpisodes/, '须按「第 X 集 / EPn」切分分集');
     assert.match(view, /episodes: eps/, '须把分集数组发给 /api/craft/lint');
-    assert.match(view, /epsNote: \(n\)/, '须告知用户已按几集体检（否则用户不知道多集规则生效）');
+    assert.match(view, /epsNote: \(n, total\)/, '须告知用户已按几集体检（否则用户不知道多集规则生效）');
     assert.match(view, /renderLint\(d, eps\.length, meta\)/, '体检结果须带上实际集数才显示提示');
   });
 
   it('体检结果可一键复制成纯文本问题单（拿给改稿环节直接用）', () => {
     const view = fs.readFileSync(path.join(root, 'lint-view.js'), 'utf8');
-    assert.match(view, /function reportText\(d, epsN\)/, '须把结构化结果拼成可读问题单');
+    assert.match(view, /function reportText\(d, epsN, meta\)/, '须把结构化结果拼成可读问题单');
     assert.match(view, /data-lint-copy/, '结果区须有复制按钮');
     assert.match(view, /copyReport:/, '须有复制按钮文案');
     assert.match(view, /closest\('\[data-lint-copy\]'\)/, '复制按钮须用事件委托（结果重渲染不丢绑定）');
@@ -125,6 +125,16 @@ describe('v2.511 剧本体检：工具箱入口与免费端点接线', () => {
     assert.match(html, /id="lintTitle"/, '体检面板须提供剧名输入框');
     assert.match(html, /data-i="tbLintTitleL"/, '剧名标签须走 i18n');
     assert.match(i18n, /tbLintTitleL:/, 'i18n 缺剧名标签');
+  });
+
+  it('两处静默截断都要明示：正文超 2 万字、集数超 10 集', () => {
+    const view = fs.readFileSync(path.join(root, 'lint-view.js'), 'utf8');
+    assert.match(view, /return \{ eps: all\.slice\(0, 10\), total: all\.length \};/, '拆集须同时回报总集数，否则用户不知后 20 集没检');
+    assert.match(view, /const \{ eps, total: totalEps \} = splitEpisodes\(text\);/, '须使用拆集回报的总集数');
+    assert.match(view, /其余未检/, '超限须明说其余未检');
+    assert.match(view, /d\.truncated/, '正文超限须在结果里提示');
+    assert.match(view, /const cutNote = d\.truncated \?/, '截断提示须在结果头部渲染，不能只写进复制文本');
+    assert.match(view, /\$\{cutNote\}/, '截断提示须真的插进结果 DOM');
   });
 
   it('递招带上已有正文的开篇与界面语言（开篇审计不再睡死）', () => {

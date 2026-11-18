@@ -224,6 +224,14 @@ describe('免费剧本体检 craft/lint（v2.510）', () => {
     assert.strictEqual(t[0].level, 'P1', '没有冲突词/一眼看点的剧名应判 P1');
   });
 
+  it('正文超出体检上限要明说（不静默截断，v2.523）', async () => {
+    const ok = await (await fetch(base + M + '/lint', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text: '她把合同拍在桌上。'.repeat(30) }) })).json();
+    assert.strictEqual(ok.truncated, false, '未超限不应标记截断');
+    const big = await (await fetch(base + M + '/lint', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text: '她把合同拍在桌上。'.repeat(3000) }) })).json();
+    assert.strictEqual(big.truncated, true, '超过 2 万字须标记 truncated');
+    assert.strictEqual(big.chars, 20000, '仍按上限截断，只是不再隐瞒');
+  });
+
   it('改稿尺子与叙事逻辑在免费体检中生效（小说腔/然后链）', async () => {
     const j = await (await fetch(base + M + '/lint', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
