@@ -1859,6 +1859,10 @@
       await loadCraftTaxonomy();
       const idea = ($('tagIdea') && $('tagIdea').value || '').trim();
       const body = { text: idea, tags: tagChosen, limit: 6 };
+      if (lang === 'en') body.lang = 'en';
+      // 已有正文时把开篇带上：递招同时给出开篇钩子审计（纯本地规则，不耗积分、不调模型）
+      const opening = String(($('scriptText') || {}).value || '').trim().slice(0, 1200);
+      if (opening) body.opening = opening;
       const j = await (await Api.request('/api/craft/recommend', { method: 'POST', body: JSON.stringify(body) })).json();
       craftSelHooks = (j.hooks || []).map((h) => ({ id: h.id, name: h.name }));
       craftRecCards = j.cards || [];

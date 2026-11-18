@@ -275,3 +275,31 @@ describe('免费原型选型 craft/archetype-match（v2.510）', () => {
     assert.ok(j.protag.length + j.villain.length >= 1);
   });
 });
+
+// v2.519 免费递招：开篇钩子审计不再睡死；英文创意也能命中方法卡，建议不含中文
+describe('免费递招 craft/recommend（v2.519）', () => {
+  it('不传 opening 时 openingAudit 为 null，传了才给建议', async () => {
+    const bare = await (await fetch(base + M + '/recommend', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text: '重生复仇逆袭', tags: ['复仇'] }),
+    })).json();
+    assert.strictEqual(bare.openingAudit, null);
+    assert.ok(bare.cards.length >= 1);
+    const withOpen = await (await fetch(base + M + '/recommend', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text: '重生复仇逆袭', opening: '这片大陆历史悠久四季如春，人们过着平静的生活，讲述一个古老家族的传承' }),
+    })).json();
+    assert.ok(withOpen.openingAudit && withOpen.openingAudit.advice.length > 20, '开篇平铺背景应给出可执行建议');
+    assert.ok(withOpen.openingAudit.used.length === 0);
+  });
+
+  it('lang=en 时英文创意能命中方法卡，开篇建议为英文且不含中文', async () => {
+    const j = await (await fetch(base + M + '/recommend', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text: 'revenge comeback underdog workplace', tags: ['revenge'], lang: 'en', opening: 'The continent has a long history and four gentle seasons; this tells an old family legend.' }),
+    })).json();
+    assert.ok(j.cards.length >= 1, '英文创意应命中方法卡');
+    assert.ok(j.openingAudit && j.openingAudit.advice.length > 20);
+    assert.ok(!/[\u4e00-\u9fa5]/.test(j.openingAudit.advice), '英文界面建议不应含中文：' + j.openingAudit.advice);
+  });
+});

@@ -98,6 +98,13 @@ describe('v2.511 剧本体检：工具箱入口与免费端点接线', () => {
     assert.match(view, /meta\.outline/, '须记录大纲是否填写');
   });
 
+  it('递招带上已有正文的开篇与界面语言（开篇审计不再睡死）', () => {
+    const app = fs.readFileSync(path.join(root, 'app.js'), 'utf8');
+    assert.match(app, /if \(lang === 'en'\) body\.lang = 'en';/, '递招须带上界面语言');
+    assert.match(app, /const opening = String\(\(\$\('scriptText'\) \|\| \{\}\)\.value \|\| ''\)\.trim\(\)\.slice\(0, 1200\);/, '须从创作台正文取前 1200 字作为开篇');
+    assert.match(app, /if \(opening\) body\.opening = opening;/, '有正文时才发开篇，避免空文本触发无依据结论');
+  });
+
   it('原型选型跟随界面语言（英文界面不得返回中文原型）', () => {
     const view = fs.readFileSync(path.join(root, 'lint-view.js'), 'utf8');
     assert.match(view, /archetype-match', \{ text, lang: en\(\) \? 'en' : 'zh' \}/, '须把界面语言发给原型选型端点');

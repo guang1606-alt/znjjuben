@@ -5,7 +5,7 @@
  */
 import { asyncRouter } from '../lib/async-router';
 import {
-  HOOK_TAXONOMY, recommendHooks, openingHookAudit, matchCraftCards,
+  HOOK_TAXONOMY, HOOK_EN, recommendHooks, openingHookAudit, matchCraftCards,
   CHARACTER_DEPTH_CARDS, NARRATIVE_DEVICE_CARDS, RELATIONSHIP_CARDS, GENRE_TOOLKIT_CARDS,
 } from '../engine/narrative-craft';
 import { pickDiverseSeeds, diversityAudit, type VersionInput } from '../engine/multi-version';
@@ -57,13 +57,24 @@ export function createCraftRouter() {
   // 按当前创意/标签实时递招：匹配方法卡 + 系统默认钩子组合 + 开篇300字钩子审计
   r.post('/recommend', (req, res) => {
     const b = req.body ?? {};
+    const lang: 'zh' | 'en' = b.lang === 'en' ? 'en' : 'zh';
     const text = String(b.text ?? '').slice(0, 6000);
     const tags = asStrArr(b.tags).slice(0, 40);
-    if (!text.trim() && !tags.length) return res.status(400).json({ error: '请提供一句话创意、简介或标签' });
+    if (!text.trim() && !tags.length) return res.status(400).json({ error: lang === 'en' ? 'Provide a one-line idea, synopsis or tags' : '请提供一句话创意、简介或标签' });
     const limit = Math.min(12, Math.max(1, Number(b.limit ?? 6) || 6));
-    const cards = matchCraftCards({ text, tags, limit });
-    const hooks = recommendHooks({ text, tags });
-    const opening = b.opening ? openingHookAudit(String(b.opening).slice(0, 1200)) : null;
+    const cards = matchCraftCards({ text, tags, limit }, lang);
+    const hooks = recommendHooks({ text, tags }, lang);
+    let opening = b.opening ? openingHookAudit(String(b.opening).slice(0, 1200)) : null;
+    // 审计规则与建议文案为中文；英文界面只替换建议句，已用钩子名取英文库，避免中英混排
+    if (opening && lang === 'en') {
+      const names = opening.used.map((id) => HOOK_EN[id]?.name || id).filter(Boolean);
+      opening = {
+        ...opening,
+        advice: names.length
+          ? `Hooks already present in the opening: ${names.join(', ')}. Keep the second line as the thunder: drop the lead into concrete trouble within 300 characters, no background first.`
+          : 'No clear hook in the first 300 characters (no uncanny action, crisis, countdown or overturning line). Break it open with one of three: an uncanny action, a line that flips common sense, or deadpan endurance with a revenge countdown. Cut weather, waking up and world-building.',
+      };
+    }
     res.json({
       cards: cards.map((c) => ({ id: c.id, title: c.title, formula: c.formula, steps: c.steps, fit: c.fit })),
       hooks: hooks.map((h) => ({ id: h.id, name: h.name, layer: h.layer, definition: h.definition, how: h.how, example: h.example })),
