@@ -127,14 +127,20 @@ export function modelReviewStatus(
   if (level === 'fresh' && !selfCheck.ok) level = 'due';
 
   const checkedToday = !!lastAckAt && daysSinceReview === 0;
-  const title = level === 'overdue'
-    ? `API 选型已 ${daysSinceReview} 天未人工核对（红线 ${REVIEW_OVERDUE_DAYS} 天）`
-    : level === 'due'
-      ? `API 选型该核对了（距上次 ${daysSinceReview} 天）`
-      : `API 选型状态新鲜（${daysSinceReview} 天前刚核对）`;
-  const message = level === 'fresh'
-    ? '近期已人工核对。模型"当下最强/最便宜"无法离线自证，仍建议扫一眼厂商停服公告；组合自检通过。'
-    : '新模型发布、老型号停服与调价都可能让现有组合不再最优甚至直接报错。请按下方清单逐家核对价格页/模型广场与后台真实账单，确认后点"今日已核对"刷新基准日。';
+  // 刚核对过但组合结构有缺口：不能说「距上次 0 天该核对了」，要把矛头指向结构问题
+  const structuralOnly = !selfCheck.ok && daysSinceReview < REVIEW_DUE_DAYS;
+  const title = structuralOnly
+    ? `组合结构自检未通过（${selfCheck.issues.length} 项），需立即处理`
+    : level === 'overdue'
+      ? `API 选型已 ${daysSinceReview} 天未人工核对（红线 ${REVIEW_OVERDUE_DAYS} 天）`
+      : level === 'due'
+        ? `API 选型该核对了（距上次 ${daysSinceReview} 天）`
+        : `API 选型状态新鲜（${daysSinceReview} 天前刚核对）`;
+  const message = structuralOnly
+    ? '文本岗国产替补、图片国产兜底或 ×2 铁底存在缺口：海外断供会直接断能力，成本击穿会卖一集亏一集。请按下方清单补齐或换型后再点「今日已核对」。'
+    : level === 'fresh'
+      ? '近期已人工核对。模型"当下最强/最便宜"无法离线自证，仍建议扫一眼厂商停服公告；组合自检通过。'
+      : '新模型发布、老型号停服与调价都可能让现有组合不再最优甚至直接报错。请按下方清单逐家核对价格页/模型广场与后台真实账单，确认后点"今日已核对"刷新基准日。';
   return {
     level, due: level !== 'fresh', daysSinceReview,
     baseDate: ymd(base), checkedToday, title, message,
@@ -161,7 +167,7 @@ export function buildReviewText(s: ModelReviewStatus): string {
     `【每日 API 选型体检】状态=${s.level} 距上次人工核对=${s.daysSinceReview}天 基准日=${s.baseDate}`,
     s.title,
     s.message,
-    `组合自检：${s.selfCheckOk ? '通过' : `不通过（${s.selfCheckIssues} 个替补/铁底问题）`}；升级建议 ${s.upgradeHints} 条`,
+    `组合自检：${s.selfCheckOk ? '通过' : `不通过（${s.selfCheckIssues} 个结构问题：替补/图片兜底/铁底）`}；升级建议 ${s.upgradeHints} 条`,
     '',
     '人工核对清单：',
     ...s.checklist.map((c, i) => `${i + 1}. ${c}`),

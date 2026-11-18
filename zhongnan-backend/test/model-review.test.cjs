@@ -67,6 +67,15 @@ describe('modelReviewStatus · 分级与基准日', () => {
     const old = new Date(now.getTime() - 30 * DAY);
     assert.strictEqual(MR.modelReviewStatus(old, now, BAD_SELF).level, 'overdue');
   });
+
+  it('刚核对过但结构自检不过：标题必须指向结构缺口，不能自相矛盾说「距上次 0 天该核对了」', () => {
+    const now = d(2026, 9, 29);
+    const s = MR.modelReviewStatus(now, now, BAD_SELF);
+    assert.strictEqual(s.level, 'due');
+    assert.ok(!/距上次\s*0\s*天/.test(s.title), '当天刚核对却提示距上次 0 天该核对，文案自相矛盾');
+    assert.match(s.title, /结构|组合/);
+    assert.match(s.message, /替补|兜底|铁底|结构/);
+  });
 });
 
 describe('modelReviewStatus · 提醒内容可执行', () => {
