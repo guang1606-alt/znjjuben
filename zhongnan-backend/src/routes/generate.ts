@@ -116,6 +116,7 @@ import { assistantGate, assistantCapabilitiesOf, fixActionByDim } from '../confi
 import { COUNCIL_MODULES, type CouncilModuleId } from '../config/council';
 import { councilBoard, reviewCouncil, councilBrief } from '../engine/council'; // v2.330 多方评议（分级依据可查询）
 import { sanitizeClientError } from '../lib/blackbox';
+import { userMessageOf, modelErrorCode } from '../lib/model-error-message';
 import { buildListenScript, listenEntitleNote } from '../engine/listen-script';
 import { buildVoiceCast } from '../engine/listen-voice-cast';
 import { buildShotManifest, planAigcVolume, analyzeAigcSceneCurve } from '../engine/aigc-screenplay'; // c219 AIGC 构成仪表盘数据落库：生成期/fix 期持久化到 qcReport._aigc，刷新后可重渲染
@@ -1529,7 +1530,7 @@ generateRouter.post('/hooks/palette', authRequired, async (req: AuthRequest, res
       ...(manual ? { manual, rejected } : {}),
     });
   } catch (e: any) {
-    res.status(400).json({ error: `钩子调色板生成失败：${String(e?.message ?? e)}` });
+    res.status(400).json({ error: `钩子调色板生成失败：${userMessageOf(e)}`, code: modelErrorCode(e) });
   }
 });
 function locOpt(o: { id: string; layer: string; score: number; name: string; nameEn: string; definition: string; definitionEn: string; example: string; reason: { zh: string; en: string } }) {
@@ -1584,7 +1585,7 @@ generateRouter.post('/beats/palette', authRequired, async (req: AuthRequest, res
       ...(manual ? { manual, rejected } : {}),
     });
   } catch (e: any) {
-    res.status(400).json({ error: `节拍调色板生成失败：${String(e?.message ?? e)}` });
+    res.status(400).json({ error: `节拍调色板生成失败：${userMessageOf(e)}`, code: modelErrorCode(e) });
   }
 });
 

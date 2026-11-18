@@ -98,3 +98,69 @@ test('用户可见文案不残留已退出型号「豆包 Seed 2.0」，旗舰�
   assert.ok(/2\.1/.test(flag.desc), '旗舰档描述应写当前在售的豆包 Seed 2.1');
   assert.ok(flag.picks.some((p) => p.modelId === 'doubao_seed2pro'));
 });
+
+// v2.507 双源守卫：采购文档「官网现价」与 catalog 必须同源，避免文档改了代码没跟（或反之）导致买错/算错账
+test('API-KEY 申请清单的官网价目与 catalog 一致，基准日同源', () => {
+  const fs = require('node:fs');
+  const path = require('node:path');
+  const ROOT = path.join(__dirname, '..');
+  const doc = fs.readFileSync(path.join(ROOT, 'docs/API-KEY-申请清单.md'), 'utf8');
+  const R = require('../dist/config/model-review.js');
+  assert.ok(doc.includes(R.CATALOG_PRICING_AS_OF), '文档必须标注与代码同源的基准日（CATALOG_PRICING_AS_OF）');
+
+  // 只校验可机读的「**输入 / 输出**」行；峰谷价/按张计费等自由文本行由下方单独守
+  const rows = [
+    { prefix: 'Doubao-Seed-2.1-pro', id: 'doubao_seed2pro' },
+    { prefix: 'Kimi K3', id: 'kimi_k3' },
+    { prefix: 'Qwen3.8-Max', id: 'qwen38max' },
+    { prefix: 'MiniMax-M3', id: 'minimax_m25' },
+  ];
+  let checked = 0;
+  for (const line of doc.split('\n')) {
+    const cells = line.split('|').map((s) => s.trim());
+    if (cells.length < 5) continue;
+    const row = rows.find((r) => cells[1].startsWith(r.prefix));
+    if (!row) continue;
+    const m = cells[3].match(/\*\*([\d.]+)\s*\/\s*([\d.]+)\*\*/);
+    if (!m) continue; // 非价目行（如采购建议表）不参与数值对拍
+    const model = C.findModel(row.id);
+    assert.strictEqual(Number(m[1]), model.inYuanPerMTok, `${row.prefix} 输入价与 catalog 漂移（文档 ${m[1]} vs 代码 ${model.inYuanPerMTok}）`);
+    assert.strictEqual(Number(m[2]), model.outYuanPerMTok, `${row.prefix} 输出价与 catalog 漂移（文档 ${m[2]} vs 代码 ${model.outYuanPerMTok}）`);
+    checked++;
+  }
+  assert.strictEqual(checked, rows.length, `应有 ${rows.length} 个文本模型价目可对拍，实际 ${checked} 个`);
+
+  // 图片按张计费：文档价必须与 catalog 备注同值
+  assert.match(doc, /0\.22/);
+  assert.match(doc, /0\.30/);
+  assert.match(C.findModel('seedream').note, /0\.22/, 'Seedream 5.0-lite 备注应含 0.22 元/张');
+  assert.match(C.findModel('seedream_pro').note, /0\.30/, 'Seedream 5.0-pro 备注应含 0.30 元/张');
+});
+
+// v2.507 守卫：超管 FAQ 的价目月份必须由基准日派生，禁止再次硬编码（历史坑：代码改价、FAQ 仍写旧月份）
+test('超管组合全景 FAQ 价目月份与 CATALOG_PRICING_AS_OF 同源', () => {
+  const fs = require('node:fs');
+  const path = require('node:path');
+  const src = fs.readFileSync(path.join(__dirname, '..', 'src/routes/admin-model.ts'), 'utf8');
+  assert.match(src, /CATALOG_PRICING_AS_OF\.slice\(0,\s*7\)/, 'FAQ 价目月份应从 CATALOG_PRICING_AS_OF 派生');
+  assert.ok(!/带出\s*20\d\d-\d\d\s*公开价/.test(src), 'FAQ 不应再硬编码价目月份');
+});
+
+// v2.507 组合自检补全：图片位国产兜底 + ×2 铁底，避免"文本岗全绿、海报断供/卖一集亏一集"漏检
+test('imageFallbackCheck：当前图片组合完整，缺国产旗舰/标准位能被抓出', () => {
+  assert.deepStrictEqual(C.imageFallbackCheck(), [], '当前目录图片位应完整');
+  const noFlag = C.imageFallbackCheck(C.IMAGE_MODELS.filter((m) => m.id !== 'seedream_pro'));
+  assert.ok(noFlag.some((i) => /国产旗舰替补/.test(i.problem)), '删掉国产旗舰图应报缺替补');
+  const overseasOnly = C.imageFallbackCheck(C.IMAGE_MODELS.filter((m) => m.region === 'overseas'));
+  assert.ok(overseasOnly.some((i) => /标准海报缺国产/.test(i.problem)), '只剩海外图应报标准位缺国产');
+  assert.ok(overseasOnly.some((i) => /走量海报缺国产/.test(i.problem)), '只剩海外图应报经济位缺国产');
+});
+
+test('pricingFloorCheck：当前三档全部过×2铁底，注入虚高成本能被抓出', () => {
+  assert.deepStrictEqual(C.pricingFloorCheck(), [], '当前定价应全部满足售价≥成本×2');
+  const base = C.buildTiers()[0];
+  const bad = [{ ...base, costFen: 999999 }];
+  const issues = C.pricingFloorCheck(bad);
+  assert.ok(issues.length > 0);
+  assert.match(issues[0].problem, /违反不赔钱铁底/);
+});

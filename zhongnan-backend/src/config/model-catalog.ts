@@ -298,12 +298,56 @@ export function validateAllTierBackups(): BackupIssue[] {
 }
 
 export interface SelfCheckItem { role: string; primaryId: string; stronger?: string; note: string }
+
+/**
+ * v2.507 图片位体检：海报不只文本岗要兜底，图片同样要求「海外旗舰 + 国产旗舰替补 + 国产标准/经济位」。
+ * 海外断供时若只剩 GPT-image，海报能力直接归零，属于结构性风险，必须进自检。
+ */
+export function imageFallbackCheck(imageModels: ModelInfo[] = IMAGE_MODELS): BackupIssue[] {
+  const list = imageModels.filter((m) => m.modality === 'image');
+  const has = (fn: (m: ModelInfo) => boolean) => list.some(fn);
+  const issues: BackupIssue[] = [];
+  if (!has((m) => m.id === 'gpt_image')) {
+    issues.push({ role: 'image.flagship', problem: '缺必接的 GPT-image 旗舰海报位', suggest: ['在超管后台登记 GPT-image 供应商'] });
+  }
+  if (!has((m) => m.region === 'domestic' && m.grade === 'flag')) {
+    issues.push({ role: 'image.flagship', problem: '旗舰海报只有海外 GPT-image，缺国产旗舰替补（海外断供即失去海报能力）', suggest: ['登记 Seedream 5.0-pro 等国产旗舰图片模型'] });
+  }
+  if (!has((m) => m.region === 'domestic' && (m.grade === 'std' || m.grade === 'flag'))) {
+    issues.push({ role: 'image.standard', problem: '标准海报缺国产可用图片模型', suggest: ['登记 Seedream 5.0-lite / 通义万相等国产图片模型'] });
+  }
+  if (!has((m) => m.region === 'domestic' && m.grade === 'eco')) {
+    issues.push({ role: 'image.economy', problem: '走量海报缺国产经济图片模型，成本压不下来', suggest: ['登记通义万相/可灵等经济位国产图片模型'] });
+  }
+  return issues;
+}
+
+/**
+ * v2.507 ×2 铁底体检：售价 ≥ 裸成本 × 2（pricing.EP_PRICE 唯一价源）。
+ * 支持注入档位便于对拍；默认跑当前三档 + 海外预留档，未开放购买的档位自动跳过。
+ */
+export function pricingFloorCheck(tiers: EngineCombo[] = buildTiers(), levels: MemberLevel[] = Object.values(MemberLevel)): BackupIssue[] {
+  const issues: BackupIssue[] = [];
+  for (const level of levels) for (const t of tiers) {
+    if (!canUseTier(level, t.id)) continue;
+    const chargedFen = (EP_PRICE[level][TIER_TO_ENGINE[t.id]] ?? 0) * FEN_PER_POINT;
+    if (chargedFen < t.costFen * 2) {
+      issues.push({
+        role: 'pricing',
+        problem: `${level}.${t.id} 售价${chargedFen}分 < 成本${t.costFen}分×2，违反不赔钱铁底`,
+        suggest: ['上调该档售价/会员价，或换同档强度但更省的模型，绝不降配'],
+      });
+    }
+  }
+  return issues;
+}
+
 /**
  * 自我迭代发现：目录中同岗若出现比当前首选 grade 更高的国产模型，提示可升级；
  * 系统无法自动判断“新模型是否真的更强”（需联网横评/真实账单），此类只给建议、不自动切换，并在 note 明示需人工确认。
  */
 export function portfolioSelfCheck(): { ok: boolean; issues: BackupIssue[]; upgradeHints: SelfCheckItem[]; manualNeeded: string[] } {
-  const issues = validateAllTierBackups();
+  const issues = [...validateAllTierBackups(), ...imageFallbackCheck(), ...pricingFloorCheck()];
   const upgradeHints: SelfCheckItem[] = [];
   for (const tier of buildTiers()) {
     for (const pick of tier.picks) {

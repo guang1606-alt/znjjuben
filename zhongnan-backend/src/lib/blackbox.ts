@@ -4,6 +4,7 @@
  * 注意：引擎档 ECONOMY/STANDARD/FLAGSHIP（经济/标准/旗舰）是产品概念，允许出现；
  *      本模块只拦截“厂商/型号/端点”级线索。后台路由不走此护栏。
  */
+import { matchModelError } from './model-error-message';
 
 export const VENDOR_LEAK_PATTERNS: RegExp[] = [
   /deepseek/i, /doubao|豆包/i, /seedream|seed[-_ ]?flash|seed[-_ ]?\d|seed2/i,
@@ -41,12 +42,18 @@ export function scanVendorLeaks(input: unknown, path = '$', seen = new WeakSet()
   return hits;
 }
 
-/** 清洗发往 C 端的异常消息：任何带厂商线索的报错统一替换为中性话术，避免错误栈外泄 */
+/** 清洗发往 C 端的异常消息：内部模型码先转用户话术，任何带厂商线索的报错再统一替换为中性话术，避免错误栈外泄 */
 export function sanitizeClientError(message: unknown, lang: 'zh' | 'en' = 'zh'): string {
   const s = String(message ?? '');
+  // 先判厂商泄露：报错里带端点/型号时统一走中性话术（优先级高于内部码翻译）
   const leaked = VENDOR_LEAK_PATTERNS.some((re) => re.test(s));
-  if (!leaked) return s.slice(0, 300);
-  return lang === 'en'
-    ? 'The creative engine is temporarily unavailable. Please retry; points were not charged.'
-    : '创作引擎暂时不可用，请稍后重试，未扣除积分。';
+  if (leaked) {
+    return lang === 'en'
+      ? 'The creative engine is temporarily unavailable. Please retry; points were not charged.'
+      : '创作引擎暂时不可用，请稍后重试，未扣除积分。';
+  }
+  // v2.507：MODEL_/IMAGE_ 机器码不直接见用户（如未配置 Key 应提示去超管后台），转成可操作中文
+  const modelErr = matchModelError(s, lang);
+  if (modelErr) return modelErr.message;
+  return s.slice(0, 300);
 }

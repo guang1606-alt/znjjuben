@@ -53,7 +53,9 @@ describe('增值服务消费-失败退款 资金链路', { concurrency: 1 }, () 
     const r = await post('/api/va/poster', { projectId: 'pj1', tier: 'STANDARD' }, 'rich');
     assert.strictEqual(r.status, 400);
     const j = await r.json();
-    assert.match(j.error, /IMAGE_NOT_CONFIGURED/);
+    assert.match(j.error, /尚未接入|未配置/, '未配置 Key 要给用户可操作中文提示');
+    assert.ok(!/IMAGE_NOT_CONFIGURED/.test(j.error), '内部机器码不得直接展示');
+    assert.strictEqual(j.code, 'IMAGE_NOT_CONFIGURED', '机器码单独下发供前端分支');
     assert.strictEqual(bal('rich'), before, '海报失败必须退款，余额复原');
     assert.strictEqual(refundLedgers('rich').length, 1);
   });

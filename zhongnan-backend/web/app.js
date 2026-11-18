@@ -10931,8 +10931,8 @@
     // v2.51 国产替补铁规自检 + 自动迭代提示
     const sc = j.backupSelfCheck || { ok: true, issues: [], upgradeHints: [], manualNeeded: [] };
     const bkIssues = sc.issues.length
-      ? znErrorHtml('国产替补自检未过', sc.issues.map((i) => `${i.role}：${i.problem}${i.suggest.length ? ' → 建议：' + i.suggest.join('/') : ''}`).join('；'))
-      : '<div class="notice">国产最强替补自检 ✅ 三档八岗每岗第一替补均为该岗中国国内最强 API，海外首选断供时不降配兜底。</div>';
+      ? znErrorHtml('组合结构自检未过', sc.issues.map((i) => `${i.role}：${i.problem}${(i.suggest || []).length ? ' → 建议：' + i.suggest.join('/') : ''}`).join('；'))
+      : '<div class="notice">组合结构自检 ✅ 文本岗国产最强替补、图片国产兜底、×2 铁底全部通过，海外断供时不降配兜底。</div>';
     const bkUp = sc.upgradeHints && sc.upgradeHints.length
       ? `<div class="notice">自动迭代候选（需联网横评+真实账单确认后换型）：<br>${sc.upgradeHints.map((h) => `· ${escapeHtml(h.role)}：${escapeHtml(h.note)}`).join('<br>')}</div>` : '';
     // @module admin
