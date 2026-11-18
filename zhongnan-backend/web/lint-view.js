@@ -19,6 +19,7 @@
       formula: '公式', core: '用法', tip: '机制', chars: (n) => `已读 ${n} 字`,
       epsNote: (n) => `已识别 ${n} 集，情绪线与开篇留存规则已生效`,
       copyReport: '复制问题单', copied: '已复制', copyFailed: '复制失败，请手动选择文本',
+      unlockHint: (names) => `未填「${names}」，对应的断章 / 终局倒推检查未运行；补上后再体检可多查两项。`,
     },
     en: {
       checking: 'Checking…', matching: 'Matching archetypes…',
@@ -33,6 +34,7 @@
       formula: 'Formula', core: 'How to use', tip: 'Mechanic', chars: (n) => `${n} chars read`,
       epsNote: (n) => `${n} episodes detected — emotion arc and opening-retention rules are active`,
       copyReport: 'Copy issue list', copied: 'Copied', copyFailed: 'Copy failed, please select the text manually',
+      unlockHint: (names) => `"${names}" is empty, so the cliffhanger / ending-backcast checks did not run; fill it in and re-run to add two checks.`,
     },
   };
   const T = () => (en() ? L.en : L.zh);
@@ -69,13 +71,23 @@
       .slice(0, 10);
   }
 
-  function renderLint(d, epsN) {
+  // 分组内按严重度排序：引擎内部按规则顺序产出，直接渲染会让 P2 夹在 P0 前面，用户容易漏掉硬伤
+  const LEVEL_RANK = { P0: 0, P1: 1, P2: 2 };
+  function sortByLevel(list) {
+    return [...(list || [])].sort((a, b) => (LEVEL_RANK[a.level] ?? 9) - (LEVEL_RANK[b.level] ?? 9));
+  }
+
+  function renderLint(d, epsN, meta) {
     const t = T();
     const c = d.counts || { p0: 0, p1: 0, p2: 0, total: 0 };
     const note = Number(epsN) >= 2 ? `<div class="muted">${esc(t.epsNote(Number(epsN)))}</div>` : '';
+    const miss = [];
+    if (!(meta && meta.ending)) miss.push(t.tbLintEndingL);
+    if (!(meta && meta.outline)) miss.push(t.tbLintOutlineL);
+    const unlock = miss.length ? `<div class="muted">${esc(t.unlockHint(miss.join(' / ')))}</div>` : '';
     const head = `<div class="dv-score-row">
       <div class="dv-score ${scoreClass(Number(d.avg) || 0)}"><span class="dv-score-num">${Number(d.avg) || 0}</span><span class="dv-score-cap">${esc(t.avgCap)}</span></div>
-      <div><div class="muted">${esc(t.counts(c))}</div><div class="muted">${esc(t.chars(Number(d.chars) || 0))}</div>${note}
+      <div><div class="muted">${esc(t.counts(c))}</div><div class="muted">${esc(t.chars(Number(d.chars) || 0))}</div>${note}${unlock}
         <button type="button" class="chip" data-lint-copy>${esc(t.copyReport)}</button></div>
     </div>`;
     if (!c.total) {
@@ -83,7 +95,7 @@
       return;
     }
     const groups = (d.groups || []).map((g) => {
-      const rows = (g.issues || []).map((i) => `<div class="dv-issue ${levelClass(i.level)}">
+      const rows = sortByLevel(g.issues).map((i) => `<div class="dv-issue ${levelClass(i.level)}">
         <b>${esc(levelName(i.level))}</b> · ${esc(i.dim || '')}：${esc(i.advice || '')}
       </div>`).join('');
       const avg = Number(g.avg) || 0;
@@ -129,7 +141,7 @@
     if (Number(epsN) >= 2) lines.push(t.epsNote(Number(epsN)));
     (d.groups || []).forEach((g) => {
       lines.push('', `【${g.name || ''}】${t.groupAvg(Number(g.avg) || 0)}`);
-      (g.issues || []).forEach((i) => lines.push(`- ${levelName(i.level)} · ${i.dim || ''}：${i.advice || ''}`));
+      sortByLevel(g.issues).forEach((i) => lines.push(`- ${levelName(i.level)} · ${i.dim || ''}：${i.advice || ''}`));
     });
     return lines.join('\n');
   }
@@ -152,7 +164,7 @@
 
   function reRender() {
     if (!last) return;
-    if (last.kind === 'lint') renderLint(last.data, last.eps || 0); else renderArch(last.data);
+    if (last.kind === 'lint') renderLint(last.data, last.eps || 0, last.meta); else renderArch(last.data);
   }
 
   async function runLint() {
@@ -172,8 +184,9 @@
       if (ending) body.ending = ending;
       if (outline) body.outline = outline;
       const d = await postJson('/api/craft/lint', body);
-      last = { kind: 'lint', data: d, eps: eps.length };
-      renderLint(d, eps.length);
+      const meta = { ending: !!ending, outline: !!outline };
+      last = { kind: 'lint', data: d, eps: eps.length, meta };
+      renderLint(d, eps.length, meta);
     } catch (e) {
       $('lintResult').innerHTML = `<div class="dv-bad">${esc(T().fail)}：${esc((e && e.message) || '')}</div>`;
     } finally {

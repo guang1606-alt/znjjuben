@@ -67,7 +67,7 @@ describe('v2.511 剧本体检：工具箱入口与免费端点接线', () => {
     assert.match(view, /function splitEpisodes/, '须按「第 X 集 / EPn」切分分集');
     assert.match(view, /episodes: eps/, '须把分集数组发给 /api/craft/lint');
     assert.match(view, /epsNote: \(n\)/, '须告知用户已按几集体检（否则用户不知道多集规则生效）');
-    assert.match(view, /renderLint\(d, eps\.length\)/, '体检结果须带上实际集数才显示提示');
+    assert.match(view, /renderLint\(d, eps\.length, meta\)/, '体检结果须带上实际集数才显示提示');
   });
 
   it('体检结果可一键复制成纯文本问题单（拿给改稿环节直接用）', () => {
@@ -87,5 +87,14 @@ describe('v2.511 剧本体检：工具箱入口与免费端点接线', () => {
     assert.match(view, /\$\('lintOutline'\)/, '须读取大纲');
     assert.match(view, /\.ending = ending/, '须把本集结尾发给后端（否则断章规则永不触发）');
     assert.match(view, /\.outline = outline/, '须把大纲发给后端（否则终局倒推规则永不触发）');
+  });
+
+  it('体检结果按严重度排序，并提示因未填选填项而没跑的检查', () => {
+    const view = fs.readFileSync(path.join(root, 'lint-view.js'), 'utf8');
+    assert.match(view, /function sortByLevel\(list\)/, '须提供严重度排序');
+    assert.match(view, /LEVEL_RANK\[a\.level\]/, '须按 P0 → P2 排序');
+    assert.match(view, /unlockHint:/, '须有「未运行检查」提示文案');
+    assert.match(view, /meta\.ending/, '须记录本集结尾是否填写');
+    assert.match(view, /meta\.outline/, '须记录大纲是否填写');
   });
 });
