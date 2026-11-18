@@ -210,6 +210,20 @@ describe('免费剧本体检 craft/lint（v2.510）', () => {
     }
   });
 
+  it('传剧名才体检剧名，不传不误报（v2.522）', async () => {
+    const body = { text: '她把合同拍在桌上，对方脸色一变。这一次，她不打算再退。'.repeat(6) };
+    const bare = await (await fetch(base + M + '/lint', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })).json();
+    assert.ok(!bare.issues.some((i) => i.rule === 'title'), '未填剧名时不应出现剧名问题');
+    const withTitle = await (await fetch(base + M + '/lint', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ...body, title: '风中的蒲公英' }),
+    })).json();
+    const t = withTitle.issues.filter((i) => i.rule === 'title');
+    assert.strictEqual(t.length, 1, '填了剧名就该给出一条剧名检查');
+    assert.strictEqual(t[0].dim, '剧名一眼想看');
+    assert.strictEqual(t[0].level, 'P1', '没有冲突词/一眼看点的剧名应判 P1');
+  });
+
   it('改稿尺子与叙事逻辑在免费体检中生效（小说腔/然后链）', async () => {
     const j = await (await fetch(base + M + '/lint', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },

@@ -181,8 +181,10 @@
       const lang = en() ? 'en' : 'zh';
       const ending = String(($('lintEnding') || {}).value || '').trim();
       const outline = String(($('lintOutline') || {}).value || '').trim();
+      const title = String(($('lintTitle') || {}).value || '').trim();
       const body = eps.length >= 2 ? { text, lang, episodes: eps } : { text, lang };
       // 选填字段不填就不发，规则只在填了才有判据，避免给出无依据的结论
+      if (title) body.title = title;
       if (ending) body.ending = ending;
       if (outline) body.outline = outline;
       const d = await postJson('/api/craft/lint', body);

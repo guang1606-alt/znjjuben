@@ -157,13 +157,15 @@ export function createCraftRouter() {
     }
     const ending = String(b.ending ?? '').slice(0, 2000) || undefined;
     const outline = String(b.outline ?? '').slice(0, 6000) || undefined;
+    // 剧名选填：填了才跑剧名尺子（不给就用正文首行冒充剧名，会报假阳性）
+    const title = String(b.title ?? '').trim().slice(0, 60) || undefined;
     const isIntrigue = b.isIntrigue === undefined ? undefined : Boolean(b.isIntrigue);
     const groups = [
       { key: 'archetype', name: lang === 'en' ? 'Character & tension' : '人物原型·张力', r: archetypeLint({ text, opening: text.slice(0, 600), lang }) },
       { key: 'emotion', name: lang === 'en' ? 'Emotion & payoff' : '情绪·爽点兑付', r: emotionCraftLint({ text, episodes, isIntrigue, lang }) },
       { key: 'webnovel', name: lang === 'en' ? 'Serial & hook craft' : '网文·钩子工艺', r: webnovelLint({ text, outline, ending, lang }) },
       // v2.520 补齐：改稿尺子与叙事逻辑此前只在生成结果页（要花积分）才跑，免费体检看不到
-      { key: 'craft', name: lang === 'en' ? 'Line-edit rulers' : '一线改稿尺子', r: craftLint({ text, episodes, lang }) },
+      { key: 'craft', name: lang === 'en' ? 'Line-edit rulers' : '一线改稿尺子', r: craftLint({ text, episodes, lang, title }) },
       { key: 'narrative', name: lang === 'en' ? 'Narrative logic' : '叙事逻辑', r: narrativeLint({ text, ending, lang }) },
     ];
     const issues = sortIssues(groups.flatMap((g) => g.r.issues));

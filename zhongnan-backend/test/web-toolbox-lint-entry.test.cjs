@@ -118,6 +118,15 @@ describe('v2.511 剧本体检：工具箱入口与免费端点接线', () => {
     assert.doesNotMatch(html, /网文钩子三组逐条体检/, 'index.html 静态兜底文案仍写三组');
   });
 
+  it('体检面板可填剧名：填了才送后端，剧名尺子才跑', () => {
+    const view = fs.readFileSync(path.join(root, 'lint-view.js'), 'utf8');
+    assert.match(view, /const title = String\(\(\$\('lintTitle'\) \|\| \{\}\)\.value \|\| ''\)\.trim\(\);/, '须读取剧名输入框');
+    assert.match(view, /if \(title\) body\.title = title;/, '剧名选填，不填不发，避免无据结论');
+    assert.match(html, /id="lintTitle"/, '体检面板须提供剧名输入框');
+    assert.match(html, /data-i="tbLintTitleL"/, '剧名标签须走 i18n');
+    assert.match(i18n, /tbLintTitleL:/, 'i18n 缺剧名标签');
+  });
+
   it('递招带上已有正文的开篇与界面语言（开篇审计不再睡死）', () => {
     const app = fs.readFileSync(path.join(root, 'app.js'), 'utf8');
     assert.match(app, /if \(lang === 'en'\) body\.lang = 'en';/, '递招须带上界面语言');
