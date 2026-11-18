@@ -129,6 +129,7 @@
           <button type="button" class="home-tool-card"><h3 data-i="tbCardRead">剧本围读</h3><p data-i="tbCardReadP">责编/导演/制片/观众逐立场挑问题，形成修改清单；支持我+小南、用户+用户、我+别人的小南、小南+小南自动围读</p><span class="tool-cost" data-i="tbCostRead">30 积分/次围读</span></button>
           <button type="button" class="home-tool-card"><h3 data-i="tbCardTd">拆爆款</h3><p data-i="tbCardTdP">粘贴爆款剧本/字幕或链接，拆出“为什么好、为什么爆、可取技法”，提炼多标签与改编方向、大纲，确认即进入改编创作</p><span class="tool-cost" data-i="tbCostTd">拆解30·大纲20积分</span></button>
           <button type="button" class="home-tool-card"><h3 data-i="tbCardDv">多版本去重体检</h3><p data-i="tbCardDvP">同一创意出多版时，写前领正交差异化种子（主角原型×冲突×反转×基调），写后两两比对，揪出“换汤不换药”的伪多版本并给改法</p><span class="tool-cost" data-i="tbCostDv">免费 · 反同质化</span></button>
+          <button type="button" class="home-tool-card"><h3 data-i="tbCardLint">剧本体检</h3><p data-i="tbCardLintP">粘贴一集正文，按人物原型、情绪兑付、网文钩子三组逐条体检，标出 P0/P1/P2 硬伤并给改法；也能按一句话创意匹配主角与反派原型</p><span class="tool-cost" data-i="tbCostLint">免费 · 不耗积分</span></button>
         </div>
       </section>
 
@@ -162,6 +163,11 @@
           <h2 data-i="tbCardBr">互动分支校验/起稿</h2>
           <p data-i="tbCardBrP">互动短剧专用：一键生成主/坏/隐藏多结局合法骨架；粘贴分支图自动查死胡同、伪选择、自环、死循环、悬空连线与概率权重</p>
           <span class="tool-cost" data-i="tbCostBr">免费 · 本地校验</span>
+        </button>
+        <button type="button" class="mode-card tool-card" id="toolCraftLint">
+          <h2 data-i="tbCardLint">剧本体检</h2>
+          <p data-i="tbCardLintP">粘贴一集正文，按人物原型、情绪兑付、网文钩子三组逐条体检，标出 P0/P1/P2 硬伤并给改法；也能按一句话创意匹配主角与反派原型</p>
+          <span class="tool-cost" data-i="tbCostLint">免费 · 不耗积分</span>
         </button>
       </div>
     </div>
@@ -314,6 +320,21 @@
         <div class="muted" style="margin:6px 0 10px" data-i="tbDvHint">把同一创意的 2–6 个版本分别填入；主角原型、冲突/走向标签用顿号或逗号分隔。体检只在本地比对，不耗积分。</div>
         <div id="dvRows"></div>
         <div id="dvResult"></div>
+      </section>
+
+      <!-- v2.511 剧本体检 / 原型选型（免费 · 不耗积分）：贴正文即抽检，本地规则引擎，不依赖模型与 Key -->
+      <section class="panel hidden" id="lintPanel">
+        <div class="room-tabs">
+          <b style="align-self:center" data-i="tbLintTitle">剧本体检 · 原型选型</b>
+          <span class="spacer" style="flex:1"></span>
+          <button class="chip" id="lintArchBtn" data-i="tbLintArch">原型选型</button>
+          <button class="btn-primary" id="lintRunBtn" data-i="tbLintRun">开始体检</button>
+          <button class="room-close" id="lintClose" data-i="tbCollapse">收起</button>
+        </div>
+        <div class="muted" style="margin:6px 0 10px" data-i="tbLintHint">粘贴一集正文（2 万字内），按人物原型、情绪兑付、网文钩子三组逐条体检，按 P0/P1/P2 标出硬伤并给改法；也可只写一句话创意做原型选型。全程本地规则引擎，不耗积分。</div>
+        <label class="muted" for="lintText" data-i="tbLintL">正文 / 一句话创意</label>
+        <textarea id="lintText" class="lint-ta" rows="10" data-ph="tbLintPh" placeholder="粘贴剧本正文（≤2 万字）。也可以只写一句话创意来匹配人物原型。"></textarea>
+        <div id="lintResult"></div>
       </section>
 
       <section class="panel hidden" id="roomPanel" role="region" aria-label="编剧室" data-i-aria="roomPanelAria">
@@ -1477,6 +1498,7 @@
   <script defer src="./teardown-view.js"></script>
   <script defer src="./diversity-view.js"></script>
   <script defer src="./branch-view.js"></script>
+  <script defer src="./lint-view.js"></script>
   <script defer src="./ad-roll.js"></script>
   <script defer src="./pointer-fx.js"></script>
   <!-- v2.186 全局反馈层：toast + skeleton + view-stack 容器 -->

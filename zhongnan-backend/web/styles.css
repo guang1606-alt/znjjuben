@@ -1178,6 +1178,10 @@ textarea { box-sizing: border-box; max-width: 100%; resize: vertical; background
 .dv-score.dv-bad{background:color-mix(in srgb,var(--cinnabar) 14%,transparent)}
 .dv-issue{border-left:3px solid var(--cinnabar);background:color-mix(in srgb,var(--cinnabar) 7%,transparent);border-radius:0 8px 8px 0;padding:7px 10px;margin:6px 0;font-size:13px}
 .dv-issue.sev-mid{border-left-color:var(--gold);background:color-mix(in srgb,var(--gold) 9%,transparent)}
+/* v2.511 剧本体检：P2 建议用主色弱提示，避免和 P0（朱砂）/ P1（金）抢注意力 */
+.dv-issue.sev-low{border-left-color:var(--accent);background:color-mix(in srgb,var(--accent) 7%,transparent)}
+.lint-ta{width:100%;min-height:180px;resize:vertical;padding:10px 12px;border:1px solid var(--line);border-radius:var(--radius-sm);background:var(--panel-2);color:var(--text);font-family:var(--sans);font-size:14px;line-height:1.65}
+.lint-ta:focus{outline:2px solid var(--accent-weak);outline-offset:1px}
 .dv-table{width:100%;border-collapse:collapse;margin-top:8px;font-size:12.5px}
 .dv-table th,.dv-table td{border:1px solid var(--line);padding:5px 8px;text-align:center}
 @media(max-width:680px){.dv-tagline{grid-template-columns:1fr}}

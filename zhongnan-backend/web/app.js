@@ -450,6 +450,7 @@
     { id: 'toolRead', key: 'tbCardRead', desc: 'tbCardReadP', cost: 'tbCostRead' },
     { id: 'toolTeardown', key: 'tbCardTd', desc: 'tbCardTdP', cost: 'tbCostTd' },
     { id: 'toolDiversity', key: 'tbCardDv', desc: 'tbCardDvP', cost: 'tbCostDv' },
+    { id: 'toolCraftLint', key: 'tbCardLint', desc: 'tbCardLintP', cost: 'tbCostLint' },
   ];
   let _homeRendered = false;
   function renderHome() {
@@ -493,7 +494,7 @@
         card.innerHTML = `<h3>${escapeHtml(t(tool.key))}</h3><p>${escapeHtml(t(tool.desc))}</p><span class="tool-cost">${escapeHtml(costTxt)}</span>`;
         card.onclick = () => {
     // @module misc
-          const panel = ({ toolPitch: 'roomPanel', toolRead: 'roomPanel', toolTeardown: 'teardownPanel', toolDiversity: 'diversityPanel', toolBranch: 'branchPanel' })[tool.id];
+          const panel = ({ toolPitch: 'roomPanel', toolRead: 'roomPanel', toolTeardown: 'teardownPanel', toolDiversity: 'diversityPanel', toolBranch: 'branchPanel', toolCraftLint: 'lintPanel' })[tool.id];
           if (panel) openWorkbench(panel);
         };
         tg.appendChild(card);
@@ -2626,7 +2627,7 @@
      syncModeBrief / 任务流等）依旧用 classList.toggle('hidden', ...) 即可触发。 */
   const _WORKBENCH_PANEL_IDS = [
     'tagBench', 'craftBench', 'novelSrcBench',
-    'branchPanel', 'branchBriefPanel', 'diversityPanel', 'roomPanel', 'teardownPanel',
+    'branchPanel', 'branchBriefPanel', 'diversityPanel', 'lintPanel', 'roomPanel', 'teardownPanel',
     'interviewPanel', 'brandPanel', 'trendPanel', 'sourceTextPanel',
     'taskQueuePanel', 'progressPanel', 'resultPanel', 'failPanel'
   ];
@@ -2637,6 +2638,7 @@
     branchPanel:      { zh: '互动分支可视化编辑器',     en: 'Branch Editor' },
     branchBriefPanel: { zh: '互动分支 · 分支简报',     en: 'Branch Brief' },
     diversityPanel:   { zh: '多版本去重体检',           en: 'Diversity Audit' },
+    lintPanel:        { zh: '剧本体检 · 原型选型',       en: 'Script Checkup' },
     roomPanel:        { zh: '编剧室',                 en: 'Writers’ Room' },
     teardownPanel:    { zh: '拆爆款工作台',             en: 'Teardown' },
     interviewPanel:   { zh: '采访式创作',               en: 'Interview' },
@@ -3137,8 +3139,8 @@
     return side;
   }
 
-  // 5 工具卡 → 工作台 panel（toolPitch/toolRead → 编剧室；toolTeardown → 拆爆款；toolDiversity → 去重；toolBranch → 分支）
-  const _TOOL_TO_PANEL = { toolPitch: 'roomPanel', toolRead: 'roomPanel', toolTeardown: 'teardownPanel', toolDiversity: 'diversityPanel', toolBranch: 'branchPanel' };
+  // 6 工具卡 → 工作台 panel（toolPitch/toolRead → 编剧室；toolTeardown → 拆爆款；toolDiversity → 去重；toolBranch → 分支；toolCraftLint → 剧本体检）
+  const _TOOL_TO_PANEL = { toolPitch: 'roomPanel', toolRead: 'roomPanel', toolTeardown: 'teardownPanel', toolDiversity: 'diversityPanel', toolBranch: 'branchPanel', toolCraftLint: 'lintPanel' };
   Object.entries(_TOOL_TO_PANEL).forEach(([tid, pid]) => {
     const t = $(tid); if (t) t.addEventListener('click', () => openWorkbench(pid));
   });
@@ -3154,7 +3156,7 @@
     });
   }
   // 各 panel 的"收起"按钮 → 关工作台层
-  ['roomClose', 'teardownClose', 'dvClose', 'brClose'].forEach((id) => {
+  ['roomClose', 'teardownClose', 'dvClose', 'brClose', 'lintClose'].forEach((id) => {
     const b = $(id); if (b) b.addEventListener('click', closeWorkbench);
   });
   // 首次 DOM 就绪后初始化（含静态转移）

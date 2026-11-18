@@ -199,6 +199,38 @@
         en: 'Don\'t write content first for interactive drama. Draw the skeleton: one start, three endings (main/bad/hidden), choice nodes in between. Then auto-check six issues: dead-end, fake-choice (paths converge), self-loop, cycle (A→B→A), dangling link, weight imbalance (hidden never triggers). Fill content only after the skeleton validates — avoids mid-write rework.',
       },
     },
+
+    // 剧本体检：三把尺子 + P0/P1/P2 分级
+    tbCardLint: {
+      id: 'tbCardLint',
+      title: { zh: '剧本体检 · 三把尺子分级法', en: 'Script Checkup · Three Rulers' },
+      oneLiner: {
+        zh: '体检不是挑刺，是用三把尺子量出「哪一处会让观众划走」。',
+        en: 'A checkup is not nitpicking — three rulers find where the audience swipes away.',
+      },
+      steps: [
+        { name: { zh: '人物原型', en: 'Archetypes' }, explain: { zh: '主角与反派有没有对冲张力？反派是不是只会送人头？', en: 'Do lead and villain create tension? Or is the villain just fodder?' } },
+        { name: { zh: '情绪兑付', en: 'Payoff' }, explain: { zh: '爽点是不是说到做到？虐完有没有给出口？', en: 'Is the catharsis delivered? Any exit after the pain?' } },
+        { name: { zh: '网文钩子', en: 'Hooks' }, explain: { zh: '开头 3 秒、结尾悬念，能不能逼人追下一集？', en: 'Do the 3-sec opening and end cliffhanger force the next episode?' } },
+        { name: { zh: '三级定级', en: 'Grade' }, explain: { zh: 'P0 硬伤先改，P1 需修排期，P2 建议最后打磨。', en: 'Fix P0 first, schedule P1, polish P2 last.' } },
+      ],
+      diagram: `<svg viewBox="0 0 200 130" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="三把尺子体检图">
+  <line x1="20" y1="27" x2="180" y2="27" stroke="currentColor" stroke-width="1.2"/>
+  <line x1="20" y1="65" x2="180" y2="65" stroke="currentColor" stroke-width="1.2"/>
+  <line x1="20" y1="103" x2="180" y2="103" stroke="currentColor" stroke-width="1.2"/>
+  <text x="20" y="20" font-size="9" fill="currentColor">人物原型</text>
+  <text x="20" y="58" font-size="9" fill="currentColor">情绪兑付</text>
+  <text x="20" y="96" font-size="9" fill="currentColor">网文钩子</text>
+  <line x1="140" y1="21" x2="140" y2="33" stroke="currentColor" stroke-width="1.6"/>
+  <line x1="120" y1="59" x2="120" y2="71" stroke="currentColor" stroke-width="1.6"/>
+  <line x1="165" y1="97" x2="165" y2="109" stroke="currentColor" stroke-width="1.6"/>
+  <text x="180" y="121" text-anchor="end" font-size="8" fill="currentColor" opacity="0.7">P0 / P1 / P2</text>
+</svg>`,
+      plainExplain: {
+        zh: '把一集正文当成体检对象，用三把尺子逐条量：人物原型看主角与反派有没有对冲张力，情绪兑付看爽点是否说到做到，网文钩子看开头与结尾能不能逼人追下一集。每条问题按 P0 硬伤（不改会被划走）、P1 需修（会掉留存）、P2 建议（打磨项）分级并给出改法。先修 P0，再谈文采；原型选型则从一句话创意匹配主角/反派/金手指机制，作为人物小传的起点。',
+        en: 'Treat one episode as a patient and measure it with three rulers: archetypes check whether lead and villain create tension, payoff checks whether catharsis is delivered, hooks check whether the opening and cliffhanger force the next episode. Grade every issue P0 (will be swiped away), P1 (retention drop) or P2 (polish), each with a fix. Fix P0 before style; archetype matching turns a one-line idea into a starting point for the character bible.',
+      },
+    },
   };
 
   /**
@@ -231,6 +263,7 @@
     toolTeardown: 'tbCardTd',
     toolDiversity: 'tbCardDv',
     toolBranch: 'tbCardBr',
+    toolCraftLint: 'tbCardLint',
   };
 
   /**
