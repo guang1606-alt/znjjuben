@@ -69,4 +69,12 @@ describe('v2.511 剧本体检：工具箱入口与免费端点接线', () => {
     assert.match(view, /epsNote: \(n\)/, '须告知用户已按几集体检（否则用户不知道多集规则生效）');
     assert.match(view, /renderLint\(d, eps\.length\)/, '体检结果须带上实际集数才显示提示');
   });
+
+  it('体检结果可一键复制成纯文本问题单（拿给改稿环节直接用）', () => {
+    const view = fs.readFileSync(path.join(root, 'lint-view.js'), 'utf8');
+    assert.match(view, /function reportText\(d, epsN\)/, '须把结构化结果拼成可读问题单');
+    assert.match(view, /data-lint-copy/, '结果区须有复制按钮');
+    assert.match(view, /copyReport:/, '须有复制按钮文案');
+    assert.match(view, /closest\('\[data-lint-copy\]'\)/, '复制按钮须用事件委托（结果重渲染不丢绑定）');
+  });
 });

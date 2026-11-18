@@ -18,6 +18,7 @@
       archHint: '原型只是选型参考——同名原型可以写出完全不同的戏，关键是 formula 里的对冲关系。',
       formula: '公式', core: '用法', tip: '机制', chars: (n) => `已读 ${n} 字`,
       epsNote: (n) => `已识别 ${n} 集，情绪线与开篇留存规则已生效`,
+      copyReport: '复制问题单', copied: '已复制', copyFailed: '复制失败，请手动选择文本',
     },
     en: {
       checking: 'Checking…', matching: 'Matching archetypes…',
@@ -31,6 +32,7 @@
       archHint: 'Archetypes are reference only: the same archetype can carry a totally different story; the tension in the formula is what matters.',
       formula: 'Formula', core: 'How to use', tip: 'Mechanic', chars: (n) => `${n} chars read`,
       epsNote: (n) => `${n} episodes detected — emotion arc and opening-retention rules are active`,
+      copyReport: 'Copy issue list', copied: 'Copied', copyFailed: 'Copy failed, please select the text manually',
     },
   };
   const T = () => (en() ? L.en : L.zh);
@@ -73,7 +75,8 @@
     const note = Number(epsN) >= 2 ? `<div class="muted">${esc(t.epsNote(Number(epsN)))}</div>` : '';
     const head = `<div class="dv-score-row">
       <div class="dv-score ${scoreClass(Number(d.avg) || 0)}"><span class="dv-score-num">${Number(d.avg) || 0}</span><span class="dv-score-cap">${esc(t.avgCap)}</span></div>
-      <div><div class="muted">${esc(t.counts(c))}</div><div class="muted">${esc(t.chars(Number(d.chars) || 0))}</div>${note}</div>
+      <div><div class="muted">${esc(t.counts(c))}</div><div class="muted">${esc(t.chars(Number(d.chars) || 0))}</div>${note}
+        <button type="button" class="chip" data-lint-copy>${esc(t.copyReport)}</button></div>
     </div>`;
     if (!c.total) {
       $('lintResult').innerHTML = `<div class="dv-report">${head}<div class="dv-good">${esc(t.allClear)}</div></div>`;
@@ -113,6 +116,38 @@
       ${blocks || `<div class="muted">${esc(t.noMatch)}</div>`}${sysBlock}
       <div class="muted" style="font-size:12.5px">${esc(t.archHint)}</div>
     </div>`;
+  }
+
+  // 问题单落地：把结构化结果拼成纯文本，用户可直接粘给改稿环节或自己的编辑工具
+  function reportText(d, epsN) {
+    const t = T();
+    const c = d.counts || {};
+    const lines = [
+      `${t.avgCap}: ${Number(d.avg) || 0}`,
+      t.counts({ p0: c.p0 || 0, p1: c.p1 || 0, p2: c.p2 || 0, total: c.total || 0 }),
+    ];
+    if (Number(epsN) >= 2) lines.push(t.epsNote(Number(epsN)));
+    (d.groups || []).forEach((g) => {
+      lines.push('', `【${g.name || ''}】${t.groupAvg(Number(g.avg) || 0)}`);
+      (g.issues || []).forEach((i) => lines.push(`- ${levelName(i.level)} · ${i.dim || ''}：${i.advice || ''}`));
+    });
+    return lines.join('\n');
+  }
+
+  // 非安全上下文（http 非 localhost）没有 navigator.clipboard，统一走 execCommand 兜底
+  function copyText(text) {
+    const legacy = () => {
+      const ta = document.createElement('textarea');
+      ta.value = text; ta.style.position = 'fixed'; ta.style.opacity = '0';
+      document.body.appendChild(ta); ta.select();
+      try { document.execCommand('copy'); } catch (_) { /* 老浏览器无降级可做 */ }
+      ta.remove();
+    };
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      return navigator.clipboard.writeText(text).catch(legacy);
+    }
+    legacy();
+    return Promise.resolve();
   }
 
   function reRender() {
@@ -165,5 +200,16 @@
     $('lintArchBtn').onclick = runArch;
     $('lintClose').onclick = () => $('lintPanel').classList.add('hidden');
     document.addEventListener('zn-lang', reRender);
+    // 复制按钮随结果区重渲染，用 document 级委托保证绑定不丢
+    document.addEventListener('click', (e) => {
+      const hit = e.target && e.target.closest && e.target.closest('[data-lint-copy]');
+      if (!hit) return;
+      if (!last || last.kind !== 'lint') return;
+      copyText(reportText(last.data, last.eps || 0)).then(() => {
+        const old = hit.textContent;
+        hit.textContent = T().copied; hit.disabled = true;
+        setTimeout(() => { hit.textContent = old; hit.disabled = false; }, 1200);
+      }).catch(() => xnErr(T().copyFailed));
+    });
   });
 })();
