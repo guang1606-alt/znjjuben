@@ -98,6 +98,26 @@ describe('v2.511 剧本体检：工具箱入口与免费端点接线', () => {
     assert.match(view, /meta\.outline/, '须记录大纲是否填写');
   });
 
+  it('体检口径与分组数一致：只有五组全过才提示通过，未填项不渲染 undefined', () => {
+    const view = fs.readFileSync(path.join(root, 'lint-view.js'), 'utf8');
+    assert.match(view, /allClear: '✔ 五组检查均未发现硬伤/, '通过提示须与实际五组一致（仍写三组会误报已全过）');
+    assert.match(view, /allClear: '✔ All five groups passed/, '英文通过提示须与实际五组一致');
+    // 此前引用了 i18n 的键名却取在视图自有字典上，运行时拼出「未填「undefined / undefined」」
+    assert.doesNotMatch(view, /t\.tbLint(Ending|Outline)L/, '体检视图不能引用自身字典里不存在的键，界面上会出现 undefined');
+    assert.match(view, /miss\.push\(t\.lhEnding\)/, '未填本集结尾须用视图内文案');
+    assert.match(view, /miss\.push\(t\.lhOutline\)/, '未填终局大纲须用视图内文案');
+    assert.match(view, /lhEnding: '本集结尾（选填）'/, '视图字典须自带本集结尾标签');
+    assert.match(view, /lhOutline: '终局大纲（选填）'/, '视图字典须自带终局大纲标签');
+  });
+
+  it('工具卡 / 面板说明与静态兜底文案都按五组口径描述体检范围', () => {
+    assert.doesNotMatch(i18n, /网文钩子三组逐条体检/, '中文说明仍写三组，与实际五组不符');
+    assert.match(i18n, /改稿尺子、叙事逻辑五组逐条体检/, '中文说明须写明新增的改稿尺子与叙事逻辑');
+    assert.doesNotMatch(i18n, /against three groups/, '英文说明仍写 three groups');
+    assert.match(i18n, /five groups/i, '英文说明须为 five groups');
+    assert.doesNotMatch(html, /网文钩子三组逐条体检/, 'index.html 静态兜底文案仍写三组');
+  });
+
   it('递招带上已有正文的开篇与界面语言（开篇审计不再睡死）', () => {
     const app = fs.readFileSync(path.join(root, 'app.js'), 'utf8');
     assert.match(app, /if \(lang === 'en'\) body\.lang = 'en';/, '递招须带上界面语言');

@@ -11,7 +11,8 @@
       needText: '请先粘贴一集正文（至少几十个字）', needIdea: '请先写一句话创意，再匹配原型',
       fail: '请求失败，请重试', avgCap: '体检分',
       counts: (c) => `P0 硬伤 ${c.p0} · P1 需修 ${c.p1} · P2 建议 ${c.p2} · 共 ${c.total} 条`,
-      allClear: '✔ 三组检查均未发现硬伤：可以进入下一步打磨。',
+      allClear: '✔ 五组检查均未发现硬伤：可以进入下一步打磨。',
+      lhEnding: '本集结尾（选填）', lhOutline: '终局大纲（选填）',
       p0: 'P0 硬伤', p1: 'P1 需修', p2: 'P2 建议', groupAvg: (n) => `维度分 ${n}`,
       protag: '主角原型', villain: '反派原型', system: '系统 / 金手指机制',
       noMatch: '未匹配到足够鲜明的原型：补充人物身份、欲望与最怕的东西再试。',
@@ -26,7 +27,8 @@
       needText: 'Paste at least one episode first (a few dozen characters)', needIdea: 'Write a one-line idea before matching archetypes',
       fail: 'Request failed, please retry', avgCap: 'Score',
       counts: (c) => `P0 ${c.p0} · P1 ${c.p1} · P2 ${c.p2} · ${c.total} in total`,
-      allClear: '✔ All three groups passed — ready for the next polish pass.',
+      allClear: '✔ All five groups passed — ready for the next polish pass.',
+      lhEnding: 'Episode ending (optional)', lhOutline: 'Endgame outline (optional)',
       p0: 'P0 critical', p1: 'P1 fix', p2: 'P2 advice', groupAvg: (n) => `dimension ${n}`,
       protag: 'Lead archetypes', villain: 'Villain archetypes', system: 'System / cheat mechanics',
       noMatch: 'No distinctive archetype matched yet — add identity, want and deepest fear, then retry.',
@@ -82,8 +84,8 @@
     const c = d.counts || { p0: 0, p1: 0, p2: 0, total: 0 };
     const note = Number(epsN) >= 2 ? `<div class="muted">${esc(t.epsNote(Number(epsN)))}</div>` : '';
     const miss = [];
-    if (!(meta && meta.ending)) miss.push(t.tbLintEndingL);
-    if (!(meta && meta.outline)) miss.push(t.tbLintOutlineL);
+    if (!(meta && meta.ending)) miss.push(t.lhEnding);
+    if (!(meta && meta.outline)) miss.push(t.lhOutline);
     const unlock = miss.length ? `<div class="muted">${esc(t.unlockHint(miss.join(' / ')))}</div>` : '';
     const head = `<div class="dv-score-row">
       <div class="dv-score ${scoreClass(Number(d.avg) || 0)}"><span class="dv-score-num">${Number(d.avg) || 0}</span><span class="dv-score-cap">${esc(t.avgCap)}</span></div>
