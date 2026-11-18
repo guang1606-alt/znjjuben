@@ -204,7 +204,7 @@ export function createAdminModelRouter(prisma: any) {
         { q: '岗位顺序为什么市场先行？', a: '市场分析两次出现：market_pre 立项前置（题材/受众/爽点/平台尺度先定对不对路），market_post 成稿后置（六维评分/投稿匹配），orderErrors 为空即顺序合法。' },
         { q: '用户能看到这些模型吗？', a: '不能。C端全程黑盒，只感知经济/标准/旗舰三档；供应商名、型号、密钥、BaseUrl 仅超管后台可见，回显一律脱敏。' },
         { q: '替补为什么必须国产？', a: 'v2.51 铁规：每岗至少一个替补且替补必须是中国国内可直连 API（豆包/通义/DeepSeek/Kimi/MiniMax）。首选可用海外最强模型，但海外断供/网络波动时由国产替补无缝兜底；LOCAL 本地引擎不算替补API。backupSelfCheck 每周盘点自动校验，违规直接 BLOCK。' },
-        { q: '替补凭什么算“最强”？（v2.52）', a: '每岗维护一张国产模型契合度策展排序 DOMESTIC_FIT_ORDER（架构/挑漏看DeepSeek-V4-Pro、中文成稿润色看豆包Seed2.0-Pro、人设看MiniMax、合规看通义、长上下文看Kimi），第一替补必须是排序首位；出现更优国产模型时改排序即可，validateStrongestBackup 与每周盘点会自动抓“替补不是最强”，故障兜底时宁可上调强度也不降配。' },
+        { q: '替补凭什么算“最强”？（v2.52）', a: '每岗维护一张国产模型契合度策展排序 DOMESTIC_FIT_ORDER（架构/挑漏看DeepSeek-V4-Pro、中文成稿润色看豆包Seed2.1-Pro、人设看MiniMax、合规看通义、长上下文看Kimi），第一替补必须是排序首位；出现更优国产模型时改排序即可，validateStrongestBackup 与每周盘点会自动抓“替补不是最强”，故障兜底时宁可上调强度也不降配。' },
       ],
     });
   });

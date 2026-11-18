@@ -102,7 +102,7 @@ const STANDARD: RolePick[] = [
   { role: 'market_post', modelId: 'deepseek_v4pro', backupIds: ['deepseek_v4flash', 'qwen38max'] },
 ];
 // 旗舰档：全国产顶配（v2.54 改造：原 GPT-5/Claude/Gemini 海外组合迁移到 OVERSEAS 海外档）
-// v2.54 设计理由：用户当前不接海外 API；旗舰档用 DeepSeek V4-Pro 架构 + 豆包 Seed 2.0 Pro 成稿 +
+// v2.54 设计理由：用户当前不接海外 API；旗舰档用 DeepSeek V4-Pro 架构 + 豆包 Seed 2.1 Pro 成稿 +
 // MiniMax M3 人设 + Kimi K3 长上下文观众挑漏 + Qwen 3.8 Max 多语市场前置；异构最强且全直连
 const FLAGSHIP: RolePick[] = [
   // 市场前置升级 Qwen 3.8 Max：长上下文 + 多语市场资料消化（替代原 Gemini 3 Pro）
@@ -119,7 +119,7 @@ const FLAGSHIP: RolePick[] = [
 ];
 // 海外 API 创作引擎（v2.54 预留档：用户搞定海外 API 时启用，EP_PRICE 未列 → C 端不可购买）
 // 设计原则：GPT-5 架构 + Claude Sonnet5 人设/润色 + Gemini 3 Pro 多语市场前置（异构最强）；
-// 但 writer 仍用豆包 Seed 2.0 Pro（中文成稿「最像人」，Claude 中文文笔不如豆包）；
+// 但 writer 仍用豆包 Seed 2.1 Pro（中文成稿「最像人」，Claude 中文文笔不如豆包）；
 // audience/market_post/compliance 仍国产控成本（避免每集成本爆炸击穿铁底）
 const OVERSEAS: RolePick[] = [
   { role: 'market_pre', modelId: 'gemini_3pro', backupIds: ['qwen38max'] },
@@ -146,7 +146,7 @@ export function buildTiers(): EngineCombo[] {
   return [
     { id: 'economy', name: '经济引擎', picks: ECONOMY, costFen: estimateComboCostFen(ECONOMY), desc: '国产高性价比多岗协同+本地合规市场，锚点1元/集档' },
     { id: 'standard', name: '标准引擎', picks: STANDARD, costFen: estimateComboCostFen(STANDARD), desc: '推理模型搭架构+中文旗舰立人设，均衡强组合' },
-    { id: 'flagship', name: '旗舰引擎(全国产顶配)', picks: FLAGSHIP, costFen: estimateComboCostFen(FLAGSHIP), desc: 'DeepSeek V4-Pro架构+豆包Seed2.0成稿+MiniMax立人物+Kimi K3长上下文观众挑漏，全国产异构最强' },
+    { id: 'flagship', name: '旗舰引擎(全国产顶配)', picks: FLAGSHIP, costFen: estimateComboCostFen(FLAGSHIP), desc: 'DeepSeek V4-Pro架构+豆包Seed2.1-Pro成稿+MiniMax立人物+Kimi K3长上下文观众挑漏，全国产异构最强' },
     // v2.54 海外档：预留不开放购买，等用户搞定海外 API 时在 EP_PRICE 加列 + MemberLevel.engines 加项即可启用
     { id: 'overseas', name: '海外API创作引擎(预留)', picks: OVERSEAS, costFen: estimateComboCostFen(OVERSEAS), desc: 'GPT-5架构+Claude Sonnet5人设/润色+Gemini3市场前置异构最强；中文成稿/挑漏/合规仍用国产控成本；暂不开放购买' },
   ];
@@ -217,7 +217,7 @@ const COMBO_ROLES = ['market_pre', 'architect', 'character', 'writer', 'audience
 /**
  * v2.52 岗位「国产最强替补」策展排序（可审计、可随横评更新）
  * 同 grade 不按价格取巧：按岗位能力契合度排序——
- * 架构/挑漏/终评看推理（DeepSeek-V4-Pro）、中文成稿/润色看去AI味（豆包Seed2.0-Pro）、
+ * 架构/挑漏/终评看推理（DeepSeek-V4-Pro）、中文成稿/润色看去AI味（豆包Seed2.1-Pro）、
  * 人设看角色声口（MiniMax-M3）、合规/前置看均衡与政策尺度（Qwen3.8-Max）、长上下文消化用 Kimi-K3（仅旗舰档，实价高）。
  * 数组即该岗国产模型由强到弱的次序；validateStrongestBackup 以此为唯一准绳。
  */

@@ -53,19 +53,19 @@ test('旗舰档全国产顶配（v2.54：原海外组合迁移到 OVERSEAS，FLA
   assert.ok(!ids.includes('gpt_5flag') && !ids.includes('claude_sonnet5') && !ids.includes('gemini_3pro'),
     '旗舰档已全国产化，不应含海外模型');
   assert.ok(ids.includes('deepseek_v4pro') && ids.includes('doubao_seed2pro'),
-    '旗舰档应含 DeepSeek-V4-Pro + 豆包 Seed2.0-Pro（国产顶配）');
+    '旗舰档应含 DeepSeek-V4-Pro + 豆包 Seed2.1-Pro（国产顶配）');
   assert.ok(!ids.some((id) => id.includes('opus')), 'Opus 每集会击穿铁底，不应进每集组合');
   const p = C.priceForTier(L.MemberLevel.PRO, 'flagship');
   assert.ok(p.chargedFen >= p.costFen * 2);
   assert.ok(p.margin >= 0.5, `专业旗舰毛利偏低 ${p.margin}`);
 });
 
-test('海外档异构最强（v2.54 预留：GPT-5+Claude Sonnet5+DeepSeek-V4+豆包Seed2.0），EP_PRICE 未列→拒售', () => {
+test('海外档异构最强（v2.54 预留：GPT-5+Claude Sonnet5+DeepSeek-V4+豆包Seed2.1），EP_PRICE 未列→拒售', () => {
   const ovs = C.buildTiers().find((x) => x.id === 'overseas');
   assert.ok(ovs, '海外档必须存在（预留）');
   const ids = ovs.picks.map((p) => p.modelId);
   assert.ok(ids.includes('gpt_5flag') && ids.includes('claude_sonnet5') && ids.includes('deepseek_v4pro') && ids.includes('doubao_seed2pro'),
-    '海外档应含 GPT-5 + Claude Sonnet5 + DeepSeek-V4-Pro + 豆包 Seed2.0-Pro');
+    '海外档应含 GPT-5 + Claude Sonnet5 + DeepSeek-V4-Pro + 豆包 Seed2.1-Pro');
   // EP_PRICE 未列 OVERSEAS → priceForTier 返回 chargedFen=0 + margin=-1 + ok=false（自然拒售，无需额外守卫代码）
   const p = C.priceForTier(L.MemberLevel.PRO, 'overseas');
   assert.ok(!p.ok, '海外档预留期：EP_PRICE 未列 OVERSEAS，必须拒售');
@@ -81,4 +81,20 @@ test('LOCAL零成本；图片模型≥8家含GPT-image；文本模型都带BaseU
   const adv = C.portfolioAdvice();
   assert.strictEqual(adv.length, 8);
   adv.forEach((a) => assert.ok(a.primary && a.rule));
+});
+
+// v2.506 守卫：已退出型号不得残留在用户可见文案（豆包 Seed 2.0 已退出方舟，目录/采购单均为 2.1-Pro）
+test('用户可见文案不残留已退出型号「豆包 Seed 2.0」，旗舰档描述与在售型号一致', () => {
+  const fs = require('node:fs');
+  const path = require('node:path');
+  const ROOT = path.join(__dirname, '..');
+  const bad = /豆包\s*Seed\s*2\.0|Seed2\.0-Pro|Seed 2\.0 Pro/;
+  for (const f of ['src/config/model-catalog.ts', 'src/routes/admin-model.ts']) {
+    const text = fs.readFileSync(path.join(ROOT, f), 'utf8');
+    const hit = text.split('\n').findIndex((l) => bad.test(l));
+    assert.strictEqual(hit, -1, `${f} 第 ${hit + 1} 行仍残留已退出型号「豆包 Seed 2.0」，会误导采购（应写 2.1-Pro）`);
+  }
+  const flag = C.buildTiers().find((t) => t.id === 'flagship');
+  assert.ok(/2\.1/.test(flag.desc), '旗舰档描述应写当前在售的豆包 Seed 2.1');
+  assert.ok(flag.picks.some((p) => p.modelId === 'doubao_seed2pro'));
 });
