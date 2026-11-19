@@ -45,6 +45,57 @@ export async function fetchImageBytes(input: string, timeoutMs = 5000): Promise<
   return { buf, mime };
 }
 
+/**
+ * 删除 TOS 对象（v2.544）：删除海报时同步清掉云上文件，避免「配额显示已释放、云上仍占空间」的名实不符。
+ * 仅接受本桶地址；未配置 TOS / 非本桶 / 解析失败一律静默返回 false，不阻断删除。
+ */
+export async function deleteTosObject(urlOrKey: string): Promise<boolean> {
+  if (!tosEnabled() || !urlOrKey) return false;
+  let key = '';
+  try {
+    const u = new URL(urlOrKey);
+    if (u.host !== `${BUCKET}.${ENDPOINT}`) return false; // 外链不是我们的对象，不越权删除
+    key = decodeURIComponent(u.pathname.replace(/^\//, ''));
+  } catch {
+    key = String(urlOrKey).replace(/^\/+/, '');
+  }
+  if (!key) return false;
+  try { await deleteObject(key); return true; }
+  catch (e) { console.error('[tos] delete failed:', (e as Error).message); return false; }
+}
+
+/** SigV4 签名 DELETE 对象 */
+async function deleteObject(key: string): Promise<void> {
+  const host = `${BUCKET}.${ENDPOINT}`;
+  const amzDate = new Date().toISOString().replace(/[-:]/g, '').replace(/\.\d{3}/, '');
+  const dateStamp = amzDate.slice(0, 8);
+  const emptyHash = sha256hex('');
+
+  const canonicalHeaders = `host:${host}\nx-tos-content-sha256:${emptyHash}\nx-tos-date:${amzDate}\n`;
+  const signedHeaders = 'host;x-tos-content-sha256;x-tos-date';
+  const canonicalRequest = ['DELETE', `/${key}`, '', canonicalHeaders, signedHeaders, emptyHash].join('\n');
+
+  const credentialScope = `${dateStamp}/${REGION}/tos/request`;
+  const stringToSign = ['TOS4-HMAC-SHA256', amzDate, credentialScope, sha256hex(canonicalRequest)].join('\n');
+  const kDate = hmac(SK, dateStamp);
+  const kRegion = hmac(kDate, REGION);
+  const kService = hmac(kRegion, 'tos');
+  const kSigning = hmac(kService, 'request');
+  const signature = hmac(kSigning, stringToSign).toString('hex');
+
+  const resp = await fetch(`https://${host}/${key}`, {
+    method: 'DELETE',
+    headers: {
+      'host': host,
+      'x-tos-content-sha256': emptyHash,
+      'x-tos-date': amzDate,
+      'authorization': `TOS4-HMAC-SHA256 Credential=${AK}/${credentialScope}, SignedHeaders=${signedHeaders}, Signature=${signature}`,
+    },
+  });
+  // 404 视为已删除（幂等），其余非 2xx 抛错由调用方降级
+  if (!resp.ok && resp.status !== 404) throw new Error(`TOS DELETE failed ${resp.status}`);
+}
+
 /** SigV4 签名 PUT 上传到 TOS */
 async function putObject(key: string, buf: Buffer, mime: string): Promise<string> {
   const host = `${BUCKET}.${ENDPOINT}`;

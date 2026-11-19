@@ -14,6 +14,7 @@ import { buildVisualStylePrompt } from '../engine/visual-style-library'; // v2.1
 import { runPk } from '../lib/script-pk';
 import { buildRankBoard, nextTierProgress } from '../lib/pk-rank';
 import { persistImage } from '../lib/media-store';
+import { deleteTosObject } from '../lib/tos';
 
 type PrismaLike = typeof defaultPrisma;
 
@@ -159,6 +160,9 @@ export function createValueAddedRouter(prisma: PrismaLike | any) {
   vaRouter.delete('/posters/:id', authRequired, async (req: AuthRequest, res) => {
     const asset = await prisma.mediaAsset.findFirst({ where: { id: req.params.id, userId: req.userId! } });
     if (!asset) return res.status(404).json({ error: '海报不存在' });
+    // v2.544 TOS 模式的对象不在库里：删除时同步清云上文件，否则配额显示已释放、云上仍占空间（名实不符）。
+    // 删除失败不阻断——记录与用量先释放，日志留痕，避免用户因云侧故障连海报都删不掉。
+    if ((asset as any).externalUrl) await deleteTosObject(String((asset as any).externalUrl));
     await prisma.mediaAsset.delete({ where: { id: asset.id } });
     // 同步释放存储用量（软删 StorageObject，保留审计痕迹）
     await prisma.storageObject.updateMany({ where: { userId: req.userId!, refId: asset.id }, data: { deletedAt: new Date() } }).catch(() => {});
