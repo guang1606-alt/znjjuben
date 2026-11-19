@@ -4161,12 +4161,16 @@
   // Content-Disposition（TOS 模式下地址是跨域重定向，download 属性会失效）。
   let posterViewId = '';
   function openPosterModal(id, url) {
-    posterViewId = id;
-    const big = $('posterBig'); const broken = $('posterBroken'); const dl = $('posterDownload');
+    posterViewId = id || '';
+    const big = $('posterBig'); const broken = $('posterBroken'); const dl = $('posterDownload'); const del = $('posterDel');
     big.hidden = false; broken.hidden = true;
     big.src = url;
     dl.href = url + (url.includes('?') ? '&' : '?') + 'download=1';
-    dl.setAttribute('download', 'poster-' + id + '.png');
+    // v2.560 文件名交给服务端 Content-Disposition：写死 .png 会让 webp/jpeg 海报存成错误后缀；
+    // download 属性留空仍能触发保存，命名以响应头为准。
+    dl.setAttribute('download', '');
+    // 生成结果页进入预览时没有卡片 id（可能还是外链），此时不提供删除，只保留看大图/下载。
+    del.hidden = !posterViewId;
     openModal('posterModal');
   }
   $('posterBig').addEventListener('error', () => { $('posterBig').hidden = true; $('posterBroken').hidden = false; });
@@ -9996,7 +10000,17 @@
       const urls = (r.images || []).filter(imgUrlOk);
       if (urls.length) {
         const wrap = document.createElement('div'); wrap.className = 'vc-poster-out';
-        wrap.innerHTML = `<p class="muted">${lang === 'en' ? 'HD certificate posters (pick one to save/share):' : '高清证书海报（选一张保存/分享）：'}</p><div class="vc-poster-grid">${urls.map((u) => `<img src="${escapeHtml(u)}" alt="poster"/>`).join('')}</div>`;
+        // v2.560 生成结果页此前只有裸 <img>：提示语让用户「选一张保存」，却既点不开也存不下，
+        // 最该顺畅的一步反而只能长按。现在每张都是可点按钮，进同一套大图预览并可直接下载原图。
+        const hint = lang === 'en' ? 'HD certificate posters — tap any to view full size or download:' : '高清证书海报（点任意一张看大图、下载原图）：';
+        wrap.innerHTML = `<p class="muted">${hint}</p><div class="vc-poster-grid">${urls.map((u) => {
+          const id = (String(u).match(/^\/media\/([^/?#]+)/) || [])[1] || '';
+          return `<button class="poster-open" type="button" data-poster-open="${escapeHtml(id)}" data-poster-url="${escapeHtml(u)}" aria-label="${escapeHtml(t('viewPoster'))}"><img src="${escapeHtml(u)}" alt="${escapeHtml(t('myPosters'))}" /></button>`;
+        }).join('')}</div>`;
+        wrap.addEventListener('click', (e) => {
+          const b = e.target.closest('[data-poster-open]');
+          if (b) openPosterModal(b.getAttribute('data-poster-open'), b.getAttribute('data-poster-url'));
+        });
         $('valueBody').appendChild(wrap);
         xnSay(r.staff ? (lang === 'en' ? 'Done — free for staff.' : '生成完成，内部账户免费～') : (lang === 'en' ? `Done, ${r.points} points used.` : `生成完成，已扣 ${r.points} 积分～`));
       }

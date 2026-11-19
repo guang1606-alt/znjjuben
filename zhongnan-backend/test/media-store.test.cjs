@@ -127,6 +127,23 @@ test('前端海报卡片可开大图并下载原图，破图必须替换为可�
   assert.match(app, /\.addEventListener\('error'/, '必须有图片加载失败兜底');
 });
 
+// v2.560 生成结果页的「保存」承诺必须有入口：此前结果区只有裸 <img>，提示语让用户
+// 「选一张保存」，实际既不能点开也不能下载，只能长按——付费生成后最该顺畅的一步反而没有操作。
+test('生成结果页高清海报必须可点开大图并下载，扩展名交给服务端决定', () => {
+  const fs = require('node:fs');
+  const path = require('node:path');
+  const app = fs.readFileSync(path.join(__dirname, '..', 'web', 'app.js'), 'utf8');
+  const lines = app.split('\n');
+  const i = lines.findIndex((l) => l.includes('vc-poster-grid'));
+  assert.ok(i >= 0, '未找到生成结果的海报网格（vc-poster-grid）');
+  const block = lines.slice(i, i + 5).join('\n');
+  assert.match(block, /data-poster-open=/, '结果海报必须带预览/下载入口');
+  assert.match(block, /class="poster-open"/, '入口必须用按钮承载，键盘可达');
+  assert.match(app, /wrap\.addEventListener\('click'/, '结果区点击必须走事件委托');
+  assert.doesNotMatch(app, /setAttribute\('download',\s*'poster-/, '不得写死 .png（webp/jpeg 海报会被存成错误后缀）');
+  assert.match(app, /setAttribute\('download', ''\)/, '下载文件名应交给服务端 Content-Disposition');
+});
+
 // v2.539 前端海报渲染守卫：落库后返回的是 /media/:id 站内相对地址，
 // 前端若只放行 http(s)/data: 就会把持久化成功的海报整批过滤掉（提示成功却一张不显示）。
 test('前端海报渲染必须放行同源 /media/ 地址，且仍拒绝协议相对外链', () => {
