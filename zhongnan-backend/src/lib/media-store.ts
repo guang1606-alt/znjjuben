@@ -5,6 +5,7 @@
  */
 import { prisma } from './prisma';
 import { tosEnabled, uploadImageToTos, fetchImageBytes } from './tos';
+import { logInternal } from './http-errors';
 
 /** 单张图片体积极限（运行时读取，便于运维与测试调整） */
 function maxBytes(): number {
@@ -31,7 +32,8 @@ export async function persistImage(input: string, kind = 'poster', db: any = pri
           data: { kind, mime: stored.mime, size: stored.size, externalUrl: stored.url, ...(ownerId ? { userId: ownerId } : {}) },
         });
         if (ownerId && db?.storageObject?.create) {
-          try { await db.storageObject.create({ data: { userId: ownerId, kind, bytes: stored.size, refId: asset.id } }); } catch { /* 记账失败不阻断出图 */ }
+          // v2.573 记账失败不阻断出图，但必须可观测：静默会让存储用量少计（用户白拿容量）且无从排查
+          try { await db.storageObject.create({ data: { userId: ownerId, kind, bytes: stored.size, refId: asset.id } }); } catch (e) { logInternal(e, 'media.accounting'); }
         }
         return `/media/${asset.id}`;
       } catch {
@@ -45,9 +47,10 @@ export async function persistImage(input: string, kind = 'poster', db: any = pri
     if (!db?.mediaAsset?.create) return input;
     const asset = await db.mediaAsset.create({ data: { kind, mime, size: buf.length, bytes: buf, ...(ownerId ? { userId: ownerId } : {}) } });
     if (ownerId && db?.storageObject?.create) {
+      // v2.573 同上：记不上账要留痕，否则配额口径长期偏低且无迹可查
       try {
         await db.storageObject.create({ data: { userId: ownerId, kind, bytes: buf.length, refId: asset.id } });
-      } catch { /* 记账失败不阻断出图 */ }
+      } catch (e) { logInternal(e, 'media.accounting'); }
     }
     return `/media/${asset.id}`;
   } catch {

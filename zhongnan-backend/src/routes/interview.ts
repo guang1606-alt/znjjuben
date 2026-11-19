@@ -22,6 +22,7 @@ import { scanWithStore } from '../lib/safety-store';
 import { prisma as defaultPrisma } from '../lib/prisma';
 import { staffOf, staffChargeTx, staffRefundTx } from '../lib/staff-billing';
 import { userMessageOf, modelErrorMeta } from '../lib/model-error-message';
+import { logInternal } from '../lib/http-errors';
 import {
   interviewTurn, buildBrief, emptyMaterials, readyCheck, gapReport,
   InterviewMaterials, Lang, TurnOutcome,
@@ -121,10 +122,11 @@ export function createInterviewRouter(prisma: PrismaLike) {
       const out: TurnOutcome = await interviewTurn(args.tier, args.text, prev.materials, prev.lastQuestion, prev.transcript, args.lang);
 
       // 模型调用观测（taskId 空 = 非剧集管线调用；priceFen 记增值定价，内部账户向用户收 0 → priceFen=0，真实 costFen 照常）
+      // v2.573 观测写入失败不阻断本轮（回答与素材优先），但必须留痕：静默会漏记成本，按档核价失真
       if (out.costFen > 0) {
         await prisma.modelCallLog.create({
           data: { taskId: null, role: 'designer', engineTier: args.tier, costFen: Math.max(1, Math.round(out.costFen)), priceFen: args.staff ? 0 : VALUE_ADDED.INTERVIEW_TURN.points * FEN_PER_POINT },
-        }).catch(() => {});
+        }).catch((e: unknown) => logInternal(e, 'interview.calllog'));
       }
 
       const transcript = [...prev.transcript, { q: prev.lastQuestion, a: args.text.slice(0, 4000) }];

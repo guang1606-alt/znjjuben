@@ -10,7 +10,7 @@ import { VALUE_ADDED, ValueAddedKey, EngineTier, MemberLevel } from '../config/p
 import { quotaBytes } from '../lib/storage';
 import { callImage, callText, STABILITY_SUFFIX } from '../lib/model-proxy';
 import { userMessageOf, modelErrorMeta } from '../lib/model-error-message';
-import { failInternal } from '../lib/http-errors';
+import { failInternal, logInternal } from '../lib/http-errors';
 import { buildVisualStylePrompt } from '../engine/visual-style-library'; // v2.148 视觉画风编码库（海报画风编码注入）
 import { runPk } from '../lib/script-pk';
 import { buildRankBoard, nextTierProgress } from '../lib/pk-rank';
@@ -200,12 +200,22 @@ export function createValueAddedRouter(prisma: PrismaLike | any) {
   vaRouter.delete('/posters/:id', authRequired, async (req: AuthRequest, res) => {
     const asset = await prisma.mediaAsset.findFirst({ where: { id: req.params.id, userId: req.userId! } });
     if (!asset) return res.status(404).json({ error: '海报不存在' });
-    // v2.544 TOS 模式的对象不在库里：删除时同步清云上文件，否则配额显示已释放、云上仍占空间（名实不符）。
-    // 删除失败不阻断——记录与用量先释放，日志留痕，避免用户因云侧故障连海报都删不掉。
+    // v2.573 记录与配额同生同死：旧实现「删记录」与「软删 StorageObject」是两条独立写，
+    // 后者失败被 `.catch(()=>{})` 吞掉——海报已从列表消失、容量却永久占着，用户既看不到也清不掉，
+    // 且无任何日志可查。现改为单事务：任一步失败整体回滚并明确报错，用户可直接重试。
+    try {
+      await prisma.$transaction(async (tx: any) => {
+        await tx.mediaAsset.delete({ where: { id: asset.id } });
+        // 软删 StorageObject，保留审计痕迹（用量口径 = deletedAt: null 的聚合）
+        await tx.storageObject.updateMany({ where: { userId: req.userId!, refId: asset.id }, data: { deletedAt: new Date() } });
+      });
+    } catch (e) {
+      logInternal(e, 'va.poster.delete');
+      return res.status(500).json({ error: '删除失败，请重试' });
+    }
+    // v2.544 TOS 模式的对象不在库里：库记录删除成功后再清云上文件。
+    // 云侧失败只留日志（deleteTosObject 内部已记），不影响配额与用户视图，最坏是云上多一个孤儿对象。
     if ((asset as any).externalUrl) await deleteTosObject(String((asset as any).externalUrl));
-    await prisma.mediaAsset.delete({ where: { id: asset.id } });
-    // 同步释放存储用量（软删 StorageObject，保留审计痕迹）
-    await prisma.storageObject.updateMany({ where: { userId: req.userId!, refId: asset.id }, data: { deletedAt: new Date() } }).catch(() => {});
     res.json({ ok: true, freedBytes: asset.size });
   });
 

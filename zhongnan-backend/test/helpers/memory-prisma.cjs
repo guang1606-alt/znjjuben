@@ -824,7 +824,7 @@ function createMemoryPrisma() {
     storageObjects, feedbacks, orders, payments, memberships, posts, postLikes, posters, pkBattles,
     writersRooms, roomMessages, teardownRecords, adverts, interviewSessions, knowledgeItems, listings,
     purchases, learningReports, modelConfigRows, announcements, characterAssets, propAssets, sceneAssets,
-    consents, providerBalances, modelSpendBudgets,
+    consents, providerBalances, modelSpendBudgets, mediaAssets,
   };
   const __snapshotTx = () => {
     const snap = {};

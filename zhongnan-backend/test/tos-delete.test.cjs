@@ -58,5 +58,6 @@ test('删除端点必须接入 TOS 清理（静态守卫）', () => {
   const path = require('node:path');
   const src = fs.readFileSync(path.join(__dirname, '..', 'src', 'routes', 'value-added.ts'), 'utf8');
   assert.match(src, /deleteTosObject\(String\(\(asset as any\)\.externalUrl\)\)/, '删除海报时必须清云上对象');
-  assert.match(src, /await prisma\.mediaAsset\.delete/, '记录照常删除');
+  // v2.573 记录删除进入事务（tx 客户端），断言兼容 prisma / tx 两种客户端，意图不变：记录照常删除
+  assert.match(src, /await (?:prisma|tx)\.mediaAsset\.delete/, '记录照常删除');
 });
