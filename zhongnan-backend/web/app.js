@@ -7435,7 +7435,12 @@
       const specialTopic = $('specialTopic').checked;
       let project = generationDraft || reuseProject; // v2.277 episodes 阶段失败重试：项目已建行，复用之，不再 POST /projects 造孤儿
       if (!project) {
-        const pr = await Api.request('/api/generate/projects', { method: 'POST', body: JSON.stringify({
+        // v2.540 建项目幂等键：同一次提交（含超时自动重试）复用同一个键，
+        // 「请求已发出、响应丢失」时重试不会造出第二个空项目、不白占项目额度。
+        const idemKey = (typeof crypto !== 'undefined' && crypto.randomUUID)
+          ? crypto.randomUUID()
+          : `idem-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+        const projectPayload = {
           title: projTitle, mode: selectedMode, scriptType: selectedScriptType, outputLang: outputLangValue(), ...(selectedMode === 'spark' ? { track: selectedTrack } : {}), totalEps, engineTier: $('engine').value,
           // v2.328 自动匹配：创意随立项一起提交，后端据此路由模式/轨道（不手选）
           ...(selectedMode === 'auto' ? { brief: brief.trim() } : {}),
@@ -7443,7 +7448,16 @@
           ...(useTagBench ? { tags: tagChosen.slice(0, TAG_MAX) } : {}),
           // v2.319 adapt/novel/hit_lab：原文立项即持久化进 bible，刷新续写/草稿恢复版权闸门不中断（与 episodes 同口径）
           ...sourceTextPayload(),
-          format: $('scriptFormatSel') ? $('scriptFormatSel').value : 'LIVE_ACTION', investWan, specialTopic, ...hookPayload(), ...beatPayload(), ...castAssetPayload(), ...propAssetPayload(), ...sceneAssetPayload(), ...modeInputPayload() }) });
+          format: $('scriptFormatSel') ? $('scriptFormatSel').value : 'LIVE_ACTION', investWan, specialTopic, ...hookPayload(), ...beatPayload(), ...castAssetPayload(), ...propAssetPayload(), ...sceneAssetPayload(), ...modeInputPayload(),
+        };
+        const postProject = () => Api.request('/api/generate/projects', { method: 'POST', headers: { 'Idempotency-Key': idemKey }, body: JSON.stringify(projectPayload) });
+        let pr;
+        try { pr = await postProject(); }
+        catch (e) {
+          // 超时/断网：服务端可能已建成，同键重试一次（命中直接回既有项目，不再新建）
+          if (!e || (e.code !== 'TIMEOUT' && e.code !== 'NETWORK_ERR')) throw e;
+          pr = await postProject();
+        }
         if (!isPrivateSessionCurrent(account)) return;
         if (!pr.ok) {
           genSessions = genSessions.filter((x) => x !== session); renderTaskQueue(); // 建单失败即时撤卡

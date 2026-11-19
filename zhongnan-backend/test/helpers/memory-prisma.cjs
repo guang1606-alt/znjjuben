@@ -96,7 +96,10 @@ function createMemoryPrisma() {
   const project = {
     async findFirst({ where }) {
       for (const p of projects.values()) {
-        if ((!where.id || p.id === where.id) && (!where.userId || p.userId === where.userId) && (!where.status || p.status !== where.status.not)) return p;
+        if ((!where.id || p.id === where.id)
+          && (!where.userId || p.userId === where.userId)
+          && (!where.idempotencyKey || p.idempotencyKey === where.idempotencyKey)
+          && (!where.status || p.status !== where.status.not)) return p;
       }
       return null;
     },

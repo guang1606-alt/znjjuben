@@ -264,11 +264,15 @@ model Project {
   specialTopic Boolean     @default(false) // 特殊题材
   totalEps    Int          @default(0)
   status      String       @default("draft")
+  // v2.540 建项目幂等键：同一次提交（含超时重试）复用同键，服务端命中即回既有项目，避免响应丢失后造重复项目
+  idempotencyKey String?
   createdAt   DateTime     @default(now())
   updatedAt   DateTime     @updatedAt
   scripts     Script[]
   tasks       GenerationTask[]
   posters     Poster[]
+
+  @@unique([userId, idempotencyKey])
 }
 
 model Script {

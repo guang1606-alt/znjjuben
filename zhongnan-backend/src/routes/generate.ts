@@ -304,6 +304,15 @@ generateRouter.post('/projects', authRequired, async (req: AuthRequest, res) => 
   const parsed = projectSchema.safeParse(req.body);
   if (!parsed.success) return res.status(400).json({ error: parsed.error.issues[0]?.message ?? '参数不合法' });
   const d = parsed.data;
+  // v2.540 建项目幂等键：同一次提交（含超时自动重试）复用同一个 Idempotency-Key，
+  // 命中即回既有项目——弱网「请求已发出、响应丢失」后重试不再造第二个空项目、不白占项目额度。
+  const idemKey = String(req.get('idempotency-key') || '').trim().slice(0, 200);
+  if (idemKey) {
+    const prior = await prisma.project
+      .findFirst({ where: { userId: req.userId!, idempotencyKey: idemKey, status: { not: 'deleted' } } })
+      .catch(() => null);
+    if (prior) return res.json({ ...(prior as Record<string, unknown>), idempotent: true });
+  }
   // 三级审核第一级：项目名+标签生成前机器拦截（硬拦截直接 422，不建项目、不计费）
   const projScan = await scanWithStore([d.title, ...(d.tags ?? [])].join('\n'), prisma);
   if (projScan.level === 'block') return res.status(422).json({ error: projScan.blockReason!, hits: projScan.blocked });
@@ -497,16 +506,27 @@ generateRouter.post('/projects', authRequired, async (req: AuthRequest, res) => 
     // v2.161 场景资产快照：立项即锁定（全剧沿用，续写/重生成自动读取）
     ...(sceneAssetsSnapshot.length ? { sceneAssets: sceneAssetsSnapshot } : {}),
   };
-  const project = await prisma.project.create({
-    data: {
-      userId: req.userId!, title: d.title, mode: canonMode, totalEps: d.totalEps ?? 0,
-      // v2.489 兜底档位也要落在当前会员可用范围内（免费档兜底经济档，其余保留标准档）
-      engineTier: d.engineTier ?? (engineAvailable(EngineTier.STANDARD, ownerLevel) ? EngineTier.STANDARD : EngineTier.ECONOMY), tags: d.tags ?? [],
-      format: fmt, status: 'draft',
-      investWan: d.investWan ?? null, specialTopic: d.specialTopic ?? false, filing: filing as object,
-      ...(Object.keys(bibleCue).length ? { bible: bibleCue as object } : {}),
-    },
-  });
+  let project: any;
+  try {
+    project = await prisma.project.create({
+      data: {
+        userId: req.userId!, title: d.title, mode: canonMode, totalEps: d.totalEps ?? 0,
+        // v2.489 兜底档位也要落在当前会员可用范围内（免费档兜底经济档，其余保留标准档）
+        engineTier: d.engineTier ?? (engineAvailable(EngineTier.STANDARD, ownerLevel) ? EngineTier.STANDARD : EngineTier.ECONOMY), tags: d.tags ?? [],
+        format: fmt, status: 'draft',
+        investWan: d.investWan ?? null, specialTopic: d.specialTopic ?? false, filing: filing as object,
+        ...(Object.keys(bibleCue).length ? { bible: bibleCue as object } : {}),
+        // v2.540 幂等键随项目落库，唯一约束兜底并发同键
+        ...(idemKey ? { idempotencyKey: idemKey } : {}),
+      },
+    });
+  } catch (e: any) {
+    if (idemKey && e?.code === 'P2002') {
+      const prior = await prisma.project.findFirst({ where: { userId: req.userId!, idempotencyKey: idemKey, status: { not: 'deleted' } } });
+      if (prior) return res.json({ ...(prior as Record<string, unknown>), idempotent: true });
+    }
+    throw e;
+  }
   // v2.153 复盘修复：引用计数在项目创建成功后再 +1——create 失败不再白加计数（先加后建的时序账目漂移）
   if (castAssetsSnapshot.length) {
     await prisma.characterAsset.updateMany({
