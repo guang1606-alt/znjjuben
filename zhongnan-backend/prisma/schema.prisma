@@ -720,7 +720,9 @@ model MediaAsset {
   kind      String   @default("poster")
   mime      String
   size      Int
-  bytes     Bytes
+  // v2.542 两种存储模式共用一张元数据表：未配置 TOS 存字节；配置 TOS 只存 externalUrl（bytes 为空，/media/:id 302 到对象地址）
+  bytes     Bytes?
+  externalUrl String?
   createdAt DateTime @default(now())
   @@index([kind, createdAt])
   @@index([userId, createdAt])

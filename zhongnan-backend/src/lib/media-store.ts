@@ -1,6 +1,7 @@
 /**
- * 生成图片的永久留存：优先 TOS；未配置 TOS 时把二进制落库（MediaAsset），
+ * 生成图片的永久留存：优先 TOS；未配置 TOS（或转存失败）时把二进制落库（MediaAsset），
  * 由 /media/:id 稳定读取，避免模型返回的临时 URL 过期后海报变裂图。
+ * v2.542：TOS 成功也落一条元数据（不存字节），两种模式共用列表/删除/用量口径。
  */
 import { prisma } from './prisma';
 import { tosEnabled, uploadImageToTos, fetchImageBytes } from './tos';
@@ -19,9 +20,24 @@ function maxBytes(): number {
 export async function persistImage(input: string, kind = 'poster', db: any = prisma, ownerId?: string): Promise<string> {
   if (!input) return input;
   if (tosEnabled()) {
-    const url = await uploadImageToTos(input, kind);
+    const stored = await uploadImageToTos(input, kind);
     // v2.541 转存成功才用 TOS 地址；失败继续走落库，不能把会过期的临时地址当永久地址返回
-    if (url) return url;
+    // v2.542 TOS 成功也落一条元数据（不存字节）：两种存储模式共享「我的海报」列表、删除释放与用量口径，
+    //         /media/:id 对无字节行 302 到对象地址，前端拿到的地址结构始终统一。
+    if (stored) {
+      if (!db?.mediaAsset?.create) return stored.url;
+      try {
+        const asset = await db.mediaAsset.create({
+          data: { kind, mime: stored.mime, size: stored.size, externalUrl: stored.url, ...(ownerId ? { userId: ownerId } : {}) },
+        });
+        if (ownerId && db?.storageObject?.create) {
+          try { await db.storageObject.create({ data: { userId: ownerId, kind, bytes: stored.size, refId: asset.id } }); } catch { /* 记账失败不阻断出图 */ }
+        }
+        return `/media/${asset.id}`;
+      } catch {
+        return stored.url; // 元数据落库失败：退回直链，至少图打得开
+      }
+    }
   }
   try {
     const { buf, mime } = await fetchImageBytes(input);

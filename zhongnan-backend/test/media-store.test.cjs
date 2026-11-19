@@ -85,6 +85,19 @@ test('GET /media/:id 返回字节、类型与长缓存；未知 id 404', async (
   assert.equal(miss.status, 404);
 });
 
+// v2.542 TOS 模式元数据行没有字节：/media/:id 必须 302 到对象地址，前端地址结构不变
+test('无字节但有 externalUrl 的元数据行 302 到对象存储；两者都缺才 404', async () => {
+  const obj = 'https://znbucket.tos-cn-test.volces.com/poster/a.png';
+  const asset = await mem.mediaAsset.create({ data: { kind: 'poster', mime: 'image/png', size: 1234, externalUrl: obj } });
+  const r = await fetch(base + `/media/${asset.id}`, { redirect: 'manual' });
+  assert.equal(r.status, 302);
+  assert.equal(r.headers.get('location'), obj);
+
+  const broken = await mem.mediaAsset.create({ data: { kind: 'poster', mime: 'image/png', size: 1 } });
+  const miss = await fetch(base + `/media/${broken.id}`);
+  assert.equal(miss.status, 404, '既无字节也无外链不得当成空图返回 200');
+});
+
 // v2.539 前端海报渲染守卫：落库后返回的是 /media/:id 站内相对地址，
 // 前端若只放行 http(s)/data: 就会把持久化成功的海报整批过滤掉（提示成功却一张不显示）。
 test('前端海报渲染必须放行同源 /media/ 地址，且仍拒绝协议相对外链', () => {

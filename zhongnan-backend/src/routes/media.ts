@@ -8,6 +8,13 @@ export function createMediaRouter(db: any = defaultPrisma): Router {
     try {
       const asset = await db.mediaAsset.findUnique({ where: { id: req.params.id } });
       if (!asset) return res.status(404).json({ error: 'NOT_FOUND' });
+      // v2.542 TOS 模式的元数据行没有字节：302 到对象存储地址。
+      // 重定向不设长缓存——对象地址若迁移/改名，短缓存可自然纠偏。
+      if (!asset.bytes) {
+        if (!asset.externalUrl) return res.status(404).json({ error: 'NOT_FOUND' });
+        res.setHeader('Cache-Control', 'public, max-age=300');
+        return res.redirect(302, String(asset.externalUrl));
+      }
       res.setHeader('Content-Type', asset.mime || 'application/octet-stream');
       res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
       res.setHeader('X-Content-Type-Options', 'nosniff');

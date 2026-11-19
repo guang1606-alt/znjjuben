@@ -32,13 +32,20 @@ function stubFetch({ putOk }) {
 const { createMemoryPrisma } = require('./helpers/memory-prisma.cjs');
 const { persistImage } = require('../dist/lib/media-store.js');
 
-test('TOS 转存成功：返回 TOS 永久地址，不再落库', async () => {
+test('TOS 转存成功：落一条元数据（不存字节）并返回 /media/:id 统一地址', async () => {
   const mem = createMemoryPrisma();
   const calls = stubFetch({ putOk: true });
   const url = await persistImage(INPUT, 'poster', mem, 'u_tos_ok');
-  assert.match(url, /^https:\/\/znbucket\.tos-cn-test\.volces\.com\/poster\//, '应返回 TOS 地址');
+  assert.match(url, /^\/media\//, 'v2.542 两种存储模式对外地址结构统一');
   assert.ok(calls.some((c) => c.method === 'PUT'), '必须真的发起 TOS PUT');
-  assert.strictEqual((await mem.mediaAsset.findMany({ where: {} })).length, 0, 'TOS 成功不应再落库');
+  const rows = await mem.mediaAsset.findMany({ where: {} });
+  assert.strictEqual(rows.length, 1, 'TOS 成功也要落元数据，让「我的海报」能看到');
+  assert.ok(!rows[0].bytes, 'TOS 模式不重复存字节');
+  assert.match(String(rows[0].externalUrl), /^https:\/\/znbucket\.tos-cn-test\.volces\.com\/poster\//);
+  assert.strictEqual(rows[0].userId, 'u_tos_ok');
+  assert.ok(rows[0].size > 0, '体积用于配额与列表展示');
+  const agg = await mem.storageObject.aggregate({ where: { userId: 'u_tos_ok', deletedAt: null }, _sum: { bytes: true } });
+  assert.strictEqual(agg._sum.bytes, rows[0].size, 'TOS 模式同样计入存储用量');
 });
 
 test('TOS 转存失败：不得把临时地址当永久地址，必须回退落库 /media/:id', async () => {
