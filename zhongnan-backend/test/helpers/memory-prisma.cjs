@@ -600,11 +600,16 @@ function createMemoryPrisma() {
       }
       return null;
     },
-    async findMany({ where = {}, orderBy, take, select } = {}) {
+    async findMany({ where = {}, orderBy, take, skip, select } = {}) {
       let rows = [...mediaAssets.values()].filter((r) => Object.entries(where).every(([k, v]) => r[k] === v));
       rows.sort((a, b) => (where.id ? 0 : (new Date(b.createdAt) - new Date(a.createdAt))));
+      // v2.543 我的海报分页：对齐 Prisma 的 skip/take
+      if (typeof skip === 'number' && skip > 0) rows = rows.slice(skip);
       if (typeof take === 'number') rows = rows.slice(0, take);
       return select ? rows.map((r) => { const o = {}; Object.keys(select).forEach((k) => { o[k] = r[k]; }); return o; }) : rows;
+    },
+    async count({ where = {} } = {}) {
+      return [...mediaAssets.values()].filter((r) => Object.entries(where).every(([k, v]) => r[k] === v)).length;
     },
     async delete({ where }) { const r = mediaAssets.get(where.id); mediaAssets.delete(where.id); return r; },
   };

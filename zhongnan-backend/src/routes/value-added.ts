@@ -132,15 +132,28 @@ export function createValueAddedRouter(prisma: PrismaLike | any) {
     }
   });
 
-  /** 我的海报：列表（仅本人，最新 60 张）+ 删除（同时释放存储用量） */
+  /** 我的海报：列表（仅本人，分页 60/页，返回 total/hasMore 避免静默截断导致旧图删不掉）+ 删除（同时释放存储用量） */
   vaRouter.get('/posters', authRequired, async (req: AuthRequest, res) => {
-    const rows = await prisma.mediaAsset.findMany({
-      where: { userId: req.userId! },
-      orderBy: { createdAt: 'desc' },
-      take: 60,
-      select: { id: true, kind: true, size: true, createdAt: true },
-    }).catch(() => []);
-    res.json({ items: (rows as any[]).map((r) => ({ id: r.id, url: `/media/${r.id}`, kind: r.kind, size: r.size, createdAt: r.createdAt })) });
+    // v2.543 静默截断修复：旧实现固定 take 60 且不告诉前端还有没有——超过 60 张后旧海报既看不到也删不掉，
+    // 存储只能一路涨到配额满。现在支持 offset 分页并回传 total/hasMore。
+    const take = Math.min(Math.max(Number(req.query.limit) || 60, 1), 120);
+    const skip = Math.max(Number(req.query.offset) || 0, 0);
+    const where = { userId: req.userId! };
+    const [rows, total] = await Promise.all([
+      prisma.mediaAsset.findMany({
+        where,
+        orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+        skip,
+        take,
+        select: { id: true, kind: true, size: true, createdAt: true },
+      }).catch(() => []),
+      prisma.mediaAsset.count({ where }).catch(() => 0),
+    ]);
+    res.json({
+      items: (rows as any[]).map((r) => ({ id: r.id, url: `/media/${r.id}`, kind: r.kind, size: r.size, createdAt: r.createdAt })),
+      total,
+      hasMore: skip + (rows as any[]).length < total,
+    });
   });
 
   vaRouter.delete('/posters/:id', authRequired, async (req: AuthRequest, res) => {

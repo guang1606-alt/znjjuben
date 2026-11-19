@@ -24,6 +24,7 @@ after(async () => { server.closeAllConnections?.(); await new Promise((r) => ser
 mem._seedUser({ id: 'me', balance: 500 });
 mem._seedUser({ id: 'other', balance: 500 });
 mem._seedUser({ id: 'full', balance: 500 });
+mem._seedUser({ id: 'pages', balance: 0 });
 const H = (uid) => ({ 'Content-Type': 'application/json', Authorization: `Bearer ${signAccess({ sub: uid, level: 'BASIC' })}` });
 
 const seedPoster = (userId, size = 10) => mem.mediaAsset.create({
@@ -69,5 +70,35 @@ describe('我的海报：归属 / 删除释放 / 配额硬校验', { concurrency
     assert.strictEqual(j.error, 'STORAGE_QUOTA_EXCEEDED');
     assert.match(j.message, /删除|扩容/, '提示要告诉用户如何释放或扩容');
     assert.strictEqual(mem._accounts.get('full').balance, 500, '拒绝发生在扣费前，积分不得减少');
+  });
+
+  // v2.543 静默截断修复：旧实现固定 60 张且不告诉前端还有没有，超过 60 张的旧海报既看不到也删不掉
+  it('列表分页：limit/offset 生效，返回 total 与 hasMore', async () => {
+    for (let i = 0; i < 5; i++) {
+      await mem.mediaAsset.create({
+        data: { userId: 'pages', kind: 'poster', mime: 'image/png', size: i + 1, bytes: Buffer.alloc(i + 1), createdAt: new Date(Date.now() - i * 1000) },
+      });
+    }
+    const q = (qs) => fetch(base + '/api/va/posters' + qs, { headers: H('pages') }).then((r) => r.json());
+    const p1 = await q('?limit=2');
+    assert.strictEqual(p1.items.length, 2);
+    assert.strictEqual(p1.total, 5, '必须回传总数，前端才知道还有多少');
+    assert.strictEqual(p1.hasMore, true);
+    const p2 = await q('?limit=2&offset=4');
+    assert.strictEqual(p2.items.length, 1);
+    assert.strictEqual(p2.hasMore, false);
+    const p3 = await q('?limit=999');
+    assert.strictEqual(p3.items.length, 5, 'limit 超上限只做截断，不得改变数据');
+  });
+
+  it('前端「我的海报」必须带 offset 分页并提供加载更多入口', () => {
+    const fs = require('node:fs');
+    const path = require('node:path');
+    const app = fs.readFileSync(path.join(__dirname, '..', 'web', 'app.js'), 'utf8');
+    assert.match(app, /\/api\/va\/posters\?offset=' \+ myPostersOffset/, '请求必须带 offset，否则永远只看得到第一页');
+    assert.match(app, /myPostersMore/, '必须有加载更多按钮接线');
+    assert.match(app, /d\.hasMore/, '必须按 hasMore 决定是否显示加载更多');
+    const html = fs.readFileSync(path.join(__dirname, '..', 'web', 'index.html'), 'utf8');
+    assert.match(html, /id="myPostersMore"/, '弹窗内必须有加载更多按钮');
   });
 });

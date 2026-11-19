@@ -4028,14 +4028,20 @@
   }
   $('editProfileBtn').onclick = () => $('profileEdit').classList.toggle('hidden');
   // v2.538 我的海报：列出生图、删除即释放存储用量（配额闭环的前端入口）
-  async function loadMyPosters() {
-    const list = $('myPostersList'); const empty = $('myPostersEmpty');
-    list.innerHTML = ''; empty.hidden = true;
+  // v2.543 分页：接口按 60 张/页返回 total/hasMore——旧实现静默截断，超过 60 张的旧海报
+  // 既看不到也删不掉，存储只能一路涨到配额满；现在提供「加载更多」按页追加。
+  let myPostersOffset = 0;
+  async function loadMyPosters(append) {
+    const list = $('myPostersList'); const empty = $('myPostersEmpty'); const more = $('myPostersMore');
+    if (!append) { list.innerHTML = ''; empty.hidden = true; myPostersOffset = 0; }
+    more.hidden = true; more.disabled = true;
     try {
-      const res = await Api.request('/api/va/posters'); const d = await Api.jsonOrThrow(res);
+      const res = await Api.request('/api/va/posters?offset=' + myPostersOffset); const d = await Api.jsonOrThrow(res);
       const items = Array.isArray(d.items) ? d.items : [];
-      empty.hidden = items.length > 0;
-      list.innerHTML = items.map((it) => `<div><img src="${escapeHtml(it.url)}" alt="${escapeHtml(t('myPosters'))}" loading="lazy" /><div class="muted" style="display:flex;justify-content:space-between;align-items:center;margin-top:4px"><span>${fmtBytes(it.size)}</span><button class="btn-ghost" type="button" data-del-poster="${escapeHtml(it.id)}">${escapeHtml(t('delPoster'))}</button></div></div>`).join('');
+      myPostersOffset += items.length;
+      empty.hidden = myPostersOffset > 0;
+      list.insertAdjacentHTML('beforeend', items.map((it) => `<div data-poster-card="${escapeHtml(it.id)}"><img src="${escapeHtml(it.url)}" alt="${escapeHtml(t('myPosters'))}" loading="lazy" /><div class="muted" style="display:flex;justify-content:space-between;align-items:center;margin-top:4px"><span>${fmtBytes(it.size)}</span><button class="btn-ghost" type="button" data-del-poster="${escapeHtml(it.id)}">${escapeHtml(t('delPoster'))}</button></div></div>`).join(''));
+      more.hidden = !d.hasMore;
       list.querySelectorAll('[data-del-poster]').forEach((b) => {
         b.onclick = async () => {
           const ok = await uiConfirm(lang === 'en' ? 'Delete this poster? Storage usage will be released.' : '删除这张海报？存储用量将同步释放。');
@@ -4044,18 +4050,23 @@
           try {
             const r = await Api.request('/api/va/posters/' + encodeURIComponent(b.getAttribute('data-del-poster')), { method: 'DELETE' });
             await Api.jsonOrThrow(r);
+            const card = b.closest('[data-poster-card]');
+            if (card) card.remove();
+            myPostersOffset = Math.max(0, myPostersOffset - 1);
+            empty.hidden = list.querySelector('[data-poster-card]') !== null;
             await loadMe();
-            await loadMyPosters();
           } catch (e) { xnSay(e.message); b.disabled = false; }
         };
       });
     } catch (e) { xnSay(e.message); }
+    finally { more.disabled = false; }
   }
   function openMyPosters() {
     if (!Api.isAuthed()) { openAuth('login'); return; }
     openModal('myPostersModal'); loadMyPosters();
   }
   $('myPostersBtn').onclick = openMyPosters;
+  $('myPostersMore').onclick = () => loadMyPosters(true);
   $('saveProfileBtn').onclick = async () => {
     try {
       const res = await Api.request('/api/auth/profile', { method: 'PATCH', body: JSON.stringify({
