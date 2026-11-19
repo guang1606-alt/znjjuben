@@ -5,6 +5,7 @@
  * 所有聚合用 findMany + JS reduce（不依赖 Prisma groupBy，内存桩可测）；敏感字段 passwordHash 绝不下发。
  */
 import { asyncRouter } from '../lib/async-router';
+import { logInternal } from '../lib/http-errors';
 import { createHash } from 'crypto';
 import { z } from 'zod';
 import { authRequired, AuthRequest } from '../middleware/auth';
@@ -232,6 +233,8 @@ export function createAdminRouter(prisma: PrismaLike | any) {
       if (msg === 'NEG') return res.status(400).json({ error: '调整后余额为负，已拒绝' });
       if (msg === 'NO_ACC') return res.status(400).json({ error: '该用户积分账户尚未建立' });
       if (msg === 'DUP') return res.status(409).json({ error: 'IDEMPOTENT_REPLAY', message: '相同调整刚已提交，请勿重复操作' });
+      // 未知异常（存储/事务故障）：保留后台既定文案，但必须留痕，否则调账失败不可追溯
+      logInternal(e, 'admin.adjust');
       res.status(500).json({ error: '积分调整失败' });
     }
   });

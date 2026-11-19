@@ -9,3 +9,13 @@ export function failInternal(res: Response, e: unknown, scope: string): void {
   console.error(`[${scope}]`, e);
   if (!res.headersSent) res.status(500).json({ error: 'INTERNAL_ERROR' });
 }
+
+/**
+ * 只留痕、不响应（v2.570）：
+ * 资金/交易等路径的 5xx 兜底文案是产品既定话术（前端与用户已依赖），不宜改成 INTERNAL_ERROR；
+ * 但失败必须可观测，统一用本函数把内部异常写进服务端日志。
+ * 用法：catch (e) { logInternal(e, 'market.buy'); return res.status(500).json({ error: '...' }); }
+ */
+export function logInternal(e: unknown, scope: string): void {
+  console.error(`[${scope}]`, e);
+}

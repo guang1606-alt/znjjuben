@@ -6,6 +6,7 @@
  *  - 数字商品付款即解锁全本；退款即收回访问权，平台全程不垫资
  */
 import { asyncRouter } from '../lib/async-router';
+import { logInternal } from '../lib/http-errors';
 import { prisma as defaultPrisma } from '../lib/prisma';
 import { parsePageParams } from '../lib/pagination';
 import { authRequired, AuthRequest } from '../middleware/auth';
@@ -273,6 +274,8 @@ export function createMarketRouter(prisma: PrismaLike | any) {
       if (kind === 'EMPTY') return res.status(409).json({ error: '该剧本暂无可交付的正文，请联系卖家' });
       if (kind === 'DUP') return res.status(409).json({ error: '你已购买过该剧本' });
       if (kind === 'GONE') return res.status(409).json({ error: '手慢了，剧本刚被买走' });
+      // 非业务异常（存储/事务故障）：保留既定兜底文案，但必须留痕，否则资金路径不可观测
+      logInternal(e, 'market.buy');
       return res.status(500).json({ error: '支付失败，已取消' });
     }
     res.json({ ok: true, purchaseId: purchase.id, escrow: true, status: purchase.status, spentPoints: pricePoints, refundableWithinHours: 24, ...purchase.contentSnapshot });
@@ -301,7 +304,8 @@ export function createMarketRouter(prisma: PrismaLike | any) {
       const r = await settlePurchase(p, prisma); // 与定时自动放款共用同一套幂等/抢占逻辑
       if (!r) return res.status(409).json({ error: '订单状态刚发生变化（可能已退款或已放款），请刷新' });
       res.json({ ok: true, ...r });
-    } catch {
+    } catch (e) {
+      logInternal(e, 'market.settle');
       res.status(500).json({ error: '放款失败，请重试' });
     }
   });
@@ -343,10 +347,11 @@ export function createMarketRouter(prisma: PrismaLike | any) {
     } catch (e: any) {
       // 内存桩无回滚：NO_CHARGE 时补偿把抢占恢复为 ESCROW（生产事务已回滚，该更新匹配0行）
       if (e?.code === 'NO_CHARGE') {
-        await prisma.purchase.updateMany({ where: { id: p.id, status: 'REFUNDED' }, data: { status: 'ESCROW' } }).catch(() => {});
+        await prisma.purchase.updateMany({ where: { id: p.id, status: 'REFUNDED' }, data: { status: 'ESCROW' } }).catch((err: unknown) => logInternal(err, 'market.refund.compensate'));
         return res.status(500).json({ error: '未找到原扣款流水，已拒绝退款' });
       }
       if (e?.code === 'RACE_LOST') return res.status(409).json({ error: '订单状态刚发生变化（可能已放款），请刷新' });
+      logInternal(e, 'market.refund');
       res.status(500).json({ error: '退款失败，请重试' });
     }
   });
