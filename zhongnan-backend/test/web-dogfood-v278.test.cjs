@@ -27,7 +27,8 @@ function fnWindow(startMarker, maxLen) {
 }
 
 describe('v2.278 [R1] loadWorks 加载骨架屏（三态补全）', () => {
-  const w = fnWindow('async function loadWorks() {', 6000);
+  // v2.550 作品卡新增目标平台徽章一行，窗口相应放宽，保证 catch 分支完整落在窗口内
+  const w = fnWindow('async function loadWorks() {', 7000);
 
   it('B1 loadWorks 窗口可定位', () => {
     assert.ok(w.length > 0, 'loadWorks 未定位到');

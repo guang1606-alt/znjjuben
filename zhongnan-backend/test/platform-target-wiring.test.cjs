@@ -75,12 +75,17 @@ test('目标平台：后端立项/生成 schema 接受、bible 落库、三层�
     'platform 未传入创作管线 EpisodeOptions');
 });
 
-test('目标平台：管线注入三岗位，且海外平台触发本地化判定', () => {
+test('目标平台：管线注入架构师/撰写师/回炉/润色师，且海外平台触发本地化判定', () => {
   const src = read('src', 'agents', 'pipeline.ts');
   assert.ok(src.includes("platformDirectiveOf") && src.includes("from '../config/platform-targets'"),
     '管线未引入平台注册表');
   const hits = (src.match(/\$\{platformDirective\}/g) || []).length;
-  assert.ok(hits >= 3, `平台指令应注入架构师/撰写师/润色师三岗，实际 ${hits} 处`);
+  assert.ok(hits >= 4, `平台指令应注入架构师/撰写师/回炉重写/润色师，实际 ${hits} 处`);
+  // 润色师是最后一版改写（整稿替换）：它若不知道目标平台，会按通用口味把平台节奏抹平
+  const polishAt = src.indexOf("_textRole(tier, 'polisher'");
+  assert.ok(polishAt >= 0, '找不到润色师调用');
+  assert.ok(src.slice(polishAt, polishAt + 1200).includes('${platformDirective}'),
+    '润色师提示词未注入平台指令（架构师/撰写师按平台写了，润色师却按通用口味整稿重写）');
   assert.match(src, /isOversea = [^;]*platformTargetOf\(options\.platform\)/,
     '海外判定未纳入平台维度（选 ReelShort/DramaBox 却不算海外）');
   // 未选平台必须零注入，行为与旧版一致
@@ -88,4 +93,20 @@ test('目标平台：管线注入三岗位，且海外平台触发本地化判�
   assert.strictEqual(P.platformDirectiveOf('unknown_id', 'en'), '');
   assert.ok(P.platformDirectiveOf('reelshort', 'zh').includes('本地化'));
   assert.ok(P.platformDirectiveOf('hongguo', 'en').includes('Hongguo'));
+});
+
+test('目标平台：作品卡回显所选平台，未选不占位', () => {
+  const js = read('web', 'app.js');
+  const fnAt = js.indexOf('function platformLabel(');
+  assert.ok(fnAt >= 0, '缺少 platformLabel()：作品库看不到项目投哪个平台');
+  assert.ok(js.slice(fnAt, fnAt + 400).includes('SELECT_OPTS.platform[lang]'),
+    'platformLabel 必须复用 SELECT_OPTS 单一事实源（另存一份标签迟早漂移）');
+
+  const cardAt = js.indexOf("className = 'work-card'");
+  assert.ok(cardAt >= 0, '找不到作品卡渲染');
+  const cardBlock = js.slice(cardAt, cardAt + 2000);
+  assert.ok(cardBlock.includes('platformLabel(p.bible?.platform)'),
+    '作品卡未回显立项时选择的平台（用户选了平台，作品库却看不出来）');
+  assert.ok(cardBlock.includes('${platLabel ?'),
+    '平台徽章必须按需渲染：未选平台的项目不得出现空徽章');
 });

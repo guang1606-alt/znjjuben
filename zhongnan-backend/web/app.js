@@ -1982,6 +1982,12 @@
     outLang: { zh: [['zh','中文'],['en','English'],['ja','日本語'],['ko','한국어'],['es','Español'],['pt','Português'],['th','ไทย'],['id','Bahasa Indonesia'],['vi','Tiếng Việt'],['ar','العربية']],
       en: [['zh','Chinese'],['en','English'],['ja','Japanese'],['ko','Korean'],['es','Spanish'],['pt','Portuguese'],['th','Thai'],['id','Indonesian'],['vi','Vietnamese'],['ar','Arabic']] },
   };
+  /** v2.550 目标平台回显：作品卡展示立项时选的平台；未选/未知返回空串（不占位、不拿内部 id 充数） */
+  function platformLabel(id) {
+    if (!id) return '';
+    const row = (SELECT_OPTS.platform[lang] || []).find(([v]) => v === id);
+    return row ? row[1] : '';
+  }
   function renderSelects() {
     [['platform', 'platform'], ['engine', 'engine'], ['outLang', 'outLang']].forEach(([id, key]) => {
       const el = $(id); if (!el) return;
@@ -3601,9 +3607,11 @@
       const c = document.createElement('div'); c.className = 'work-card';
       // v2.489 作品卡此前直接渲染后端 mode 原始枚举（tag / hit_lab…），中文界面里等于把内部 id 给用户看
       const modeText = (((I18N.DICT[lang] || I18N.DICT.zh).mode) || {})[p.mode] || (lang === 'en' ? 'Script' : '剧本');
+      // v2.550 目标平台回显：立项时选了平台却只在续写时才看得到，作品库无法一眼确认投哪个平台
+      const platLabel = platformLabel(p.bible?.platform);
       c.innerHTML = `<h3>${escapeHtml(p.title)}</h3>
         <div class="muted">${escapeHtml(modeText)} · ${p.totalEps || 0} eps · ${PV().formatDateTime(p.createdAt, lang)}</div>
-        <div class="work-badges"><span class="badge">${escapeHtml(engineLabel(p.engineTier, true) || (lang === 'en' ? 'Standard' : '标准'))}</span><span class="badge">${p.format === 'AIGC' ? 'Z-AIGC' : (lang === 'en' ? 'Live action' : '真人实拍')}</span></div>
+        <div class="work-badges"><span class="badge">${escapeHtml(engineLabel(p.engineTier, true) || (lang === 'en' ? 'Standard' : '标准'))}</span><span class="badge">${p.format === 'AIGC' ? 'Z-AIGC' : (lang === 'en' ? 'Live action' : '真人实拍')}</span>${platLabel ? `<span class="badge">${escapeHtml(platLabel)}</span>` : ''}</div>
         <div class="work-actions">
           <button class="chip work-action-btn" data-act="rename">${lang === 'en' ? 'Rename' : '重命名'}</button>
           <button class="chip work-action-btn" data-act="clone">${lang === 'en' ? 'Clone' : '克隆'}</button>

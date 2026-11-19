@@ -7,6 +7,12 @@ const ts = require('typescript');
 const ProgressView = require('../web/progress-view.js');
 
 const source = fs.readFileSync(path.join(__dirname, '../web/app.js'), 'utf8');
+// v2.550 作品卡目标平台徽章：platformLabel 依赖 IIFE 内 const SELECT_OPTS，逐函数 vm 求值需在上下文预置（取真源，不另存一份标签）
+const SELECT_OPTS = (() => {
+  const sandbox = { window: {} };
+  vm.runInNewContext(fs.readFileSync(path.join(__dirname, '../web/data/constants.js'), 'utf8'), sandbox);
+  return sandbox.window.ZN_DATA.SELECT_OPTS;
+})();
 const ast = ts.createSourceFile('app.js', source, ts.ScriptTarget.Latest, true, ts.ScriptKind.JS);
 const functions = new Map();
 function visit(node) {
@@ -99,6 +105,8 @@ function setup(handler = async () => response([])) {
       { id: 'STANDARD', zh: '标准（均衡）', en: 'Standard (balanced)', min: 'basic' },
       { id: 'FLAGSHIP', zh: '旗舰（顶配组合）', en: 'Flagship (top mix)', min: 'advanced' },
     ],
+    // v2.550 作品卡平台徽章的数据源（与浏览器同源 constants.js）
+    SELECT_OPTS,
     PV: () => ({
       ...ProgressView,
       createProgress: () => ({}),
@@ -157,6 +165,8 @@ function setup(handler = async () => response([])) {
     'loadMe', 'loadCastAssets', 'loadPropAssets', 'loadSceneAssets', 'latestScriptsByEpisode',
     // v2.489 作品卡引擎档本地化（engineLabel 依赖 ENGINE_TIERS）
     'engineLabel',
+    // v2.550 作品卡目标平台回显（platformLabel 依赖 SELECT_OPTS）
+    'platformLabel',
     'refreshResultScripts', 'handleEvent', 'startGenerate', 'openDirectorPack', 'openMaterials',
   ]) {
     assert.ok(functions.has(name), `missing production function ${name}`);
