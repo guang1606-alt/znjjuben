@@ -5,11 +5,13 @@
  *  - 小南多席位发言按增值服务扣积分（PITCH_MEETING / TABLE_READ），前端须明示价格；服务失败自动退款
  */
 import { randomBytes, createHash } from 'crypto';
+import type { Response } from 'express';
 import { asyncRouter } from '../lib/async-router';
 import { z } from 'zod';
 import { authRequired, AuthRequest } from '../middleware/auth';
 import { prisma as defaultPrisma } from '../lib/prisma';
-import { consumeFlexible, refundFlexible } from '../lib/billing';
+import { consumeFlexible, refundFlexible, BillingError } from '../lib/billing';
+import { failInternal } from '../lib/http-errors';
 import { withBillingTransaction } from '../lib/prisma-tx';
 import { VALUE_ADDED, ValueAddedKey, MemberLevel, vaPointsForLevel } from '../config/pricing';
 import { staffOf, staffChargeTx, staffRefundTx } from '../lib/staff-billing';
@@ -19,6 +21,18 @@ import {
   aiTableRead, buildReadRewritePacks, READ_SEATS, READ_MODES, readSeats, readModes, ReadMode, WrLang,
 } from '../engine/writers-room';
 const normLang = (l: any): WrLang => (l === 'en' ? 'en' : 'zh');
+
+/**
+ * v2.568 失败出口分层：业务校验（积分不足、定价熔断）是用户可理解的 400 中文；
+ * 其余异常（Prisma/连接/断言）属服务端故障，统一 500 INTERNAL_ERROR，内部报文只进日志，绝不当业务提示外抛。
+ */
+function failRoom(res: Response, e: unknown, scope: string): void {
+  if (e instanceof BillingError) {
+    res.status(400).json({ error: e.message });
+    return;
+  }
+  failInternal(res, e, scope);
+}
 
 type PrismaLike = typeof defaultPrisma;
 
@@ -177,7 +191,7 @@ export function createRoomRouter(prisma: PrismaLike | any) {
       res.json({ ok: true, roomId: room.id, inviteCode: code, points: paid, staff, opened });
     } catch (e) {
       if (charged) await refund(userId, 'PITCH_MEETING', refId, idem, staff, paid).catch(() => {});
-      res.status(400).json({ error: (e as Error).message });
+      failRoom(res, e, 'room.pitch');
     }
   });
 
@@ -224,7 +238,7 @@ export function createRoomRouter(prisma: PrismaLike | any) {
       res.json({ ok: true, reply, messageId: msg.id, points: paid, staff, questions: fa.questions });
     } catch (e) {
       if (charged) await refund(userId, 'PITCH_MEETING', refId, idem, staff, paid).catch(() => {});
-      res.status(400).json({ error: (e as Error).message });
+      failRoom(res, e, 'room.pitch');
     }
   });
 
@@ -263,7 +277,7 @@ export function createRoomRouter(prisma: PrismaLike | any) {
       res.json({ ok: true, verdict, points: paid, staff });
     } catch (e) {
       if (charged) await refund(userId, 'PITCH_MEETING', refId, idem, staff, paid).catch(() => {});
-      res.status(400).json({ error: (e as Error).message });
+      failRoom(res, e, 'room.pitch');
     }
   });
 
@@ -406,7 +420,7 @@ export function createRoomRouter(prisma: PrismaLike | any) {
       res.json({ ok: true, result, points: paid, staff });
     } catch (e) {
       if (charged) await refund(userId, 'TABLE_READ', refId, idem, staff, paid).catch(() => {});
-      res.status(400).json({ error: (e as Error).message });
+      failRoom(res, e, 'room.table');
     }
   });
 

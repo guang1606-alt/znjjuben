@@ -553,3 +553,22 @@ describe('v2.532 选题会发言主持人名随语言', { concurrency: 1 }, () =
     assert.ok(!HAN.test(h.content), '主持人正文不得混入中文：' + h.content.slice(0, 80));
   });
 });
+
+// v2.568 内部异常不得冒充业务错误：建房失败是服务端故障，必须 500 INTERNAL_ERROR，
+// 而不是把 Prisma/连接层文案当 400 业务提示原样回给前端。
+describe('v2.568 编剧室异常不外泄', { concurrency: 1 }, () => {
+  mem._seedUser({ id: 'room-err', balance: 200 });
+  it('建房时数据库异常：500 INTERNAL_ERROR，已扣积分原路退回', async () => {
+    const orig = mem.writersRoom;
+    mem.writersRoom = { ...orig, create: async () => { throw new Error('PrismaClientKnownRequestError: connection refused'); } };
+    try {
+      const before = bal('room-err');
+      const r = await post('/api/room/pitch/open', { idea: '被辞退的女厨师夺回餐厅，前合伙人暗中打压' }, 'room-err');
+      assert.strictEqual(r.status, 500);
+      const j = await r.json();
+      assert.strictEqual(j.error, 'INTERNAL_ERROR');
+      assert.ok(!/PrismaClient|connection refused/.test(JSON.stringify(j)), '内部报文不得外泄');
+      assert.strictEqual(bal('room-err'), before, '失败必须退款复原');
+    } finally { mem.writersRoom = orig; }
+  });
+});

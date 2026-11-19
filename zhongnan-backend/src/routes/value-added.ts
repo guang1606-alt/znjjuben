@@ -10,6 +10,7 @@ import { VALUE_ADDED, ValueAddedKey, EngineTier, MemberLevel } from '../config/p
 import { quotaBytes } from '../lib/storage';
 import { callImage, callText, STABILITY_SUFFIX } from '../lib/model-proxy';
 import { userMessageOf, modelErrorMeta } from '../lib/model-error-message';
+import { failInternal } from '../lib/http-errors';
 import { buildVisualStylePrompt } from '../engine/visual-style-library'; // v2.148 视觉画风编码库（海报画风编码注入）
 import { runPk } from '../lib/script-pk';
 import { buildRankBoard, nextTierProgress } from '../lib/pk-rank';
@@ -289,7 +290,8 @@ export function createValueAddedRouter(prisma: PrismaLike | any) {
       // 即时回传最新段位/排名（v2.68）：让用户每局都看到战力成长
       const [allBattles, me] = await Promise.all([
         prisma.pkBattle.findMany({ orderBy: { createdAt: 'desc' } }),
-        prisma.user.findUnique({ where: { id: req.userId! } }),
+        // v2.568 取数最小化：只回笔名/昵称，避免为了一段回包把手机号、密码哈希一并读入内存
+        prisma.user.findUnique({ where: { id: req.userId! }, select: { id: true, penName: true, nickname: true } }),
       ]);
       const board = buildRankBoard(allBattles as any, req.userId!, { [req.userId!]: { penName: (me as any)?.penName ?? null, nickname: (me as any)?.nickname ?? null } }, 20);
       const nextTier = board.mine ? nextTierProgress(board.mine.power) : null;
@@ -306,10 +308,14 @@ export function createValueAddedRouter(prisma: PrismaLike | any) {
    */
   vaRouter.get('/pk/leaderboard', authRequired, async (req: AuthRequest, res) => {
     try {
-      const [battles, users] = await Promise.all([
-        prisma.pkBattle.findMany({ orderBy: { createdAt: 'desc' } }),
-        prisma.user.findMany(),
-      ]);
+      const battles = await prisma.pkBattle.findMany({ orderBy: { createdAt: 'desc' } });
+      // v2.568 取数最小化：战力榜只展示笔名/昵称，按上榜者 id 精确取三列即可；
+      // 此前 findMany() 全表返回用户（含手机号、密码哈希），既慢又把敏感字段无谓读进内存。
+      const ids = [...new Set([...(battles as any[]).map((b) => b.userId), req.userId!])];
+      const users = await prisma.user.findMany({
+        where: { id: { in: ids } },
+        select: { id: true, penName: true, nickname: true },
+      });
       const metaMap: Record<string, { penName?: string; nickname?: string }> = {};
       for (const u of users as any[]) {
         metaMap[u.id] = { penName: u.penName ?? null, nickname: u.nickname ?? null };
@@ -318,7 +324,8 @@ export function createValueAddedRouter(prisma: PrismaLike | any) {
       const progress = board.mine ? nextTierProgress(board.mine.power) : null;
       res.json({ ok: true, board, nextTier: progress });
     } catch (e) {
-      res.status(400).json({ error: (e as Error).message });
+      // 榜单是只读查询：失败即服务端/存储异常，按 500 统一出口脱敏，不能当 400 业务错误外抛内部报文
+      failInternal(res, e, 'va.pk.leaderboard');
     }
   });
 

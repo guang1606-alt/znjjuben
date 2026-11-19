@@ -12,6 +12,7 @@ import {
 import { pickDiverseSeeds, diversityAudit, type VersionInput } from '../engine/multi-version';
 import { validateBranches, buildBranchSkeleton, applyMutator, autoLayout, validateClueGraph, type BranchGraph, type MutateOp } from '../engine/interactive-branch';
 import { normalizeClues, BranchBriefError, type ClueSpec } from '../engine/branch-brief';
+import { userMessageOf } from '../lib/model-error-message';
 import { matchArchetype, archetypeLint, PROTAG_EN, VILLAIN_EN, SYSTEM_EN } from '../engine/archetype-craft';
 import { emotionCraftLint } from '../engine/emotion-craft';
 import { webnovelLint } from '../engine/webnovel-craft';
@@ -147,7 +148,8 @@ export function createCraftRouter() {
       const graph = applyMutator(g, op, lang);
       res.json({ graph, report: validateBranches(graph, lang), layout: autoLayout(graph), clueIssues: validateClueGraph(clues, graph, lang) });
     } catch (e) {
-      res.status(400).json({ error: (e as Error).message });
+      // v2.568 分支图编辑失败：领域校验本就是中文，原样回；畸形图触发的 TypeError 等英文内部报文不外抛
+      res.status(400).json({ error: userMessageOf(e, lang) });
     }
   });
   // 互动短剧：生成保证合法的多结局分支骨架（快速起稿），同时回自动布局
