@@ -2,6 +2,7 @@ import 'dotenv/config';
 import { assertNoLoss, pricingMatrixErrors } from './config/pricing';
 import { createApp } from './server/app';
 import { settleDueEscrows } from './lib/escrow';
+import { logInternal } from './lib/http-errors';
 import { prisma } from './lib/prisma';
 import { startAutoScheduler } from './services/scheduler';
 import { runDailyModelReview } from './services/auto-learning';
@@ -40,7 +41,7 @@ const ESCROW_CRON_MS = 3600 * 1000;
 if (process.env.DISABLE_CRON === '1') {
   console.log('⏸️  DISABLE_CRON=1：已关闭托管放款定时器（由外部定时任务驱动）');
 } else {
-  setInterval(() => { settleDueEscrows().then((n) => n && console.log(`[escrow] 自动放款 ${n} 笔`)).catch(() => {}); }, ESCROW_CRON_MS);
+  setInterval(() => { settleDueEscrows().then((n) => n && console.log(`[escrow] 自动放款 ${n} 笔`)).catch((e) => logInternal(e, 'escrow.cron')); }, ESCROW_CRON_MS);
 }
 
 // 自主进化调度：每日自主学习闭环 + 每周一 API 全面盘点（DISABLE_AUTO_SCHEDULER=1 可关）

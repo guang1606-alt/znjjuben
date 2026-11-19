@@ -10,7 +10,7 @@ import { isDeepStrictEqual } from 'util';
 import { z } from 'zod';
 import { authRequired, AuthRequest } from '../middleware/auth';
 import { prisma as defaultPrisma } from '../lib/prisma';
-import { consumeFlexible, refundFlexible } from '../lib/billing';
+import { consumeFlexible, refundFlexible, safeRefund } from '../lib/billing';
 import { staffOf, staffChargeTx, staffRefundTx } from '../lib/staff-billing';
 import { withBillingTransaction } from '../lib/prisma-tx';
 import {
@@ -128,7 +128,7 @@ export function createTeardownRouter(prisma: PrismaLike | any) {
       res.json({ recordId: rec.id, points, staff, report, directions: adaptDirections(report) });
     } catch (e: any) {
       if (e?.code === 'IDEMPOTENT_REPLAY') return res.status(409).json({ error: 'IDEMPOTENT_REPLAY', message: '相同内容刚已提交，请勿重复拆解' });
-      if (charged) await refund(userId, points, 'TEARDOWN_ANALYZE', refId, idem, staff).catch(() => {});
+      if (charged) await safeRefund('teardown.analyze', userId, 'TEARDOWN_ANALYZE', refId, () => refund(userId, points, 'TEARDOWN_ANALYZE', refId, idem, staff));
       if (e?.code === 'INSUFFICIENT') return res.status(400).json({ error: '积分不足，请先充值' });
       throw e;
     }
@@ -164,13 +164,13 @@ export function createTeardownRouter(prisma: PrismaLike | any) {
         data: { pickedTags: p.data.pickedTags, direction: p.data.direction, outline: outline as object, state: 'OUTLINED', pointsCost: { increment: points } },
       });
       if (applied.count === 0) {
-        if (charged) await refund(userId, points, 'TEARDOWN_OUTLINE', refId, idem, staff).catch(() => {});
+        if (charged) await safeRefund('teardown.outline', userId, 'TEARDOWN_OUTLINE', refId, () => refund(userId, points, 'TEARDOWN_OUTLINE', refId, idem, staff));
         return res.status(409).json({ error: 'OUTLINE_RACE', message: '另一方向的改编大纲刚已生成，请刷新查看后按需重新生成' });
       }
       res.json({ outline, points, staff });
     } catch (e: any) {
       if (e?.code === 'IDEMPOTENT_REPLAY') return res.status(409).json({ error: 'IDEMPOTENT_REPLAY', message: '相同选择刚已提交，请勿重复生成' });
-      if (charged) await refund(userId, points, 'TEARDOWN_OUTLINE', refId, idem, staff).catch(() => {});
+      if (charged) await safeRefund('teardown.outline', userId, 'TEARDOWN_OUTLINE', refId, () => refund(userId, points, 'TEARDOWN_OUTLINE', refId, idem, staff));
       if (e?.code === 'INSUFFICIENT') return res.status(400).json({ error: '积分不足，请先充值' });
       throw e;
     }

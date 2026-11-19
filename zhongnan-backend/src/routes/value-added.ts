@@ -3,7 +3,7 @@ import { createHash } from 'crypto';
 import { z } from 'zod';
 import { authRequired, AuthRequest } from '../middleware/auth';
 import { prisma as defaultPrisma } from '../lib/prisma';
-import { consumeValueAdded, refundValueAdded } from '../lib/billing';
+import { consumeValueAdded, refundValueAdded, safeRefund } from '../lib/billing';
 import { staffOf, staffChargeTx, staffRefundTx } from '../lib/staff-billing';
 import { withBillingTransaction } from '../lib/prisma-tx';
 import { VALUE_ADDED, ValueAddedKey, EngineTier, MemberLevel } from '../config/pricing';
@@ -151,7 +151,7 @@ export function createValueAddedRouter(prisma: PrismaLike | any) {
       });
       res.json({ ok: true, posterId: poster.id, images: permanentImages, realCostFen: costFen, points: staff ? 0 : VALUE_ADDED[key].points, staff });
     } catch (e) {
-      if (charged) await refund(req.userId!, key, refId, idem, staff).catch(() => {}); // 下游失败：付费退积分 / staff 落 0 元 REFUND
+      if (charged) await safeRefund('va.poster', req.userId!, key, refId, () => refund(req.userId!, key, refId, idem, staff)); // 下游失败：付费退积分 / staff 落 0 元 REFUND
       res.status(400).json({ error: userMessageOf(e), ...modelErrorMeta(e) });
     }
   });
@@ -231,7 +231,7 @@ export function createValueAddedRouter(prisma: PrismaLike | any) {
     const staff = await staffOf(prisma, req.userId!);
     let idem = '';
     let charged = false;
-    const giveBack = () => { if (charged) return refund(req.userId!, 'PK_BATTLE', refId, idem, staff).catch(() => {}); };
+    const giveBack = () => { if (charged) return safeRefund('va.pk', req.userId!, 'PK_BATTLE', refId, () => refund(req.userId!, 'PK_BATTLE', refId, idem, staff)); };
     try {
       const r0 = await charge(req.userId!, 'PK_BATTLE', refId, staff);
       if (!r0.charged) return res.status(409).json({ error: 'IDEMPOTENT_REPLAY', message: '相同PK请求刚已提交，请勿重复操作' });
@@ -346,7 +346,7 @@ export function createValueAddedRouter(prisma: PrismaLike | any) {
       if (!String(r.text ?? '').trim()) {
         const sandbox = (r as { sandbox?: boolean }).sandbox === true;
         if (staff) return res.json({ ok: true, answer: '', points: 0, staff, sandbox });
-        if (charged) await refund(req.userId!, 'XIAONAN_DEEP', refId, idem, staff).catch(() => {});
+        if (charged) await safeRefund('va.xiaonan', req.userId!, 'XIAONAN_DEEP', refId, () => refund(req.userId!, 'XIAONAN_DEEP', refId, idem, staff));
         charged = false;
         return res.status(503).json({
           error: sandbox ? 'SANDBOX' : 'UNUSABLE',
@@ -357,7 +357,7 @@ export function createValueAddedRouter(prisma: PrismaLike | any) {
       }
       res.json({ ok: true, answer: r.text, points: staff ? 0 : VALUE_ADDED.XIAONAN_DEEP.points, staff });
     } catch (e) {
-      if (charged) await refund(req.userId!, 'XIAONAN_DEEP', refId, idem, staff).catch(() => {});
+      if (charged) await safeRefund('va.xiaonan', req.userId!, 'XIAONAN_DEEP', refId, () => refund(req.userId!, 'XIAONAN_DEEP', refId, idem, staff));
       res.status(400).json({ error: userMessageOf(e), ...modelErrorMeta(e) });
     }
   });
