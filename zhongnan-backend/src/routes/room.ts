@@ -367,12 +367,15 @@ export function createRoomRouter(prisma: PrismaLike | any) {
       const r0 = await charge(userId, 'TABLE_READ', refId, staff);
       if (!r0.charged) return res.status(409).json({ error: 'IDEMPOTENT_REPLAY', message: '围读刚已提交，请勿重复操作' });
       idem = r0.idem; charged = true; paid = r0.points;
-      const lang = normLang((got.room.payload || {}).lang);
       // c199：重跑围读允许换制式（LIVE/AIGC 字数尺子不同，用户在面板切换 select 后必须生效，
       // 不能被开房时的 payload 永久覆盖成死控件）；白名单外的值容错忽略，并把有效选择回写 payload。
       const prevPayload = got.room.payload || {};
       const askedMode = req.body?.mode === 'AIGC' || req.body?.mode === 'LIVE' ? req.body.mode : null;
       const scriptMode = (askedMode || prevPayload.scriptMode || 'LIVE') as 'LIVE' | 'AIGC';
+      // v2.530：语言与 c199 的制式同源——重跑围读按当前界面语言出报告，白名单外忽略；
+      // 有效选择回写 payload，下游 rewrite-pack / 取回沿用同一语言（老房无 payload.lang 时也由此补齐）。
+      const askedLang = req.body?.lang === 'en' || req.body?.lang === 'zh' ? (req.body.lang as WrLang) : null;
+      const lang = normLang(askedLang ?? prevPayload.lang);
       // c198：围读结论必须消费本房真人讨论（c197 userDiscussion 已做全量历史/去重/截断）；
       // xn_xn 无人模式引擎内部不消费，传空串省一次无意义查询。
       const discussion = got.room.readMode === 'xn_xn' ? '' : await userDiscussion(got.room.id);
@@ -399,7 +402,7 @@ export function createRoomRouter(prisma: PrismaLike | any) {
         ? `[Read conclusion] ${result.summary}\nScene cost: ${result.sceneCost.sceneCount} scenes, level "${result.sceneCost.level}"${result.sceneCost.highCostHits.length ? ` (high-cost: ${result.sceneCost.highCostHits.join(', ')})` : ''}\nScores: Rhythm ${result.scores.rhythm} De-AI ${result.scores.deAi} Grounded ${result.scores.grounded} (overall ${result.scores.overall})\nFix list:\n${result.actionItems.join('\n') || 'No P0/P1 items'}${discussionLine}`
         : `【围读结论】${result.summary}\n场景成本：${result.sceneCost.sceneCount}个场景，成本等级「${result.sceneCost.level}」${result.sceneCost.highCostHits.length ? `（高成本元素：${result.sceneCost.highCostHits.join('、')}）` : ''}\n评分：节奏${result.scores.rhythm} 去AI${result.scores.deAi} 落地${result.scores.grounded}（综合${result.scores.overall}）\n修改清单：\n${result.actionItems.join('\n') || '无P0/P1项'}${discussionLine}`;
       await addMsg(got.room.id, { speakerType: 'XN', seat: 'host', speakerName: lang === 'en' ? 'Xiaonan notes' : '小南记录', content: hostText });
-      await prisma.writersRoom.update({ where: { id: got.room.id }, data: { payload: { ...prevPayload, scriptMode, lastRead: result } } });
+      await prisma.writersRoom.update({ where: { id: got.room.id }, data: { payload: { ...prevPayload, scriptMode, lang, lastRead: result } } });
       res.json({ ok: true, result, points: paid, staff });
     } catch (e) {
       if (charged) await refund(userId, 'TABLE_READ', refId, idem, staff, paid).catch(() => {});

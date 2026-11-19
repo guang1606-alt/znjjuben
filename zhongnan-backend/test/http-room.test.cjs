@@ -246,6 +246,55 @@ describe('c199 复盘：EN房主持人名本地化 × 重跑制式可切换（�
   });
 });
 
+describe('v2.530 围读语言可切换（body.lang 覆盖开房语言并回写 payload）', { concurrency: 1 }, () => {
+  const HAN = /[一-龥]/;
+  // 独立账户：围读每次扣 30 积分，不能挪用后续用例的钱包（rich 在 c200/c201 有余额断言）
+  mem._seedUser({ id: 'langu', balance: 500 });
+  const lastHost = async (rid) => {
+    const j = await (await get(`/api/room/${rid}/messages`, 'langu')).json();
+    const hosts = j.messages.filter((m) => m.seat === 'host');
+    return { room: j.room, host: hosts[hosts.length - 1] };
+  };
+  it('中文开房 → ai-read 传 lang=en：报告转英文并回写 payload.lang', async () => {
+    const o = await post('/api/room/read/open', { readMode: 'me_xn', scriptText: SCRIPT }, 'langu');
+    assert.strictEqual(o.status, 200);
+    const rid = (await o.json()).roomId;
+    let s = await lastHost(rid);
+    assert.strictEqual(s.room.payload.lang, 'zh', '未指定语言开房默认中文');
+    const r = await post(`/api/room/read/${rid}/ai-read`, { mode: 'LIVE', lang: 'en', clientToken: 'v2530-zh2en' }, 'langu');
+    assert.strictEqual(r.status, 200);
+    s = await lastHost(rid);
+    assert.strictEqual(s.host.speakerName, 'Xiaonan notes', '切英文后主持人名应为英文');
+    assert.ok(!HAN.test(s.host.content), '切英文后主持人结论正文不得含中文：' + s.host.content.slice(0, 80));
+    assert.strictEqual(s.room.payload.lang, 'en', '有效语言选择必须回写 payload，供 rewrite-pack 等下游沿用');
+  });
+  it('英文开房 → ai-read 传 lang=zh：报告转中文并回写；非法 lang 忽略不污染', async () => {
+    const o = await post('/api/room/read/open', { readMode: 'me_xn', scriptText: SCRIPT, lang: 'en' }, 'langu');
+    assert.strictEqual(o.status, 200);
+    const rid = (await o.json()).roomId;
+    let s = await lastHost(rid);
+    assert.strictEqual(s.room.payload.lang, 'en');
+    const r = await post(`/api/room/read/${rid}/ai-read`, { mode: 'LIVE', lang: 'zh', clientToken: 'v2530-en2zh' }, 'langu');
+    assert.strictEqual(r.status, 200);
+    s = await lastHost(rid);
+    assert.strictEqual(s.host.speakerName, '小南记录', '切中文后主持人名应为中文');
+    assert.strictEqual(s.room.payload.lang, 'zh');
+    const bad = await post(`/api/room/read/${rid}/ai-read`, { mode: 'LIVE', lang: 'fr', clientToken: 'v2530-bad' }, 'langu');
+    assert.strictEqual(bad.status, 200, '非法语言不应 400（容错），但必须被忽略');
+    s = await lastHost(rid);
+    assert.strictEqual(s.room.payload.lang, 'zh', '非法语言不得污染已选语言');
+  });
+  it('不传 lang 时沿用 payload.lang（老客户端兼容）', async () => {
+    const o = await post('/api/room/read/open', { readMode: 'me_xn', scriptText: SCRIPT, lang: 'en' }, 'langu');
+    const rid = (await o.json()).roomId;
+    const r = await post(`/api/room/read/${rid}/ai-read`, { mode: 'LIVE', clientToken: 'v2530-nolang' }, 'langu');
+    assert.strictEqual(r.status, 200);
+    const s = await lastHost(rid);
+    assert.strictEqual(s.host.speakerName, 'Xiaonan notes', '不传 lang 应沿用开房语言(en)');
+    assert.strictEqual(s.room.payload.lang, 'en');
+  });
+});
+
 describe('c200 围读结论→定点改写包 GET /read/:id/rewrite-pack（只读/零扣费/确定性）', { concurrency: 1 }, () => {
   // 关联项目分集（模拟真实作品页围读入口）
   mem.project.create({ data: { id: 'c200proj', userId: 'rich', title: 'c200围读项目', format: 'LIVE' } });

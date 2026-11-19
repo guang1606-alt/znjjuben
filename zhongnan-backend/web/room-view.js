@@ -515,7 +515,7 @@
     }))) return;
     const btn = $('readAiBtn'); btn.disabled = true;
     try {
-      const j = await post(`/api/room/read/${state.readRoom}/ai-read`, { mode: $('readFormat').value, clientToken: idemToken() });
+      const j = await post(`/api/room/read/${state.readRoom}/ai-read`, { mode: $('readFormat').value, lang: en() ? 'en' : 'zh', clientToken: idemToken() });
       state.lastRead = j.result;
       renderReadActions(j.result);
       await refreshRead();

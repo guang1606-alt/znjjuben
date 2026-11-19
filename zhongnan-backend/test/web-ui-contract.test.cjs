@@ -234,3 +234,17 @@ describe('v2.529 英文界面括号与集号不外溢', () => {
     assert.ok(app.includes("en ? '[Priority fix list]' : '【优先修改清单】'"), '复制报告分组未按语言');
   });
 });
+
+// v2.530 围读语言与 c199 制式同源：重跑围读必须能按当前界面语言出报告，
+// 否则老房/切语言后 AI 围读永远停在开房时的语言。前端要带上 lang，后端才可覆盖并回写 payload。
+describe('v2.530 围读请求按界面语言接线', () => {
+  const roomView = fs.readFileSync(path.join(ROOT, 'web', 'room-view.js'), 'utf8');
+
+  it('ai-read 请求体带 lang（界面语言）', () => {
+    const i = roomView.indexOf('/ai-read');
+    assert.ok(i > 0, '找不到 ai-read 调用');
+    const seg = roomView.slice(i, i + 220);
+    assert.ok(/lang: en\(\) \? 'en' : 'zh'/.test(seg), 'ai-read 未带 lang，后端只能沿用开房语言');
+    assert.ok(/mode: \$\('readFormat'\)\.value/.test(seg), 'ai-read 应同时保留制式（c199）');
+  });
+});
