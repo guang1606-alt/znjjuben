@@ -755,6 +755,7 @@
           <div><b id="meStorage">0 MB</b><span data-i="storage"></span></div>
           <div><b id="meInvite">—</b><span data-i="inviteCode"></span></div>
         </div>
+        <div style="margin-top:10px"><button class="btn-ghost" id="myPostersBtn" data-i="myPosters"></button></div>
         <div class="profile-edit hidden" id="profileEdit">
           <div class="field"><label data-i="nickname" for="inNickname"></label><input id="inNickname" autocomplete="off" maxlength="24" /></div>
           <div class="field"><label data-i="penName" for="inPen"></label><input id="inPen" autocomplete="off" maxlength="20" placeholder="中英文数字 _ · -" /></div>
@@ -979,6 +980,15 @@
           <div class="field"><label data-i="listSample" for="listSample"></label><textarea id="listSample" rows="3" maxlength="600"></textarea></div>
           <div class="notice" data-i="listRule"></div>
           <button class="btn-primary" id="listSubmit" data-i="save"></button>
+        </div>
+      </div>
+      <!-- 我的海报：查看与删除生成物，删除即释放存储用量（v2.538） -->
+      <div class="modal-mask hidden" id="myPostersModal" aria-labelledby="myPostersTitle">
+        <div class="modal">
+          <button class="modal-x" data-close="myPostersModal">×</button>
+          <h3 id="myPostersTitle" data-i="myPosters"></h3>
+          <div class="muted" id="myPostersEmpty" data-i="myPostersEmpty" hidden></div>
+          <div class="poster-grid" id="myPostersList"></div>
         </div>
       </div>
       <!-- 购买后全本弹窗 -->

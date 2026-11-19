@@ -4027,6 +4027,35 @@
     document.querySelectorAll('.super-only').forEach((el) => el.classList.toggle('hidden', !isSuper));
   }
   $('editProfileBtn').onclick = () => $('profileEdit').classList.toggle('hidden');
+  // v2.538 我的海报：列出生图、删除即释放存储用量（配额闭环的前端入口）
+  async function loadMyPosters() {
+    const list = $('myPostersList'); const empty = $('myPostersEmpty');
+    list.innerHTML = ''; empty.hidden = true;
+    try {
+      const res = await Api.request('/api/va/posters'); const d = await Api.jsonOrThrow(res);
+      const items = Array.isArray(d.items) ? d.items : [];
+      empty.hidden = items.length > 0;
+      list.innerHTML = items.map((it) => `<div><img src="${escapeHtml(it.url)}" alt="${escapeHtml(t('myPosters'))}" loading="lazy" /><div class="muted" style="display:flex;justify-content:space-between;align-items:center;margin-top:4px"><span>${fmtBytes(it.size)}</span><button class="btn-ghost" type="button" data-del-poster="${escapeHtml(it.id)}">${escapeHtml(t('delPoster'))}</button></div></div>`).join('');
+      list.querySelectorAll('[data-del-poster]').forEach((b) => {
+        b.onclick = async () => {
+          const ok = await uiConfirm(lang === 'en' ? 'Delete this poster? Storage usage will be released.' : '删除这张海报？存储用量将同步释放。');
+          if (!ok) return;
+          b.disabled = true;
+          try {
+            const r = await Api.request('/api/va/posters/' + encodeURIComponent(b.getAttribute('data-del-poster')), { method: 'DELETE' });
+            await Api.jsonOrThrow(r);
+            await loadMe();
+            await loadMyPosters();
+          } catch (e) { xnSay(e.message); b.disabled = false; }
+        };
+      });
+    } catch (e) { xnSay(e.message); }
+  }
+  function openMyPosters() {
+    if (!Api.isAuthed()) { openAuth('login'); return; }
+    openModal('myPostersModal'); loadMyPosters();
+  }
+  $('myPostersBtn').onclick = openMyPosters;
   $('saveProfileBtn').onclick = async () => {
     try {
       const res = await Api.request('/api/auth/profile', { method: 'PATCH', body: JSON.stringify({

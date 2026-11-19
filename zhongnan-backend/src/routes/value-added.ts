@@ -6,7 +6,8 @@ import { prisma as defaultPrisma } from '../lib/prisma';
 import { consumeValueAdded, refundValueAdded } from '../lib/billing';
 import { staffOf, staffChargeTx, staffRefundTx } from '../lib/staff-billing';
 import { withBillingTransaction } from '../lib/prisma-tx';
-import { VALUE_ADDED, ValueAddedKey, EngineTier } from '../config/pricing';
+import { VALUE_ADDED, ValueAddedKey, EngineTier, MemberLevel } from '../config/pricing';
+import { quotaBytes } from '../lib/storage';
 import { callImage, callText, STABILITY_SUFFIX } from '../lib/model-proxy';
 import { userMessageOf, modelErrorMeta } from '../lib/model-error-message';
 import { buildVisualStylePrompt } from '../engine/visual-style-library'; // v2.148 视觉画风编码库（海报画风编码注入）
@@ -75,6 +76,18 @@ export function createValueAddedRouter(prisma: PrismaLike | any) {
     await withBillingTransaction(prisma, userId, (tx) => refundValueAdded(tx, userId, key, refId, idem));
   }
 
+  /** 存储用量/配额：与 /me 同一口径（未删除 StorageObject 字节 + 等级基础配额 + 已购扩容包） */
+  async function storageUsage(userId: string): Promise<{ used: number; quota: number }> {
+    const [u, agg] = await Promise.all([
+      prisma.user.findUnique({ where: { id: userId }, select: { level: true, extraStorageBytes: true } }),
+      prisma.storageObject.aggregate({ where: { userId, deletedAt: null }, _sum: { bytes: true } }),
+    ]);
+    return {
+      used: (agg as any)?._sum?.bytes ?? 0,
+      quota: quotaBytes(((u as any)?.level ?? 'FREE') as MemberLevel, (u as any)?.extraStorageBytes ?? 0),
+    };
+  }
+
   const posterSchema = z.object({
     projectId: z.string(),
     tier: z.enum(['STANDARD', 'FLAGSHIP']),
@@ -89,6 +102,11 @@ export function createValueAddedRouter(prisma: PrismaLike | any) {
     // v2.296：已删=不存在——补 status 过滤（v2.295 修 PK 面时本面漏网；否则已删项目穿透到计费阶段，花 39/199 积分生成海报）
     const project = await prisma.project.findFirst({ where: { id: p.data.projectId, userId: req.userId!, status: { not: 'deleted' } } });
     if (!project) return res.status(404).json({ error: '项目不存在' });
+    // 存储配额硬校验：已满时不再生成（否则继续占用且用户无感知）；删除海报后可释放空间
+    const usage = await storageUsage(req.userId!);
+    if (usage.used >= usage.quota) {
+      return res.status(413).json({ error: 'STORAGE_QUOTA_EXCEEDED', message: '存储空间已满：请先删除不再需要的海报释放空间，或扩容后重试' });
+    }
     const refId = `poster:${req.userId}:${project.id}:${p.data.tier}:${idemWindow()}:${nonceOf(req) || contentHash(p.data.style ?? '')}`;
     const staff = await staffOf(prisma, req.userId!);
     let idem = '';
@@ -112,6 +130,26 @@ export function createValueAddedRouter(prisma: PrismaLike | any) {
       if (charged) await refund(req.userId!, key, refId, idem, staff).catch(() => {}); // 下游失败：付费退积分 / staff 落 0 元 REFUND
       res.status(400).json({ error: userMessageOf(e), ...modelErrorMeta(e) });
     }
+  });
+
+  /** 我的海报：列表（仅本人，最新 60 张）+ 删除（同时释放存储用量） */
+  vaRouter.get('/posters', authRequired, async (req: AuthRequest, res) => {
+    const rows = await prisma.mediaAsset.findMany({
+      where: { userId: req.userId! },
+      orderBy: { createdAt: 'desc' },
+      take: 60,
+      select: { id: true, kind: true, size: true, createdAt: true },
+    }).catch(() => []);
+    res.json({ items: (rows as any[]).map((r) => ({ id: r.id, url: `/media/${r.id}`, kind: r.kind, size: r.size, createdAt: r.createdAt })) });
+  });
+
+  vaRouter.delete('/posters/:id', authRequired, async (req: AuthRequest, res) => {
+    const asset = await prisma.mediaAsset.findFirst({ where: { id: req.params.id, userId: req.userId! } });
+    if (!asset) return res.status(404).json({ error: '海报不存在' });
+    await prisma.mediaAsset.delete({ where: { id: asset.id } });
+    // 同步释放存储用量（软删 StorageObject，保留审计痕迹）
+    await prisma.storageObject.updateMany({ where: { userId: req.userId!, refId: asset.id }, data: { deletedAt: new Date() } }).catch(() => {});
+    res.json({ ok: true, freedBytes: asset.size });
   });
 
   const pkSchema = z.object({

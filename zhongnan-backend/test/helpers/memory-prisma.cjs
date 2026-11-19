@@ -77,6 +77,15 @@ function createMemoryPrisma() {
   const storageObjects = [];
   const storageObject = {
     async create({ data }) { const row = { id: `so_${++seq}`, deletedAt: null, ...data }; storageObjects.push(row); return row; },
+    async updateMany({ where = {}, data = {} } = {}) {
+      let n = 0;
+      for (const o of storageObjects) {
+        if (where.userId && o.userId !== where.userId) continue;
+        if (where.refId && o.refId !== where.refId) continue;
+        Object.assign(o, data); n++;
+      }
+      return { count: n };
+    },
     async aggregate({ where = {}, _sum } = {}) {
       const r = storageObjects.filter((o) => (!where.userId || o.userId === where.userId) && (where.deletedAt === undefined || o.deletedAt === where.deletedAt));
       const out = {}; for (const k of Object.keys(_sum || {})) out[k] = r.reduce((a, o) => a + (o[k] || 0), 0);
@@ -576,10 +585,25 @@ function createMemoryPrisma() {
   const mediaAssets = new Map();
   const mediaAsset = {
     async create({ data }) {
-      const row = { id: `ma_${++seq}`, kind: 'poster', createdAt: new Date(), ...data };
+      const row = { id: `ma_${++seq}`, kind: 'poster', userId: null, createdAt: new Date(), ...data };
       mediaAssets.set(row.id, row); return row;
     },
     async findUnique({ where }) { return mediaAssets.get(where.id) ?? null; },
+    async findFirst({ where = {} } = {}) {
+      for (const r of mediaAssets.values()) {
+        if (where.id && r.id !== where.id) continue;
+        if (where.userId && r.userId !== where.userId) continue;
+        return r;
+      }
+      return null;
+    },
+    async findMany({ where = {}, orderBy, take, select } = {}) {
+      let rows = [...mediaAssets.values()].filter((r) => Object.entries(where).every(([k, v]) => r[k] === v));
+      rows.sort((a, b) => (where.id ? 0 : (new Date(b.createdAt) - new Date(a.createdAt))));
+      if (typeof take === 'number') rows = rows.slice(0, take);
+      return select ? rows.map((r) => { const o = {}; Object.keys(select).forEach((k) => { o[k] = r[k]; }); return o; }) : rows;
+    },
+    async delete({ where }) { const r = mediaAssets.get(where.id); mediaAssets.delete(where.id); return r; },
   };
   // —— v2.612 API 余额监控：providerBalance 单独数组，按 providerId 取最新 ——
   const providerBalances = [];

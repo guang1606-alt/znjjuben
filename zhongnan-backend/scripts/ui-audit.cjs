@@ -116,6 +116,8 @@ const REAL_TRIGGERS = {
   // xMatureModal 的入口在模式网格首屏；若前面入口已进入模式二级页（#modeDetail 未收起），
   // 该按钮 0×0 不可见 —— 真实路径得先点返回回到网格（已在网格时 #modeBackBtn 不可见，pre 自动跳过）。
   xMatureModal: { view: 'studio', pre: ['#modeBackBtn'], sel: ['#matureManageBtn'], needsAuth: true },
+  // v2.538 我的海报：入口在作品页个人资料卡；空列表由 #myPostersEmpty 空态标记承接（不会被判空壳）。
+  myPostersModal: { view: 'works', sel: ['#myPostersBtn'], needsAuth: true },
 };
 
 function log(...a) { if (!JSON_ONLY) console.log(...a); }

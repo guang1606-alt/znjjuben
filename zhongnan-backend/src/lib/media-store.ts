@@ -23,7 +23,7 @@ export async function persistImage(input: string, kind = 'poster', db: any = pri
     const { buf, mime } = await fetchImageBytes(input);
     if (!buf.length || buf.length > maxBytes()) return input;
     if (!db?.mediaAsset?.create) return input;
-    const asset = await db.mediaAsset.create({ data: { kind, mime, size: buf.length, bytes: buf } });
+    const asset = await db.mediaAsset.create({ data: { kind, mime, size: buf.length, bytes: buf, ...(ownerId ? { userId: ownerId } : {}) } });
     if (ownerId && db?.storageObject?.create) {
       try {
         await db.storageObject.create({ data: { userId: ownerId, kind, bytes: buf.length, refId: asset.id } });

@@ -711,10 +711,13 @@ model ModelSpendBudget {
 // 生成图片永久留存：模型返回的临时 URL 会过期（未配置 TOS 时尤其明显），落库后由 /media/:id 稳定读取
 model MediaAsset {
   id        String   @id @default(cuid())
+  // 归属用户：用于「我的海报」列表、删除释放与配额核对；历史行为 null（无主）
+  userId    String?
   kind      String   @default("poster")
   mime      String
   size      Int
   bytes     Bytes
   createdAt DateTime @default(now())
   @@index([kind, createdAt])
+  @@index([userId, createdAt])
 }
