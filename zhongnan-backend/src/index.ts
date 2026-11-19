@@ -3,6 +3,8 @@ import { assertNoLoss, pricingMatrixErrors } from './config/pricing';
 import { createApp } from './server/app';
 import { settleDueEscrows } from './lib/escrow';
 import { logInternal } from './lib/http-errors';
+import { abortAllActiveTasks } from './lib/active-tasks';
+import { makeShutdownHandler } from './lib/shutdown';
 import { prisma } from './lib/prisma';
 import { startAutoScheduler } from './services/scheduler';
 import { runDailyModelReview } from './services/auto-learning';
@@ -56,4 +58,15 @@ runDailyModelReview(prisma, {}, 'boot').catch((e) => console.error('[model-revie
 ensureSuperAdmin(prisma).catch((e) => console.error('[super-admin] 引导失败（不阻断启动）:', (e as Error).message));
 
 const port = Number(process.env.PORT) || 8080;
-app.listen(port, () => console.log(`🚀 终南集·AGI编剧大师 后端: http://localhost:${port} (health: /health)`));
+const server = app.listen(port, () => console.log(`🚀 终南集·AGI编剧大师 后端: http://localhost:${port} (health: /health)`));
+
+// v2.572 优雅关停：滚动发布/Ctrl+C 时先取消活跃生成任务（走失败退款闭环），再关连接、断库
+const shutdown = makeShutdownHandler({
+  closeServer: (cb) => server.close(cb),
+  disconnect: () => prisma.$disconnect(),
+  abortAll: () => abortAllActiveTasks(),
+  exit: (code) => process.exit(code),
+  log: (m) => console.log(m),
+});
+process.once('SIGTERM', () => shutdown('SIGTERM'));
+process.once('SIGINT', () => shutdown('SIGINT'));

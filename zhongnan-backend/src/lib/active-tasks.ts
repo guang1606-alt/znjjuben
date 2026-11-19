@@ -19,3 +19,13 @@ export function abortActiveTask(id: string): boolean {
 }
 /** 观测用：当前活跃任务数 */
 export function activeTaskCount(): number { return _active.size; }
+/**
+ * v2.572 关停用：取消全部活跃任务并清空注册表。
+ * 触发管线在下一岗位边界抛 CANCELLED，走既有失败路径解冻退款，避免滚动发布把任务留成悬挂孤儿。
+ */
+export function abortAllActiveTasks(): number {
+  const n = _active.size;
+  for (const c of _active.values()) c.abort();
+  _active.clear();
+  return n;
+}
