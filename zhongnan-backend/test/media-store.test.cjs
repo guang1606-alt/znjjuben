@@ -84,3 +84,20 @@ test('GET /media/:id 返回字节、类型与长缓存；未知 id 404', async (
   const miss = await fetch(base + '/media/not-exist');
   assert.equal(miss.status, 404);
 });
+
+// v2.539 前端海报渲染守卫：落库后返回的是 /media/:id 站内相对地址，
+// 前端若只放行 http(s)/data: 就会把持久化成功的海报整批过滤掉（提示成功却一张不显示）。
+test('前端海报渲染必须放行同源 /media/ 地址，且仍拒绝协议相对外链', () => {
+  const fs = require('node:fs');
+  const path = require('node:path');
+  const src = fs.readFileSync(path.join(__dirname, '..', 'web', 'app.js'), 'utf8');
+  const line = src.split('\n').find((l) => l.includes('const urls = (r.images || [])'));
+  assert.ok(line, '未找到高清海报渲染处（r.images 过滤）');
+  assert.match(line, /filter\(imgUrlOk\)/, '过滤必须走 imgUrlOk 单点维护');
+  const fn = src.match(/const imgUrlOk = \(u\) => \{[\s\S]*?\n    \};/);
+  assert.ok(fn, '过滤逻辑应集中在 imgUrlOk，便于单点维护');
+  assert.match(fn[0], /startsWith\('\/'\)/, '必须放行站内相对地址（/media/:id）');
+  assert.match(fn[0], /'\/\/'/, '必须显式拒绝 // 协议相对外链，避免把站内地址放行扩大成任意域');
+  assert.match(fn[0], /\^https\?:\\\/\\\//, '仍需放行 http(s) 外部地址（TOS 模式）');
+  assert.match(fn[0], /data:image\//, '仍需放行 data:image（未配置 TOS 且落库失败时的回退）');
+});

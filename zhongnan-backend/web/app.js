@@ -9776,7 +9776,14 @@
     try {
       const r = await Api.jsonOrThrow(await Api.request('/api/va/poster', { method: 'POST', body: JSON.stringify({ projectId: currentProjectId, tier: 'STANDARD', clientToken: idemToken() }) }));
     // @module qc
-      const urls = (r.images || []).filter((u) => /^https?:\/\//.test(u) || u.startsWith('data:image/'));
+    // v2.539 落库海报返回的是 /media/:id 站内相对地址；旧正则只放行 http(s)/data:，
+    // 会把它整批过滤掉——用户看到「已生成」却一张海报都没有。放行同源根路径，仍拒绝 // 协议相对外链。
+    const imgUrlOk = (u) => {
+      const s = String(u || '');
+      if (/^https?:\/\//i.test(s) || s.startsWith('data:image/')) return true;
+      return s.startsWith('/') && !s.startsWith('//');
+    };
+      const urls = (r.images || []).filter(imgUrlOk);
       if (urls.length) {
         const wrap = document.createElement('div'); wrap.className = 'vc-poster-out';
         wrap.innerHTML = `<p class="muted">${lang === 'en' ? 'HD certificate posters (pick one to save/share):' : '高清证书海报（选一张保存/分享）：'}</p><div class="vc-poster-grid">${urls.map((u) => `<img src="${escapeHtml(u)}" alt="poster"/>`).join('')}</div>`;
