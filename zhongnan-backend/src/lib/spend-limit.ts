@@ -116,6 +116,20 @@ export interface SpendUsage {
   updatedAt: string | null;
 }
 
+/** 单本账的用量快照（总额与每个 Key 同形，Key 版不含 keyCount） */
+export type SpendSnapshot = Omit<SpendUsage, 'keyCount'>;
+
+function snapshot(row: any): SpendSnapshot {
+  const yuan = (f: number) => Math.round(Number(f) || 0) / 100;
+  return {
+    limitYuan: yuan(row.limitFen),
+    spentYuan: yuan(row.spentFen),
+    reservedYuan: yuan(row.reservedFen),
+    availableYuan: yuan(row.availableFen),
+    updatedAt: row.updatedAt ? new Date(row.updatedAt).toISOString() : null,
+  };
+}
+
 /** v2.564 超管后台用量读数：台账才是真正决定放不放行的依据，配置额度只是下次预留时的目标值。
  *  从未产生真实调用（没建过 total 行）时返回 null，由界面提示「尚无消费记录」，
  *  不能伪装成「限额 0 / 可用 0」让管理员误以为已经耗尽。
@@ -124,13 +138,23 @@ export async function readSpendUsage(p: any = prisma): Promise<SpendUsage | null
   const rows: any[] = await p.modelSpendBudget.findMany();
   const total = rows.find((r) => r.id === 'total');
   if (!total) return null;
-  const yuan = (f: number) => Math.round(Number(f) || 0) / 100;
   return {
-    limitYuan: yuan(total.limitFen),
-    spentYuan: yuan(total.spentFen),
-    reservedYuan: yuan(total.reservedFen),
-    availableYuan: yuan(total.availableFen),
+    ...snapshot(total),
     keyCount: rows.filter((r) => String(r.id).startsWith('key_')).length,
-    updatedAt: total.updatedAt ? new Date(total.updatedAt).toISOString() : null,
   };
+}
+
+/** v2.565 供应商卡片按 Key 回读用量：只配限额却看不到消耗，等于没配。
+ *  Key 只以 SHA-256 身份作映射键，映射结果在服务端配对后仅回金额，指纹不出后端。 */
+export async function readKeySpendUsage(p: any = prisma): Promise<Record<string, SpendSnapshot>> {
+  const rows: any[] = await p.modelSpendBudget.findMany();
+  const out: Record<string, SpendSnapshot> = {};
+  for (const r of rows) if (String(r.id).startsWith('key_')) out[String(r.id)] = snapshot(r);
+  return out;
+}
+
+/** 由 Key 明文推出账本 id（空 Key 返回 null：没有身份就没有分账） */
+export function spendKeyId(apiKey: string): string | null {
+  const k = String(apiKey || '').trim();
+  return k ? keyId(k) : null;
 }

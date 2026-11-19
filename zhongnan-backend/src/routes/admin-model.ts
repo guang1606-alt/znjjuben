@@ -8,8 +8,8 @@ import { failInternal } from '../lib/http-errors';
 import { authRequired, AuthRequest } from '../middleware/auth';
 import { createRequireAdmin, requireSuperAdmin } from '../middleware/admin';
 import { prisma } from '../lib/prisma';
-import { maskedConfig, saveConfig, ModelConfigData, maskedProvidersConfig, saveProvider, deleteProvider, saveRouting, loadProviders, loadRouting, loadSpendLimit, saveSpendLimit } from '../lib/model-config';
-import { readSpendUsage } from '../lib/spend-limit';
+import { maskedConfig, saveConfig, loadConfig, ModelConfigData, maskedProvidersConfig, saveProvider, deleteProvider, saveRouting, loadProviders, loadRouting, loadSpendLimit, saveSpendLimit } from '../lib/model-config';
+import { readSpendUsage, readKeySpendUsage, spendKeyId } from '../lib/spend-limit';
 import {
   ALL_ROLE_IDS, ROLE_LABEL_ZH, routingCoverage, routedCostFenPerEp, RoleId, ProviderEntry, enrichProviderFromCatalog,
 } from '../lib/model-config-policy';
@@ -32,10 +32,26 @@ export function createAdminModelRouter(prisma: any) {
   const adminModelRouter = asyncRouter();
   const requireAdmin = createRequireAdmin(prisma, '仅超级管理员可配置模型密钥');
 
+  // v2.565 三档引擎同样按 Key 记账：回显带上用量，否则「限额有输入框、消耗看不见」。
+  const modelPayload = async () => {
+    const [masked, raw, keyUsage] = await Promise.all([
+      maskedConfig(prisma), loadConfig(prisma), readKeySpendUsage(prisma),
+    ]);
+    for (const kind of ['text', 'image'] as const) {
+      const tiers = masked[kind] as unknown as Record<string, any>;
+      const rawTiers = (raw[kind] || {}) as Record<string, any>;
+      for (const tier of Object.keys(tiers)) {
+        const kid = spendKeyId(rawTiers[tier]?.apiKey || '');
+        tiers[tier] = { ...tiers[tier], spendUsage: kid ? (keyUsage[kid] ?? null) : null };
+      }
+    }
+    return masked;
+  };
+
   // 读取（脱敏：只回 hasKey / keyMask，不回明文）
   adminModelRouter.get('/', authRequired, requireAdmin, requireSuperAdmin, async (_req, res) => {
     try {
-      res.json(await maskedConfig(prisma));
+      res.json(await modelPayload());
     } catch (e) {
       failInternal(res, e, 'admin-model');
     }
@@ -54,7 +70,7 @@ export function createAdminModelRouter(prisma: any) {
         image: { standard: pick(body.image?.standard), flagship: pick(body.image?.flagship) },
       };
       await saveConfig(clean as unknown as ModelConfigData, req.userId || 'admin', prisma);
-      res.json({ ok: true, masked: await maskedConfig(prisma) });
+      res.json({ ok: true, masked: await modelPayload() });
     } catch (e) {
       failInternal(res, e, 'admin-model');
     }
@@ -150,9 +166,20 @@ export function createAdminModelRouter(prisma: any) {
     enabled: z.boolean().default(true),
   });
 
-  // 供应商池（脱敏）+ 当前路由
+  // 供应商池（脱敏）+ 当前路由；v2.565 每张卡片附带该 Key 的真实用量（只回金额，不回指纹）
+  const providersPayload = async () => {
+    const [masked, raw, keyUsage] = await Promise.all([
+      maskedProvidersConfig(prisma), loadProviders(prisma), readKeySpendUsage(prisma),
+    ]);
+    const rawById = new Map(raw.map((p) => [p.id, p]));
+    masked.providers = masked.providers.map((p: any) => {
+      const kid = spendKeyId(rawById.get(p.id)?.apiKey || '');
+      return { ...p, spendUsage: kid ? (keyUsage[kid] ?? null) : null };
+    });
+    return masked;
+  };
   adminModelRouter.get('/providers', authRequired, requireAdmin, requireSuperAdmin, async (_req, res) => {
-    res.json(await maskedProvidersConfig(prisma));
+    res.json(await providersPayload());
   });
 
   // 新增/更新单个供应商；目录型号可免填 baseUrl（自动补 catalog 默认端点）
@@ -173,7 +200,7 @@ export function createAdminModelRouter(prisma: any) {
     const entry = enrichProviderFromCatalog(raw, catalog);
     try {
       await saveProvider(entry, catalog?.defaultBaseUrl, req.userId || 'admin', prisma);
-      res.json({ ok: true, masked: await maskedProvidersConfig(prisma) });
+      res.json({ ok: true, masked: await providersPayload() });
     } catch (e) {
       res.status(400).json({ error: (e as Error).message });
     }
@@ -181,7 +208,7 @@ export function createAdminModelRouter(prisma: any) {
 
   adminModelRouter.delete('/providers/:id', authRequired, requireAdmin, requireSuperAdmin, async (req: AuthRequest, res) => {
     await deleteProvider(String(req.params.id), req.userId || 'admin', prisma);
-    res.json({ ok: true, masked: await maskedProvidersConfig(prisma) });
+    res.json({ ok: true, masked: await providersPayload() });
   });
 
   // 九岗路由（悬空 id 服务端自动丢弃）

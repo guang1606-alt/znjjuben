@@ -11316,7 +11316,8 @@
         const c = cfg[g.kind][tt.key] || {};
         return `<div class="model-row" data-kind="${g.kind}" data-tier="${tt.key}">
           <div class="model-tier">${lang === 'en' ? tt.en : tt.zh}
-            ${c.hasKey ? `<span class="badge ok">${escapeHtml(c.keyMask || '')}</span>` : `<span class="badge">${lang==='en'?'no key':'未配置'}</span>`}</div>
+            ${c.hasKey ? `<span class="badge ok">${escapeHtml(c.keyMask || '')}</span>` : `<span class="badge">${lang==='en'?'no key':'未配置'}</span>`}
+            ${Number(c.spendLimitYuan) > 0 ? `<span class="muted" style="display:block;font-size:11px">${c.spendUsage ? `已用 ${spendYuanText(c.spendUsage.spentYuan)} / 可用 ${spendYuanText(c.spendUsage.availableYuan)}` : '尚未产生消费'}</span>` : ''}</div>
           <div class="model-fields">
             <input data-f="baseUrl" name="baseUrl" aria-label="Base URL" value="${escapeHtml(c.baseUrl || '')}" placeholder="${lang === 'en' ? 'Base URL (e.g. https://api.openai.com/v1)' : 'Base URL（如 https://api.openai.com/v1）'}" />
             <input data-f="model" name="model" aria-label="Model" value="${escapeHtml(c.model || '')}" placeholder="${lang === 'en' ? 'Model (e.g. gpt-4.1-mini / gpt-image-1)' : 'Model（如 gpt-4.1-mini / gpt-image-1）'}" />
@@ -11459,13 +11460,21 @@
   }
   async function loadProviders() {
     pvCache = await admApi('/model/providers');
-    $('pvList').innerHTML = pvCache.providers.length ? pvCache.providers.map((p) => `
+    $('pvList').innerHTML = pvCache.providers.length ? pvCache.providers.map((p) => {
+      // v2.565 限额旁给出这只 Key 的真实消耗：只有限额没有用量，管理员看不出还剩多少、该不该调高。
+      const spendNote = Number(p.spendLimitYuan) > 0
+        ? (p.spendUsage
+          ? `限额 ${Number(p.spendLimitYuan)} 元 · 已用 ${spendYuanText(p.spendUsage.spentYuan)} / 可用 ${spendYuanText(p.spendUsage.availableYuan)}`
+          : `限额 ${Number(p.spendLimitYuan)} 元 · 尚未产生消费`)
+        : '';
+      return `
       <div class="model-row" style="margin-bottom:6px">
-        <div class="model-tier">${escapeHtml(p.name)} <span class="badge">${p.modality}</span> ${p.enabled ? '' : '<span class="badge">停用</span>'} ${Number(p.spendLimitYuan) > 0 ? `<span class="badge">限额 ${Number(p.spendLimitYuan)} 元</span>` : ''} <span class="muted">${escapeHtml(p.keyMask || p.apiKey || '')}</span></div>
+        <div class="model-tier">${escapeHtml(p.name)} <span class="badge">${p.modality}</span> ${p.enabled ? '' : '<span class="badge">停用</span>'} ${spendNote ? `<span class="badge">${escapeHtml(spendNote)}</span>` : ''} <span class="muted">${escapeHtml(p.keyMask || p.apiKey || '')}</span></div>
         <div class="row-actions">
           <button class="btn-ghost" data-pvedit="${p.id}">编辑</button>
           <button class="btn-ghost" data-pvdel="${p.id}">删除</button>
-        </div></div>`).join('') : znEmptyHtml('暂无自定义供应商', '岗位全部走三档引擎组合');
+        </div></div>`;
+    }).join('') : znEmptyHtml('暂无自定义供应商', '岗位全部走三档引擎组合');
     $('pvList').querySelectorAll('[data-pvdel]').forEach((b) => b.onclick = async () => {
       if (!(await uiConfirm({ body: '删除该供应商？相关岗位路由将自动解绑回退。', danger: true, okText: '删除' }))) return;
       // v2.285 admApi 经 jsonOrThrow 把网络层与 HTTP 非 ok 都 throw：catch 给失败结论并阻断乐观成功

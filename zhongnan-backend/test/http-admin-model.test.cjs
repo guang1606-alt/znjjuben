@@ -72,6 +72,26 @@ describe('管理员模型密钥配置（脱敏/加密/不误清空）', { concur
     assert.strictEqual(after.keyMask, prevMask, '密钥掩码应保持不变');
   });
 
+  it('三档引擎回带 Key 用量：限额档位能看到已用/可用，且不下发指纹', async () => {
+    const SL = require('../dist/lib/spend-limit.js');
+    const body = skeleton({
+      text: { economy: { baseUrl: 'https://eco-usage.local/v1', model: 'eco-usage', apiKey: 'sk-eco-usage-secret', spendLimitYuan: 3 } },
+    });
+    const saved = await put('/api/admin/model/', 'admin1', 'PRO', body);
+    assert.strictEqual(saved.s, 200);
+    assert.strictEqual(saved.j.masked.text.economy.spendUsage, null, '尚未消费时显式 null');
+    const kid = SL.spendKeyId('sk-eco-usage-secret');
+    await mem.modelSpendBudget.create({
+      data: { id: kid, limitFen: 300, availableFen: 250, reservedFen: 0, spentFen: 50 },
+    });
+    const { s, j } = await get('/api/admin/model/', 'admin1', 'PRO');
+    assert.strictEqual(s, 200);
+    assert.strictEqual(j.text.economy.spendUsage.spentYuan, 0.5);
+    assert.strictEqual(j.text.economy.spendUsage.availableYuan, 2.5);
+    assert.ok(!JSON.stringify(j).includes(kid), '不得把 Key 指纹下发给前端');
+    assert.ok(!JSON.stringify(j).includes('sk-eco-usage-secret'), '明文密钥绝不下发');
+  });
+
   it('普通用户 PUT 403', async () => {
     const { s } = await put('/api/admin/model/', 'u_norm', 'BASIC', skeleton());
     assert.strictEqual(s, 403);
@@ -210,6 +230,28 @@ describe('v2.41 供应商池/九岗路由/组合全景', { concurrency: 1 }, () 
     assert.strictEqual(j.masked.providers.length, 0);
     assert.ok(!j.masked.routing.architect, '删供应商必须自动解绑岗位');
   });
+  it('供应商回带 Key 级用量：已用/在途/可用可见，且不下发 Key 指纹', async () => {
+    const SL = require('../dist/lib/spend-limit.js');
+    const r = await put(M + '/providers', 'admin1', 'PRO', {
+      name: '用量供应商', modality: 'text', baseUrl: 'https://pv-usage.local/v1',
+      model: 'pv-usage', apiKey: 'sk-pv-usage-secret', inYuanPerMTok: 1, outYuanPerMTok: 2,
+      spendLimitYuan: 5, enabled: true,
+    });
+    assert.strictEqual(r.s, 200);
+    const pv = r.j.masked.providers.find((x) => x.name === '用量供应商');
+    assert.strictEqual(pv.spendUsage, null, '尚未产生消费时显式 null，不伪造 0 用量');
+    const kid = SL.spendKeyId('sk-pv-usage-secret');
+    assert.ok(kid);
+    await mem.modelSpendBudget.create({
+      data: { id: kid, limitFen: 500, availableFen: 470, reservedFen: 0, spentFen: 30 },
+    });
+    const list = (await get(M + '/providers', 'admin1', 'PRO')).j;
+    const p = list.providers.find((x) => x.name === '用量供应商');
+    assert.strictEqual(p.spendUsage.spentYuan, 0.3);
+    assert.strictEqual(p.spendUsage.availableYuan, 4.7);
+    assert.ok(!JSON.stringify(list).includes(kid), '不得把 Key 指纹下发给前端');
+    await fetch(base + M + '/providers/' + p.id, { method: 'DELETE', headers: H('admin1', 'PRO') });
+  });
 });
 
 describe('测试期模型消费限额配置（仅超管、脱敏）', { concurrency: 1 }, () => {
@@ -273,7 +315,7 @@ describe('测试期模型消费限额配置（仅超管、脱敏）', { concurre
     assert.strictEqual(g.j.usage.spentYuan, 1);
     assert.strictEqual(g.j.usage.reservedYuan, 0.5);
     assert.strictEqual(g.j.usage.availableYuan, 18.5);
-    assert.strictEqual(g.j.usage.keyCount, 1, '不得暴露 Key 指纹，只回分账数量');
+    assert.ok(g.j.usage.keyCount >= 1, '不得暴露 Key 指纹，只回分账数量');
     assert.ok(g.j.usage.updatedAt);
     const p = await put(M + '/spend-limit', 'admin1', 'PRO', { enabled: true, totalLimitYuan: 20 });
     assert.strictEqual(p.s, 200);

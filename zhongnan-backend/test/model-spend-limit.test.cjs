@@ -199,6 +199,33 @@ test('用量读数：预留计入在途、结算计入已用，且能看出分�
   assert.equal(u.availableYuan, 1.88);
 });
 
+// v2.565 供应商级用量：后台给每个供应商配了单 Key 限额，却看不到这只 Key 花了多少，
+// 等于配了也管不了。按 Key 分账回读，只回金额、不回指纹。
+test('Key 分账读数：只回 Key 行，空 Key 不产生身份', async () => {
+  const mem = createMemoryPrisma();
+  control(mem, { totalLimitYuan: 1 });
+  await SL.reserveModelSpend({ apiKey: 'sk-pv-a', keyLimitYuan: 2, reserveFen: 40 });
+  const kid = SL.spendKeyId('sk-pv-a');
+  assert.ok(kid && kid.startsWith('key_'));
+  assert.equal(SL.spendKeyId('   '), null);
+  const map = await SL.readKeySpendUsage(mem);
+  assert.deepEqual(Object.keys(map), [kid], 'total 行不得混进 Key 分账');
+  assert.equal(map[kid].limitYuan, 2);
+  assert.equal(map[kid].reservedYuan, 0.4);
+  assert.equal(map[kid].availableYuan, 1.6);
+  assert.equal(map[kid].spentYuan, 0);
+});
+
+test('供应商卡片回带 Key 用量：已用/可用可见，且不下发指纹', () => {
+  const fs = require('node:fs');
+  const path = require('node:path');
+  const app = fs.readFileSync(path.join(__dirname, '../web/app.js'), 'utf8');
+  assert.match(app, /p\.spendUsage/);
+  assert.match(app, /c\.spendUsage/);
+  assert.match(app, /尚未产生消费/);
+  assert.match(app, /已用 \$\{spendYuanText/);
+});
+
 test('超管后台展示用量：已用/在途/可用 + 用尽警告（不再只有输入框）', () => {
   const fs = require('node:fs');
   const path = require('node:path');
