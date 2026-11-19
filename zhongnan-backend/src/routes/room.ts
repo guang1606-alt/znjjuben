@@ -220,7 +220,7 @@ export function createRoomRouter(prisma: PrismaLike | any) {
         : (lang === 'en'
           ? 'Key information is fairly complete — tap “Form pitch verdict” for the call and an executable pitch card.'
           : '关键信息已经比较齐了，建议点“形成选题决议”，我来出立项判断和可执行选题卡。');
-      const msg = await addMsg(got.room.id, { speakerType: 'XN', seat: 'host', speakerName: '小南(主持)', content: reply, meta: { missing } });
+      const msg = await addMsg(got.room.id, { speakerType: 'XN', seat: 'host', speakerName: lang === 'en' ? 'Xiaonan (host)' : '小南(主持)', content: reply, meta: { missing } });
       res.json({ ok: true, reply, messageId: msg.id, points: paid, staff, questions: fa.questions });
     } catch (e) {
       if (charged) await refund(userId, 'PITCH_MEETING', refId, idem, staff, paid).catch(() => {});

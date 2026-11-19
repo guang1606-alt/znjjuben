@@ -533,3 +533,23 @@ describe('会员折扣定价与退款对称（v2.483 权益承诺对齐）', { c
     assert.strictEqual(bal('vip-adv'), before, '扣 16 退 16，余额必须完全复原');
   });
 });
+
+// v2.532 选题会主持人在英文会议上必须用英文名：speak 回包此前固定「小南(主持)」，
+// 正文已英文、说话人却中文，截图/导出混排，与 open/decide 两处已做的语言分流不一致。
+describe('v2.532 选题会发言主持人名随语言', { concurrency: 1 }, () => {
+  const HAN = /[一-龥]/;
+  mem._seedUser({ id: 'pitchlang', balance: 200 });
+  it('英文房发言后主持人名为 Xiaonan (host) 且正文英文', async () => {
+    const o = await post('/api/room/pitch/open', { idea: 'A dismissed chef schemes to take back her restaurant from her ex-partner', audience: 'women 25-40', lang: 'en' }, 'pitchlang');
+    assert.strictEqual(o.status, 200);
+    const rid = (await o.json()).roomId;
+    const s = await post(`/api/room/pitch/${rid}/speak`, { content: 'She wants to prove the recipe was stolen and fight back.' }, 'pitchlang');
+    assert.strictEqual(s.status, 200);
+    const j = await (await get(`/api/room/${rid}/messages`, 'pitchlang')).json();
+    const hosts = j.messages.filter((m) => m.seat === 'host');
+    const h = hosts[hosts.length - 1];
+    assert.strictEqual(h.speakerName, 'Xiaonan (host)', '英文选题会主持人名不得是中文');
+    assert.ok(!HAN.test(h.speakerName), '主持人名不得含中文');
+    assert.ok(!HAN.test(h.content), '主持人正文不得混入中文：' + h.content.slice(0, 80));
+  });
+});
