@@ -37,6 +37,36 @@ test('鉴权失败/审核拒绝/限流/超时/取消/空返回 各有专属中�
   assert.match(M.friendlyModelError(new Error('MODEL_TRANSIENT_HTTP_500:boom')).message, /稍后重试/);
 });
 
+// v2.563 测试期消费硬限额：额度用尽/台账不可用必须给可操作话术，
+// 不能把 MODEL_SPEND_LIMIT_* 内部码原样丢给用户；额度用尽也不能误导为「稍后重试」（重试不会变好）。
+test('消费硬限额失败：中文可操作话术，不泄露内部码、不误导重试', () => {
+  const total = M.friendlyModelError(new Error('MODEL_SPEND_LIMIT_TOTAL 测试期总额度已不足'));
+  assert.strictEqual(total.code, 'MODEL_SPEND_LIMIT_TOTAL');
+  assert.match(total.message, /额度|限额/);
+  assert.match(total.message, /管理员/);
+  assert.ok(!/MODEL_SPEND_LIMIT/.test(total.message), '不得把内部码原样展示给用户');
+  assert.ok(!/稍后重试/.test(total.message), '额度用尽反复重试不会变好，不能引导重试');
+  assert.match(total.message, /不扣积分/);
+
+  const key = M.friendlyModelError(new Error('MODEL_SPEND_LIMIT_KEY 该 API Key 的消费额度已不足'));
+  assert.strictEqual(key.code, 'MODEL_SPEND_LIMIT_KEY');
+  assert.match(key.message, /额度|限额/);
+  assert.ok(!/MODEL_SPEND_LIMIT|API Key/.test(key.message), '不得向用户暴露密钥层细节');
+
+  const un = M.friendlyModelError(new Error('MODEL_SPEND_LIMIT_UNAVAILABLE 消费限额台账不可用，已阻止模型调用'));
+  assert.strictEqual(un.code, 'MODEL_SPEND_LIMIT_UNAVAILABLE');
+  assert.match(un.message, /额度|限额/);
+  assert.match(un.message, /稍后重试/);
+  assert.ok(!/MODEL_SPEND_LIMIT/.test(un.message));
+
+  // userMessageOf 也必须先命中限额规则，而不是因含中文而原样透出（旧行为会连内部码一起给用户）
+  const viaUser = M.userMessageOf(new Error('MODEL_SPEND_LIMIT_TOTAL 测试期总额度已不足'));
+  assert.ok(!/MODEL_SPEND_LIMIT/.test(viaUser));
+
+  const en = M.friendlyModelError(new Error('MODEL_SPEND_LIMIT_TOTAL'), 'en');
+  assert.match(en.message, /budget|limit/i);
+});
+
 test('未知错误兜底中文话术，绝不回传原始英文栈', () => {
   const r = M.friendlyModelError(new Error('some internal stack trace at Foo.bar'));
   assert.strictEqual(r.code, 'MODEL_UNKNOWN');

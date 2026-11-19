@@ -37,6 +37,18 @@ const RULES: Rule[] = [
     en: 'Model authentication failed (invalid or expired API key). Please ask the admin to update the key, then retry. No points were charged.',
   },
   {
+    // v2.563 测试期消费硬限额：额度用尽是管理侧问题，反复重试不会自愈——
+    // 说明「已暂停以避免超额」并指向管理员；旧逻辑因报文含中文会原样透出 MODEL_SPEND_LIMIT_* 内部码。
+    test: /MODEL_SPEND_LIMIT_(TOTAL|KEY)/,
+    zh: '该创作通道的测试期额度已用尽，已暂停生成以避免超额支出。请联系管理员调整额度后重试；本次不扣积分。',
+    en: 'The trial budget for this creative channel is exhausted, so generation is paused to avoid overspending. Please ask the admin to raise the limit, then retry. No points were charged.',
+  },
+  {
+    test: /MODEL_SPEND_LIMIT_UNAVAILABLE/,
+    zh: '额度校验服务暂时不可用，已阻止调用模型以避免超额支出，请稍后重试；本次不扣积分。',
+    en: 'The budget-check service is temporarily unavailable, so the model call was blocked to avoid overspending. Please retry later. No points were charged.',
+  },
+  {
     test: /(AUDIT|DataInspection|内容审核|SENSITIVE|content.?policy)/i,
     zh: '内容未通过平台审核，请调整描述或剧情后重试。本次不扣积分。',
     en: 'The content did not pass moderation. Please revise the description or story and retry. No points were charged.',
