@@ -24,6 +24,24 @@ export function tosEnabled(): boolean {
   return !!(REGION && BUCKET && AK && SK);
 }
 
+/**
+ * 本桶对象域名（运行时读取环境变量，便于测试与本进程内配置变更即时生效）。
+ * v2.559：/media/:id?download=1 需要判断外链是否为本桶对象——只对自己的对象做字节代理，
+ * 避免站内路由被当成任意 URL 代理（SSRF 面）。
+ */
+export function tosObjectHost(): string {
+  const region = process.env.TOS_REGION || '';
+  const bucket = process.env.TOS_BUCKET || '';
+  const endpoint = process.env.TOS_ENDPOINT || (region ? `tos-${region}.volces.com` : '');
+  return bucket && endpoint ? `${bucket}.${endpoint}` : '';
+}
+
+export function isOwnTosObjectUrl(urlOrKey: string): boolean {
+  const host = tosObjectHost();
+  if (!host) return false;
+  try { return new URL(urlOrKey).host === host; } catch { return false; }
+}
+
 function hmac(key: Buffer | string, data: string): Buffer {
   return crypto.createHmac('sha256', key).update(data, 'utf8').digest();
 }
