@@ -18,7 +18,11 @@ function maxBytes(): number {
  */
 export async function persistImage(input: string, kind = 'poster', db: any = prisma, ownerId?: string): Promise<string> {
   if (!input) return input;
-  if (tosEnabled()) return uploadImageToTos(input, kind);
+  if (tosEnabled()) {
+    const url = await uploadImageToTos(input, kind);
+    // v2.541 转存成功才用 TOS 地址；失败继续走落库，不能把会过期的临时地址当永久地址返回
+    if (url) return url;
+  }
   try {
     const { buf, mime } = await fetchImageBytes(input);
     if (!buf.length || buf.length > maxBytes()) return input;

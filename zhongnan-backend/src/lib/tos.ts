@@ -88,18 +88,19 @@ async function putObject(key: string, buf: Buffer, mime: string): Promise<string
 }
 
 /**
- * 把图片转存到 TOS，返回永久 URL。
- * 未配置 TOS 时原样返回 input（不阻断业务）。
+ * 把图片转存到 TOS，成功返回永久 URL，失败返回 null。
+ * v2.541：失败不再回退原图地址——模型临时链接会过期，「转存失败」当下看不出来、
+ * 几天后海报全变裂图。由调用方决定回退（落库持久化），保证已生成的图永远打得开。
  */
-export async function uploadImageToTos(input: string, keyPrefix = 'poster'): Promise<string> {
-  if (!tosEnabled()) return input;
+export async function uploadImageToTos(input: string, keyPrefix = 'poster'): Promise<string | null> {
+  if (!tosEnabled()) return null;
   try {
     const { buf, mime } = await fetchImageBytes(input);
     const ext = mime.includes('jpeg') ? 'jpg' : mime.includes('webp') ? 'webp' : 'png';
     const key = `${keyPrefix}/${Date.now()}-${crypto.randomBytes(6).toString('hex')}.${ext}`;
     return await putObject(key, buf, mime);
   } catch (e) {
-    console.error('[tos] upload failed, fallback to original URL:', (e as Error).message);
-    return input; // 上传失败回退原图，不让业务失败
+    console.error('[tos] upload failed, will fallback to db persistence:', (e as Error).message);
+    return null;
   }
 }
