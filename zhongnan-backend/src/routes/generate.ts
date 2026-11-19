@@ -1766,11 +1766,12 @@ generateRouter.get('/projects', authRequired, async (req: AuthRequest, res) => {
   if (status && ['active', 'archived', 'draft'].includes(status)) baseWhere.status = status;
   const mode = req.query.mode as string | undefined;
   if (mode) baseWhere.mode = mode;
-  const total = await prisma.project.count({ where: baseWhere }).catch(() => 0);
+  const cursor = decodeProjectCursor(req.query.cursor);
+  // v2.553 优化：cursor 翻页路径跳过 count（前端 fallback 到 list.length），省一次 DB 查询
+  const total = cursor ? null : await prisma.project.count({ where: baseWhere }).catch(() => 0);
 
   const limitRaw = Number(req.query.limit || req.query.take || 60);
   const take = Math.max(1, Math.min(120, limitRaw));
-  const cursor = decodeProjectCursor(req.query.cursor);
   const skip = cursor ? 0 : Math.max(0, Number(req.query.offset || req.query.skip || 0));
 
   const where = cursor

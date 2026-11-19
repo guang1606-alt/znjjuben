@@ -98,7 +98,7 @@ describe('v2.553 作品库列表键集游标分页', { concurrency: 1 }, () => {
     // 断言锚点不在下一页（锚点是 p1 最后一条，下一页应全是 createdAt 更早或 createdAt 相等但 id 更小的）
     for (const it of p2.items) assert.notStrictEqual(it.id, anchorId, '翻页不应带回锚点自身');
     for (const it of p2.items) assert.ok(!seenIds.has(it.id), '翻页不应带回已返回项：' + it.id);
-    assert.strictEqual(p2.total, oldTotal + 1); // 新增的那一条会被 total 统计
+    assert.strictEqual(p2.total, null); // p2 带 cursor 翻页，跳过 count 省一次 DB 查询（前端 fallback 到 list.length）
   });
 
   it('cursor 脏值 / 越界安全退化第一页', async () => {
