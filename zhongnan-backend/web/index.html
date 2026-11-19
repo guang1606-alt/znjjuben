@@ -1257,6 +1257,8 @@
             <span class="spacer"></span>
             <button class="btn-primary" id="admSpendSave" type="button">保存限额</button>
           </div>
+          <!-- v2.564 用量读数：已用/在途/可用，额度耗尽前就能看见 -->
+          <div class="muted" id="admSpendUsage"></div>
           <div class="muted">开启后每次真实模型调用前预留额度，成功按实际成本结算、失败或取消全额释放；总额度用尽即拒绝调用。单个 Key 限额填 0 表示不单独限制该 Key，但仍受总额约束。</div>
         </div>
         <div id="admModelWrap"></div>

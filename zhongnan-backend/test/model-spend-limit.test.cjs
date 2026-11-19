@@ -174,6 +174,44 @@ test('图片成功按实际张数结算，在途预留归零', async () => {
   assert.equal(total.availableFen, 90);
 });
 
+// v2.564 用量可见性：后台只有「限额」输入框时，额度耗尽前管理员看不到已用/在途/可用，
+// 只能等用户报「生成失败」才发现。台账是真正决定放行的依据，读数必须与它同源。
+test('用量读数：未建台账返回 null，不把「从未记账」伪装成零额度', async () => {
+  const mem = createMemoryPrisma();
+  assert.equal(await SL.readSpendUsage(mem), null);
+});
+
+test('用量读数：预留计入在途、结算计入已用，且能看出分了几个 Key 账本', async () => {
+  const mem = createMemoryPrisma();
+  control(mem, { totalLimitYuan: 2 });
+  const r = await SL.reserveModelSpend({ apiKey: 'sk-usage', keyLimitYuan: 1, reserveFen: 30 });
+  let u = await SL.readSpendUsage(mem);
+  assert.equal(u.limitYuan, 2);
+  assert.equal(u.reservedYuan, 0.3);
+  assert.equal(u.availableYuan, 1.7);
+  assert.equal(u.spentYuan, 0);
+  assert.equal(u.keyCount, 1, '单 Key 限额 > 0 时必须能看出分了几个 Key 账本');
+  assert.ok(u.updatedAt, '界面需要展示最近一次记账时间');
+  await SL.settleModelSpend(r, 12);
+  u = await SL.readSpendUsage(mem);
+  assert.equal(u.reservedYuan, 0);
+  assert.equal(u.spentYuan, 0.12);
+  assert.equal(u.availableYuan, 1.88);
+});
+
+test('超管后台展示用量：已用/在途/可用 + 用尽警告（不再只有输入框）', () => {
+  const fs = require('node:fs');
+  const path = require('node:path');
+  const app = fs.readFileSync(path.join(__dirname, '../web/app.js'), 'utf8');
+  const html = fs.readFileSync(path.join(__dirname, '../web/index.html'), 'utf8');
+  assert.match(html, /id="admSpendUsage"/);
+  assert.match(app, /renderSpendUsage\(r && r\.usage, c\)/);
+  assert.match(app, /usage\.reservedYuan/);
+  assert.match(app, /usage\.availableYuan/);
+  assert.match(app, /台账限额/);
+  assert.match(app, /已用尽：真实调用会被拒绝/);
+});
+
 test('图片失败重试耗尽后释放全部预留，不产生消费', async () => {
   const mem = createMemoryPrisma();
   control(mem, { totalLimitYuan: 1 });

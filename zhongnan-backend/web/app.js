@@ -11253,12 +11253,43 @@
       { key: 'standard', zh: '标准图片', en: 'Standard image' }, { key: 'flagship', zh: '旗舰图片（gpt-image）', en: 'Flagship (gpt-image)' }] },
   ];
   /* 测试期消费硬限额：总阀 + 总额度（单 Key 限额在模型档位与供应商池各自表单内） */
+  function spendYuanText(v) { return '¥' + (Math.round((Number(v) || 0) * 100) / 100).toFixed(2); }
+  // v2.564 用量可见性：此前后台只有「限额」输入框，额度耗尽前管理员看不到已用/在途/可用，
+  // 只能等用户报「生成失败」才发现。台账是真正决定放行的依据，配置额度只在下次预留时对齐。
+  function renderSpendUsage(usage, cfg) {
+    const el = $('admSpendUsage');
+    if (!el) return;
+    if (!usage) {
+      el.classList.remove('warn-text');
+      el.textContent = cfg && cfg.enabled
+        ? '尚无消费记录：开启总阀后产生一次真实调用即开始记账。'
+        : '总阀未开启，当前不限制真实调用。';
+      return;
+    }
+    const parts = [
+      '已用 ' + spendYuanText(usage.spentYuan) + ' / 台账限额 ' + spendYuanText(usage.limitYuan),
+      '在途 ' + spendYuanText(usage.reservedYuan),
+      '可用 ' + spendYuanText(usage.availableYuan),
+    ];
+    if (Number(usage.keyCount) > 0) parts.push('Key 分账 ' + Number(usage.keyCount) + ' 个');
+    const urgent = Number(usage.availableYuan) <= 0
+      || (Number(usage.limitYuan) > 0 && Number(usage.availableYuan) / Number(usage.limitYuan) < 0.1);
+    let tail = '';
+    if (Number(usage.availableYuan) <= 0) tail = ' · 已用尽：真实调用会被拒绝，请调高总额度';
+    else if (urgent) tail = ' · 剩余不足 10%，接近用尽';
+    if (cfg && Number(cfg.totalLimitYuan) !== Number(usage.limitYuan)) {
+      tail += ' · 限额已改为 ' + spendYuanText(cfg.totalLimitYuan) + '，下次真实调用后按新额度核算';
+    }
+    el.classList.toggle('warn-text', urgent);
+    el.textContent = parts.join(' · ') + tail;
+  }
   async function loadSpendLimit() {
     try {
       const r = await admApi('/model/spend-limit');
       const c = (r && r.spendLimit) || {};
       $('admSpendEnabled').checked = !!c.enabled;
       $('admSpendTotal').value = Number(c.totalLimitYuan) || 0;
+      renderSpendUsage(r && r.usage, c);
     } catch (e) { xnSay((e && e.message) || t('loadFail')); }
   }
   async function saveSpendLimit() {

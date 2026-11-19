@@ -257,6 +257,28 @@ describe('测试期模型消费限额配置（仅超管、脱敏）', { concurre
     });
     assert.strictEqual(r.s, 400);
   });
+  it('用量读数：无台账返回 null，有台账回带已用/在途/可用（保存后同份回带）', async () => {
+    const empty = await get(M + '/spend-limit', 'admin1', 'PRO');
+    assert.strictEqual(empty.s, 200);
+    assert.strictEqual(empty.j.usage, null, '从未真实调用时不得伪装成 0/0 额度');
+    await mem.modelSpendBudget.create({
+      data: { id: 'total', limitFen: 2000, availableFen: 1850, reservedFen: 50, spentFen: 100 },
+    });
+    await mem.modelSpendBudget.create({
+      data: { id: 'key_usage_test', limitFen: 1000, availableFen: 950, reservedFen: 50, spentFen: 0 },
+    });
+    const g = await get(M + '/spend-limit', 'admin1', 'PRO');
+    assert.strictEqual(g.s, 200);
+    assert.strictEqual(g.j.usage.limitYuan, 20);
+    assert.strictEqual(g.j.usage.spentYuan, 1);
+    assert.strictEqual(g.j.usage.reservedYuan, 0.5);
+    assert.strictEqual(g.j.usage.availableYuan, 18.5);
+    assert.strictEqual(g.j.usage.keyCount, 1, '不得暴露 Key 指纹，只回分账数量');
+    assert.ok(g.j.usage.updatedAt);
+    const p = await put(M + '/spend-limit', 'admin1', 'PRO', { enabled: true, totalLimitYuan: 20 });
+    assert.strictEqual(p.s, 200);
+    assert.deepStrictEqual(p.j.usage, g.j.usage, '保存限额后同一份用量一起回带，避免再发一次请求');
+  });
 });
 
 describe('v2.53 全量API清单', { concurrency: 1 }, () => {

@@ -9,6 +9,7 @@ import { authRequired, AuthRequest } from '../middleware/auth';
 import { createRequireAdmin, requireSuperAdmin } from '../middleware/admin';
 import { prisma } from '../lib/prisma';
 import { maskedConfig, saveConfig, ModelConfigData, maskedProvidersConfig, saveProvider, deleteProvider, saveRouting, loadProviders, loadRouting, loadSpendLimit, saveSpendLimit } from '../lib/model-config';
+import { readSpendUsage } from '../lib/spend-limit';
 import {
   ALL_ROLE_IDS, ROLE_LABEL_ZH, routingCoverage, routedCostFenPerEp, RoleId, ProviderEntry, enrichProviderFromCatalog,
 } from '../lib/model-config-policy';
@@ -64,13 +65,14 @@ export function createAdminModelRouter(prisma: any) {
     totalLimitYuan: z.number().finite().min(0).max(1_000_000_000),
   });
   adminModelRouter.get('/spend-limit', authRequired, requireAdmin, requireSuperAdmin, async (_req, res) => {
-    res.json({ spendLimit: await loadSpendLimit(prisma) });
+    // v2.564 配置 + 用量一起回带：只给限额输入框时，额度耗尽前管理员看不到已用/在途/可用。
+    res.json({ spendLimit: await loadSpendLimit(prisma), usage: await readSpendUsage(prisma) });
   });
   adminModelRouter.put('/spend-limit', authRequired, requireAdmin, requireSuperAdmin, async (req: AuthRequest, res) => {
     const parsed = spendLimitSchema.safeParse(req.body);
     if (!parsed.success) return res.status(400).json({ error: 'SPEND_LIMIT_INVALID 总开关或总额度无效' });
     await saveSpendLimit(parsed.data, req.userId || 'admin', prisma);
-    res.json({ ok: true, spendLimit: await loadSpendLimit(prisma) });
+    res.json({ ok: true, spendLimit: await loadSpendLimit(prisma), usage: await readSpendUsage(prisma) });
   });
 
   // 每周 API 全面盘点（也可被定时任务调用）：体检/铁底/异构/代际/价格，留存报告

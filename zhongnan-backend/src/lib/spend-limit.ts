@@ -106,3 +106,31 @@ export function isSpendLimitError(e: unknown, kind?: 'TOTAL' | 'KEY' | 'UNAVAILA
   const msg = e instanceof Error ? e.message : String(e);
   return msg.includes(`MODEL_SPEND_LIMIT_${kind || ''}`);
 }
+
+export interface SpendUsage {
+  limitYuan: number;
+  spentYuan: number;
+  reservedYuan: number;
+  availableYuan: number;
+  keyCount: number;
+  updatedAt: string | null;
+}
+
+/** v2.564 超管后台用量读数：台账才是真正决定放不放行的依据，配置额度只是下次预留时的目标值。
+ *  从未产生真实调用（没建过 total 行）时返回 null，由界面提示「尚无消费记录」，
+ *  不能伪装成「限额 0 / 可用 0」让管理员误以为已经耗尽。
+ *  Key 分账只回数量，不暴露任何指纹。 */
+export async function readSpendUsage(p: any = prisma): Promise<SpendUsage | null> {
+  const rows: any[] = await p.modelSpendBudget.findMany();
+  const total = rows.find((r) => r.id === 'total');
+  if (!total) return null;
+  const yuan = (f: number) => Math.round(Number(f) || 0) / 100;
+  return {
+    limitYuan: yuan(total.limitFen),
+    spentYuan: yuan(total.spentFen),
+    reservedYuan: yuan(total.reservedFen),
+    availableYuan: yuan(total.availableFen),
+    keyCount: rows.filter((r) => String(r.id).startsWith('key_')).length,
+    updatedAt: total.updatedAt ? new Date(total.updatedAt).toISOString() : null,
+  };
+}
