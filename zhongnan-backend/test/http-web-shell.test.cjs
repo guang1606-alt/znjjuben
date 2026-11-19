@@ -93,7 +93,8 @@ describe('前端站点托管 + 项目创建端点', { concurrency: 1 }, () => {
     assert.deepStrictEqual(p.tags, ['逆袭', '都市']);
     assert.ok(!Number.isNaN(new Date(p.createdAt).getTime()), '演示项目应模拟 Prisma 的 createdAt 默认值');
     const list = await (await fetch(base + '/api/generate/projects', { headers: { Authorization: `Bearer ${tok}` } })).json();
-    assert.ok(list.some((x) => x.id === p.id));
+    const items = Array.isArray(list) ? list : (list.items || []); // v2.553 响应改 { items, ... } 结构，裸数组兜底兼容
+    assert.ok(items.some((x) => x.id === p.id));
   });
   it('项目参数非法（空标题）400', async () => {
     const r = await fetch(base + '/api/generate/projects', {
