@@ -117,3 +117,22 @@ test('剧本类型强制制式：前端 SCRIPT_TYPE_FORMAT 与后端 scriptTypeF
     if (fmt) assert.strictEqual(fe[t.id], fmt, `${t.id} 后端强制 ${fmt}，前端漏配`);
   }
 });
+
+test('灵感式赛道：前端轨道顺序与可见等级标签 = 后端 SPARK_TRACKS 的 minLevel', () => {
+  // 前端轨道按钮把 minLevel 写死成 rank + 中文等级词（① 素材改编（基础）…），
+  // 后端若调整 minLevel（如名场面提到专业），前端会继续显示旧等级并放错锁 → 用户选了 403。
+  const block = arrayLiteral(readWeb('app.js'), 'const TRACKS =');
+  const re = /\{\s*id:\s*'([^']+)'\s*,\s*rank:\s*(\d+)\s*,\s*zh:\s*'([^']+)'/g;
+  const fe = [];
+  let m;
+  while ((m = re.exec(block))) fe.push({ id: m[1], rank: Number(m[2]), zh: m[3] });
+  assert.strictEqual(fe.length, M.SPARK_TRACKS.length, '前端赛道数量与后端 SPARK_TRACKS 不一致');
+  const rankOf = { BASIC: 1, ADVANCED: 2, PRO: 3 };
+  const zhOf = { BASIC: '基础', ADVANCED: '高级', PRO: '专业' };
+  M.SPARK_TRACKS.forEach((t, i) => {
+    const f = fe[i];
+    assert.strictEqual(f.id, t.id, `第 ${i + 1} 条赛道 id 漂移（后端 SPARK_TRACKS 为 ${t.id}）`);
+    assert.strictEqual(f.rank, rankOf[t.minLevel], `${t.id} 前端 rank=${f.rank} 与后端 minLevel=${t.minLevel} 不一致`);
+    assert.ok(f.zh.includes(zhOf[t.minLevel]), `${t.id} 前端可见等级标签「${f.zh}」与后端 minLevel=${t.minLevel} 不一致`);
+  });
+});

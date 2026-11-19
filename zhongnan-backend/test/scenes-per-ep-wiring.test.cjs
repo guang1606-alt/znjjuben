@@ -54,3 +54,9 @@ test('每集场数：后端立项落库并可被生成请求沿用', () => {
   assert.match(ts, /\.\.\.\(d\.scenesPerEp \? \{ scenesPerEp: d\.scenesPerEp \} : \{\}\)/, '立项未把 scenesPerEp 落库进 bible');
   assert.match(ts, /parsed\.data\.scenesPerEp \?\? storedScenesPerEp/, '生成路由未沿用立项落库的 scenesPerEp');
 });
+
+test('每集场数：续写已保存项目时还原落库值并随项目锁定', () => {
+  const js = read('web', 'app.js');
+  assert.ok(js.includes("['episodes', 'engine', 'scriptFormatSel', 'scenesPerEp']"), '续写时「每集场数」未随项目锁定（可被改成与已生成集不一致）');
+  assert.match(js, /\$\('scenesPerEp'\)\.value = project\.bible\?\.scenesPerEp/, '续写未从项目 bible 还原每集场数（界面显示自动、实际沿用落库值，名实不符）');
+});

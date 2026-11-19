@@ -3511,12 +3511,13 @@
       note.classList.toggle('hidden', !draftProject);
       note.innerHTML = draftProject
         ? `${lang === 'en' ? 'Continuing saved project' : '继续已保存项目'}：${escapeHtml(draftProject.title)} · ${draftProject.totalEps} ${lang === 'en' ? 'episodes' : '集'}
-          <span class="muted">${lang === 'en' ? 'The project episode count, engine and format are retained.' : '沿用该项目的集数、引擎和制式，可修改下方创作简报。'}</span>
+          <span class="muted">${lang === 'en' ? 'The project episode count, engine, format and scenes per episode are retained.' : '沿用该项目的集数、引擎、制式与每集场数，可修改下方创作简报。'}</span>
           <button type="button" class="btn-ghost" id="leaveDraftBtn">${lang === 'en' ? 'Start a new project' : '另起新项目'}</button>`
         : '';
       if (draftProject) $('leaveDraftBtn').onclick = clearDraftProject;
     }
-    ['episodes', 'engine', 'scriptFormatSel'].forEach((id) => { if ($(id)) $(id).disabled = !!draftProject; });
+    // v2.548 每集场数属项目级排布：续写时与集数/引擎/制式一起锁定，避免同剧前后集场数不一致
+    ['episodes', 'engine', 'scriptFormatSel', 'scenesPerEp'].forEach((id) => { if ($(id)) $(id).disabled = !!draftProject; });
     // v2.336 恢复草稿后按剧本类型纠正制式（历史 aigc_drama + LIVE_ACTION 脏组合自愈）
     if (typeof applyScriptTypeFormat === 'function') applyScriptTypeFormat();
   }
@@ -3531,6 +3532,8 @@
     // v2.329 改编/小说统一归灵感式·素材改编轨道
     selectedMode = 'spark'; selectedTrack = 'material_rewrite';
     selectedScriptType = project.bible?.scriptType || 'live_action_drama';
+    // v2.548 还原立项时落库的每集场数（否则界面显示「自动」、生成却沿用落库值，名实不符）
+    if ($('scenesPerEp')) $('scenesPerEp').value = project.bible?.scenesPerEp ? String(project.bible.scenesPerEp) : '';
     switchView('studio'); renderModes(); renderScriptTypes(); syncTagBench(); syncModeBrief();
     $('modeBrief').value = draft?.brief || '';
     $('episodes').value = project.totalEps || 20;
