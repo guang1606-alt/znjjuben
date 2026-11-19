@@ -186,6 +186,21 @@ export async function refundFlexible(tx: Tx, userId: string, points: number, rea
     reason: `${reason}:REFUND`, refType: 'value_added', refId, idempotencyKey: refundKey, balanceAfter: acc.balance + points,
   });
 }
+
+/**
+ * v2.569 失败路径退款留痕：模型/落库失败后已扣积分必须退回，但退款自身又可能因存储抖动失败。
+ * 此处吞掉异常只影响响应（仍按原始失败返回），但必须打结构化日志——否则用户「扣了分没拿到货」
+ * 在服务端零痕迹，只能靠客户投诉发现。日志带 userId/refId，可直接按 refId 对账补偿。
+ */
+export async function safeRefund(
+  scope: string, userId: string, key: string, refId: string, op: () => Promise<void>,
+): Promise<void> {
+  try {
+    await op();
+  } catch (e) {
+    console.error(`[${scope}] 退款失败，需人工核对`, { userId, key, refId, error: (e as Error).message });
+  }
+}
 export async function grantBonus(tx: Tx, userId: string, points: number, reason: string, idem: string) {
   await tx.lockAccount(userId);
   if (await tx.ledgerExists(idem)) return;

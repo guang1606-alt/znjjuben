@@ -10,7 +10,7 @@ import { asyncRouter } from '../lib/async-router';
 import { z } from 'zod';
 import { authRequired, AuthRequest } from '../middleware/auth';
 import { prisma as defaultPrisma } from '../lib/prisma';
-import { consumeFlexible, refundFlexible, BillingError } from '../lib/billing';
+import { consumeFlexible, refundFlexible, safeRefund, BillingError } from '../lib/billing';
 import { failInternal } from '../lib/http-errors';
 import { withBillingTransaction } from '../lib/prisma-tx';
 import { VALUE_ADDED, ValueAddedKey, MemberLevel, vaPointsForLevel } from '../config/pricing';
@@ -190,7 +190,7 @@ export function createRoomRouter(prisma: PrismaLike | any) {
       for (const h of opened.hints) await addMsg(room.id, { speakerType: 'XN', seat: 'host', speakerName: lang === 'en' ? 'Xiaonan (host)' : '小南(主持)', content: h });
       res.json({ ok: true, roomId: room.id, inviteCode: code, points: paid, staff, opened });
     } catch (e) {
-      if (charged) await refund(userId, 'PITCH_MEETING', refId, idem, staff, paid).catch(() => {});
+      if (charged) await safeRefund('room.pitch', userId, 'PITCH_MEETING', refId, () => refund(userId, 'PITCH_MEETING', refId, idem, staff, paid));
       failRoom(res, e, 'room.pitch');
     }
   });
@@ -237,7 +237,7 @@ export function createRoomRouter(prisma: PrismaLike | any) {
       const msg = await addMsg(got.room.id, { speakerType: 'XN', seat: 'host', speakerName: lang === 'en' ? 'Xiaonan (host)' : '小南(主持)', content: reply, meta: { missing } });
       res.json({ ok: true, reply, messageId: msg.id, points: paid, staff, questions: fa.questions });
     } catch (e) {
-      if (charged) await refund(userId, 'PITCH_MEETING', refId, idem, staff, paid).catch(() => {});
+      if (charged) await safeRefund('room.pitch', userId, 'PITCH_MEETING', refId, () => refund(userId, 'PITCH_MEETING', refId, idem, staff, paid));
       failRoom(res, e, 'room.pitch');
     }
   });
@@ -276,7 +276,7 @@ export function createRoomRouter(prisma: PrismaLike | any) {
       await addMsg(got.room.id, { speakerType: 'XN', seat: 'host', speakerName: lang === 'en' ? 'Xiaonan (host)' : '小南(主持)', content: text, meta: { verdict } });
       res.json({ ok: true, verdict, points: paid, staff });
     } catch (e) {
-      if (charged) await refund(userId, 'PITCH_MEETING', refId, idem, staff, paid).catch(() => {});
+      if (charged) await safeRefund('room.pitch', userId, 'PITCH_MEETING', refId, () => refund(userId, 'PITCH_MEETING', refId, idem, staff, paid));
       failRoom(res, e, 'room.pitch');
     }
   });
@@ -419,7 +419,7 @@ export function createRoomRouter(prisma: PrismaLike | any) {
       await prisma.writersRoom.update({ where: { id: got.room.id }, data: { payload: { ...prevPayload, scriptMode, lang, lastRead: result } } });
       res.json({ ok: true, result, points: paid, staff });
     } catch (e) {
-      if (charged) await refund(userId, 'TABLE_READ', refId, idem, staff, paid).catch(() => {});
+      if (charged) await safeRefund('room.table', userId, 'TABLE_READ', refId, () => refund(userId, 'TABLE_READ', refId, idem, staff, paid));
       failRoom(res, e, 'room.table');
     }
   });

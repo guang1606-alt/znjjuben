@@ -16,7 +16,7 @@ import { asyncRouter } from '../lib/async-router';
 import { z } from 'zod';
 import { authRequired, AuthRequest } from '../middleware/auth';
 import { EngineTier, VALUE_ADDED, ValueAddedKey, FEN_PER_POINT } from '../config/pricing';
-import { consumeValueAdded, refundValueAdded } from '../lib/billing';
+import { consumeValueAdded, refundValueAdded, safeRefund } from '../lib/billing';
 import { withBillingTransaction } from '../lib/prisma-tx';
 import { scanWithStore } from '../lib/safety-store';
 import { prisma as defaultPrisma } from '../lib/prisma';
@@ -141,7 +141,7 @@ export function createInterviewRouter(prisma: PrismaLike) {
         // 拒入败者并退款，前端提示后刷新即拿到最新问题；PG 行锁串行两个条件更新，只有一个 count=1。
         const applied = await prisma.interviewSession.updateMany({ where: { id: sid, turnCount: prev.turnCount }, data });
         if (applied.count === 0) {
-          if (charged) await refund(args.userId, 'INTERVIEW_TURN', refId, idem, args.staff).catch(() => {});
+          if (charged) await safeRefund('interview.turn', args.userId, 'INTERVIEW_TURN', refId, () => refund(args.userId, 'INTERVIEW_TURN', refId, idem, args.staff));
           return res.status(409).json({
             error: 'IDEMPOTENT_REPLAY',
             message: args.lang === 'en'
@@ -162,7 +162,7 @@ export function createInterviewRouter(prisma: PrismaLike) {
         points: args.staff ? 0 : VALUE_ADDED.INTERVIEW_TURN.points, staff: args.staff,
       });
     } catch (e) {
-      if (charged) await refund(args.userId, 'INTERVIEW_TURN', refId, idem, args.staff).catch(() => {});
+      if (charged) await safeRefund('interview.turn', args.userId, 'INTERVIEW_TURN', refId, () => refund(args.userId, 'INTERVIEW_TURN', refId, idem, args.staff));
       res.status(400).json({ error: userMessageOf(e) || (args.staff ? '采访服务暂不可用，请稍后重试' : '采访服务暂不可用，积分已退回'), ...modelErrorMeta(e) });
     }
   }

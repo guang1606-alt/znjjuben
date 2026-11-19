@@ -572,3 +572,34 @@ describe('v2.568 编剧室异常不外泄', { concurrency: 1 }, () => {
     } finally { mem.writersRoom = orig; }
   });
 });
+
+// v2.569 退款自身失败不得静默：用户已扣分却退不回去，服务端必须留下可按 refId 对账的日志
+describe('v2.569 编剧室退款失败留痕', { concurrency: 1 }, () => {
+  mem._seedUser({ id: 'room-err2', balance: 200 });
+  it('退款事务失败：响应仍按原始失败返回 500，并写退款失败日志', async () => {
+    const origRoom = mem.writersRoom;
+    mem.writersRoom = { ...origRoom, create: async () => { throw new Error('boom'); } };
+    const origTx = mem.$transaction;
+    let calls = 0;
+    mem.$transaction = async (...args) => {
+      calls += 1;
+      if (calls >= 2) throw new Error('refund tx failed'); // 第 1 次=扣费，第 2 次=退款
+      return origTx.apply(mem, args);
+    };
+    const logs = [];
+    const origErr = console.error;
+    console.error = (...a) => { logs.push(a); };
+    try {
+      const r = await post('/api/room/pitch/open', { idea: '被辞退的女厨师夺回餐厅，前合伙人暗中打压' }, 'room-err2');
+      assert.strictEqual(r.status, 500);
+      const j = await r.json();
+      assert.strictEqual(j.error, 'INTERNAL_ERROR');
+      assert.ok(logs.some((l) => String(l[0]).includes('退款失败')), '退款失败必须留痕，不能静默吞掉');
+      assert.ok(logs.some((l) => l[1] && l[1].userId === 'room-err2'), '日志须带可对账的 userId');
+    } finally {
+      console.error = origErr;
+      mem.$transaction = origTx;
+      mem.writersRoom = origRoom;
+    }
+  });
+});
