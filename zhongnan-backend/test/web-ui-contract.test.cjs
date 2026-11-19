@@ -69,3 +69,26 @@ describe('v2.524 递招面板跟随界面语言', () => {
     assert.ok(/craftRecCards\.find\(\(x\) => x\.id === c\.id\)/.test(brief), '出本创意里的卡片名须按 id 解析');
   });
 });
+
+// v2.525 英文钩子名以分类库为唯一权威：此前 renderCraftHooks / craftBriefLine 在英文界面一律用
+// CRAFT_HOOK_EN 短名覆盖分类库全名，同一钩子在标签里是 Episode-end hook、在下拉里却是
+// Episode hook (Zeigarnik cliff)，两套英文名；分类卡总数也写死 43，库增删后文案会失真。
+describe('v2.525 英文钩子名单一权威与卡片数动态化', () => {
+  it('有分类库时直接用库内当前语言名，旧短名映射只作未加载兜底', () => {
+    const hookSeg = app.slice(app.indexOf('function renderCraftHooks('), app.indexOf('function renderCraftHooks(') + 1000);
+    assert.ok(/const nm = hk \? hk\.name : \(outLocale\(\) === 'en' \? craftHookEn\(h\.id, h\.name\) : h\.name\);/.test(hookSeg), '有分类库时须直接用库内名称，旧短名只作兜底');
+    assert.ok(!/craftHookEn\(h\.id, nm\)/.test(hookSeg), '不得用旧短名覆盖分类库全名');
+  });
+
+  it('出本创意的钩子名同样以分类库为准', () => {
+    const brief = app.slice(app.indexOf('function craftBriefLine('), app.indexOf('function craftBriefLine(') + 1000);
+    assert.ok(/return f \? f\.name : \(outLocale\(\) === 'en' \? craftHookEn\(h\.id, h\.name\) : h\.name\);/.test(brief), '出本创意须用库内名称，旧短名只作兜底');
+    assert.ok(!/craftHookEn\(h\.id, nm\)/.test(brief), '出本创意不得用旧短名覆盖库内全名');
+  });
+
+  it('浏览全部方法卡的张数取分类库总量，不写死 43', () => {
+    const seg = app.slice(app.indexOf('function renderCraftCards('), app.indexOf('function renderCraftCards(') + 2400);
+    assert.ok(/craftTaxonomy\.totals\.cards/.test(seg), '卡片总数须取分类库 totals.cards');
+    assert.ok(!/Browse all 43|浏览全部 43/.test(seg), '不得写死 43，避免分类库增删后文案失真');
+  });
+});

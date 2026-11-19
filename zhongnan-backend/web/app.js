@@ -1806,9 +1806,11 @@
     box.innerHTML = '';
     craftSelHooks.forEach((h) => {
       const hk = findHook(h.id);
-      const nm = hk ? hk.name : h.name;
+      // v2.525 英文名以分类库为唯一权威：库已加载就用库内全名，仅库未加载时退回旧短名映射，
+      // 避免同一钩子在标签（Episode-end hook）与下拉（Episode hook (Zeigarnik cliff)）出现两套英文名
+      const nm = hk ? hk.name : (outLocale() === 'en' ? craftHookEn(h.id, h.name) : h.name);
       const b = document.createElement('button'); b.type = 'button'; b.className = 'tag-pick picked';
-      b.textContent = (outLocale() === 'en' ? craftHookEn(h.id, nm) : nm) + ' ×';
+      b.textContent = nm + ' ×';
       b.title = (hk && (hk.definition + '\n' + hk.how)) || nm;
       b.onclick = () => removeCraftHook(h.id); box.appendChild(b);
     });
@@ -1835,7 +1837,9 @@
     let html = '';
     if (craftRecCards.length) html += `<div class="craft-group-label">${lang === 'en' ? 'Best matches for your idea' : '最贴你创意的方法'}</div><div class="craft-grid">` + craftRecCards.map((c) => cardHtml(c, true)).join('') + '</div>';
     if (craftTaxonomy) {
-      html += `<details class="craft-all"><summary>${lang === 'en' ? 'Browse all 43 craft cards' : '浏览全部 43 张方法卡'}</summary>` +
+      // v2.525 张数取分类库总量：写死 43 会在库增删后失真
+      const totalCards = (craftTaxonomy.totals && craftTaxonomy.totals.cards) || craftTaxonomy.cardGroups.reduce((n, g) => n + g.cards.length, 0);
+      html += `<details class="craft-all"><summary>${lang === 'en' ? `Browse all ${totalCards} craft cards` : `浏览全部 ${totalCards} 张方法卡`}</summary>` +
         craftTaxonomy.cardGroups.map((g) => `<div class="craft-group-label">${escapeHtml(g.name)}（${g.count}）</div><div class="craft-grid">` +
           g.cards.filter((c) => !recIds.has(c.id)).map((c) => cardHtml(c, false)).join('') + '</div>').join('') + '</details>';
     }
@@ -1857,10 +1861,10 @@
   }
   function craftBriefLine() {
     if (!craftSelHooks.length && !craftSelCards.length) return '';
+    // v2.525 与钩子标签同源：库内有就用库内当前语言名，旧短名仅在库未加载时兜底
     const hk = craftSelHooks.map((h) => {
       const f = findHook(h.id);
-      const nm = f ? f.name : h.name;
-      return outLocale() === 'en' ? craftHookEn(h.id, nm) : nm;
+      return f ? f.name : (outLocale() === 'en' ? craftHookEn(h.id, h.name) : h.name);
     });
     // v2.524 卡片标题按 id 从当前语言的数据里取，切语言后出本创意不残留旧语言
     const cd = craftSelCards.map((c) => {
