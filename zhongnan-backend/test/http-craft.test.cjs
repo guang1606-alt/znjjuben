@@ -25,6 +25,47 @@ describe('叙事工艺·小南递招 HTTP', () => {
     assert.ok(j.cardGroups[0].cards.every((c) => c.id && c.title && c.formula && !c.steps));
   });
 
+  it('taxonomy 传 lang=en 整套英文化：钩子层位/定义/例句与分组名、卡片标题公式都不再是中文（v2.524）', async () => {
+    const zh = await (await fetch(base + M + '/taxonomy')).json();
+    const en = await (await fetch(base + M + '/taxonomy?lang=en')).json();
+    const cjk = /[\u4e00-\u9fa5]/;
+    assert.ok(cjk.test(zh.hooks[0].name) && cjk.test(zh.hooks[0].layer), '中文请求仍应返回中文钩子');
+    assert.ok(cjk.test(zh.cardGroups[0].name) && cjk.test(zh.cardGroups[0].cards[0].title), '中文请求仍应返回中文卡片');
+    for (const h of en.hooks) {
+      for (const k of ['name', 'layer', 'definition', 'example', 'how']) {
+        assert.ok(!cjk.test(String(h[k])), `英文 taxonomy 钩子 ${h.id}.${k} 仍含中文：${h[k]}`);
+      }
+    }
+    for (const g of en.cardGroups) {
+      assert.ok(!cjk.test(g.name), `英文分组名仍含中文：${g.name}`);
+      for (const c of g.cards) {
+        for (const k of ['title', 'formula']) assert.ok(!cjk.test(String(c[k])), `英文卡片 ${c.id}.${k} 仍含中文：${c[k]}`);
+        for (const f of c.fit) assert.ok(!cjk.test(f), `英文卡片 ${c.id} 的匹配词仍含中文：${f}`);
+      }
+    }
+    assert.strictEqual(en.totals.cards, 43, '英文化不能丢卡片');
+  });
+
+  it('recommend 传 lang=en 卡片步骤整套英文化，且步骤条数与中文一致（v2.524）', async () => {
+    const body = { text: '重生复仇逆袭，悬疑权谋', tags: ['复仇', '悬疑'], lang: 'en' };
+    const en = await (await fetch(base + M + '/recommend', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })).json();
+    const zh = await (await fetch(base + M + '/recommend', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...body, lang: 'zh' }) })).json();
+    const cjk = /[\u4e00-\u9fa5]/;
+    const zhById = new Map(zh.cards.map((c) => [c.id, c]));
+    assert.ok(en.cards.length >= 1);
+    for (const c of en.cards) {
+      for (const k of ['title', 'formula']) assert.ok(!cjk.test(String(c[k])), `英文推荐卡 ${c.id}.${k} 仍含中文：${c[k]}`);
+      assert.ok(Array.isArray(c.steps) && c.steps.length >= 1, `推荐卡 ${c.id} 缺步骤`);
+      for (const s of c.steps) assert.ok(!cjk.test(s), `英文推荐卡 ${c.id} 的步骤仍含中文：${s}`);
+      const z = zhById.get(c.id);
+      if (z) assert.strictEqual(c.steps.length, z.steps.length, `卡 ${c.id} 英文步骤条数与中文不一致`);
+    }
+    for (const h of en.hooks) {
+      assert.ok(!cjk.test(String(h.name)), `英文推荐钩 ${h.id} 名称仍含中文`);
+      assert.ok(!cjk.test(String(h.layer)), `英文推荐钩 ${h.id} 层位仍含中文`);
+    }
+  });
+
   it('空输入 400；正常创意返回匹配方法卡+默认钩子（保底集/场/连环）', async () => {
     const r400 = await fetch(base + M + '/recommend', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' });
     assert.strictEqual(r400.status, 400);

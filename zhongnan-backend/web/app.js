@@ -249,7 +249,13 @@
     // v2.266 快照防双发：syncTagBench→initTagBench 首次取数并置 tagDimInited=true，活读标志会当轮再取一次；改用调用前快照
     if (typeof syncTagBench === 'function') { const _tagDimWasInited = tagDimInited; syncTagBench(); if (_tagDimWasInited) Api.request('/api/tags/dimensions').then((r) => r.json()).then(fillTagDimSel).catch(() => {}); }
     // 语言切换时同步小南递招面板（钩子/方法卡显示语言）
-    if (typeof renderCraftHooks === 'function' && craftTaxonomy) { renderCraftHooks(); renderCraftCards(); renderCraftPicked(); }
+    // v2.524 缓存带语言标记：切语言后旧缓存作废需重拉；推荐卡也按新语言重新匹配，避免中英混排
+    if (typeof renderCraftHooks === 'function' && (craftTaxonomy || craftRecCards.length)) {
+      const _langChanged = !!craftTaxonomyLang && craftTaxonomyLang !== lang;
+      if (_langChanged) { craftTaxonomy = null; craftRecCards = []; }
+      const _after = () => { renderCraftHooks(); renderCraftCards(); renderCraftPicked(); };
+      if (_langChanged) loadCraftTaxonomy().then(_after).catch(_after); else _after();
+    }
     // v2.267 [P2-2a] 钩子编排摘要按钮（🎣 钩子编排：[系统智能]…）按界面语言重渲染；
     // refreshHookSummary 内部对元素/数据全空值守卫，钩子卡未初始化时调用安全
     if (typeof refreshHookSummary === 'function') refreshHookSummary();
@@ -1759,13 +1765,19 @@
   // ═══ MODULE: xiaonan (112行, 4fn) ═══ 小南递招：方法卡 + 钩子（免费只读，选中注入出本创意）
   /* ---------- 小南递招：方法卡 + 钩子（免费只读，选中注入出本创意） ---------- */
   let craftTaxonomy = null;
+  let craftTaxonomyLang = '';
   let craftSelHooks = [];   // [{id,name}]
   let craftSelCards = [];   // [{id,title}]
   let craftRecCards = [];   // 推荐方法卡（含 formula/steps）
   async function loadCraftTaxonomy() {
-    if (craftTaxonomy) return craftTaxonomy;
-    craftTaxonomy = await (await Api.request('/api/craft/taxonomy')).json();
+    // v2.524 分类浏览按界面语言取：缓存需带语言标记，切语言后重新拉，否则英文界面一直显示中文钩子
+    if (craftTaxonomy && craftTaxonomyLang === lang) return craftTaxonomy;
+    craftTaxonomy = null;
     const sel = $('craftHookAdd');
+    if (sel) { while (sel.options.length > 1) sel.remove(1); }
+    const l = lang === 'en' ? '?lang=en' : '';
+    craftTaxonomy = await (await Api.request('/api/craft/taxonomy' + l)).json();
+    craftTaxonomyLang = lang;
     if (sel) {
       craftTaxonomy.hooks.forEach((h) => {
         const o = document.createElement('option'); o.value = h.id; o.textContent = h.name; sel.appendChild(o);
@@ -1793,9 +1805,11 @@
     if (!craftSelHooks.length) { box.innerHTML = `<span class="tag-empty">${lang === 'en' ? 'None yet — hit “Suggest” above.' : '点上方「按当前创意递招」获取系统默认组合'}</span>`; return; }
     box.innerHTML = '';
     craftSelHooks.forEach((h) => {
+      const hk = findHook(h.id);
+      const nm = hk ? hk.name : h.name;
       const b = document.createElement('button'); b.type = 'button'; b.className = 'tag-pick picked';
-      b.textContent = (outLocale() === 'en' ? craftHookEn(h.id, h.name) : h.name) + ' ×';
-      b.title = (findHook(h.id) && (findHook(h.id).definition + '\n' + findHook(h.id).how)) || h.name;
+      b.textContent = (outLocale() === 'en' ? craftHookEn(h.id, nm) : nm) + ' ×';
+      b.title = (hk && (hk.definition + '\n' + hk.how)) || nm;
       b.onclick = () => removeCraftHook(h.id); box.appendChild(b);
     });
   }
@@ -1843,8 +1857,16 @@
   }
   function craftBriefLine() {
     if (!craftSelHooks.length && !craftSelCards.length) return '';
-    const hk = craftSelHooks.map((h) => (outLocale() === 'en' ? craftHookEn(h.id, h.name) : h.name));
-    const cd = craftSelCards.map((c) => c.title);
+    const hk = craftSelHooks.map((h) => {
+      const f = findHook(h.id);
+      const nm = f ? f.name : h.name;
+      return outLocale() === 'en' ? craftHookEn(h.id, nm) : nm;
+    });
+    // v2.524 卡片标题按 id 从当前语言的数据里取，切语言后出本创意不残留旧语言
+    const cd = craftSelCards.map((c) => {
+      const hit = craftRecCards.find((x) => x.id === c.id) || (craftTaxonomy && craftTaxonomy.cardGroups.flatMap((g) => g.cards).find((x) => x.id === c.id));
+      return hit ? hit.title : c.title;
+    });
     if (lang === 'en') return `Craft: hooks [${hk.join(', ')}]; methods [${cd.join('; ')}]`;
     return `创作手法：钩子[${hk.join('、')}]；方法[${cd.join('；')}]`;
   }

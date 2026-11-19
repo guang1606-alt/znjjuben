@@ -43,3 +43,29 @@ describe('v2.472 前端 UI 契约', () => {
     assert.ok(/data-scroll/.test(app), '缺少 data-scroll 挂载逻辑');
   });
 });
+
+// v2.524 分类浏览按界面语言取数据：不传 lang 时英文界面会一直显示中文钩子与方法卡，
+// 且缓存不带语言标记时切语言后不会重拉——这里守住三处接线。
+describe('v2.524 递招面板跟随界面语言', () => {
+  it('taxonomy 请求带 lang，缓存带语言标记', () => {
+    const fn = app.slice(app.indexOf('async function loadCraftTaxonomy('), app.indexOf('async function loadCraftTaxonomy(') + 900);
+    assert.ok(/const l = lang === 'en' \? '\?lang=en' : '';/.test(fn), 'taxonomy 请求须按界面语言带 ?lang=en');
+    assert.ok(/craftTaxonomyLang === lang/.test(fn), '缓存须带语言标记，否则切语言后不重拉');
+    assert.ok(/craftTaxonomyLang = lang;/.test(fn), '拉取成功后须记录当前语言');
+  });
+
+  it('切语言时旧语言分类缓存与推荐卡都作废重取', () => {
+    const seg = app.slice(app.indexOf('语言切换时同步小南递招面板'), app.indexOf('语言切换时同步小南递招面板') + 700);
+    assert.ok(/craftTaxonomyLang !== lang/.test(seg), '切语言须检测语言变化');
+    assert.ok(/craftRecCards = \[\]/.test(seg), '旧语言推荐卡须清空，避免中英混排');
+    assert.ok(/loadCraftTaxonomy\(\)\.then\(_after\)/.test(seg), '语言变化后须重拉分类再渲染');
+  });
+
+  it('已选钩子/卡片按 id 取当前语言名称，出本创意不残留旧语言', () => {
+    const hookSeg = app.slice(app.indexOf('function renderCraftHooks('), app.indexOf('function renderCraftHooks(') + 900);
+    assert.ok(/const hk = findHook\(h\.id\);/.test(hookSeg), '钩子标签须按 id 解析当前语言名称');
+    const brief = app.slice(app.indexOf('function craftBriefLine('), app.indexOf('function craftBriefLine(') + 900);
+    assert.ok(/findHook\(h\.id\)/.test(brief), '出本创意里的钩子名须按 id 解析');
+    assert.ok(/craftRecCards\.find\(\(x\) => x\.id === c\.id\)/.test(brief), '出本创意里的卡片名须按 id 解析');
+  });
+});

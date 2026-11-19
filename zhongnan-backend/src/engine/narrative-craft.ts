@@ -60,18 +60,18 @@ const matchByFit = <T extends { fit: string[] }>(lib: T[], text: string, enFit?:
   return scored.map((s) => s.x);
 };
 
-/** v1.94 钩子英文层（id 键控）：英文名 + 用法 + 英文匹配词 */
-export const HOOK_EN: Record<string, { name: string; how: string; fit: string[] }> = {
-  episode_hook: { name: 'Episode hook (Zeigarnik cliff)', how: 'Say a thing halfway; end on a question/exclamation, never let the lead rest easy.', fit: ['all'] },
-  scene_hook: { name: 'Scene hook (in-scene in 3s)', how: 'Cut weather/waking/commute openings; press trouble onto the character at once.', fit: ['all'] },
-  action_hook: { name: 'Action hook (abnormal action)', how: 'Open with one concrete, abnormal, ongoing action before any adjective or backstory.', fit: ['underdog', 'suspense', 'urban', 'power fantasy'] },
-  atmosphere_hook: { name: 'Atmosphere hook (bomb under the table)', how: 'Give the reader god-view of the approaching danger while the character lives on; delay with detail.', fit: ['suspense', 'thriller', 'intrigue', 'crime'] },
-  dialogue_hook: { name: 'Dialogue hook (barbed line)', how: 'State a conclusion first, then throw a barb instead of explaining why.', fit: ['romance', 'suspense', 'urban', 'female'] },
-  infogap_hook: { name: 'Information-gap bomb', how: 'One hole card the lead lacks, near-miss exposures, truth revealed at the worst moment.', fit: ['suspense', 'spy', 'intrigue', 'undercover', 'revenge'] },
-  countdown_hook: { name: 'Countdown hook (concrete deadline)', how: 'Make the deadline visible, repeatedly reminded, and bound to the lead’s choice.', fit: ['disaster', 'suspense', 'survival', 'workplace', 'power fantasy'] },
-  anticommon_hook: { name: 'Anti-common-sense hook', how: 'Put the most uncanny verdict in the first paragraph without explaining.', fit: ['sci-fi', 'suspense', 'fantasy', 'brain hole'] },
-  endure_sell_hook: { name: 'Endure-with-dignity hook', how: 'Make the public deprivation real, delay the rebound, give endurance a clear due date.', fit: ['revenge', 'underdog', 'son-in-law', 'war god', 'strong female'] },
-  chain_hook: { name: 'Chain hook (line-1 lightning, line-2 thunder)', how: 'Visual→auditory, macro→micro, or conclusion→barb; no gap to swipe away within two lines.', fit: ['all'] },
+/** v1.94 钩子英文层（id 键控）：英文名 + 用法 + 英文匹配词；v2.524 补齐分类浏览所需的层位/定义/例句 */
+export const HOOK_EN: Record<string, { name: string; layer: string; definition: string; example: string; how: string; fit: string[] }> = {
+  episode_hook: { name: 'Episode hook (Zeigarnik cliff)', layer: 'Episode end', definition: 'Do not close on the peak with a full stop; stop at the breath before it or the instant a new turn shows, leaving an itch of incompleteness.', example: 'He opens the chest — no sword inside, only a mirror, and in it his master, dead ten years, is grinning at him. End of episode.', how: 'Say a thing halfway; end on a question/exclamation, never let the lead rest easy.', fit: ['all'] },
+  scene_hook: { name: 'Scene hook (in-scene in 3s)', layer: 'Scene open', definition: 'No establishing weather or errands: within three seconds press conflict, anomaly or an unresolved action onto the scene.', example: 'Not "he wakes to harsh sunlight" but "he wakes with a blade at his throat."', how: 'Cut weather/waking/commute openings; press trouble onto the character at once.', fit: ['all'] },
+  action_hook: { name: 'Action hook (abnormal action)', layer: 'Opening / transition', definition: 'Hook with one concrete, abnormal action already in progress, not adjectives or backstory.', example: 'Born a nobody, he poisons his deskmate every single day.', how: 'Open with one concrete, abnormal, ongoing action before any adjective or backstory.', fit: ['underdog', 'suspense', 'urban', 'power fantasy'] },
+  atmosphere_hook: { name: 'Atmosphere hook (bomb under the table)', layer: 'Inside the scene', definition: 'Hitchcock’s bomb: let the reader know the danger is closing in while the character carries on as usual.', example: 'The reader knows the wine is poisoned; the lead raises the glass and toasts the villain with a smile.', how: 'Give the reader god-view of the approaching danger while the character lives on; delay with detail.', fit: ['suspense', 'thriller', 'intrigue', 'crime'] },
+  dialogue_hook: { name: 'Dialogue hook (barbed line)', layer: 'Dialogue', definition: 'A line that answers sideways, hides a blade, or contradicts itself, planting a question mark.', example: '"I’ve decided to die — but first I need to know why the person who brought me an umbrella last night wears the same perfume as my late wife."', how: 'State a conclusion first, then throw a barb instead of explaining why.', fit: ['romance', 'suspense', 'urban', 'female'] },
+  infogap_hook: { name: 'Information-gap bomb', layer: 'Cross-episode structure', definition: 'Let the reader hold one card the lead lacks; they chase not "what happens" but "when will he find out".', example: 'The reader knows the butler is a mole; the lead keeps handing him his back.', how: 'One hole card the lead lacks, near-miss exposures, truth revealed at the worst moment.', fit: ['suspense', 'spy', 'intrigue', 'undercover', 'revenge'] },
+  countdown_hook: { name: 'Countdown hook (concrete deadline)', layer: 'Cross-episode structure', definition: 'Humans cannot resist a countdown; make the deadline concrete and visible (not a clock face).', example: 'Three hours until the world ends, and the only man who knows is being hunted across the school.', how: 'Make the deadline visible, repeatedly reminded, and bound to the lead’s choice.', fit: ['disaster', 'suspense', 'survival', 'workplace', 'power fantasy'] },
+  anticommon_hook: { name: 'Anti-common-sense hook', layer: 'First line', definition: 'The first sentence overturns common sense: "what you think is X is actually Y", cracking the foundation of belief.', example: 'Physics no longer exists.', how: 'Put the most uncanny verdict in the first paragraph without explaining.', fit: ['sci-fi', 'suspense', 'fantasy', 'brain hole'] },
+  endure_sell_hook: { name: 'Endure-with-dignity hook', layer: 'Opening', definition: 'Humiliated without tears or noise: swallow it, mark a revenge countdown in silence — classier than exploding on the spot.', example: 'He swallows every insult and says only to himself: twenty-seven days, and you will kneel.', how: 'Make the public deprivation real, delay the rebound, give endurance a clear due date.', fit: ['revenge', 'underdog', 'son-in-law', 'war god', 'strong female'] },
+  chain_hook: { name: 'Chain hook (line-1 lightning, line-2 thunder)', layer: 'First two lines', definition: 'After the first line grabs them, the second must lock again at once — sensory nail, barbed question or viewpoint blast; never slide into setup.', example: 'Blood seeps from the ceiling — into his coffee cup, blooming a dark red ring.', how: 'Visual→auditory, macro→micro, or conclusion→barb; no gap to swipe away within two lines.', fit: ['all'] },
 };
 /** 系统默认钩子组合：任何题材都保底给集钩/场钩/连环钩，再按题材补专属钩；用户也可自行增删（前端做选项）。v1.94 支持英文匹配 */
 export function recommendHooks(input: { text?: string; tags?: string[] }, lang: 'zh' | 'en' = 'zh'): HookType[] {
@@ -216,7 +216,241 @@ export const CARD_EN: Record<string, { title: string; formula: string; fit: stri
   villain_break: { title: 'Smart villain & break-the-game chain', formula: 'The villain rules by making rules; the lead breaks information, then logic, then belief.', fit: ['intrigue', 'mind game', 'business war', 'suspense', 'villain'] },
   banal_villain: { title: 'Banal evil (dinner-table villain)', formula: 'The most relatable Chinese villain is in the living room: control delivered through the most domestic “for your own good”.', fit: ['family', 'realistic', 'period', 'in-law', 'chinese relationship', 'villain'] },
 };
-/** 按题材/梗概匹配最相关的方法论卡片（选题会与大纲阶段用）。v1.94 支持英文匹配 */
+
+/** v2.524 方法论卡步骤英文层（id 键控，与中文 steps 逐条对应）：英文界面递招不再混排中文 */
+export const CARD_STEPS_EN: Record<string, string[]> = {
+  want_need: [
+    'Want is the external goal that drives plot (revenge / being number one / money); need is the soul’s wound (being loved / letting go / making peace with ordinariness)',
+    'Use the want to mask the need all the way; never preach the need in the early acts',
+    'At the peak, make him give up the want for the need (cripple himself to save his love); the arc maxes out the instant he shatters it with his own hands',
+  ],
+  shameful_secret: [
+    'The secret must be the opposite of the public image (a cold sword god afraid of the dark; an infallible strategist who cannot read)',
+    'No voluntary confession: stage him being exposed, or nearly exposed, in front of a crowd by an enemy',
+    'Let the secret actually drive plot (afraid of the dark yet walking into a black cave to save someone for the first time)',
+  ],
+  human_crease: [
+    'On hearing a cry for help his first instinct is to run; two steps later he stops, swears, turns and charges in',
+    'Give him a small flaw he cannot shake as an identifier (petty greed / fear of death / stubborn mouth)',
+    'Let him live on with the problem (forgives but still has nightmares); no all-clear epiphany',
+  ],
+  old_wound: [
+    'The wound is psychological (abandoned, so terrified of being left); do not repeat it — let it surface at key decisions',
+    'Let the wound grow into a capability (bullied all his life, so he endures until every rival dies of exhaustion)',
+    'At the summit / investiture, let the wound twitch through one physical detail (the hand shaking as he toasts)',
+  ],
+  inner_contrast: [
+    'Outer: domineering / sharp-tongued / cold; inner: insecure / gentle / afraid — both are true at once',
+    'At a life-and-death stake let the inner beat the outer (the miser throws all his money away to save a life)',
+    'Do not end by curing the flaw into perfection — living on with the contradiction is what feels real',
+  ],
+  mirror_foil: [
+    'One trait is both armor and soft spot (loyalty lets him die for a brother and dooms him to loneliness)',
+    'Leave the verdict to the reader: corner him in a dilemma, let him choose one road and regret it for life',
+    'Make the villain “the man the hero becomes if he takes one wrong step” — mirror each other or neither stands',
+  ],
+  coward_first: [
+    'When bullied his first reflex is to run or hide (“great, my face is done for”); only then does he grit his teeth and hit back',
+    'Give him one small, concrete, even tacky ordinary-person obsession (save up to buy his sister a wheelchair, not save the world)',
+    'Add an inner barrage at each decision (“am I sick? she doesn’t even like me”)',
+  ],
+  arc_four: [
+    'Anchor: open with one firm initial belief (power is everything)',
+    'Storm: attack that belief with serial loss / betrayal / truth, forcing doubt and struggle',
+    'Choice-rebirth: pick between two mutually exclusive values and pay the highest price — become someone new or fall',
+  ],
+  fear_greed_kill: [
+    'Fear: one concrete terror (returning to poverty / being seen through for his origins), never abstract “fear of failure”',
+    'Greed: one desire that pushes him over the line (the craving to be looked up to)',
+    'Kill: let fear and greed collide in one event; the road he chooses with his own hands destroys or completes him — character is fate',
+  ],
+  self_deception: [
+    'Before every key decision, write the line he tells himself to justify it (“I’m doing this for the family”)',
+    'Let the reader see the real motive under the excuse through detail (what he truly cannot bear is no longer being the center)',
+    'At the climax strip the excuse away; the instant self-deception collapses is the arc or the ruin',
+  ],
+  danger_pull: [
+    'Reward and punishment on an irregular interval; never pay out every effort immediately',
+    'Establish danger or coldness first, then leak a flicker of softness or protection at the least expected moment',
+    'The scarcer the tenderness, the more it is worth; steady output kills attraction — always keep “he might walk away” uncertain',
+  ],
+  steal_scene: [
+    'Before each named side character enters, give them a small goal unrelated to the main plot (pick up the kid / hide their own scheme)',
+    'Let them react by their own logic, not the lead’s needs — interrupt, undercut, derail when it fits',
+    'Give them one unexpected move for their own goal that incidentally changes the main line; the world runs when the lead is off-screen',
+  ],
+  causal_chain: [
+    'Replace every “and then” with “therefore”: pick up the sword → seal activates → trail exposed → enemies arrive → forced into battle',
+    'Chekhov’s gun: the gun in act one must fire in act three; if the plot survives deleting an event, it was filler — cut it',
+    'Nail chapters with cause and effect: the fruit at the end of one chapter is the cause of the next',
+  ],
+  disguised_foreshadow: [
+    'Let the reader smell gunpowder from page one (put the climax first); disguise clues as coincidence or idle detail',
+    'Scatter setups across the first half; the reversal is the last puzzle piece, not a deus ex machina',
+    'Give a false reversal so the reader thinks they have it, then flip the table at their proudest moment',
+  ],
+  triple_reversal: [
+    'Identity reversal makes everyone re-choose sides (a love triangle collapses when the “perfect nice guy” is exposed)',
+    'Goal reversal reveals the sacred goal as the original sin at the peak of achieving it (saving the world = formatting it)',
+    'Rule reversal exposes the underlying rule as fake (the world is an experiment / a program); the three can chain upward',
+  ],
+  unreliable_narrator: [
+    'Define the narrator’s cognitive flaw (missing information / twisted values / emotional blindness)',
+    'Facts stay consistent but conclusions are wrong (the madman’s diary: the doctor’s visit is real, “fattening me up to eat” is madness that hits the truth)',
+    'Bury a few cold slivers of real fact as cracks, and let the reader assemble the truth alone',
+  ],
+  three_line: [
+    'Bait (death line): the goal carries a public countdown where failing is worse than dying — not an empty cry for revenge',
+    'Catalyst (supply line): each sub-line does exactly one job — obtain the boss-killer / redefine the rules / recruit an ally who can stab the rules',
+    'Formula (ghost line): show, never explain, the world’s anomalies (gold flashes in the pupils when emotions spike); the three lines synthesize a larger truth at the end',
+  ],
+  leave_blank: [
+    'Don’t write “he regretted it”; write him typing “I’m sorry”, deleting it, locking the phone face down',
+    'Don’t write a whole day of searching; cut to dusk, him appearing with a crumpled note in hand',
+    'Stop at the fork without saying which road; cut straight to three years later',
+  ],
+  cost_dilemma: [
+    'Price everything he gains (after the divine sword acknowledges him, all his old martial arts are void); no free acquisitions',
+    'The dilemma is good-vs-good or lesser-evil, never right-vs-wrong; either choice bleeds',
+    'The choice is cheap; the aftershock is what costs (years unable to enter a friend’s door); end with the same trap a second time',
+  ],
+  debt_thorn: [
+    'Let him be one step / one sentence / one second short; regret cuts deeper than fulfillment',
+    'Leave one unfinished line at the climax (“after this battle I’ll…” — and he never returns)',
+    'Close on a small object (his sister’s ragged doll, placed on the windowsill)',
+  ],
+  emotion_spring: [
+    'Press the lead to the bottom first (thrown out, publicly stripped); the deeper the suppression, the harder the rebound',
+    'Just as the reader nears impatience, give one beyond-expectation release (junk gear casually blows away a pro)',
+    'No celebration after winning — one understated line leaves blank (“just starting over”, lighting a cigarette); irregular rewards are what addict',
+  ],
+  energy_debt: [
+    'Hook the debt: end every scene with an unsettled emotional bill in the reader’s hand (an unanswered question / an unvented anger)',
+    'Manage the cards: never spend all the energy at once; roll “owe a little — pay a little — owe more”, total debt only rising to the climax',
+    'Mind the breathing: after every high-energy run insert a low-energy digestion scene (a meal / silence / routine); annihilation must be complete — one climax clears every debt at once',
+  ],
+  client_escalate: [
+    'The instant the lead hits a small goal, throw a higher or opposite demand (gets the money → it’s fake / the person to save is gone)',
+    'Each escalation makes prior effort “necessary but insufficient”; never repeat the same difficulty in place',
+    'Escalate on the character’s soft spot (overturn what he cares most about) and make “no way back” visible — logical cruelty, not cruelty for its own sake',
+  ],
+  detail_con: [
+    'At a key setting, give a detail precise to numbers/brands/motions (a curling medicine label, the third button popping off); the more uselessly specific, the more believable',
+    'One real detail anchor can carry a fiction (a real old-street route makes the invented shop stand)',
+    'Detail must serve story or emotion, never encyclopedic stuffing; in suspense, disguise key clues as such “idle detail” — the payoff hits hardest',
+  ],
+  conflict_autopsy: [
+    'Stance layer: put both sides’ legitimate demands on the table (not good vs evil, but two rights colliding)',
+    'Evidence layer: nail the conflict with concrete events / old debts / interests so one explanation cannot dissolve it',
+    'Verdict layer: force a costly choice on the spot and make him bear it; every conflict must change the relationship or the balance — otherwise cut it',
+  ],
+  suspense_feed: [
+    'Feed: throw one inexplicable anomaly early without an answer',
+    'Raise: every so often add a clue pointing to a different conclusion, so the reader reasons and keeps overturning themselves',
+    'Flip: when the reader thinks the picture is complete, flip the table — the truth reverses every clue yet all of them still fit (fair-play mystery, no deus ex machina)',
+  ],
+  blasphemy_ideate: [
+    'Cut: take a worn trope precisely (broken engagement / rebirth revenge / CEO chases wife) without avoiding it',
+    'Sew: graft on a heterogeneous element (broken engagement + accountant audit thinking / CEO + social anxiety); displacement creates novelty',
+    'Reverse: invert the trope’s key step (the one who should be humiliated helps the lead first / the reborn lead finds the enemy is reborn too); tune the strength from “safe classic” to “bold innovation”',
+  ],
+  opening_three: [
+    'Guillotine: in chapter one show a blade that will fall sooner or later (a terminal diagnosis / a three-day deadline / a trap already set)',
+    'Hungry beast: give the lead a present craving strong enough to unman him (needs this life-saving money / needs this person to look at him), driving immediate action',
+    'Needle rain: a string of tiny frictions (cut in line, hung up on, a broken heel) keeps a low ache going and roots identification in detail',
+  ],
+  visual_three: [
+    'Jump-cut: skip the process and cut to the key frame (not “he walks over” but “when the door is kicked open he is stuffing the bankbook into his mouth”)',
+    'Camera: write the scene in push / pull / pan / close-up order — wide to set the danger, then shove into one detail that nails the emotion',
+    'Embed: let the image itself carry suspense (one face burned out of the family photo by a cigarette); scenery is the hook, no voice-over explanation',
+  ],
+  fatal_pull: [
+    'Forced together at the worst time, on opposite sides (enemies / ruler and subject / the only two of their kind)',
+    'Both know clearly they must not love, yet reason cannot hold instinct: calculating out loud, softening in the eyes',
+    'Not mutual salvation but a mirror — in the whole world only he reads your wound',
+  ],
+  dual_strong: [
+    'Matched wits: hunter and prey swap roles; no love-brained dumbing down',
+    'Matched psychology: both walled off, yet the only one who understands the helplessness under the other’s hardness',
+    'Fight shoulder to shoulder, not one saving the other; both catch each other',
+  ],
+  regret_second: [
+    'Give her talent, looks and vision equal to the female lead — only a step late or the wrong timing in love',
+    'However it hurts, she smiles and says it’s fine, quietly yielding without hysterics',
+    'Her worst end is not dying but living on well and losing forever — no clinging, no looking back',
+  ],
+  iron_choice: [
+    'The trouble must be famine / war / the truth of class, not a fake problem another man can fix',
+    'Choose ambition over romance, ruthlessness over the “good woman” norm, and bear the loss of everyone',
+    'A clear goal + lethal means + one untouchable soft spot (pain at its peak never changes the decision)',
+  ],
+  romance_scalpel: [
+    'Life-or-death wall: set an objectively near-unsolvable obstacle (blood feud of identity / no time left / opposing sides); the more they love, the less they can',
+    'Body betrays: the mouth refuses but the body is honest — instinctively shielding a blade, remembering his offhand food taboo, finding him first in a crowd; actions instead of love lines',
+    'Emotional bungee: inside one scene go close — pushed away by misunderstanding — close again in danger; the bigger the drop the deeper the addiction; never a linear warm-up',
+  ],
+  comedy_ladder: [
+    'Gag rung: persona + core trait + situational catchphrase (Lü Shu’s sharp tongue); no old jokes, max three gags a chapter, no gags off-persona',
+    'Logic rung: fixed worldview rules × the lead’s unconventional but self-consistent behavior (modern business thinking franchising in ancient times)',
+    'Persona rung: an exclusive comic tag + extreme contrast + behavioral consistency; funny before he speaks',
+    'Core rung: a comic shell around a real motive (the sharp tongue is armor over loneliness); laughter with tears, no forced sentiment',
+  ],
+  horror_tools: [
+    'Anomaly in the daily: he means to pour water and finds the cup full (he had emptied it)',
+    'Sound for image: the top-floor tenant hears marbles rolling upstairs at 3 a.m., and the reader’s mind does the rest',
+    'Scare themselves: “help” on the mirror is his own handwriting, which he cannot remember; escalate the dark-cult in four stages — off → confirmed anomaly → rules failing → nowhere to run — slower, quieter and sparser each step, saving the ghost face / entity for the last blow',
+  ],
+  fight_pacing: [
+    'Insert a still close-up inside continuous action (in the punch, see the fear in the opponent’s eyes; flash back three years)',
+    'Use senses to stretch time (wind drying the mouth, rust taste in the throat, three steps to the finish, two, one)',
+    'Choreography stays grounded, not floating (a fist into the ribs, his own knuckles numb); exchange, feint, counter; after the fight leave a blank to digest; cut every exchange that changes no outcome/relationship/information',
+  ],
+  everyman_slice: [
+    'Shoot only the key frames of fate (drinking while standing / sharing beans / walking on his hands after his legs are broken); no résumé-style biography',
+    'One verb writes a fate (“counting out” nine coins for a moment of dignity → “fishing out” four coins in ruin)',
+    'The opponent is not a villain but the laughing onlookers and the whole structure; tragedy then outgrows the story',
+  ],
+  worldview_build: [
+    'Rule ceiling: write three iron laws — power cap / class border / life-and-death logic; the more self-consistent, the higher the world',
+    'Interest chain: who rules, who profits, who risks their life; characters move themselves, pushed by interest',
+    'Cultural-moral base + hidden loophole: ritual and faith decide rational behavior; leave one institutional bug / historical taboo as the fuse; knead setting into action and dialogue — over 200 characters of pure setting, break it up',
+  ],
+  tragedy_three: [
+    'Layer one seeks a concrete culprit; layer two fights fate, mostly in vain',
+    'Layer three is a complicity structure: everyone does their duty in place, together weaving a net no one escapes (“for your own good” love becomes the sharpest knife)',
+    'Write “had no choice”, not “should not have”; end with a window that cannot open, the system intact or a new cycle already begun',
+  ],
+  darkening: [
+    'First give him someone or a faith he fights to protect and ultimately loses (the fuel is despair at failing to protect, not being bullied)',
+    'Let him discover the old faith was a lie and destroy his former self with his own hands (the turn is seeing through the lie, not being hurt)',
+    'On the ruins build a colder, crueler but self-consistent rule — the only way left to protect what remains',
+  ],
+  villain_break: [
+    'Three-tier villain: a unique cognitive processor + precise human simulation (creating need, not PUA) + a closed self-consistent logic; the drive is rebuilding order, not pure evil',
+    'Break the information game: turn his proudest advantage into his only blind spot, make him misread the world',
+    'Break the logic game with a variable he cannot compute (time / human nature / the nobody he despises); break the faith game by using his own logic to force him to see the abyss — no fist needed',
+  ],
+  banal_villain: [
+    'Put the oppression inside daily ritual — eating, serving food, handing water — and issue control in a caring tone (“eat more; I’ve already quit that job for you”)',
+    'The villain genuinely believes he is right, even feels martyred; his logic holds inside the family context — that is what chills',
+    'Conflict through needles wrapped in silk, not shouting: one soft line reallocates resources / strips dignity; show power through seating order, who eats first, who has no right to speak',
+  ],
+};
+
+/** v2.524 钩子按语言取字段：英文界面分类浏览/下拉/提示不再混排中文 */
+export function localizeHook(h: HookType, lang: 'zh' | 'en'): HookType {
+  if (lang !== 'en') return h;
+  const e = HOOK_EN[h.id];
+  return e ? { id: h.id, name: e.name, layer: e.layer, definition: e.definition, example: e.example, how: e.how, fit: e.fit } : h;
+}
+
+/** v2.524 方法卡按语言取字段：标题/公式/步骤/匹配词整套切换，英文缺层时回退中文并留待测试兜底 */
+export function localizeCard(c: CraftCard, lang: 'zh' | 'en'): CraftCard {
+  if (lang !== 'en') return c;
+  const e = CARD_EN[c.id];
+  if (!e) return c;
+  return { id: c.id, title: e.title, formula: e.formula, steps: CARD_STEPS_EN[c.id] || c.steps, fit: e.fit };
+}
 export function matchCraftCards(input: { text?: string; tags?: string[]; limit?: number }, lang: 'zh' | 'en' = 'zh'): CraftCard[] {
   const en = lang === 'en';
   const rawText = `${input.text || ''} ${(input.tags || []).join(' ')}`;

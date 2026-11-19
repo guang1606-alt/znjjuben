@@ -7,6 +7,7 @@ import { asyncRouter } from '../lib/async-router';
 import {
   HOOK_TAXONOMY, HOOK_EN, recommendHooks, openingHookAudit, matchCraftCards,
   CHARACTER_DEPTH_CARDS, NARRATIVE_DEVICE_CARDS, RELATIONSHIP_CARDS, GENRE_TOOLKIT_CARDS,
+  localizeHook, localizeCard,
 } from '../engine/narrative-craft';
 import { pickDiverseSeeds, diversityAudit, type VersionInput } from '../engine/multi-version';
 import { validateBranches, buildBranchSkeleton, applyMutator, autoLayout, validateClueGraph, type BranchGraph, type MutateOp } from '../engine/interactive-branch';
@@ -25,10 +26,10 @@ const sortIssues = (list: LintIssue[]): LintIssue[] =>
   [...list].sort((a, b) => (LEVEL_ORDER[a.level] ?? 9) - (LEVEL_ORDER[b.level] ?? 9) || a.score - b.score);
 
 const CARD_GROUPS = [
-  { key: 'character', name: '人物内驱·缺陷·弧光', cards: CHARACTER_DEPTH_CARDS },
-  { key: 'device', name: '叙事装置·结构·反转', cards: NARRATIVE_DEVICE_CARDS },
-  { key: 'relation', name: '关系·情感·双雄', cards: RELATIONSHIP_CARDS },
-  { key: 'genre', name: '分类型工具箱', cards: GENRE_TOOLKIT_CARDS },
+  { key: 'character', name: '人物内驱·缺陷·弧光', nameEn: 'Character drive · flaw · arc', cards: CHARACTER_DEPTH_CARDS },
+  { key: 'device', name: '叙事装置·结构·反转', nameEn: 'Narrative device · structure · reversal', cards: NARRATIVE_DEVICE_CARDS },
+  { key: 'relation', name: '关系·情感·双雄', nameEn: 'Relationship · emotion · dual leads', cards: RELATIONSHIP_CARDS },
+  { key: 'genre', name: '分类型工具箱', nameEn: 'Genre toolkits', cards: GENRE_TOOLKIT_CARDS },
 ] as const;
 
 export function createCraftRouter() {
@@ -44,19 +45,28 @@ export function createCraftRouter() {
     }
   };
 
-  // 全量工艺分类浏览：10类钩子 + 4组方法卡（标题/公式层，点开才看步骤，避免信息过载）
-  r.get('/taxonomy', (_req, res) => {
+  // 全量工艺分类浏览：10类钩子 + 4组方法卡（标题/公式层，点开才看步骤，避免信息过载）。v2.524 按 lang 返回英文字段
+  r.get('/taxonomy', (req, res) => {
+    const lang: 'zh' | 'en' = req.query.lang === 'en' ? 'en' : 'zh';
     res.json({
-      hooks: HOOK_TAXONOMY.map((h) => ({ id: h.id, name: h.name, layer: h.layer, definition: h.definition, how: h.how, example: h.example, fit: h.fit })),
+      hooks: HOOK_TAXONOMY.map((h) => {
+        if (lang !== 'en') return { id: h.id, name: h.name, layer: h.layer, definition: h.definition, how: h.how, example: h.example, fit: h.fit };
+        const e = localizeHook(h, 'en');
+        return { id: h.id, name: e.name, layer: e.layer, definition: e.definition, how: e.how, example: e.example, fit: e.fit };
+      }),
       cardGroups: CARD_GROUPS.map((g) => ({
-        key: g.key, name: g.name, count: g.cards.length,
-        cards: g.cards.map((c) => ({ id: c.id, title: c.title, formula: c.formula, fit: c.fit })),
+        key: g.key, name: lang === 'en' ? g.nameEn : g.name, count: g.cards.length,
+        cards: g.cards.map((c) => {
+          if (lang !== 'en') return { id: c.id, title: c.title, formula: c.formula, fit: c.fit };
+          const e = localizeCard(c, 'en');
+          return { id: c.id, title: e.title, formula: e.formula, fit: e.fit };
+        }),
       })),
       totals: { hooks: HOOK_TAXONOMY.length, cards: CARD_GROUPS.reduce((n, g) => n + g.cards.length, 0) },
     });
   });
 
-  // 按当前创意/标签实时递招：匹配方法卡 + 系统默认钩子组合 + 开篇300字钩子审计
+  // 按当前创意/标签实时递招：匹配方法卡 + 系统默认钩子组合 + 开篇300字钩子审计。v2.524 响应卡片/钩子整套本地化
   r.post('/recommend', (req, res) => {
     const b = req.body ?? {};
     const lang: 'zh' | 'en' = b.lang === 'en' ? 'en' : 'zh';
@@ -78,8 +88,14 @@ export function createCraftRouter() {
       };
     }
     res.json({
-      cards: cards.map((c) => ({ id: c.id, title: c.title, formula: c.formula, steps: c.steps, fit: c.fit })),
-      hooks: hooks.map((h) => ({ id: h.id, name: h.name, layer: h.layer, definition: h.definition, how: h.how, example: h.example })),
+      cards: cards.map((c) => {
+        const e = lang === 'en' ? localizeCard(c, 'en') : c;
+        return { id: e.id, title: e.title, formula: e.formula, steps: e.steps, fit: e.fit };
+      }),
+      hooks: hooks.map((h) => {
+        const e = lang === 'en' ? localizeHook(h, 'en') : h;
+        return { id: e.id, name: e.name, layer: e.layer, definition: e.definition, how: e.how, example: e.example };
+      }),
       openingAudit: opening,
     });
   });
