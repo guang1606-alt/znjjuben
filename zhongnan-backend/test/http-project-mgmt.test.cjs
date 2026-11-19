@@ -41,7 +41,7 @@ describe('项目管理：重命名 + 软删除', { concurrency: 1 }, () => {
     assert.strictEqual(j.ok, true);
     // 列表过滤已删除项目
     const list = await call('GET', '/projects');
-    assert.ok(!list.j.some((p) => p.id === 'p1'));
+    assert.ok(!list.j.items.some((p) => p.id === 'p1'));
   });
 
   it('已删除项目：重命名/删除均 404', async () => {
@@ -108,12 +108,12 @@ describe('项目管理：重命名 + 软删除', { concurrency: 1 }, () => {
     mem._projects.set('pAlpha', { id: 'pAlpha', userId: UID, title: '阿尔法剧本', mode: 'tags', status: 'draft' });
     mem._projects.set('pBeta', { id: 'pBeta', userId: UID, title: '贝塔故事', mode: 'tags', status: 'archived' });
     const all = await call('GET', '/projects');
-    assert.ok(all.j.some((p) => p.title === '阿尔法剧本'));
-    assert.ok(all.j.some((p) => p.title === '贝塔故事'));
+    assert.ok(all.j.items.some((p) => p.title === '阿尔法剧本'));
+    assert.ok(all.j.items.some((p) => p.title === '贝塔故事'));
     const byQ = await call('GET', '/projects?q=阿尔法');
-    assert.ok(byQ.j.every((p) => p.title.includes('阿尔法')));
-    assert.strictEqual(byQ.j.length, 1);
+    assert.ok(byQ.j.items.every((p) => p.title.includes('阿尔法')));
+    assert.strictEqual(byQ.j.items.length, 1);
     const archived = await call('GET', '/projects?status=archived');
-    assert.ok(archived.j.every((p) => p.status === 'archived'));
+    assert.ok(archived.j.items.every((p) => p.status === 'archived'));
   });
 });

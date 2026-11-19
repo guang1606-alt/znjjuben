@@ -150,7 +150,7 @@ describe('v2.267 [P3-1] 作品详情必须有返回列表入口', () => {
   });
 
   it('loadWorks 重入（再点 nav / 搜索）先收起详情回列表态', () => {
-    const w = fnWindow('async function loadWorks', "const res = await Api.request('/api/generate/projects", 1200);
+    const w = fnWindow('async function loadWorks', "const url = `/api/generate/projects", 1200);
     assert.ok(w, '应定位到 loadWorks 开头窗口');
     assert.ok(/worksDetail[\s\S]{0,80}classList\.add\(\s*['"]hidden['"]/.test(w),
       'loadWorks 应在取数前给 #worksDetail 加 hidden（再点 nav「我的作品」须回列表）');

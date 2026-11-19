@@ -61,7 +61,9 @@ describe('v2.552 作品库列表瘦身', { concurrency: 1 }, () => {
     const pid = seedProject('p_slim', 'u_slim', { sourceText: BIG_TEXT, platform: 'hongguo', adaptationDraft: { brief: '改编大纲' } });
     const r = await fetch(base + '/api/generate/projects', { headers: auth('u_slim', 'ADVANCED') });
     assert.strictEqual(r.status, 200);
-    const list = await r.json();
+    const raw = await r.json();
+    // v2.553 响应改 { items, hasMore, nextCursor, total } 结构；v2.552 兜底纯数组
+    const list = Array.isArray(raw) ? raw : (raw.items || []);
     assert.ok(Array.isArray(list), '列表契约保持数组');
     const it = list.find((x) => x.id === pid);
     assert.ok(it, '应能取回自己的项目');
@@ -80,7 +82,9 @@ describe('v2.552 作品库列表瘦身', { concurrency: 1 }, () => {
   it('无 bible 的项目摘要兜底为空/假，不抛错', async () => {
     const pid = seedProject('p_plain', 'u_slim', null);
     const r = await fetch(base + '/api/generate/projects', { headers: auth('u_slim', 'ADVANCED') });
-    const it = (await r.json()).find((x) => x.id === pid);
+    const raw = await r.json();
+    const list = Array.isArray(raw) ? raw : (raw.items || []);
+    const it = list.find((x) => x.id === pid);
     assert.ok(it);
     assert.strictEqual(it.platform, '');
     assert.strictEqual(it.hasSource, false);

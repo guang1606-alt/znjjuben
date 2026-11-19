@@ -340,7 +340,7 @@ test('signing in again reloads saved Works and scripts from the server', async (
   await until(() => h.$('epsList').innerHTML.includes('Saved episode body'));
   assert.match(h.$('epsList').innerHTML, /Saved episode body/);
   assert.equal(h.$('worksDetailTitle').textContent, 'Saved title');
-  assert.equal(h.requests.filter(item => item.url === '/api/generate/projects').length, 2);
+  assert.equal(h.requests.filter(item => item.url.startsWith('/api/generate/projects?')).length, 2);
   assert.ok(h.requests.every(item => !item.options.method || item.options.method === 'GET'));
 });
 

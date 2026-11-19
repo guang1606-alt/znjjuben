@@ -40,7 +40,7 @@ describe('v2.278 [R1] loadWorks 加载骨架屏（三态补全）', () => {
 
   it('B3 骨架必须先于请求发出（进入/搜索即见骨架，不白屏）', () => {
     const iSk = w.indexOf("znSkeleton(grid, 'grid')");
-    const iReq = w.indexOf("Api.request('/api/generate/projects'");
+    const iReq = w.indexOf("Api.request(url)");
     assert.ok(iSk >= 0 && iReq > 0, '骨架调用与请求均应在窗口内');
     assert.ok(iSk < iReq, '骨架必须在 Api.request 之前写入，否则加载期仍全白');
   });

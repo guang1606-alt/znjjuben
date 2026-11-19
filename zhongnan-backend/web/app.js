@@ -3564,6 +3564,10 @@
   }
   window.addEventListener('zn-adaptation-project', (event) => resumeAdaptationProject(event.detail?.project));
   let worksReqSeq = 0; // v2.274：作品搜索同会话请求序号，弱网乱序时旧查询响应一律作废（同 mkReqSeq/feedReqSeq 范式）
+  // v2.553：作品库键集游标状态（与 v2.551 海报同套路）
+  let myProjectsCursor = '';
+  let myProjectsHasMore = false;
+  let myProjectsTotal = 0;
   // v2.275：作品卡片写操作（重命名/克隆/归档/删除）统一在途锁 + 提交中按钮反馈。
   // 弱网下克隆等非幂等请求在途时重复点击会创建重复副本（dogfood 第十轮实测 clone 被连发 2 次、项目 1→3）。
   // 函数级锁跨卡片/跨 loadWorks 重渲染持久（同 _sqPosting/_placingOrder 范式）；被点按钮即时 disabled 并
@@ -3583,6 +3587,8 @@
     // v2.267 [P3-1] 再点 nav「我的作品」/触发搜索即回列表态：收起可能正展开的作品详情
     $('worksDetail')?.classList.add('hidden');
     const grid = $('worksGrid'), empty = $('worksEmpty'); grid.innerHTML = '';
+    // v2.553：换搜索词或重进作品库时重置游标（翻页追加才保留）
+    myProjectsCursor = ''; myProjectsHasMore = false; myProjectsTotal = 0;
     const ws = $('worksSearch');
     if (ws && !ws._bound) {
       ws._bound = true;
@@ -3596,11 +3602,17 @@
     const q = ($('worksSearch')?.value || '').trim();
     // v2.238 静默失败根治：此前无 try/catch，切视图入口调用点亦无 .catch——请求失败时 grid 已清空、面板全白零提示
     try {
-    const res = await Api.request('/api/generate/projects' + (q ? `?q=${encodeURIComponent(q)}` : ''));
-    const list = await Api.jsonOrThrow(res);
+    const url = `/api/generate/projects?limit=50${q ? '&q=' + encodeURIComponent(q) : ''}`;
+    const res = await Api.request(url);
+    const raw = await Api.jsonOrThrow(res);
     if (!isPrivateSessionCurrent(account) || seq !== worksReqSeq) return; // v2.274：换号或旧查询晚回，均不得写 DOM
+    // v2.553：响应改 { items, hasMore, nextCursor, total }；v2.552 及之前是纯数组，兜底 1 行兼容
+    const list = Array.isArray(raw) ? raw : (raw.items || []);
+    myProjectsHasMore = !!raw.hasMore;
+    myProjectsCursor = raw.nextCursor || '';
+    myProjectsTotal = typeof raw.total === 'number' ? raw.total : list.length;
     grid.innerHTML = ''; // v2.278：清骨架后渲染真实内容
-    $('worksCount').textContent = t('worksCount', { n: list.length });
+    $('worksCount').textContent = t('worksCount', { n: myProjectsTotal || list.length });
     empty.classList.toggle('hidden', list.length > 0);
     if (!list.length) empty.innerHTML = znEmptyHtml(t('worksEmpty'));
     list.forEach((p) => {
@@ -3672,12 +3684,53 @@
       });
       grid.appendChild(c);
     });
+    // v2.553：翻页追加按钮（只在 hasMore 时显示，避免用户以为点不动）
+    let more = $('worksLoadMore');
+    if (!more) {
+      more = document.createElement('button'); more.id = 'worksLoadMore';
+      more.className = 'btn-ghost'; more.hidden = true;
+      grid.parentElement?.appendChild(more);
+    }
+    more.textContent = lang === 'en' ? 'Load more' : '加载更多';
+    more.hidden = !myProjectsHasMore || !myProjectsCursor;
+    more.onclick = () => loadMoreWorks(account, seq, more).catch(() => {});
     } catch {
       if (!isPrivateSessionCurrent(account) || seq !== worksReqSeq) return; // v2.274：旧查询失败晚回也不得冲掉新查询的正确态
       grid.innerHTML = ''; // v2.278：清骨架后写错误态
       $('worksCount').textContent = '';
       empty.classList.remove('hidden');
       empty.innerHTML = znErrorHtml(t('loadFail'));
+    }
+  }
+  // v2.553：翻页追加（带游标请求，追加到现有 grid 末尾，不重置已有卡片）
+  async function loadMoreWorks(account, seq, btn) {
+    if (!myProjectsCursor || btn.disabled) return;
+    btn.disabled = true; const oldTxt = btn.textContent; btn.textContent = lang === 'en' ? 'Loading…' : '加载中…';
+    try {
+      const q = ($('worksSearch')?.value || '').trim();
+      const url = `/api/generate/projects?limit=50&cursor=${encodeURIComponent(myProjectsCursor)}${q ? '&q=' + encodeURIComponent(q) : ''}`;
+      const res = await Api.request(url);
+      const raw = await Api.jsonOrThrow(res);
+      if (!isPrivateSessionCurrent(account) || seq !== worksReqSeq) return;
+      const items = raw.items || [];
+      myProjectsHasMore = !!raw.hasMore;
+      myProjectsCursor = raw.nextCursor || '';
+      const grid = $('worksGrid');
+      items.forEach((p) => {
+        const c = document.createElement('div'); c.className = 'work-card';
+        const modeText = (((I18N.DICT[lang] || I18N.DICT.zh).mode) || {})[p.mode] || (lang === 'en' ? 'Script' : '剧本');
+        const platLabel = platformLabel(p.platform || p.bible?.platform);
+        c.innerHTML = `<h3>${escapeHtml(p.title)}</h3>
+          <div class="muted">${escapeHtml(modeText)} · ${p.totalEps || 0} eps · ${PV().formatDateTime(p.createdAt, lang)}</div>
+          <div class="work-badges"><span class="badge">${escapeHtml(engineLabel(p.engineTier, true) || (lang === 'en' ? 'Standard' : '标准'))}</span><span class="badge">${p.format === 'AIGC' ? 'Z-AIGC' : (lang === 'en' ? 'Live action' : '真人实拍')}</span>${platLabel ? `<span class="badge">${escapeHtml(platLabel)}</span>` : ''}</div>`;
+        c.onclick = () => { if (isPrivateSessionCurrent(account)) openProject(p); };
+        grid.appendChild(c);
+      });
+      btn.hidden = !myProjectsHasMore || !myProjectsCursor;
+    } catch (e) {
+      toastInfo((e && e.message) || (lang === 'en' ? 'Load more failed.' : '加载更多失败'));
+    } finally {
+      btn.disabled = false; btn.textContent = oldTxt;
     }
   }
   // c202 版本逐行对比（零扣费、确定性）：渲染/请求/文案辅助，供作品详情与 fix 成功后自动展开

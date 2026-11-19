@@ -31,7 +31,7 @@ function fnWindow(startMarker, maxLen) {
 }
 
 describe('v2.274 [R1] loadWorks 搜索请求序号防 stale-response 乱序', () => {
-  const w = fnWindow('async function loadWorks() {', 6000);
+  const w = fnWindow('async function loadWorks() {', 10000);
 
   it('A1 模块级请求序号 let worksReqSeq = 0 已声明', () => {
     assert.match(src, /let\s+worksReqSeq\s*=\s*0\s*;/);
@@ -39,7 +39,7 @@ describe('v2.274 [R1] loadWorks 搜索请求序号防 stale-response 乱序', ()
 
   it('A2 loadWorks 窗口可定位且内含作品列表请求', () => {
     assert.ok(w.length > 0, 'loadWorks 未定位到');
-    assert.match(w, /Api\.request\('\/api\/generate\/projects'/);
+    assert.match(w, /Api\.request\(url\)/);
   });
 
   it('A3 发请求前自增序号（const seq = ++worksReqSeq）', () => {
@@ -48,7 +48,7 @@ describe('v2.274 [R1] loadWorks 搜索请求序号防 stale-response 乱序', ()
 
   it('A4 序号自增必须早于请求发出（不能在 await 之后才 ++）', () => {
     const iInc = w.indexOf('++worksReqSeq');
-    const iReq = w.indexOf("Api.request('/api/generate/projects'");
+    const iReq = w.indexOf("Api.request(url)");
     assert.ok(iInc >= 0 && iReq > 0, '序号自增/请求均应在窗口内');
     assert.ok(iInc < iReq, '序号必须在请求发出前自增，否则拦不住先发的旧响应');
   });

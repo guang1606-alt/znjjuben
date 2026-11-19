@@ -1722,6 +1722,27 @@ generateRouter.post('/creation-strategy/recommend', authRequired, async (req: Au
     res.status(400).json({ error: `创作策略推荐失败：${String(e?.message ?? e)}` });
   }
 });
+/** v2.553 作品库列表键集游标：(createdAt, id) 复合锚点，替代 offset 翻页。
+ *  与 v2.551 海报同套路，解决并发插入时重复/跳过 + take:200 硬上限静默截断。 */
+function encodeProjectCursor(createdAt: unknown, id: string): string {
+  try {
+    const d = new Date(createdAt as any);
+    if (Number.isNaN(d.getTime())) return '';
+    return Buffer.from(`${d.toISOString()}|${id}`, 'utf8').toString('base64url');
+  } catch { return ''; }
+}
+function decodeProjectCursor(raw: unknown): { createdAt: Date; id: string } | null {
+  if (typeof raw !== 'string' || !raw.trim()) return null;
+  try {
+    const s = Buffer.from(raw.trim(), 'base64url').toString('utf8');
+    const at = s.lastIndexOf('|');
+    if (at <= 0) return null;
+    const d = new Date(s.slice(0, at));
+    const id = s.slice(at + 1);
+    if (!id || Number.isNaN(d.getTime())) return null;
+    return { createdAt: d, id };
+  } catch { return null; }
+}
 /** v2.552 作品库列表瘦身：列表只回渲染摘要，bible（adapt/novel 原文上限 5 万字）不进列表。
  *  摘要三字段与前端契约对齐：platform（作品卡平台徽章）、hasSource（有可续写原文）、hasAdaptDraft（有改编大纲）；
  *  原文与大纲仅在用户点「继续创作」时走 GET /projects/:id 按需取。 */
@@ -1738,15 +1759,39 @@ function toProjectListItem(p: any) {
 }
 // 我的项目列表（作品库）
 generateRouter.get('/projects', authRequired, async (req: AuthRequest, res) => {
-  const where: any = { userId: req.userId!, status: { not: 'deleted' } };
+  const baseWhere: any = { userId: req.userId!, status: { not: 'deleted' } };
   const q = (req.query.q as string | undefined)?.trim();
-  if (q) where.title = { contains: q, mode: 'insensitive' };
+  if (q) baseWhere.title = { contains: q, mode: 'insensitive' };
   const status = req.query.status as string | undefined;
-  if (status && ['active', 'archived', 'draft'].includes(status)) where.status = status;
+  if (status && ['active', 'archived', 'draft'].includes(status)) baseWhere.status = status;
   const mode = req.query.mode as string | undefined;
-  if (mode) where.mode = mode;
-  const list = await prisma.project.findMany({ where, orderBy: { createdAt: 'desc' }, take: 200 });
-  res.json(list.map(toProjectListItem));
+  if (mode) baseWhere.mode = mode;
+  const total = await prisma.project.count({ where: baseWhere }).catch(() => 0);
+
+  const limitRaw = Number(req.query.limit || req.query.take || 60);
+  const take = Math.max(1, Math.min(120, limitRaw));
+  const cursor = decodeProjectCursor(req.query.cursor);
+  const skip = cursor ? 0 : Math.max(0, Number(req.query.offset || req.query.skip || 0));
+
+  const where = cursor
+    ? {
+        userId: req.userId!, status: { not: 'deleted' },
+        OR: [
+          { createdAt: { lt: cursor.createdAt } },
+          { createdAt: { equals: cursor.createdAt }, id: { lt: cursor.id } },
+        ],
+      }
+    : baseWhere;
+
+  const rows = await prisma.project.findMany({
+    where, orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+    take: take + 1, skip,
+  });
+  const hasMore = rows.length > take;
+  const items = rows.slice(0, take).map(toProjectListItem);
+  const last = items[items.length - 1];
+  const nextCursor = (hasMore && last) ? encodeProjectCursor(last.createdAt, last.id) : '';
+  res.json({ items, hasMore, nextCursor, total });
 });
 
 // v2.552 项目详情：作品库按需取原文/改编大纲（列表已不再整包返回 bible）。仅本人、已删不可见。
