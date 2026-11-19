@@ -1722,6 +1722,20 @@ generateRouter.post('/creation-strategy/recommend', authRequired, async (req: Au
     res.status(400).json({ error: `创作策略推荐失败：${String(e?.message ?? e)}` });
   }
 });
+/** v2.552 作品库列表瘦身：列表只回渲染摘要，bible（adapt/novel 原文上限 5 万字）不进列表。
+ *  摘要三字段与前端契约对齐：platform（作品卡平台徽章）、hasSource（有可续写原文）、hasAdaptDraft（有改编大纲）；
+ *  原文与大纲仅在用户点「继续创作」时走 GET /projects/:id 按需取。 */
+function toProjectListItem(p: any) {
+  const bible = p?.bible && typeof p.bible === 'object' ? p.bible : {};
+  const source = typeof bible.sourceText === 'string' ? bible.sourceText : '';
+  return {
+    id: p.id, title: p.title, mode: p.mode, format: p.format, engineTier: p.engineTier,
+    totalEps: p.totalEps, status: p.status, tags: p.tags, createdAt: p.createdAt, updatedAt: p.updatedAt,
+    platform: typeof bible.platform === 'string' ? bible.platform : '',
+    hasSource: source.trim().length >= 10,
+    hasAdaptDraft: !!bible.adaptationDraft?.brief,
+  };
+}
 // 我的项目列表（作品库）
 generateRouter.get('/projects', authRequired, async (req: AuthRequest, res) => {
   const where: any = { userId: req.userId!, status: { not: 'deleted' } };
@@ -1732,7 +1746,14 @@ generateRouter.get('/projects', authRequired, async (req: AuthRequest, res) => {
   const mode = req.query.mode as string | undefined;
   if (mode) where.mode = mode;
   const list = await prisma.project.findMany({ where, orderBy: { createdAt: 'desc' }, take: 200 });
-  res.json(list);
+  res.json(list.map(toProjectListItem));
+});
+
+// v2.552 项目详情：作品库按需取原文/改编大纲（列表已不再整包返回 bible）。仅本人、已删不可见。
+generateRouter.get('/projects/:id', authRequired, async (req: AuthRequest, res) => {
+  const project = await prisma.project.findFirst({ where: { id: req.params.id, userId: req.userId!, status: { not: 'deleted' } } });
+  if (!project) return res.status(404).json({ error: '项目不存在' });
+  res.json(project);
 });
 
 // 重命名项目（仅本人）

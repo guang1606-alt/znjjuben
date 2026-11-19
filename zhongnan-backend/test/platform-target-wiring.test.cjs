@@ -105,8 +105,8 @@ test('目标平台：作品卡回显所选平台，未选不占位', () => {
   const cardAt = js.indexOf("className = 'work-card'");
   assert.ok(cardAt >= 0, '找不到作品卡渲染');
   const cardBlock = js.slice(cardAt, cardAt + 2000);
-  assert.ok(cardBlock.includes('platformLabel(p.bible?.platform)'),
-    '作品卡未回显立项时选择的平台（用户选了平台，作品库却看不出来）');
+  assert.ok(cardBlock.includes('platformLabel(p.platform || p.bible?.platform)'),
+    '作品卡未回显立项时选择的平台（v2.552 列表瘦身后摘要 platform 优先，兼容旧全量行）');
   assert.ok(cardBlock.includes('${platLabel ?'),
     '平台徽章必须按需渲染：未选平台的项目不得出现空徽章');
 });

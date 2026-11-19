@@ -3608,7 +3608,7 @@
       // v2.489 作品卡此前直接渲染后端 mode 原始枚举（tag / hit_lab…），中文界面里等于把内部 id 给用户看
       const modeText = (((I18N.DICT[lang] || I18N.DICT.zh).mode) || {})[p.mode] || (lang === 'en' ? 'Script' : '剧本');
       // v2.550 目标平台回显：立项时选了平台却只在续写时才看得到，作品库无法一眼确认投哪个平台
-      const platLabel = platformLabel(p.bible?.platform);
+      const platLabel = platformLabel(p.platform || p.bible?.platform);
       c.innerHTML = `<h3>${escapeHtml(p.title)}</h3>
         <div class="muted">${escapeHtml(modeText)} · ${p.totalEps || 0} eps · ${PV().formatDateTime(p.createdAt, lang)}</div>
         <div class="work-badges"><span class="badge">${escapeHtml(engineLabel(p.engineTier, true) || (lang === 'en' ? 'Standard' : '标准'))}</span><span class="badge">${p.format === 'AIGC' ? 'Z-AIGC' : (lang === 'en' ? 'Live action' : '真人实拍')}</span>${platLabel ? `<span class="badge">${escapeHtml(platLabel)}</span>` : ''}</div>
@@ -3816,12 +3816,20 @@
     if (!eps.length) {
       // v2.322 novel 模式与 adapt 对称：sourceText 已立项持久化进 bible，
       // 作品库必须给"继续创作"入口，否则用户刷新页面后想生成第 2 集只能重新立项（造孤儿项目+原文重贴）
-      const hasAdaptDraft = !!p.bible?.adaptationDraft?.brief;
-      const hasSource = typeof p.bible?.sourceText === 'string' && p.bible.sourceText.trim().length >= 10;
+      // v2.552 列表只回摘要：优先读 hasSource/hasAdaptDraft，兼容会话/详情对象里的全量 bible
+      const hasAdaptDraft = !!(p.hasAdaptDraft || p.bible?.adaptationDraft?.brief);
+      const hasSource = p.hasSource === true || (typeof p.bible?.sourceText === 'string' && p.bible.sourceText.trim().length >= 10);
       const canResume = hasAdaptDraft || hasSource;
       const resumeBtn = canResume ? `<button type="button" class="btn-primary" id="worksResumeDraft">${lang === 'en' ? 'Continue creation' : '继续创作'}</button>` : '';
       $('epsList').innerHTML = znEmptyHtml(lang === 'en' ? 'No finished episodes yet.' : '暂无成稿分集。') + resumeBtn;
-      if (canResume) $('worksResumeDraft').onclick = () => resumeAdaptationProject(p);
+      if (canResume) $('worksResumeDraft').onclick = () => {
+        // v2.552 作品库列表已瘦身：列表项没有 bible 时按需取详情再回填；会话/详情对象带全量则直接续写
+        if (p.bible) { resumeAdaptationProject(p); return; }
+        Api.request(`/api/generate/projects/${p.id}`)
+          .then((res) => Api.jsonOrThrow(res))
+          .then((full) => resumeAdaptationProject({ ...p, ...full }))
+          .catch((e) => toastInfo((e && e.message) || (lang === 'en' ? 'Failed to load project. Please retry.' : '项目详情加载失败，请重试。')));
+      };
       return;
     }
     // c202 版本分组：/fix 每改一次新增一行版本，旧逻辑把每一行都渲染成独立 EP 块，改出 v2 后页面出现两个“EP1”。
