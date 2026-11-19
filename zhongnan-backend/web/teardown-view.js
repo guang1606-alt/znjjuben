@@ -116,17 +116,21 @@
   }
   function renderOutline(o) {
     const t = T();
+    // v2.531 英文界面：大纲此前固定全角「：」「；」「（）」，复制出去的大纲（取 innerText）混进中文排版
+    const colon = en() ? ': ' : '：';
+    const semi = en() ? '; ' : '；';
+    const paren = (s) => (en() ? ` (${s})` : `（${s}）`);
     const box = $('tdOutlineBox');
     box.classList.remove('hidden');
     box.innerHTML = `
       <div class="td-outline">
-        <p><b>${t.logline}：</b>${esc(o.logline)}</p>
-        <p><b>${t.mainline}：</b>${esc(o.mainline)}</p>
-        <p><b>${t.openHook}：</b>${esc(o.openingHook)}</p>
-        <p><b>${t.endPay}：</b>${esc(o.endingPayoff)}</p>
-        <div><b>${t.chars}：</b>${o.characters.map((c) => `<div class="td-line"><b>${esc(c.name)}（${esc(c.role)}）</b><span>${t.want}：${esc(c.want)}；${t.secret}：${esc(c.secret)}</span></div>`).join('')}</div>
-        <div><b>${t.arc}：</b>${o.arc.map((a) => `<div class="td-line"><b>${esc(a.stage)}</b><span>${esc(a.goal)}</span></div>`).join('')}</div>
-        <p class="muted">${t.isolation}：${esc(o.isolationNote)}</p>
+        <p><b>${t.logline}${colon}</b>${esc(o.logline)}</p>
+        <p><b>${t.mainline}${colon}</b>${esc(o.mainline)}</p>
+        <p><b>${t.openHook}${colon}</b>${esc(o.openingHook)}</p>
+        <p><b>${t.endPay}${colon}</b>${esc(o.endingPayoff)}</p>
+        <div><b>${t.chars}${colon}</b>${o.characters.map((c) => `<div class="td-line"><b>${esc(c.name)}${paren(esc(c.role))}</b><span>${t.want}${colon}${esc(c.want)}${semi}${t.secret}${colon}${esc(c.secret)}</span></div>`).join('')}</div>
+        <div><b>${t.arc}${colon}</b>${o.arc.map((a) => `<div class="td-line"><b>${esc(a.stage)}</b><span>${esc(a.goal)}</span></div>`).join('')}</div>
+        <p class="muted">${t.isolation}${colon}${esc(o.isolationNote)}</p>
         <div class="row-actions">
           <button class="btn-primary" id="tdToProject">${t.toProject}</button>
           <button class="btn-ghost" id="tdCopyOutline">${t.copyOutline}</button>

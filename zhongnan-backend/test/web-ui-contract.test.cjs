@@ -248,3 +248,20 @@ describe('v2.530 围读请求按界面语言接线', () => {
     assert.ok(/mode: \$\('readFormat'\)\.value/.test(seg), 'ai-read 应同时保留制式（c199）');
   });
 });
+
+// v2.531 拆爆款改编大纲：v2.527 收了拆解结果里的技法行标点，但「改编大纲」整块仍是固定
+// 全角「：」「；」「（）」，英文界面生成的大纲复制出去夹带中文排版（一键复制取的是 innerText）。
+describe('v2.531 拆爆款改编大纲标点随界面语言', () => {
+  const td = fs.readFileSync(path.join(ROOT, 'web', 'teardown-view.js'), 'utf8');
+  const seg = td.slice(td.indexOf('function renderOutline('), td.indexOf('function renderOutline(') + 2400);
+
+  it('大纲渲染使用语言化冒号、分号与括号', () => {
+    assert.ok(seg.includes("const colon = en() ? ': ' : '：';"), '缺少语言化冒号');
+    assert.ok(seg.includes("const semi = en() ? '; ' : '；';"), '缺少语言化分号');
+    assert.ok(/const paren = \(s\) => \(en\(\) \? ` \(\$\{s\}\)` : `（\$\{s\}）`\);/.test(seg), '缺少语言化括号');
+    assert.ok(!seg.includes('${t.logline}：'), '一句话仍固定全角冒号');
+    assert.ok(!seg.includes('${t.want}：'), '人物欲望/底牌仍固定全角冒号');
+    assert.ok(!seg.includes('${esc(c.name)}（${esc(c.role)}）'), '人物角色仍固定全角括号');
+    assert.ok(seg.includes('${paren(esc(c.role))}'), '人物角色未走语言化括号');
+  });
+});
