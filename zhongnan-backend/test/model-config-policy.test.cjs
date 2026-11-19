@@ -86,3 +86,23 @@ test('回显脱敏不含明文Key；掩码占位保存时沿用旧Key', () => {
   const replace = P.mergeMaskedKey(valid({ apiKey: 'sk-new' }), old);
   assert.strictEqual(replace.apiKey, 'sk-new');
 });
+
+// v2.566 粘贴 Key 常带首尾空白：空白会进入 Authorization 头导致 401，也会让分账哈希对不上后台回读。
+test('保存供应商时 Key 去首尾空白；空白/脱敏占位视为未修改沿用旧 Key', () => {
+  assert.strictEqual(P.mergeMaskedKey(valid({ apiKey: '  sk-pasted\n' }), undefined).apiKey, 'sk-pasted');
+  const old = valid({ apiKey: 'sk-real' });
+  assert.strictEqual(P.mergeMaskedKey(valid({ apiKey: '   ' }), old).apiKey, 'sk-real');
+  assert.strictEqual(P.mergeMaskedKey(valid({ apiKey: '  ••••••real  ' }), old).apiKey, 'sk-real');
+});
+
+// v2.566 三档走的是另一条保存路径（saveConfig），同样不能把粘贴空白原样落库。
+test('三档 Key 保存时去首尾空白，纯空白不清空既有 Key', async () => {
+  const MC = require('../dist/lib/model-config.js');
+  const { createMemoryPrisma } = require('./helpers/memory-prisma.cjs');
+  const mem = createMemoryPrisma();
+  const base = { text: { economy: {}, standard: {}, flagship: {}, overseas: {} }, image: { standard: {}, flagship: {} }, providers: [], routing: {} };
+  await MC.saveConfig({ ...base, text: { ...base.text, economy: { apiKey: ' sk-tier ' } } }, 'tester', mem);
+  assert.strictEqual((await MC.loadConfig(mem)).text.economy.apiKey, 'sk-tier');
+  await MC.saveConfig({ ...base, text: { ...base.text, economy: { apiKey: '   ' } } }, 'tester', mem);
+  assert.strictEqual((await MC.loadConfig(mem)).text.economy.apiKey, 'sk-tier', '纯空白不得清空既有 Key');
+});

@@ -20,7 +20,9 @@ function fen(yuan: number): number {
   return Math.max(0, Math.ceil((Number.isFinite(yuan) ? yuan : 0) * 100 - 1e-9));
 }
 function keyId(apiKey: string): string {
-  return 'key_' + createHash('sha256').update(apiKey).digest('hex');
+  // v2.566 去首尾空白再哈希：粘贴带空格的 Key 不得脱离干净 Key 的分账，
+  // 否则后台按 Key 回读用量永远配不上（卡片永远「尚未产生消费」）。
+  return 'key_' + createHash('sha256').update(String(apiKey).trim()).digest('hex');
 }
 function limitError(kind: 'TOTAL' | 'KEY'): Error {
   return new Error(`MODEL_SPEND_LIMIT_${kind} ${kind === 'TOTAL' ? '测试期总额度已不足' : '该 API Key 的消费额度已不足'}`);

@@ -106,13 +106,17 @@ export async function loadConfig(p: any = prisma): Promise<ModelConfigData> {
 export async function saveConfig(data: Omit<ModelConfigData, 'updatedAt'>, updatedBy: string, p: any = prisma): Promise<void> {
   // 若某字段传的是脱敏占位（含••），说明用户没改，保留原值
   const old = await loadConfig(p);
-  const merge = (n: ProviderCfg, o: ProviderCfg): ProviderCfg => ({
-    baseUrl: n.baseUrl ?? o.baseUrl,
-    model: n.model ?? o.model,
-    // 未填(空串)或传回脱敏占位(含•)都视为“未修改”，保留原密钥，避免只改其他项时误清空 key
-    apiKey: !n.apiKey || n.apiKey.includes('•') ? o.apiKey : n.apiKey,
-    spendLimitYuan: n.spendLimitYuan ?? o.spendLimitYuan ?? 0,
-  });
+  const merge = (n: ProviderCfg, o: ProviderCfg): ProviderCfg => {
+    // 未填、纯空白或传回脱敏占位(含•)都视为“未修改”，保留原密钥，避免只改其他项时误清空 key；
+    // v2.566 其余情况去首尾空白后再落库，空白不得随 Authorization 头下发(401)，也不得脱离分账身份。
+    const nk = String(n.apiKey || '').trim();
+    return {
+      baseUrl: n.baseUrl ?? o.baseUrl,
+      model: n.model ?? o.model,
+      apiKey: !nk || nk.includes('•') ? o.apiKey : nk,
+      spendLimitYuan: n.spendLimitYuan ?? o.spendLimitYuan ?? 0,
+    };
+  };
   const merged: ModelConfigData = {
     text: {
       economy: merge(data.text.economy, old.text.economy),

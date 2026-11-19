@@ -115,10 +115,12 @@ export function maskProviders(list: ProviderEntry[]) {
   return list.map((p) => ({ ...p, apiKey: p.apiKey ? '••••••' + p.apiKey.slice(-4) : '' }));
 }
 
-/** 保存时：若 Key 是脱敏占位（含••），沿用旧值，避免被掩码覆盖 */
+/** 保存时：Key 去首尾空白；空白或脱敏占位（含••）均视为未修改，沿用旧值，
+ *  避免粘贴空白随 Authorization 头下发被判 401、也让分账哈希与后台回读一致。 */
 export function mergeMaskedKey(incoming: ProviderEntry, old: ProviderEntry | undefined): ProviderEntry {
-  if (old && incoming.apiKey && incoming.apiKey.includes('•')) return { ...incoming, apiKey: old.apiKey };
-  return incoming;
+  const key = String(incoming.apiKey || '').trim();
+  if (old && (!key || key.includes('•'))) return { ...incoming, apiKey: old.apiKey };
+  return { ...incoming, apiKey: key };
 }
 
 /** v2.41 岗位路由覆盖体检：每岗是否有可用文本供应商；未路由/指向失效不算错（回退档位env），只给状态 */

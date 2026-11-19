@@ -216,6 +216,18 @@ test('Key 分账读数：只回 Key 行，空 Key 不产生身份', async () => 
   assert.equal(map[kid].spentYuan, 0);
 });
 
+// v2.566 粘贴 Key 常带首尾空白：空白参与 SHA-256 会衍生出第二本分账，
+// 后台按 Key 回读时永远配不上，供应商卡片永远显示「尚未产生消费」。
+test('Key 首尾空白不影响分账身份：带空白的 Key 与干净 Key 落到同一本账', async () => {
+  const mem = createMemoryPrisma();
+  control(mem, { totalLimitYuan: 2 });
+  await SL.reserveModelSpend({ apiKey: '  sk-ws\t\n', keyLimitYuan: 1, reserveFen: 10 });
+  const kid = SL.spendKeyId('sk-ws');
+  const map = await SL.readKeySpendUsage(mem);
+  assert.deepEqual(Object.keys(map), [kid], '空白 Key 不得孤立成第二本账，否则卡片永远显示尚未产生消费');
+  assert.equal(map[kid].reservedYuan, 0.1);
+});
+
 test('供应商卡片回带 Key 用量：已用/可用可见，且不下发指纹', () => {
   const fs = require('node:fs');
   const path = require('node:path');
