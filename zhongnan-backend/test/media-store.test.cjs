@@ -173,6 +173,44 @@ test('我的海报卡片必须显示生成时间', () => {
   assert.match(app, /function posterTimeText\(iso\)/, '时间格式化应集中在一个函数');
 });
 
+// v2.562 多端/多标签页并发下删除海报：另一端已删时服务端返回 404，
+// 此时目标已达成，把它当失败会留下删不掉的卡片与「海报不存在」假故障。
+test('删除海报接口 404 必须按成功处理（多端已删 = 目标达成）', () => {
+  const fs = require('node:fs');
+  const path = require('node:path');
+  const app = fs.readFileSync(path.join(__dirname, '..', 'web', 'app.js'), 'utf8');
+  const lines = app.split('\n');
+  const i = lines.findIndex((l) => l.includes('async function deletePosterApi'));
+  assert.ok(i >= 0, '未找到 deletePosterApi');
+  const block = lines.slice(i, i + 8).join('\n');
+  assert.match(block, /status === 404/, '404 必须短路为成功，不得抛错');
+});
+
+// v2.562 从「我的海报」预览里删掉的图，价值参考面板里同款格子不能留下点不开的残影。
+test('预览弹窗删除后必须同步移除认证海报网格里的同款格子', () => {
+  const fs = require('node:fs');
+  const path = require('node:path');
+  const app = fs.readFileSync(path.join(__dirname, '..', 'web', 'app.js'), 'utf8');
+  const lines = app.split('\n');
+  const i = lines.findIndex((l) => l.includes("$('posterDel').onclick"));
+  assert.ok(i >= 0, '未找到预览弹窗删除处理');
+  const block = lines.slice(i, i + 14).join('\n');
+  assert.match(block, /certPosters/, '删除后必须同步清理认证海报网格');
+  assert.match(block, /posterViewId/, '清理必须按当前预览的海报 id 定位');
+});
+
+// v2.562 认证海报表单读屏时几张图的名称完全相同，无法区分选哪张。
+test('认证海报按钮的无障碍名必须带方案序号', () => {
+  const fs = require('node:fs');
+  const path = require('node:path');
+  const app = fs.readFileSync(path.join(__dirname, '..', 'web', 'app.js'), 'utf8');
+  const lines = app.split('\n');
+  const i = lines.findIndex((l) => l.includes("const pg = $('certPosters')"));
+  assert.ok(i >= 0, '未找到认证海报渲染处（certPosters）');
+  const block = lines.slice(i, i + 12).join('\n');
+  assert.match(block, /aria-label="\$\{escapeHtml\(t\('viewPoster'\) \+ ' ' \+ label\)\}"/, '无障碍名需含方案序号');
+});
+
 // v2.539 前端海报渲染守卫：落库后返回的是 /media/:id 站内相对地址，
 // 前端若只放行 http(s)/data: 就会把持久化成功的海报整批过滤掉（提示成功却一张不显示）。
 test('前端海报渲染必须放行同源 /media/ 地址，且仍拒绝协议相对外链', () => {

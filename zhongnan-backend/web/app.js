@@ -4114,6 +4114,9 @@
   // v2.558 删除共用：卡片内删除与预览弹窗内删除走同一接口，避免两处逻辑漂移。
   async function deletePosterApi(id) {
     const r = await Api.request('/api/va/posters/' + encodeURIComponent(id), { method: 'DELETE' });
+    // v2.562 幂等删除：另一标签页/设备已删掉时服务端 404，对用户而言目标已达成；
+    // 此时报「海报不存在」并把卡片留在列表里是假故障，按成功返回让界面继续收口。
+    if (r.status === 404) return;
     await Api.jsonOrThrow(r);
   }
   async function loadMyPosters(append) {
@@ -4181,6 +4184,13 @@
     $('posterDel').disabled = true;
     try {
       await deletePosterApi(posterViewId);
+      // v2.562 同步收口：这张图可能同时出现在价值参考面板的认证海报网格里，
+      // 不清理会留下一个点开就破图的残影；按当前预览 id 精确移除，整块空了就收起网格。
+      const staleGrid = $('certPosters');
+      if (staleGrid) {
+        staleGrid.querySelectorAll('[data-poster-open="' + posterViewId + '"]').forEach((el) => el.remove());
+        if (!staleGrid.querySelector('[data-poster-open]')) staleGrid.classList.add('hidden');
+      }
       closeModalEl($('posterModal'));
       await loadMyPosters(); await loadMe();
     } catch (e) { xnSay(e.message); }
@@ -5078,7 +5088,7 @@
           pg.innerHTML = (j.images || []).map((u, i) => {
             const id = (String(u).match(/^\/media\/([^/?#]+)/) || [])[1] || '';
             const label = (lang === 'en' ? 'Option ' : '方案') + (i + 1);
-            return `<button class="poster-open" type="button" data-poster-open="${escapeHtml(id)}" data-poster-url="${escapeHtml(u)}" aria-label="${escapeHtml(t('viewPoster'))}" title="${escapeHtml(t('viewPoster'))}"><img src="${escapeHtml(u)}" alt="${escapeHtml(label)}" /><div class="muted" style="text-align:center;font-size:11px;line-height:1.6">${label}</div></button>`;
+            return `<button class="poster-open" type="button" data-poster-open="${escapeHtml(id)}" data-poster-url="${escapeHtml(u)}" aria-label="${escapeHtml(t('viewPoster') + ' ' + label)}" title="${escapeHtml(t('viewPoster'))}"><img src="${escapeHtml(u)}" alt="${escapeHtml(label)}" /><div class="muted" style="text-align:center;font-size:11px;line-height:1.6">${label}</div></button>`;
           }).join('');
           pg.onclick = (e) => {
             const b = e.target.closest('[data-poster-open]');
