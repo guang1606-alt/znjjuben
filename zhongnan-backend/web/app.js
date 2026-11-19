@@ -8549,11 +8549,15 @@
     const wloc = strategyLocale();
     const WLAB = { zh: ['；爽点：', '；反转：', (n, v) => `第${n}集 张力${v}`], en: ['; payoffs: ', '; reversal: ', (n, v) => `Ep${n} intensity ${v}`], ja: ['／カタルシス：', '／反転：', (n, v) => `第${n}話 テンション${v}`], ko: ['／쾌점: ', '／반전: ', (n, v) => `제${n}화 긴장도 ${v}`], es: ['; recompensas: ', '; giro: ', (n, v) => `Ep.${n} tensión ${v}`], ar: ['؛ إشباع: ', '؛ انقلاب: ', (n, v) => `الحلقة ${n} توتر ${v}`] };
     const wl = WLAB[wloc] || WLAB.zh;
+    // v2.528 非中文界面统一取英文名：波形数据只有 name / nameEn 两套，
+    // 此前只在 en 下切英文，ja/ko/es/ar 界面仍吐中文节拍名（如「爽点回收」），
+    // 与同一行已本地化的“payoffs/reversal”标签混排。
+    const beatName = (q) => (wloc === 'zh' ? q.name : (q.nameEn || q.name));
     const dots = pts.map((p, i) => {
-      const names = p.path.map((q) => (wloc === 'en' ? q.nameEn : q.name)).join(wloc === 'en' ? ' → ' : '→');
-      const pay = p.payoffs.length ? `${wl[0]}${p.payoffs.map((q) => (wloc === 'en' ? q.nameEn : q.name)).join('/')}` : '';
-      const rev = p.reversal ? `${wl[1]}${wloc === 'en' ? p.reversal.nameEn : p.reversal.name}` : '';
-      const label = wl[2](p.ep, p.intensity) + `｜${names}${pay}${rev}`;
+      const names = p.path.map(beatName).join(wloc === 'en' ? ' → ' : '→');
+      const pay = p.payoffs.length ? `${wl[0]}${p.payoffs.map(beatName).join('/')}` : '';
+      const rev = p.reversal ? `${wl[1]}${beatName(p.reversal)}` : '';
+      const label = wl[2](p.ep, p.intensity) + `${wloc === 'zh' ? '｜' : ' | '}${names}${pay}${rev}`;
       return `<circle class="wave-dot" data-ep="${p.ep}" cx="${x(i).toFixed(1)}" cy="${y(p.intensity).toFixed(1)}" r="${pts.length > 60 ? 1.6 : 3.4}" fill="${p.intensity >= 80 ? 'var(--grade-bad)' : p.intensity >= 60 ? 'var(--grade-warn)' : 'var(--grade-mid)'}"><title>${escapeHtml(label)}</title></circle>`;
     }).join('');
     const grid = [20, 40, 60, 80].map((v) => `<line x1="${padL}" y1="${y(v)}" x2="${Wpx - padR}" y2="${y(v)}" class="wave-grid"/><text x="4" y="${y(v) + 3}" class="wave-axis">${v}</text>`).join('');
@@ -9380,7 +9384,9 @@
     // @module misc
     const tags = (typeof tagChosen !== 'undefined' && Array.isArray(tagChosen)) ? tagChosen : [];
     try {
-      const res = await Api.request('/api/market/investor-lens', { method: 'POST', body: JSON.stringify({ text: text.slice(0, 6000), tags }) });
+      // v2.528 前端把界面语言一起传给后端：此前不传 lang，英文界面收到的结论/必问清单/一句话都是中文；
+      // 后端按「正文语言」选信号词表（中文剧本配英文界面不会掉分），按这里传的 lang 出结论。
+      const res = await Api.request('/api/market/investor-lens', { method: 'POST', body: JSON.stringify({ text: text.slice(0, 6000), tags, lang: lang === 'en' ? 'en' : 'zh' }) });
       const d = await Api.jsonOrThrow(res);
       if (!isPrivateSessionCurrent(account) || (currentProjectId && currentProjectId !== projectId)) return;
       renderInvestorLens(d);

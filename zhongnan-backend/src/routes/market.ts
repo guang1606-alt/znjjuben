@@ -33,12 +33,20 @@ export function createMarketRouter(prisma: PrismaLike | any) {
   const marketRouter = asyncRouter();
   // 资方视角评估：纯本地确定性分析、零token成本，免费只读开放（让用户知道剧本值不值钱、怎么才好卖）
   marketRouter.post('/investor-lens', (req, res) => {
-    const { text, tags, episodes } = req.body as { text?: string; tags?: string[]; episodes?: number };
+    const body = req.body as { text?: string; tags?: string[]; episodes?: number; lang?: string };
+    const { text, tags, episodes } = body;
+    // v2.528 引擎早已支持中英两套信号词与结论文案（investorLens 第二参 lang），但路由从未读取 lang：
+    // 英文界面用户只会拿到中文结论，中文剧本配英文界面又会因词表选错而四项集体掉分。
+    // 这里按「正文实际语言」选信号词表、按「界面语言」出结论，两者分开传。
+    const uiLang: 'zh' | 'en' = body?.lang === 'en' ? 'en' : 'zh';
     const content = String(text ?? '').slice(0, 6000);
     if (!content.trim() && !(Array.isArray(tags) && tags.length))
       return res.status(400).json({ error: '请提供剧本梗概、简介或标签' });
-    const r = investorLens({ text: content, tags: Array.isArray(tags) ? tags.map(String) : [], episodes: Number(episodes) || undefined });
-    res.json({ ok: true, ...r, oneLiner: investorOneLiner(r) });
+    const cjk = (content.match(/[\u4e00-\u9fa5]/g) || []).length;
+    const latinWords = (content.match(/[A-Za-z]{3,}/g) || []).length;
+    const contentLang: 'zh' | 'en' = cjk >= 6 || cjk >= latinWords ? 'zh' : 'en';
+    const r = investorLens({ text: content, tags: Array.isArray(tags) ? tags.map(String) : [], episodes: Number(episodes) || undefined }, contentLang, uiLang);
+    res.json({ ok: true, ...r, oneLiner: investorOneLiner(r, uiLang) });
   });
 
   // v2.72 上架前价值预览：确定性零 token、免费。给卖家定价参考（价值指数/等级/单集区间/全集区间），不强制按此定价

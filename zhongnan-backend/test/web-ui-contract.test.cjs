@@ -191,3 +191,18 @@ describe('v2.527 结果页卡片与导出按界面语言出标签', () => {
     assert.ok(!/\}｜\$\{t\.reuse\}：/.test(teardown), '技法行仍固定全角标点');
   });
 });
+
+// v2.528 资方视角：后端引擎早已支持双语，但前端不传 lang、路由不读 lang，
+// 英文界面只能拿到中文结论；情绪波形则只在 en 下切英文名，ja/ko/es/ar 仍吐中文节拍名。
+describe('v2.528 资方视角与情绪波形的语言接线', () => {
+  it('资方视角请求带上界面语言', () => {
+    const seg = app.slice(app.indexOf("'/api/market/investor-lens'") - 300, app.indexOf("'/api/market/investor-lens'") + 400);
+    assert.ok(/lang: lang === 'en' \? 'en' : 'zh'/.test(seg), '请求体缺少 lang，后端只能出中文');
+  });
+
+  it('情绪波形非中文界面统一取英文名，分隔符随语言', () => {
+    const seg = app.slice(app.indexOf('const beatName = (q) =>'), app.indexOf('const beatName = (q) =>') + 500);
+    assert.ok(/wloc === 'zh' \? q\.name : \(q\.nameEn \|\| q\.name\)/.test(seg), '非中文界面仍可能吐中文节拍名');
+    assert.ok(/wloc === 'zh' \? '｜' : ' \| '/.test(seg), '波形标签竖线未随语言');
+  });
+});

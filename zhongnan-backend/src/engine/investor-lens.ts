@@ -92,15 +92,23 @@ function dimScore(base: number, posHits: string[], negHits: string[], perPos: nu
   return clamp(base + posHits.length * perPos - negHits.length * perNeg);
 }
 
-export function investorLens(input: { text?: string; tags?: string[]; episodes?: number }, lang: 'zh' | 'en' = 'zh'): InvestorLensResult {
-  const en = lang === 'en';
+/**
+ * v2.528 拆开「信号词语言」与「文案语言」：
+ * 中文剧本 + 英文界面是常见组合，过去两者共用一个 lang——选英文信号词会让中文剧本一个词都命中不了
+ * （四项分数集体掉到基线），选中文信号词又会把中文结论塞进英文界面。
+ * @param lang    信号词词表语言，按「正文语言」选
+ * @param uiLang  结论文案语言，按「界面语言」选；缺省跟随 lang
+ */
+export function investorLens(input: { text?: string; tags?: string[]; episodes?: number }, lang: 'zh' | 'en' = 'zh', uiLang: 'zh' | 'en' = lang): InvestorLensResult {
+  const sigEn = lang === 'en';
+  const en = uiLang === 'en';
   const raw = `${input.text || ''} ${(input.tags || []).join(' ')}`;
-  const t = en ? raw.toLowerCase() : raw;
+  const t = sigEn ? raw.toLowerCase() : raw;
 
-  const trackPos = hitOf(t, en ? TRACK_POS_EN : TRACK_POS), trackNeg = hitOf(t, en ? TRACK_NEG_EN : TRACK_NEG);
-  const costLow = hitOf(t, en ? COST_LOW_EN : COST_LOW), costHigh = hitOf(t, en ? COST_HIGH_EN : COST_HIGH), recoup = hitOf(t, en ? RECOUP_EN : RECOUP);
-  const mktPos = hitOf(t, en ? MARKET_POS_EN : MARKET_POS), mktNeg = hitOf(t, en ? MARKET_NEG_EN : MARKET_NEG);
-  const content = hitOf(t, en ? CONTENT_BASE_EN : CONTENT_BASE), policy = hitOf(t, en ? POLICY_RISK_EN : POLICY_RISK);
+  const trackPos = hitOf(t, sigEn ? TRACK_POS_EN : TRACK_POS), trackNeg = hitOf(t, sigEn ? TRACK_NEG_EN : TRACK_NEG);
+  const costLow = hitOf(t, sigEn ? COST_LOW_EN : COST_LOW), costHigh = hitOf(t, sigEn ? COST_HIGH_EN : COST_HIGH), recoup = hitOf(t, sigEn ? RECOUP_EN : RECOUP);
+  const mktPos = hitOf(t, sigEn ? MARKET_POS_EN : MARKET_POS), mktNeg = hitOf(t, sigEn ? MARKET_NEG_EN : MARKET_NEG);
+  const content = hitOf(t, sigEn ? CONTENT_BASE_EN : CONTENT_BASE), policy = hitOf(t, sigEn ? POLICY_RISK_EN : POLICY_RISK);
 
   // ① 赛道确定性
   const trackScore = dimScore(50, trackPos, trackNeg, 5, 12);

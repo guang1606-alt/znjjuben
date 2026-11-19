@@ -185,4 +185,28 @@ describe('资方视角评估 /investor-lens（免费只读·无需登录）', ()
     assert.ok(j.funderQuestions.length >= 8);
     assert.ok(typeof j.oneLiner === 'string' && j.oneLiner.includes('资方视角综合'));
   });
+
+  // v2.528 英文界面此前拿到的是中文结论（路由从不读 lang）；同时中文正文配英文界面不能掉分。
+  it('lang=en 出英文结论，但中文正文仍按中文词表打分', async () => {
+    const text = '重生复仇爆款对标红果，封闭场景少量演员成本可控，分账投流回本，前3秒强钩子高能切片付费卡点';
+    const zhRes = await fetch(base + M + '/investor-lens', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text }) });
+    const enRes = await fetch(base + M + '/investor-lens', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text, lang: 'en' }) });
+    const zh = await zhRes.json(); const en = await enRes.json();
+    assert.strictEqual(en.ok, true);
+    assert.deepStrictEqual(en.dimensions.map((d) => d.score), zh.dimensions.map((d) => d.score), '文案语言不应影响打分');
+    assert.ok(en.dimensions[0].score > 50, '中文正文应命中中文词表');
+    assert.strictEqual(en.dimensions[0].name, 'Track certainty');
+    assert.ok(en.oneLiner.includes('Investor lens'), '一句话总结应为英文');
+    assert.ok(!/[\u4e00-\u9fa5]/.test(en.premise), '结论不应含中文');
+  });
+
+  it('纯英文正文即使不传 lang，也按英文词表打分、出中文结论', async () => {
+    const r = await fetch(base + M + '/investor-lens', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text: 'A rebirth revenge hit with a proven benchmark, enclosed indoor small cast low budget, revenue share recoup break-even, strong hook payoff cutdown material' }),
+    });
+    const j = await r.json();
+    assert.ok(j.dimensions[0].score > 50, '英文正文应命中英文词表');
+    assert.strictEqual(j.dimensions[0].name, '赛道确定性');
+  });
 });

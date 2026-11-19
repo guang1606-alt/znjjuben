@@ -56,3 +56,26 @@ test('分数恒在0-100，长文本不溢出', () => {
   r.dimensions.forEach((d) => assert.ok(d.score >= 0 && d.score <= 100));
   assert.ok(r.overall >= 0 && r.overall <= 100);
 });
+
+// v2.528 信号词语言（正文）与文案语言（界面）必须拆开：中文剧本配英文界面是常见组合，
+// 过去两者共用一个 lang，选英文词表会让中文正文一个词都命中不了、四项集体掉到基线；
+// 选中文词表又会把中文结论塞进英文界面。
+test('中文正文 + 英文界面：词表按正文选（不掉分），文案按界面出英文', () => {
+  const text = '重生复仇爆款对标红果登顶榜单，封闭场景少量演员成本可控，分账投流回本，前3秒强钩子高能切片付费卡点';
+  const zhUI = investorLens({ text, tags: ['重生'] }, 'zh', 'zh');
+  const enUI = investorLens({ text, tags: ['重生'] }, 'zh', 'en');
+  assert.deepStrictEqual(enUI.dimensions.map((d) => d.score), zhUI.dimensions.map((d) => d.score), '文案语言不应影响打分');
+  assert.ok(enUI.dimensions[0].score > 50, '中文正文应命中中文词表，赛道分高于基线');
+  assert.strictEqual(enUI.dimensions[0].name, 'Track certainty');
+  assert.ok(!/[\u4e00-\u9fa5]/.test(enUI.premise), '英文界面结论不应含中文');
+  assert.ok(enUI.funderQuestions.every((q) => !/[\u4e00-\u9fa5]/.test(q)), '英文界面必问清单应全英文');
+  assert.ok(investorOneLiner(enUI, 'en').includes('Investor lens'));
+});
+
+test('纯英文正文 + 中文界面：词表按正文选英文，文案仍出中文', () => {
+  const text = 'A rebirth revenge hit with a proven benchmark, enclosed indoor small cast low budget, revenue share recoup break-even, strong hook payoff high-energy cutdown material';
+  const r = investorLens({ text }, 'en', 'zh');
+  assert.ok(r.dimensions[0].score > 50, '英文正文应命中英文词表');
+  assert.strictEqual(r.dimensions[0].name, '赛道确定性');
+  assert.ok(r.premise.includes('入场券'), '中文界面文案应保持中文');
+});
