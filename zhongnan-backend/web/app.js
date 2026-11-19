@@ -5648,13 +5648,13 @@
     head.textContent = lang === 'en' ? 'Per-position hook palette (system default + alternatives)' : '逐点钩子调色板（系统默认 + 备选，点选即接管）';
     grp.appendChild(head);
     const ctrl = document.createElement('div'); ctrl.className = 'palette-ctrl';
-    const scenesSel = document.createElement('select'); scenesSel.className = 'palette-scenes';
-    [2, 3, 4, 5, 6, 7, 8].forEach((n) => { const o = document.createElement('option'); o.value = String(n); o.textContent = (lang === 'en' ? `${n} scenes/ep` : `每集${n}场`); if (n === 4) o.selected = true; scenesSel.appendChild(o); });
+    // v2.547 场数不再由调色板自己选：此前这个独立选择器只影响预览、不进生成请求，
+    // 用户选 6 场真实写本集仍按节奏默认（约3场）。统一由生成配置栏的「每集场数」驱动。
     const genBtn = document.createElement('button'); genBtn.type = 'button'; genBtn.className = 'chip palette-gen';
     genBtn.textContent = lang === 'en' ? '🎯 Build palette' : '🎯 生成逐点方案';
     const clearBtn = document.createElement('button'); clearBtn.type = 'button'; clearBtn.className = 'chip palette-clear';
     clearBtn.textContent = lang === 'en' ? 'Reset my picks' : '清空我的点选';
-    ctrl.appendChild(scenesSel); ctrl.appendChild(genBtn); ctrl.appendChild(clearBtn); grp.appendChild(ctrl);
+    ctrl.appendChild(genBtn); ctrl.appendChild(clearBtn); grp.appendChild(ctrl);
     const note = document.createElement('div'); note.className = 'muted palette-note'; grp.appendChild(note);
     const body = document.createElement('div'); body.className = 'palette-body'; grp.appendChild(body);
     box.appendChild(grp);
@@ -5718,7 +5718,8 @@
         const epCount = Math.max(1, Math.min(120, parseInt(($('episodes') || {}).value || '20', 10) || 20));
         const tagBrief = (typeof buildTagBrief === 'function') ? buildTagBrief() : '';
         const tags = Array.isArray(tagChosen) ? tagChosen.slice(0, 40) : [];
-        const payload = { episodeCount: epCount, scenesPerEp: parseInt(scenesSel.value, 10), tags, lang: lang === 'en' ? 'en' : 'zh', brief: tagBrief.slice(0, 2000) };
+        // v2.547 与生成请求同源：用户没显式选场数时，调色板按 4 场示意（生成侧仍走节奏策略默认）
+        const payload = { episodeCount: epCount, scenesPerEp: scenesPerEpValue() || 4, tags, lang: lang === 'en' ? 'en' : 'zh', brief: tagBrief.slice(0, 2000) };
         if (hookStrategy) payload.strategy = hookStrategy;
         const res = await Api.request('/api/generate/hooks/palette', { method: 'POST', body: JSON.stringify(payload) });
         const d = await res.json();
@@ -6008,6 +6009,16 @@
     return base;
   }
   function beatPayload() { return beatAdvanced() ? { beatPref: collectBeatPref() } : {}; }
+  // v2.547 每集场数：生成配置栏的显式选择（1-8）；空值=自动，交给节奏策略定中位场数。
+  // 立项落库兼顾续写：同一次创作里用户在表单改了场数，下一集（含刷新后从 bible 读）不会悄悄退回默认。
+  function scenesPerEpValue() {
+    const n = parseInt(($('scenesPerEp') || {}).value || '', 10);
+    return Number.isFinite(n) && n >= 1 && n <= 8 ? n : 0;
+  }
+  function scenesPayload() {
+    const n = scenesPerEpValue();
+    return n ? { scenesPerEp: n } : {};
+  }
   // v2.35 AIGC 制式成片时长（仅 Z-AIGC 制作本传，按分钟精算字数与台词配比）
   function aigcPayload() {
     const sel = $('scriptFormatSel');
@@ -7487,7 +7498,7 @@
           ...(useTagBench ? { tags: tagChosen.slice(0, TAG_MAX) } : {}),
           // v2.319 adapt/novel/hit_lab：原文立项即持久化进 bible，刷新续写/草稿恢复版权闸门不中断（与 episodes 同口径）
           ...sourceTextPayload(),
-          format: $('scriptFormatSel') ? $('scriptFormatSel').value : 'LIVE_ACTION', investWan, specialTopic, ...hookPayload(), ...beatPayload(), ...castAssetPayload(), ...propAssetPayload(), ...sceneAssetPayload(), ...modeInputPayload(),
+          format: $('scriptFormatSel') ? $('scriptFormatSel').value : 'LIVE_ACTION', investWan, specialTopic, ...hookPayload(), ...beatPayload(), ...scenesPayload(), ...castAssetPayload(), ...propAssetPayload(), ...sceneAssetPayload(), ...modeInputPayload(),
         };
         const postProject = () => Api.request('/api/generate/projects', { method: 'POST', headers: { 'Idempotency-Key': idemKey }, body: JSON.stringify(projectPayload) });
         let pr;
@@ -7531,7 +7542,7 @@
       renderTaskQueue();
       session.briefText = brief.trim(); // v2.277 仅 episodes 阶段留存原简报：失败后 #failRetry 凭此 + session.project 安装复用句柄
       const res = await Api.request('/api/generate/episodes', { method: 'POST', signal: abortCtrl.signal,
-        body: JSON.stringify({ projectId: project.id, brief: brief.trim(), engineTier: $('engine').value, lang: outLocale(), ...hookPayload(), ...beatPayload(), ...(aigcPayload()), ...(selectedMode === 'spark' ? { track: selectedTrack } : {}), ...bbPayload, ...tbPayload, ...brPayload, ...sourceTextPayload() }) });
+        body: JSON.stringify({ projectId: project.id, brief: brief.trim(), engineTier: $('engine').value, lang: outLocale(), ...hookPayload(), ...beatPayload(), ...scenesPayload(), ...(aigcPayload()), ...(selectedMode === 'spark' ? { track: selectedTrack } : {}), ...bbPayload, ...tbPayload, ...brPayload, ...sourceTextPayload() }) });
       if (!isPrivateSessionCurrent(account)) { res.body?.cancel().catch(() => {}); return; }
       if (!res.ok || !res.body) {
         const txt = await res.text().catch(() => '');

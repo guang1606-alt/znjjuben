@@ -166,7 +166,7 @@ for (const error of ['BRANCH_VALIDATION_FAILED', 'TREND_PII_BLOCKED', 'AD_CLAIM_
       selectedMode: 'adapt', selectedTrack: 'signature_scene', draftProject: null,
       loadCastAssets: async () => {}, loadPropAssets: async () => {}, loadSceneAssets: async () => {},
       brandBriefPayload: () => ({}), trendBriefPayload: () => ({}), branchBriefPayload: () => ({}),
-      hookPayload: () => ({}), beatPayload: () => ({}), castAssetPayload: () => ({}), propAssetPayload: () => ({}), sceneAssetPayload: () => ({}), aigcPayload: () => ({}), sourceTextPayload: () => ({}), modeInputPayload: () => ({}), outLocale: () => 'zh',
+      hookPayload: () => ({}), beatPayload: () => ({}), scenesPayload: () => ({}), castAssetPayload: () => ({}), propAssetPayload: () => ({}), sceneAssetPayload: () => ({}), aigcPayload: () => ({}), sourceTextPayload: () => ({}), modeInputPayload: () => ({}), outLocale: () => 'zh',
       PV: () => ({ createProgress: () => ({}) }), showBranchError() {}, showTrendError() {}, showBrandError() {},
       showFail() {}, closeWorkbench() {}, BRANCH_UI_DICT: () => ({}), TREND_UI_DICT: () => ({}),
       Api: { isAuthed: () => true, request: async url => url.endsWith('/projects') ? { ok: true, json: async () => ({ id: 'p1', title: '测试', mode: 'adapt' }) } : { ok: false, status: 400, text: async () => JSON.stringify({ error, message: '预检拒绝' }) } },
@@ -231,7 +231,7 @@ test('submitting a resumed adaptation uses its project without creating a duplic
     selectedMode: 'spark', selectedTrack: 'signature_scene', draftProject: project,
     loadCastAssets: async () => {}, loadPropAssets: async () => {}, loadSceneAssets: async () => {},
     brandBriefPayload: () => ({}), trendBriefPayload: () => ({}), branchBriefPayload: () => ({}),
-    hookPayload: () => ({}), beatPayload: () => ({}), castAssetPayload: () => ({}), propAssetPayload: () => ({}), sceneAssetPayload: () => ({}), aigcPayload: () => ({}), sourceTextPayload: () => ({}), modeInputPayload: () => ({}), outLocale: () => 'zh',
+    hookPayload: () => ({}), beatPayload: () => ({}), scenesPayload: () => ({}), castAssetPayload: () => ({}), propAssetPayload: () => ({}), sceneAssetPayload: () => ({}), aigcPayload: () => ({}), sourceTextPayload: () => ({}), modeInputPayload: () => ({}), outLocale: () => 'zh',
     PV: () => ({ createProgress: () => ({}) }), closeWorkbench() {}, clearDraftProject() {}, showFail() {},
     Api: { isAuthed: () => true, request: async (url, opts) => {
       requests.push({ url, data: JSON.parse(opts.body) });
@@ -255,7 +255,7 @@ test('v2.319 tags mode creates the project with structured Chinese tags (not jus
     loadCastAssets: async () => {}, loadPropAssets: async () => {}, loadSceneAssets: async () => {},
     buildTagBrief: () => '标签组合：逆袭、都市……的自然语言简报', tagProjectTitle: () => '标签剧标题', rememberPrefTags() {},
     brandBriefPayload: () => ({}), trendBriefPayload: () => ({}), branchBriefPayload: () => ({}),
-    hookPayload: () => ({}), beatPayload: () => ({}), castAssetPayload: () => ({}), propAssetPayload: () => ({}), sceneAssetPayload: () => ({}), aigcPayload: () => ({}), sourceTextPayload: () => ({}), modeInputPayload: () => ({}), outLocale: () => 'zh',
+    hookPayload: () => ({}), beatPayload: () => ({}), scenesPayload: () => ({}), castAssetPayload: () => ({}), propAssetPayload: () => ({}), sceneAssetPayload: () => ({}), aigcPayload: () => ({}), sourceTextPayload: () => ({}), modeInputPayload: () => ({}), outLocale: () => 'zh',
     PV: () => ({ createProgress: () => ({}) }), closeWorkbench() {}, showFail() {},
     Api: { isAuthed: () => true, request: async (url, opts) => {
       requests.push({ url, data: JSON.parse(opts.body) });
@@ -278,7 +278,7 @@ test('v2.319 spark mode persists sourceText at project creation so resume/regene
     selectedMode: 'spark', selectedTrack: 'signature_scene', draftProject: null,
     loadCastAssets: async () => {}, loadPropAssets: async () => {}, loadSceneAssets: async () => {},
     brandBriefPayload: () => ({}), trendBriefPayload: () => ({}), branchBriefPayload: () => ({}),
-    hookPayload: () => ({}), beatPayload: () => ({}), castAssetPayload: () => ({}), propAssetPayload: () => ({}), sceneAssetPayload: () => ({}), aigcPayload: () => ({}), modeInputPayload: () => ({}), outLocale: () => 'zh',
+    hookPayload: () => ({}), beatPayload: () => ({}), scenesPayload: () => ({}), castAssetPayload: () => ({}), propAssetPayload: () => ({}), sceneAssetPayload: () => ({}), aigcPayload: () => ({}), modeInputPayload: () => ({}), outLocale: () => 'zh',
     PV: () => ({ createProgress: () => ({}) }), closeWorkbench() {}, showFail() {},
     Api: { isAuthed: () => true, request: async (url, opts) => {
       requests.push({ url, data: JSON.parse(opts.body) });

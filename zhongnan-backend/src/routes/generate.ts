@@ -302,6 +302,9 @@ const projectSchema = z.object({
   // v2.545 思考深度档位：speed=极速 / balanced=标准 / depth=深度（Method Trace + Purpose Gate + Range Lens 三档递进）。
   // 立项落库、续写沿用；此前 pipeline v2.326 三层已支持但无路由入口 = 能力无入口，请求永远 balanced。
   depthTier: z.enum(['speed', 'balanced', 'depth']).optional(),
+  // v2.547 每集场数：自动=不传（按节奏策略定中位）；显式 1-8 约束本剧排布。
+  // 此前该参数只有钩子调色板预览在用、生成请求从不携带 → 用户选了场数也不生效。
+  scenesPerEp: z.number().int().min(1).max(8).optional(),
 });
 generateRouter.post('/projects', authRequired, async (req: AuthRequest, res) => {
   const parsed = projectSchema.safeParse(req.body);
@@ -498,6 +501,8 @@ generateRouter.post('/projects', authRequired, async (req: AuthRequest, res) => 
     ...(beatPrefs ? { beatPrefs } : {}),
     // v2.545 思考深度档位随项目落库（续写/重生成沿用同一深度，不要求每次重填）
     ...(d.depthTier ? { depthTier: d.depthTier } : {}),
+    // v2.547 每集场数随项目落库（续写/重生成沿用同一排布，刷新后不退回节奏默认）
+    ...(d.scenesPerEp ? { scenesPerEp: d.scenesPerEp } : {}),
     // v2.345 四模式表单事实源快照：立项即锁定（全剧沿用，续写/重生成自动读取，生成时注入架构师/撰写师）
     ...(modeInput ? { modeInput } : {}),
     // v2.148 视觉画风编号：仅 AIGC 项目接受，非法编号静默丢弃（不阻断建项目）
@@ -3303,6 +3308,13 @@ generateRouter.post('/episodes', authRequired, async (req: AuthRequest, res) => 
       return rawDepth === 'speed' || rawDepth === 'balanced' || rawDepth === 'depth' ? rawDepth as 'speed' | 'balanced' | 'depth' : undefined;
     })();
     const depthTierOpt = parsed.data.depthTier ?? storedDepthTier;
+    // v2.547 每集场数：请求显式优先；否则沿用立项落库值（脏数据/旧项目无该键回退 undefined → 节奏策略中位）
+    const storedScenesPerEp = (() => {
+      const raw = (bible as any)?.scenesPerEp;
+      const n = typeof raw === 'number' ? raw : parseInt(String(raw ?? ''), 10);
+      return Number.isInteger(n) && n >= 1 && n <= 8 ? n : undefined;
+    })();
+    const scenesPerEpOpt = parsed.data.scenesPerEp ?? storedScenesPerEp;
     // v2.84 自主学习知识库：拉取已生效知识（高分剧本技法/市场趋势/政策规则），按 brief 相关性注入各岗位
     const knowledgeRows = await prisma.knowledgeItem.findMany({
       where: { status: 'APPROVED' },
@@ -3352,7 +3364,8 @@ generateRouter.post('/episodes', authRequired, async (req: AuthRequest, res) => 
         : {}),
       episodeIndex: epIndex,
       episodeCount: totalEps && totalEps > 0 ? totalEps : 1,
-      scenesPerEp: parsed.data.scenesPerEp,
+      // v2.547 每集场数（请求 > 项目落库 > 节奏策略默认），写入 _profile 便于回溯本集排布依据
+      ...(scenesPerEpOpt ? { scenesPerEp: scenesPerEpOpt } : {}),
       ...(parsed.data.hookStrategy ? { hookStrategy: parsed.data.hookStrategy } : {}),
       ...(parsed.data.paceStrategy ? { paceStrategy: parsed.data.paceStrategy } : {}),
       ...(parsed.data.dialogueStrategy ? { dialogueStrategy: parsed.data.dialogueStrategy } : {}),
