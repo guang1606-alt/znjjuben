@@ -17,6 +17,7 @@ import { isValidVisualStyleId, listVisualStyles } from '../engine/visual-style-l
 import { isValidCameraStyleId, listCameraStyles } from '../engine/camera-language-library'; // v2.149 镜头语言编码库（AIGC 漫剧镜头语言编号 → 可执行 prompt 模板）
 import { buildCastAssetDirective, extractCastAssetDrafts, type CastAssetSeed } from '../engine/character-asset'; // v2.151 角色资产库（L3 角色可资产化：跨剧复用强约束 + 沉淀草稿提取）
 import { sanitizeModeInput } from '../engine/mode-input'; // v2.345 四模式表单事实源（persona/duel/multiverse/diary 立项落库 bible.modeInput，生成时双岗注入）
+import { isPlatformTargetId, type PlatformTargetId } from '../config/platform-targets'; // v2.549 目标平台（前端下拉 → 立项落库 → 生成注入，此前为死控件）
 import { scoreCastAsset, detectCastAssetConflicts, autoFillCastAsset } from '../engine/asset-health'; // v2.152 资产体检（五维完整度 + 库级冲突预警）+ v2.181 规则模板补全
 import { buildAssetUsageMap } from '../engine/asset-usage'; // v2.165 资产引用统计（当前被哪些项目引用，与 usedCount 历史累计口径互补）
 import { extractPropAssetDrafts, type PropAssetSeed } from '../engine/prop-asset'; // v2.159 道具资产库（L3 道具可资产化：关键信物跨集沉淀）
@@ -305,6 +306,9 @@ const projectSchema = z.object({
   // v2.547 每集场数：自动=不传（按节奏策略定中位）；显式 1-8 约束本剧排布。
   // 此前该参数只有钩子调色板预览在用、生成请求从不携带 → 用户选了场数也不生效。
   scenesPerEp: z.number().int().min(1).max(8).optional(),
+  // v2.549 目标平台：前端下拉此前是死控件（值从不进请求、后端无字段）。
+  // 立项落库、续写沿用；生成时注入架构师/撰写师/润色师，并参与海外本地化判定。
+  platform: z.enum(['hongguo', 'douyin', 'kuaishou', 'reelshort', 'dramabox']).optional(),
 });
 generateRouter.post('/projects', authRequired, async (req: AuthRequest, res) => {
   const parsed = projectSchema.safeParse(req.body);
@@ -503,6 +507,8 @@ generateRouter.post('/projects', authRequired, async (req: AuthRequest, res) => 
     ...(d.depthTier ? { depthTier: d.depthTier } : {}),
     // v2.547 每集场数随项目落库（续写/重生成沿用同一排布，刷新后不退回节奏默认）
     ...(d.scenesPerEp ? { scenesPerEp: d.scenesPerEp } : {}),
+    // v2.549 目标平台随项目落库（续写/重生成沿用同一投递目标，管线据此注入平台节奏偏好）
+    ...(d.platform ? { platform: d.platform } : {}),
     // v2.345 四模式表单事实源快照：立项即锁定（全剧沿用，续写/重生成自动读取，生成时注入架构师/撰写师）
     ...(modeInput ? { modeInput } : {}),
     // v2.148 视觉画风编号：仅 AIGC 项目接受，非法编号静默丢弃（不阻断建项目）
@@ -2565,6 +2571,8 @@ const genSchema = z.object({
   visualStyleId: z.string().max(8).optional(),            // v2.148 视觉画风编号（AIGC 项目；传入即落库 project.bible，供分镜导出/海报注入）
   cameraStyleId: z.string().max(8).optional(),            // v2.149 镜头语言编号（AIGC 项目；传入即落库 project.bible，供分镜导出注入）
   scenesPerEp: z.number().int().min(1).max(8).optional(),
+  // v2.549 目标平台：请求显式优先，否则沿用项目 bible.platform；未选不注入（与旧版行为一致）
+  platform: z.enum(['hongguo', 'douyin', 'kuaishou', 'reelshort', 'dramabox']).optional(),
   // 反转/爽点/情绪节拍偏好（与钩子同构），非法/未知id在 pipeline 内清洗
   beatPref: z.object({
     mode: z.enum(['auto', 'manual', 'hybrid']).optional(),
@@ -3315,6 +3323,9 @@ generateRouter.post('/episodes', authRequired, async (req: AuthRequest, res) => 
       return Number.isInteger(n) && n >= 1 && n <= 8 ? n : undefined;
     })();
     const scenesPerEpOpt = parsed.data.scenesPerEp ?? storedScenesPerEp;
+    // v2.549 目标平台：请求显式优先；否则沿用立项落库值（脏数据/旧项目/未知 id 回退 undefined → 不注入）
+    const storedPlatform = isPlatformTargetId((bible as any)?.platform) ? (bible as any).platform as PlatformTargetId : undefined;
+    const platformOpt = parsed.data.platform ?? storedPlatform;
     // v2.84 自主学习知识库：拉取已生效知识（高分剧本技法/市场趋势/政策规则），按 brief 相关性注入各岗位
     const knowledgeRows = await prisma.knowledgeItem.findMany({
       where: { status: 'APPROVED' },
@@ -3366,6 +3377,8 @@ generateRouter.post('/episodes', authRequired, async (req: AuthRequest, res) => 
       episodeCount: totalEps && totalEps > 0 ? totalEps : 1,
       // v2.547 每集场数（请求 > 项目落库 > 节奏策略默认），写入 _profile 便于回溯本集排布依据
       ...(scenesPerEpOpt ? { scenesPerEp: scenesPerEpOpt } : {}),
+      // v2.549 目标平台（请求 > 项目落库），管线据此注入节奏/题材偏好并参与海外本地化判定
+      ...(platformOpt ? { platform: platformOpt } : {}),
       ...(parsed.data.hookStrategy ? { hookStrategy: parsed.data.hookStrategy } : {}),
       ...(parsed.data.paceStrategy ? { paceStrategy: parsed.data.paceStrategy } : {}),
       ...(parsed.data.dialogueStrategy ? { dialogueStrategy: parsed.data.dialogueStrategy } : {}),

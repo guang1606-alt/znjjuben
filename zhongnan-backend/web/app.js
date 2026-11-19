@@ -1976,8 +1976,8 @@
 
   /* ---------- 下拉双语 ---------- */
   const SELECT_OPTS = (typeof window !== 'undefined' && window.ZN_DATA && window.ZN_DATA.SELECT_OPTS) || {
-    platform: { zh: [['红果短剧','红果短剧'],['抖音','抖音'],['快手','快手'],['ReelShort','ReelShort'],['DramaBox','DramaBox']],
-      en: [['红果短剧','Hongguo'],['抖音','Douyin'],['快手','Kuaishou'],['ReelShort','ReelShort'],['DramaBox','DramaBox']] },
+    platform: { zh: [['',''],['hongguo','红果短剧'],['douyin','抖音'],['kuaishou','快手'],['reelshort','ReelShort'],['dramabox','DramaBox']],
+      en: [['',''],['hongguo','Hongguo'],['douyin','Douyin'],['kuaishou','Kuaishou'],['reelshort','ReelShort'],['dramabox','DramaBox']] },
     engine: { zh: ENGINE_TIERS.map((t) => [t.id, t.zh]), en: ENGINE_TIERS.map((t) => [t.id, t.en]) },
     outLang: { zh: [['zh','中文'],['en','English'],['ja','日本語'],['ko','한국어'],['es','Español'],['pt','Português'],['th','ไทย'],['id','Bahasa Indonesia'],['vi','Tiếng Việt'],['ar','العربية']],
       en: [['zh','Chinese'],['en','English'],['ja','Japanese'],['ko','Korean'],['es','Spanish'],['pt','Portuguese'],['th','Thai'],['id','Indonesian'],['vi','Vietnamese'],['ar','Arabic']] },
@@ -1988,13 +1988,15 @@
       const cur = el.value || SELECT_OPTS[key][lang][0][0];
       const my = acctRank();
       el.innerHTML = SELECT_OPTS[key][lang].map(([v, lab]) => {
+        // v2.549 目标平台的空值选项走 i18n（「不指定（自动适配）」），其余沿用表内双语标签
+        const shown = id === 'platform' && v === '' ? t('platformAuto') : lab;
         // v2.329 输出语言 / v2.489 引擎档均按会员档解锁（与后端 LANGUAGE_LOCKED / ENGINE_LOCKED 同源）
         const meta = id === 'outLang' ? OUT_LANGS.find((l) => l.code === v)
           : id === 'engine' ? ENGINE_TIERS.find((t) => t.id === v) : null;
-        if (!meta) return `<option value="${v}">${lab}</option>`;
+        if (!meta) return `<option value="${v}">${shown}</option>`;
         const locked = (_RANK[meta.min] ?? 0) > my;
         const hint = councilTitle((id === 'outLang' ? 'language:' : 'engine:') + v);
-        return `<option value="${v}"${locked ? ' disabled' : ''}${hint}>${lab}${locked ? (lang === 'en' ? ` · 🔒 ${meta.min}` : ` · 🔒 需${TIER_NAME[meta.min] || ''}会员`) : ''}</option>`;
+        return `<option value="${v}"${locked ? ' disabled' : ''}${hint}>${shown}${locked ? (lang === 'en' ? ` · 🔒 ${meta.min}` : ` · 🔒 需${TIER_NAME[meta.min] || ''}会员`) : ''}</option>`;
       }).join('');
       el.value = cur;
       // 当前值被降级锁定时回落到第一个可用项（如换账号/退出/降档后）
@@ -3511,13 +3513,14 @@
       note.classList.toggle('hidden', !draftProject);
       note.innerHTML = draftProject
         ? `${lang === 'en' ? 'Continuing saved project' : '继续已保存项目'}：${escapeHtml(draftProject.title)} · ${draftProject.totalEps} ${lang === 'en' ? 'episodes' : '集'}
-          <span class="muted">${lang === 'en' ? 'The project episode count, engine, format and scenes per episode are retained.' : '沿用该项目的集数、引擎、制式与每集场数，可修改下方创作简报。'}</span>
+          <span class="muted">${lang === 'en' ? 'The project episode count, engine, format, scenes per episode and target platform are retained.' : '沿用该项目的集数、引擎、制式、每集场数与目标平台，可修改下方创作简报。'}</span>
           <button type="button" class="btn-ghost" id="leaveDraftBtn">${lang === 'en' ? 'Start a new project' : '另起新项目'}</button>`
         : '';
       if (draftProject) $('leaveDraftBtn').onclick = clearDraftProject;
     }
     // v2.548 每集场数属项目级排布：续写时与集数/引擎/制式一起锁定，避免同剧前后集场数不一致
-    ['episodes', 'engine', 'scriptFormatSel', 'scenesPerEp'].forEach((id) => { if ($(id)) $(id).disabled = !!draftProject; });
+    // v2.549 目标平台同属项目级决策：续写沿用立项平台，不随新一集改动
+    ['episodes', 'engine', 'scriptFormatSel', 'scenesPerEp', 'platform'].forEach((id) => { if ($(id)) $(id).disabled = !!draftProject; });
     // v2.336 恢复草稿后按剧本类型纠正制式（历史 aigc_drama + LIVE_ACTION 脏组合自愈）
     if (typeof applyScriptTypeFormat === 'function') applyScriptTypeFormat();
   }
@@ -3534,6 +3537,8 @@
     selectedScriptType = project.bible?.scriptType || 'live_action_drama';
     // v2.548 还原立项时落库的每集场数（否则界面显示「自动」、生成却沿用落库值，名实不符）
     if ($('scenesPerEp')) $('scenesPerEp').value = project.bible?.scenesPerEp ? String(project.bible.scenesPerEp) : '';
+    // v2.549 还原立项时落库的目标平台（否则界面显示「不指定」、生成却沿用落库值，名实不符）
+    if ($('platform')) $('platform').value = project.bible?.platform || '';
     switchView('studio'); renderModes(); renderScriptTypes(); syncTagBench(); syncModeBrief();
     $('modeBrief').value = draft?.brief || '';
     $('episodes').value = project.totalEps || 20;
@@ -6022,6 +6027,16 @@
     const n = scenesPerEpValue();
     return n ? { scenesPerEp: n } : {};
   }
+  // v2.549 目标平台：此前该下拉的值从不进请求（死控件），用户选了平台对生成毫无影响。
+  // 空值 = 不指定，交给系统默认（不下发键，行为与旧版一致）。
+  function platformValue() {
+    const v = ($('platform') || {}).value || '';
+    return /^(hongguo|douyin|kuaishou|reelshort|dramabox)$/.test(v) ? v : '';
+  }
+  function platformPayload() {
+    const v = platformValue();
+    return v ? { platform: v } : {};
+  }
   // v2.35 AIGC 制式成片时长（仅 Z-AIGC 制作本传，按分钟精算字数与台词配比）
   function aigcPayload() {
     const sel = $('scriptFormatSel');
@@ -7501,7 +7516,7 @@
           ...(useTagBench ? { tags: tagChosen.slice(0, TAG_MAX) } : {}),
           // v2.319 adapt/novel/hit_lab：原文立项即持久化进 bible，刷新续写/草稿恢复版权闸门不中断（与 episodes 同口径）
           ...sourceTextPayload(),
-          format: $('scriptFormatSel') ? $('scriptFormatSel').value : 'LIVE_ACTION', investWan, specialTopic, ...hookPayload(), ...beatPayload(), ...scenesPayload(), ...castAssetPayload(), ...propAssetPayload(), ...sceneAssetPayload(), ...modeInputPayload(),
+          format: $('scriptFormatSel') ? $('scriptFormatSel').value : 'LIVE_ACTION', investWan, specialTopic, ...hookPayload(), ...beatPayload(), ...scenesPayload(), ...platformPayload(), ...castAssetPayload(), ...propAssetPayload(), ...sceneAssetPayload(), ...modeInputPayload(),
         };
         const postProject = () => Api.request('/api/generate/projects', { method: 'POST', headers: { 'Idempotency-Key': idemKey }, body: JSON.stringify(projectPayload) });
         let pr;
@@ -7545,7 +7560,7 @@
       renderTaskQueue();
       session.briefText = brief.trim(); // v2.277 仅 episodes 阶段留存原简报：失败后 #failRetry 凭此 + session.project 安装复用句柄
       const res = await Api.request('/api/generate/episodes', { method: 'POST', signal: abortCtrl.signal,
-        body: JSON.stringify({ projectId: project.id, brief: brief.trim(), engineTier: $('engine').value, lang: outLocale(), ...hookPayload(), ...beatPayload(), ...scenesPayload(), ...(aigcPayload()), ...(selectedMode === 'spark' ? { track: selectedTrack } : {}), ...bbPayload, ...tbPayload, ...brPayload, ...sourceTextPayload() }) });
+        body: JSON.stringify({ projectId: project.id, brief: brief.trim(), engineTier: $('engine').value, lang: outLocale(), ...hookPayload(), ...beatPayload(), ...scenesPayload(), ...platformPayload(), ...(aigcPayload()), ...(selectedMode === 'spark' ? { track: selectedTrack } : {}), ...bbPayload, ...tbPayload, ...brPayload, ...sourceTextPayload() }) });
       if (!isPrivateSessionCurrent(account)) { res.body?.cancel().catch(() => {}); return; }
       if (!res.ok || !res.body) {
         const txt = await res.text().catch(() => '');

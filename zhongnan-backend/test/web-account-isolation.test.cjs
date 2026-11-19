@@ -127,7 +127,9 @@ function setup(handler = async () => response([])) {
   for (const name of [
     'brandBriefPayload', 'trendBriefPayload', 'branchBriefPayload', 'hookPayload', 'beatPayload',
     // v2.547 每集场数：startGenerate/立项载荷新增 scenesPayload，注入同族空桩
+    // v2.549 目标平台：立项/生成载荷新增 platformPayload，同样注入
     'scenesPayload',
+    'platformPayload',
     'castAssetPayload', 'propAssetPayload', 'sceneAssetPayload', 'aigcPayload', 'sourceTextPayload',
     // v2.345 四模式表单事实源：startGenerate 立项调用 modeInputPayload，注入同族空桩
     'modeInputPayload',

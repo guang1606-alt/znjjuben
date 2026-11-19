@@ -4,7 +4,7 @@
   'use strict';
   const C = {};
 // v2.498 运行时版本号（首页更新通知用；bump-version.cjs 同步更新）
-C.ZN_VERSION = '2.548.0';
+C.ZN_VERSION = '2.549.0';
 C.HOME_TOOLS = [
     { id: 'toolPitch', key: 'tbCardPitch', desc: 'tbCardPitchP', cost: 'tbCostPitch' },
     { id: 'toolRead', key: 'tbCardRead', desc: 'tbCardReadP', cost: 'tbCostRead' },
@@ -204,8 +204,8 @@ C.ENGINE_TIERS = [
   ];
 
 C.SELECT_OPTS = {
-    platform: { zh: [['红果短剧','红果短剧'],['抖音','抖音'],['快手','快手'],['ReelShort','ReelShort'],['DramaBox','DramaBox']],
-      en: [['红果短剧','Hongguo'],['抖音','Douyin'],['快手','Kuaishou'],['ReelShort','ReelShort'],['DramaBox','DramaBox']] },
+    platform: { zh: [['',''],['hongguo','红果短剧'],['douyin','抖音'],['kuaishou','快手'],['reelshort','ReelShort'],['dramabox','DramaBox']],
+      en: [['',''],['hongguo','Hongguo'],['douyin','Douyin'],['kuaishou','Kuaishou'],['reelshort','ReelShort'],['dramabox','DramaBox']] },
     engine: { zh: C.ENGINE_TIERS.map((t) => [t.id, t.zh]), en: C.ENGINE_TIERS.map((t) => [t.id, t.en]) },
     outLang: { zh: C.OUT_LANGS.map((l) => [l.code, l.native]), en: C.OUT_LANGS.map((l) => [l.code, l.native]) },
   };
