@@ -48,6 +48,31 @@ test('超过体积上限的图片不入库，回退原地址', async () => {
   }
 });
 
+test('带 ownerId 时同步记一条存储用量（refId 指向媒体 id）', async () => {
+  const url = await persistImage(PNG_1PX, 'poster', mem, 'u_owner');
+  const id = url.split('/').pop();
+  const asset = await mem.mediaAsset.findUnique({ where: { id } });
+  const sum = await mem.storageObject.aggregate({ where: { userId: 'u_owner', deletedAt: null }, _sum: { bytes: true } });
+  assert.equal(sum._sum.bytes, asset.size, '存储用量必须等于落库图片字节数');
+  const rows = await mem.storageObject.aggregate({ where: { userId: 'nobody', deletedAt: null }, _sum: { bytes: true } });
+  assert.equal(rows._sum.bytes, 0, '别的用户不应被记入');
+});
+
+test('未传 ownerId 时不产生存储用量（避免匿名记账）', async () => {
+  await persistImage(PNG_1PX, 'poster', mem);
+  const sum = await mem.storageObject.aggregate({ where: { userId: 'u_no_owner', deletedAt: null }, _sum: { bytes: true } });
+  assert.equal(sum._sum.bytes, 0);
+});
+
+test('存储记账失败不影响图片永久地址返回', async () => {
+  const db = {
+    mediaAsset: mem.mediaAsset,
+    storageObject: { async create() { throw new Error('STORAGE_WRITE_FAIL'); } },
+  };
+  const url = await persistImage(PNG_1PX, 'poster', db, 'u_owner');
+  assert.match(url, /^\/media\/ma_\d+$/);
+});
+
 test('GET /media/:id 返回字节、类型与长缓存；未知 id 404', async () => {
   const url = await persistImage(PNG_1PX, 'poster', mem);
   const r = await fetch(base + url);

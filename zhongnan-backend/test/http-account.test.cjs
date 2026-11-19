@@ -35,6 +35,7 @@ describe('账户资料 /me 与笔名修改', { concurrency: 1 }, () => {
     assert.strictEqual(d.points.balance, 500);
     assert.strictEqual(d.phone, '138****1111');           // 手机号掩码，不回传全号
     assert.strictEqual(d.storageUsedBytes, 1500);
+    assert.strictEqual(d.storageQuotaBytes, 500 * 1024 * 1024, '配额 = 等级基础额度，不能再把扩容额度当用量叠加');
     assert.ok(d.benefits);                                // 带当前档权益
     assert.strictEqual(d.isAdmin, false, '普通用户不是管理员');
     assert.strictEqual(d.isSuperAdmin, false);

@@ -7,6 +7,7 @@ import { passwordStrength } from '../lib/auth-policy';
 import { grantBonus } from '../lib/billing';
 import { withBillingTransaction } from '../lib/prisma-tx';
 import { INVITE, MEMBERSHIP, MemberLevel } from '../config/pricing';
+import { quotaBytes } from '../lib/storage';
 import { authRequired, invalidateSessionCache } from '../middleware/auth';
 import type { AuthRequest } from '../middleware/auth';
 import { isAdminUser, isSuperAdminUser, SUPER_ADMIN_PHONE } from '../middleware/admin';
@@ -166,6 +167,8 @@ export function createAuthRouter(prisma: PrismaLike | any) {
       canAdmin: isSuperAdminUser(u),
       points: { balance: acct?.balance ?? 0, frozen: acct?.frozen ?? 0 },
       storageUsedBytes: (used && used._sum && used._sum.bytes) || 0,
+      // 配额 = 等级基础额度 + 已购扩容包；前端展示「已用 / 配额」，不再把扩容额度误当用量
+      storageQuotaBytes: quotaBytes(u.level as MemberLevel, u.extraStorageBytes ?? 0),
       benefits: MEMBERSHIP[u.level as MemberLevel] ?? null,
     });
   });

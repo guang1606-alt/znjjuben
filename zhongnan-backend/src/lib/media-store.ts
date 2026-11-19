@@ -13,8 +13,10 @@ function maxBytes(): number {
 /**
  * 把图片模型返回的临时 URL / data URI 转成永久地址。
  * 任何一步失败都回退原地址，不让海报生成整体失败。
+ * ownerId 传入时同步记一条 StorageObject（refId=媒体 id），让「存储用量」真实反映生成物；
+ * 记账失败不影响出图（图片已落库，只是不计入配额视图）。
  */
-export async function persistImage(input: string, kind = 'poster', db: any = prisma): Promise<string> {
+export async function persistImage(input: string, kind = 'poster', db: any = prisma, ownerId?: string): Promise<string> {
   if (!input) return input;
   if (tosEnabled()) return uploadImageToTos(input, kind);
   try {
@@ -22,6 +24,11 @@ export async function persistImage(input: string, kind = 'poster', db: any = pri
     if (!buf.length || buf.length > maxBytes()) return input;
     if (!db?.mediaAsset?.create) return input;
     const asset = await db.mediaAsset.create({ data: { kind, mime, size: buf.length, bytes: buf } });
+    if (ownerId && db?.storageObject?.create) {
+      try {
+        await db.storageObject.create({ data: { userId: ownerId, kind, bytes: buf.length, refId: asset.id } });
+      } catch { /* 记账失败不阻断出图 */ }
+    }
     return `/media/${asset.id}`;
   } catch {
     return input;

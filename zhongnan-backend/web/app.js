@@ -3993,7 +3993,10 @@
     $('mePoints').textContent = isStaffAcct(me)
       ? (lang === 'en' ? 'Internal account · Free' : '内部账户 · 创作免费')
       : me.points.balance + (me.points.frozen ? ` (${lang==='en'?'frozen':'冻结'} ${me.points.frozen})` : '');
-    $('meStorage').textContent = fmtBytes(me.storageUsedBytes + (me.extraStorageBytes || 0));
+    // 存储用量只算已用（不能再叠加扩容额度，否则买过 5GB 扩容包的用户未存内容也显示 5GB 用量）；有配额则展示「已用 / 配额」
+    $('meStorage').textContent = me.storageQuotaBytes
+      ? `${fmtBytes(me.storageUsedBytes)} / ${fmtBytes(me.storageQuotaBytes)}`
+      : fmtBytes(me.storageUsedBytes);
     $('meInvite').textContent = me.inviteCode || '—';
     $('inNickname').value = me.nickname || ''; $('inPen').value = me.penName || ''; $('inBio').value = me.bio || '';
     $('inChgPwUsername').value = me.phone || ''; // v2.502 改密表单隐藏用户名字段值为当前手机号
