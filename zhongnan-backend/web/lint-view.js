@@ -5,6 +5,9 @@
   const $ = (id) => document.getElementById(id);
   const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   const en = () => ((window.znLang ? window.znLang() : (localStorage.getItem('zn_lang') || 'zh')) === 'en');
+  // v2.526 英文界面不混中文标点：全角冒号/书名号只服务中文排版（与编剧室 c199 同口径）
+  const colon = () => (en() ? ': ' : '：');
+  const wrapGroup = (s) => (en() ? `[${s}] ` : `【${s}】`);
   const L = {
     zh: {
       checking: '正在体检…', matching: '正在匹配原型…',
@@ -106,7 +109,7 @@
     }
     const groups = (d.groups || []).map((g) => {
       const rows = sortByLevel(g.issues).map((i) => `<div class="dv-issue ${levelClass(i.level)}">
-        <b>${esc(levelName(i.level))}</b> · ${esc(i.dim || '')}：${esc(i.advice || '')}
+        <b>${esc(levelName(i.level))}</b> · ${esc(i.dim || '')}${colon()}${esc(i.advice || '')}
       </div>`).join('');
       const avg = Number(g.avg) || 0;
       return `<div><b>${esc(g.name || '')}</b> <span class="muted">${esc(t.groupAvg(avg))}</span>${rows || `<div class="dv-good">✔</div>`}</div>`;
@@ -119,8 +122,8 @@
     const t = T();
     const items = list.map((a) => `<div class="dv-issue sev-low">
       <b>${esc(a.name || '')}</b><br>
-      <span class="muted">${esc(t.formula)}：</span>${esc(a.formula || '')}<br>
-      <span class="muted">${esc(t.core)}：</span>${esc(a.core || '')}
+      <span class="muted">${esc(t.formula)}${colon()}</span>${esc(a.formula || '')}<br>
+      <span class="muted">${esc(t.core)}${colon()}</span>${esc(a.core || '')}
     </div>`).join('');
     return `<div><b>${esc(title)}</b>${items}</div>`;
   }
@@ -130,8 +133,8 @@
     const blocks = archBlock(t.protag, d.protag) + archBlock(t.villain, d.villain);
     const sys = (d.system || []).map((m) => `<div class="dv-issue sev-low">
       <b>${esc(m.name || '')}</b><br>
-      <span class="muted">${esc(t.formula)}：</span>${esc(m.formula || '')}<br>
-      <span class="muted">${esc(t.tip)}：</span>${esc(m.tip || '')}
+      <span class="muted">${esc(t.formula)}${colon()}</span>${esc(m.formula || '')}<br>
+      <span class="muted">${esc(t.tip)}${colon()}</span>${esc(m.tip || '')}
     </div>`).join('');
     const sysBlock = sys ? `<div><b>${esc(t.system)}</b>${sys}</div>` : '';
     $('lintResult').innerHTML = `<div class="dv-report">
@@ -151,8 +154,8 @@
     if (d.truncated) lines.push(t.truncatedNote);
     if (Number(epsN) >= 2) lines.push(t.epsNote(Number(epsN), meta && meta.epsTotal));
     (d.groups || []).forEach((g) => {
-      lines.push('', `【${g.name || ''}】${t.groupAvg(Number(g.avg) || 0)}`);
-      sortByLevel(g.issues).forEach((i) => lines.push(`- ${levelName(i.level)} · ${i.dim || ''}：${i.advice || ''}`));
+      lines.push('', `${wrapGroup(g.name || '')}${t.groupAvg(Number(g.avg) || 0)}`);
+      sortByLevel(g.issues).forEach((i) => lines.push(`- ${levelName(i.level)} · ${i.dim || ''}${colon()}${i.advice || ''}`));
     });
     return lines.join('\n');
   }
@@ -201,7 +204,7 @@
       last = { kind: 'lint', data: d, eps: eps.length, meta };
       renderLint(d, eps.length, meta);
     } catch (e) {
-      $('lintResult').innerHTML = `<div class="dv-bad">${esc(T().fail)}：${esc((e && e.message) || '')}</div>`;
+      $('lintResult').innerHTML = `<div class="dv-bad">${esc(T().fail)}${colon()}${esc((e && e.message) || '')}</div>`;
     } finally {
       if (btn) btn.disabled = old;
     }
@@ -219,7 +222,7 @@
       last = { kind: 'arch', data: d };
       renderArch(d);
     } catch (e) {
-      $('lintResult').innerHTML = `<div class="dv-bad">${esc(T().fail)}：${esc((e && e.message) || '')}</div>`;
+      $('lintResult').innerHTML = `<div class="dv-bad">${esc(T().fail)}${colon()}${esc((e && e.message) || '')}</div>`;
     } finally {
       if (btn) btn.disabled = old;
     }

@@ -4,6 +4,9 @@
   const $ = (id) => document.getElementById(id);
   const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   const en = () => ((window.znLang ? window.znLang() : (localStorage.getItem('zn_lang') || 'zh')) === 'en');
+  // v2.526 英文界面不混中文标点：冒号/引号/顿号都随语言（与编剧室 c199 同口径）
+  const colon = () => (en() ? ': ' : '：');
+  const labelOf = (k, v) => (en() ? `${k}: ${v}` : `${k}「${v}」`);
   const L = {
     zh: {
       version: '版本', remove: '移除', phLog: '这一版的梗概/故事核（谁+麻烦+怎么反击）',
@@ -94,7 +97,7 @@
     const t = T();
     $('dvResult').innerHTML = `<div class="dv-seed-box"><b>${t.seedTitle}</b>
       ${j.seeds.map((s) => `<div class="dv-seed-item"><span class="dv-seed-no">V${s.version}</span>
-        <span class="dv-seed-tags">${t.arch}「${esc(s.archetype)}」·${t.conflict}「${esc(s.conflict)}」·${t.turn}「${esc(s.turn)}」·${t.tone}「${esc(s.tone)}」</span>
+        <span class="dv-seed-tags">${labelOf(t.arch, esc(s.archetype))} · ${labelOf(t.conflict, esc(s.conflict))} · ${labelOf(t.turn, esc(s.turn))} · ${labelOf(t.tone, esc(s.tone))}</span>
         <div class="muted">${esc(s.directive)}</div></div>`).join('')}</div>`;
   }
   async function genSeeds() {
@@ -104,7 +107,7 @@
     try {
       j = await getJson('/api/craft/diverse-seeds?n=' + n + '&lang=' + (en() ? 'en' : 'zh'));
     } catch (e) {
-      $('dvResult').innerHTML = `<div class="dv-bad">${T().seedFail}：${esc((e && e.message) || T().retry)}</div>`;
+      $('dvResult').innerHTML = `<div class="dv-bad">${T().seedFail}${colon()}${esc((e && e.message) || T().retry)}</div>`;
       return;
     }
     // 把正交主角原型填进现有版本（只填空，不覆盖用户已写）
@@ -151,7 +154,7 @@
       renderAudit(r);
       $('dvResult').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
     } catch (e) {
-      $('dvResult').innerHTML = `<div class="dv-bad">${T().auditFail}：${esc((e && e.message) || T().retry)}</div>`;
+      $('dvResult').innerHTML = `<div class="dv-bad">${T().auditFail}${colon()}${esc((e && e.message) || T().retry)}</div>`;
     }
   }
   function dimName(d) { return (T().dims[d]) || d; }
@@ -171,7 +174,7 @@
       // 重建行标签/占位（保留已填内容）
       const saved = collect();
       $('dvRows').innerHTML = ''; rowSeq = 0;
-      saved.forEach((s) => { const d = addRow(); d.querySelector('.dv-logline').value = s.logline || ''; d.querySelector('.dv-arch').value = s.archetype || ''; d.querySelector('.dv-conf').value = (s.conflictTags || []).join('、'); d.querySelector('.dv-plot').value = (s.plotTags || []).join('、'); });
+      saved.forEach((s) => { const d = addRow(); d.querySelector('.dv-logline').value = s.logline || ''; d.querySelector('.dv-arch').value = s.archetype || ''; d.querySelector('.dv-conf').value = (s.conflictTags || []).join(en() ? ', ' : '、'); d.querySelector('.dv-plot').value = (s.plotTags || []).join(en() ? ', ' : '、'); });
       while ($('dvRows').children.length < 3) addRow();
       if (lastAudit) renderAudit(lastAudit); else if (lastSeeds) renderSeeds(lastSeeds);
     });

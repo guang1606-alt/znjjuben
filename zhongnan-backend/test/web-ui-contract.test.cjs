@@ -92,3 +92,40 @@ describe('v2.525 英文钩子名单一权威与卡片数动态化', () => {
     assert.ok(!/Browse all 43|浏览全部 43/.test(seg), '不得写死 43，避免分类库增删后文案失真');
   });
 });
+
+// v2.526 英文界面全角标点：剧本体检与多版本面板此前在英文下仍输出「：」「」「【】」和顿号，
+// 与编剧室 c199 已修的同类问题不一致——中文排版混进英文界面，复制出去的问题单同样带【】。
+describe('v2.526 英文界面全角标点不外溢', () => {
+  const lint = fs.readFileSync(path.join(ROOT, 'web', 'lint-view.js'), 'utf8');
+  const dv = fs.readFileSync(path.join(ROOT, 'web', 'diversity-view.js'), 'utf8');
+
+  it('体检视图：分隔冒号随语言', () => {
+    assert.ok(lint.includes("const colon = () => (en() ? ': ' : '：');"), '缺少 colon() 语言化分隔符');
+    assert.ok(lint.includes("${esc(i.dim || '')}${colon()}"), '问题行分隔符未走 colon()');
+    assert.ok(lint.includes('${esc(t.formula)}${colon()}'), '原型公式分隔符未走 colon()');
+    assert.ok(lint.includes('${esc(t.core)}${colon()}'), '原型用法分隔符未走 colon()');
+    assert.ok(lint.includes('${esc(t.tip)}${colon()}'), '机制分隔符未走 colon()');
+    assert.ok(lint.includes('${esc(T().fail)}${colon()}'), '失败提示分隔符未走 colon()');
+    assert.ok(!lint.includes('${esc(t.formula)}：'), '仍残留全角冒号');
+  });
+
+  it('体检问题单：英文分组用方括号、问题行不用全角冒号', () => {
+    assert.ok(lint.includes("const wrapGroup = (s) => (en() ? `[${s}] ` : `【${s}】`);"), '缺少 wrapGroup()');
+    assert.ok(lint.includes("${wrapGroup(g.name || '')}"), '问题单分组标题未走 wrapGroup()');
+    assert.ok(lint.includes("${i.dim || ''}${colon()}"), '问题单问题行分隔符未走 colon()');
+    assert.ok(!lint.includes('`【${g.name'), '英文下仍会输出【】');
+  });
+
+  it('多版本面板：种子标签与错误提示随语言', () => {
+    assert.ok(dv.includes("const colon = () => (en() ? ': ' : '：');"), '缺少 colon()');
+    assert.ok(dv.includes('const labelOf = (k, v) => (en() ? `${k}: ${v}` : `${k}「${v}」`);'), '缺少 labelOf()');
+    assert.ok(dv.includes('${labelOf(t.arch, esc(s.archetype))}'), '种子原型标签未走 labelOf()');
+    assert.ok(!dv.includes('${t.arch}「${esc(s.archetype)}」'), '仍残留中文引号');
+    assert.ok(dv.includes('${T().seedFail}${colon()}'), '种子失败提示未走 colon()');
+    assert.ok(dv.includes('${T().auditFail}${colon()}'), '审计失败提示未走 colon()');
+  });
+
+  it('多版本面板：切语言重建行时标签分隔符随语言', () => {
+    assert.ok(dv.includes("join(en() ? ', ' : '、')"), '标签拼接仍固定顿号');
+  });
+});
