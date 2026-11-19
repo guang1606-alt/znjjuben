@@ -30,6 +30,8 @@ type RItem = RLine | RChart;
 
 function flatten(doc: ScriptDoc): RItem[] {
   const out: RItem[] = [];
+  // v2.533 目录/页码标签跟随剧本语言（此前固定「第N集」「第 X 页　共 Y 页」）
+  const en = doc.lang === 'en';
   const L = (text: string, font: 'cn' | 'cnb', size: number, align: 'left' | 'center' = 'left', extra: Partial<RLine> = {}): RLine =>
     ({ text, font, size, align, indent: 0, gapBefore: 0, gapAfter: 4, breakPage: false, ...extra });
   doc.blocks.forEach((b) => {
@@ -43,11 +45,11 @@ function flatten(doc: ScriptDoc): RItem[] {
       case 'h2': out.push(L(b.text, 'cnb', 13.5, 'left', { gapBefore: 6, gapAfter: 4 })); break;
       case 'p': b.text.split('\n').forEach((x) => out.push(L(x, 'cn', 12, 'left', { indent: 24 }))); break;
       case 'toc':
-        if (!b.items.length) out.push(L('（暂无分集）', 'cn', 12));
-        b.items.forEach((it) => out.push(L(`第${it.ep}集  ${it.title}${it.synopsis ? `  — ${it.synopsis}` : ''}`, 'cn', 11, 'left', { gapAfter: 3 })));
+        if (!b.items.length) out.push(L(en ? '(No episodes yet)' : '（暂无分集）', 'cn', 12));
+        b.items.forEach((it) => out.push(L(`${en ? `Episode ${it.ep}` : `第${it.ep}集`}  ${it.title}${it.synopsis ? `  — ${it.synopsis}` : ''}`, 'cn', 11, 'left', { gapAfter: 3 })));
         break;
       case 'waveChart': out.push({ chart: true, wave: b.wave }); break;
-      case 'epStart': out.push(L(`第${b.ep}集  ${b.title}`, 'cnb', 16, 'left', { breakPage: true, gapAfter: 8 })); break;
+      case 'epStart': out.push(L(`${en ? `Episode ${b.ep}` : `第${b.ep}集`}  ${b.title}`, 'cnb', 16, 'left', { breakPage: true, gapAfter: 8 })); break;
       case 'para': out.push(L(b.text, 'cn', 12, 'left', { indent: 24 })); break;
     }
   });
@@ -143,7 +145,9 @@ export async function renderPdf(doc: ScriptDoc): Promise<Buffer> {
       const savedBottom = pg.margins.bottom;
       // 临时收窄下边距，让页脚落在页脚带而不触发 LineWrapper 自动翻页（CJK 行高偏大，需留足余量）
       pg.margins.bottom = 18;
-      const foot = `第 ${i + 1} 页　共 ${realTotal} 页${doc.watermark ? `　|　${doc.watermark}` : ''}`;
+      const foot = doc.lang === 'en'
+        ? `Page ${i + 1} of ${realTotal}${doc.watermark ? ` | ${doc.watermark}` : ''}`
+        : `第 ${i + 1} 页　共 ${realTotal} 页${doc.watermark ? `　|　${doc.watermark}` : ''}`;
       pdf.font('cn').fontSize(9).fillColor('#888888')
         .text(foot, margin, pg.height - 44, { width: pg.width - margin * 2, align: 'center', lineBreak: false });
       pg.margins.bottom = savedBottom;

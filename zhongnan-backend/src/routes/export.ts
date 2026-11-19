@@ -23,16 +23,18 @@ type PrismaLike = typeof defaultPrisma;
 function contentDisposition(filename: string) {
   return `attachment; filename="script.export"; filename*=UTF-8''${encodeURIComponent(filename)}`;
 }
-function toTxt(blocks: ReturnType<typeof buildScriptDoc>['blocks']): string {
+function toTxt(blocks: ReturnType<typeof buildScriptDoc>['blocks'], lang: 'zh' | 'en' = 'zh'): string {
+  const en = lang === 'en';
   return blocks.map((b) => {
     switch (b.kind) {
       case 'cover': return `${b.title}\n${b.meta.join('\n')}`;
       case 'h1': return `\n\n${b.text}\n${'='.repeat(Math.max(4, b.text.length * 2))}`;
-      case 'h2': return `\n【${b.text}】`;
+      // v2.533 结构标签跟随剧本语言：英文剧本此前导出为「【】」「第N集」，与正文语言不一致
+      case 'h2': return en ? `\n[${b.text}]` : `\n【${b.text}】`;
       case 'p': return b.text;
-      case 'toc': return b.items.map((it) => `第${it.ep}集 ${it.title}${it.synopsis ? ` — ${it.synopsis}` : ''}`).join('\n');
+      case 'toc': return b.items.map((it) => `${en ? `Episode ${it.ep}` : `第${it.ep}集`} ${it.title}${it.synopsis ? ` — ${it.synopsis}` : ''}`).join('\n');
       case 'waveChart': return ''; // 波形统计文本由后续 p 块承载，避免重复
-      case 'epStart': return `\n\n第${b.ep}集　${b.title}\n`;
+      case 'epStart': return `\n\n${en ? `Episode ${b.ep}` : `第${b.ep}集`}　${b.title}\n`;
       case 'para': return b.text;
     }
   }).join('\n');
@@ -129,7 +131,7 @@ export function createExportRouter(prisma: PrismaLike | any) {
       }
       res.setHeader('Content-Type', 'text/plain; charset=utf-8');
       res.setHeader('Content-Disposition', contentDisposition(`${safeTitle}.txt`));
-      return res.end('﻿' + toTxt(doc.blocks)); // BOM 保证 Windows 记事本中文不乱码
+      return res.end('﻿' + toTxt(doc.blocks, doc.lang)); // BOM 保证 Windows 记事本中文不乱码
     } catch (e) {
       failInternal(res, e, 'export.render');
     }

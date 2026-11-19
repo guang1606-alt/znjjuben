@@ -221,3 +221,22 @@ describe('v2.154 制作物料清单 JSON 端点 + 导出物料页', { concurrenc
     assert.strictEqual(bad.status, 400);
   });
 });
+
+// v2.533 英文剧本导出：结构标签（章节/目录/集号/括号）跟随剧本语言，不再中英混排
+describe('v2.533 英文剧本导出结构标签英文', { concurrency: 1 }, () => {
+  before(async () => {
+    await mem.project.create({ data: { id: 'pEn', userId: 'basic', title: 'Demo', mode: 'tags', format: 'LIVE_ACTION',
+      bible: { worldview: 'Modern city', timeline: ['A chef fights back'], foreshadow: [], characters: { Lin: { traits: 'Stubborn', arc: 'From retreat to fight', voice: 'Short lines' } } } } });
+    await mem.script.create({ data: { projectId: 'pEn', epNo: 1, title: '', synopsis: 'Fired', content: 'INT. RESTAURANT - NIGHT\nShe puts down the chopsticks.', wordCount: 12 } });
+  });
+
+  it('txt 导出结构标签与集号全英文', async () => {
+    const r = await get('pEn', 'basic', 'BASIC', '?format=txt');
+    assert.strictEqual(r.status, 200);
+    const t = await r.text();
+    assert.ok(t.includes('Story Outline') && t.includes('Episode List') && t.includes('Episode 1'), '英文导出缺少英文结构标签：' + t.slice(0, 160));
+    for (const zh of ['故事大纲', '人物小传', '分集目录', '第1集', '【']) {
+      assert.ok(!t.includes(zh), '英文导出不得残留中文标签：' + zh);
+    }
+  });
+});

@@ -29,6 +29,8 @@ function para(text: string, opts: { bold?: boolean; size?: number; align?: (type
 
 export async function renderDocx(doc: ScriptDoc): Promise<Buffer> {
   const children: Paragraph[] = [];
+  // v2.533 目录/页码标签跟随剧本语言（此前固定「第N集」「第 X 页 共 Y 页」）
+  const en = doc.lang === 'en';
 
   doc.blocks.forEach((b) => {
     switch (b.kind) {
@@ -47,8 +49,8 @@ export async function renderDocx(doc: ScriptDoc): Promise<Buffer> {
         b.text.split('\n').forEach((line) => children.push(para(line, { indent: 480 })));
         break;
       case 'toc':
-        if (!b.items.length) children.push(para('（暂无分集）'));
-        b.items.forEach((it) => children.push(para(`第${it.ep}集　${it.title}${it.synopsis ? `　— ${it.synopsis}` : ''}`, { size: 22, spacing: 300 })));
+        if (!b.items.length) children.push(para(en ? '(No episodes yet)' : '（暂无分集）'));
+        b.items.forEach((it) => children.push(para(`${en ? `Episode ${it.ep}` : `第${it.ep}集`}　${it.title}${it.synopsis ? `　— ${it.synopsis}` : ''}`, { size: 22, spacing: 300 })));
         break;
       case 'waveChart': {
         // v2.59 导演节奏页：零依赖 PNG 内嵌（960×300 → 页宽 560px 等比）
@@ -61,7 +63,7 @@ export async function renderDocx(doc: ScriptDoc): Promise<Buffer> {
         break;
       }
       case 'epStart':
-        children.push(para(`第${b.ep}集　${b.title}`, { bold: true, size: 30, fontName: HEAD_FONT, pageBreakBefore: true }));
+        children.push(para(`${en ? `Episode ${b.ep}` : `第${b.ep}集`}　${b.title}`, { bold: true, size: 30, fontName: HEAD_FONT, pageBreakBefore: true }));
         break;
       case 'para':
         children.push(para(b.text, { indent: 480 }));
@@ -69,17 +71,25 @@ export async function renderDocx(doc: ScriptDoc): Promise<Buffer> {
     }
   });
 
-  const wm = doc.watermark ? `　|　${doc.watermark}` : '';
+  const wm = doc.watermark ? `${en ? ' | ' : '　|　'}${doc.watermark}` : '';
   const footer = new Footer({
     children: [new Paragraph({
       alignment: AlignmentType.CENTER,
-      children: [
-        tr('第 ', { size: 18 }),
-        new TextRun({ children: [PageNumber.CURRENT], size: 18, font: font() }),
-        tr(' 页　共 ', { size: 18 }),
-        new TextRun({ children: [PageNumber.TOTAL_PAGES], size: 18, font: font() }),
-        tr(` 页${wm}`, { size: 18 }),
-      ],
+      children: en
+        ? [
+          tr('Page ', { size: 18 }),
+          new TextRun({ children: [PageNumber.CURRENT], size: 18, font: font() }),
+          tr(' of ', { size: 18 }),
+          new TextRun({ children: [PageNumber.TOTAL_PAGES], size: 18, font: font() }),
+          tr(wm, { size: 18 }),
+        ]
+        : [
+          tr('第 ', { size: 18 }),
+          new TextRun({ children: [PageNumber.CURRENT], size: 18, font: font() }),
+          tr(' 页　共 ', { size: 18 }),
+          new TextRun({ children: [PageNumber.TOTAL_PAGES], size: 18, font: font() }),
+          tr(` 页${wm}`, { size: 18 }),
+        ],
     })],
   });
 

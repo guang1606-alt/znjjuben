@@ -41,6 +41,8 @@ export interface ScriptDoc {
   blocks: DocBlock[];
   watermark: string | null;
   epCount: number;
+  /** v2.533 导出结构标签语言：按剧本正文自动判定（全英文正文 → en），供渲染器出目录/页码标签 */
+  lang: 'zh' | 'en';
 }
 
 /** 等级序数，用于门控比较 */
@@ -121,49 +123,57 @@ export function buildScriptDoc(
     : [BRAND.fullName, pen].filter(Boolean).join(' · ');
   const now = opts.now ?? new Date();
   const blocks: DocBlock[] = [];
+  // v2.533 导出语言与导演页同源（按正文判中英，空项目按中文）：
+  // 此前只有导演页/物料页按语言出标题，封面、故事大纲、人物小传、分集目录、页脚仍写死中文，
+  // 全英文剧本导出后结构标签中英混排，交付物与剧本语言不一致。
+  const joinedAll = eps.map((e) => (e.content || '')).join('');
+  const docLang: 'zh' | 'en' = joinedAll && !/[\u4e00-\u9fff]/.test(joinedAll) ? 'en' : 'zh';
+  const L = (zh: string, en: string) => (docLang === 'en' ? en : zh);
 
   // ① 封面
   blocks.push({
     kind: 'cover', title: project.title,
     meta: [
-      `创作模式：${project.mode ?? '-'}　剧本制式：${project.format ?? 'LIVE_ACTION'}`,
-      `共 ${eps.length || project.totalEps || 0} 集　总字数：${eps.reduce((s, e) => s + (e.wordCount || (e.content || '').length), 0)}`,
-      `导出时间：${now.toLocaleString('zh-CN')}`,
-      ...(watermark ? [`水印：${watermark}`] : []),
+      L(`创作模式：${project.mode ?? '-'}　剧本制式：${project.format ?? 'LIVE_ACTION'}`,
+        `Mode: ${project.mode ?? '-'}　Format: ${project.format ?? 'LIVE_ACTION'}`),
+      L(`共 ${eps.length || project.totalEps || 0} 集　总字数：${eps.reduce((s, e) => s + (e.wordCount || (e.content || '').length), 0)}`,
+        `Episodes: ${eps.length || project.totalEps || 0}　Words: ${eps.reduce((s, e) => s + (e.wordCount || (e.content || '').length), 0)}`),
+      L(`导出时间：${now.toLocaleString('zh-CN')}`, `Exported: ${now.toLocaleString('en-US')}`),
+      ...(watermark ? [L(`水印：${watermark}`, `Watermark: ${watermark}`)] : []),
     ],
   });
 
   // ② 故事大纲（字段均已归一：string / string[]，无裸读炸点）
-  blocks.push({ kind: 'h1', text: '故事大纲' });
+  blocks.push({ kind: 'h1', text: L('故事大纲', 'Story Outline') });
   const logline = bible.timeline[0] || eps[0]?.synopsis || '';
-  blocks.push({ kind: 'p', text: logline || '（暂无一句话梗概）' });
-  if (bible.worldview) blocks.push({ kind: 'p', text: `世界观：${bible.worldview}` });
+  blocks.push({ kind: 'p', text: logline || L('（暂无一句话梗概）', '(No one-line logline yet)') });
+  if (bible.worldview) blocks.push({ kind: 'p', text: L(`世界观：${bible.worldview}`, `Worldview: ${bible.worldview}`) });
   if (bible.foreshadow.length) {
-    blocks.push({ kind: 'p', text: `主线伏笔：${bible.foreshadow.join('；')}` });
+    blocks.push({ kind: 'p', text: L(`主线伏笔：${bible.foreshadow.join('；')}`, `Main foreshadowing: ${bible.foreshadow.join('; ')}`) });
   }
 
   // ③ 人物小传（v2.193 c193：归一后恒为对象形态 Record<string,{string?}>，无索引名/错型污染）
-  blocks.push({ kind: 'h1', text: '人物小传' });
+  blocks.push({ kind: 'h1', text: L('人物小传', 'Characters') });
   const chars = Object.entries(bible.characters);
   if (!chars.length) {
-    blocks.push({ kind: 'p', text: '（人物设定随创作过程沉淀，详见分集正文）' });
+    blocks.push({ kind: 'p', text: L('（人物设定随创作过程沉淀，详见分集正文）', '(Characters are built up as you write; see the episodes.)') });
   } else {
     chars.forEach(([name, c]) => {
       blocks.push({ kind: 'h2', text: name });
       const lines: string[] = [];
-      if (c.traits) lines.push(`性格特质：${c.traits}`);
-      if (c.arc) lines.push(`成长弧线：${c.arc}`);
-      if (c.voice) lines.push(`语言风格：${c.voice}`);
-      if (c.visualAnchor) lines.push(`视觉锚点：${c.visualAnchor}`);
-      blocks.push({ kind: 'p', text: lines.join('\n') || '（详见正文）' });
+      if (c.traits) lines.push(L(`性格特质：${c.traits}`, `Traits: ${c.traits}`));
+      if (c.arc) lines.push(L(`成长弧线：${c.arc}`, `Arc: ${c.arc}`));
+      if (c.voice) lines.push(L(`语言风格：${c.voice}`, `Voice: ${c.voice}`));
+      if (c.visualAnchor) lines.push(L(`视觉锚点：${c.visualAnchor}`, `Visual anchor: ${c.visualAnchor}`));
+      blocks.push({ kind: 'p', text: lines.join('\n') || L('（详见正文）', '(see the episodes)') });
     });
   }
 
   // ④ 分集目录
-  blocks.push({ kind: 'h1', text: '分集目录' });
+  blocks.push({ kind: 'h1', text: L('分集目录', 'Episode List') });
   blocks.push({
     kind: 'toc',
-    items: eps.map((e) => ({ ep: e.epNo, title: e.title || `第${e.epNo}集`, synopsis: e.synopsis || '' })),
+    items: eps.map((e) => ({ ep: e.epNo, title: e.title || L(`第${e.epNo}集`, `Episode ${e.epNo}`), synopsis: e.synopsis || '' })),
   });
 
   // ④.5 全剧情绪节奏·导演页（v2.59）：与创作管线同源的确定性波形，让出品方/买家一眼看到节奏设计
@@ -300,38 +310,38 @@ export function buildScriptDoc(
 
   // ⑤ 完整分集正文
   eps.forEach((e) => {
-    blocks.push({ kind: 'epStart', ep: e.epNo, title: e.title || `第${e.epNo}集` });
+    blocks.push({ kind: 'epStart', ep: e.epNo, title: e.title || L(`第${e.epNo}集`, `Episode ${e.epNo}`) });
     const paras = (e.content || '')
       .split(/\n+/)
       .map((x) => x.trim())
       .filter(Boolean);
-    (paras.length ? paras : ['（本集正文为空）']).forEach((text) => blocks.push({ kind: 'para', text }));
+    (paras.length ? paras : [L('（本集正文为空）', '(this episode is empty)')]).forEach((text) => blocks.push({ kind: 'para', text }));
   });
 
   // ⑥ Z-AIGC 机器分镜附录（v2.36）：AIGC 项目专属，正文与机器层分页，可直接交付 AI 视频工作流
   if (project.format === 'AIGC') {
-    blocks.push({ kind: 'h1', text: '附录·Z-AIGC 机器分镜层（供 AI 视频自动化工作流拆分镜使用）' });
+    blocks.push({ kind: 'h1', text: L('附录·Z-AIGC 机器分镜层（供 AI 视频自动化工作流拆分镜使用）', 'Appendix · Z-AIGC Shot List (for AI video automation workflows)') });
     // v2.148 画风锚点：opts 显式传入优先，回退 project.bible.visualStyleId；非法编号静默跳过（老项目零影响）
     const styleId = (opts.visualStyleId || (project.bible as { visualStyleId?: unknown } | null)?.visualStyleId) as string | undefined;
     const styleNode = typeof styleId === 'string' ? resolveVisualStyle(styleId) : null;
     if (styleNode) {
-      blocks.push({ kind: 'h2', text: `画风锚点 ${styleNode.id} · ${styleNode.label}（全部镜头统一画风，禁止逐镜漂移）` });
+      blocks.push({ kind: 'h2', text: L(`画风锚点 ${styleNode.id} · ${styleNode.label}（全部镜头统一画风，禁止逐镜漂移）`, `Visual style anchor ${styleNode.id} · ${styleNode.label} (one style for all shots; no per-shot drift)`) });
       blocks.push({ kind: 'p', text: [
-        `质感关键词：${styleNode.keywords.join('、')}`,
-        `英文画风提示词（喂入生图/视频模型时置于每个镜头提示词最前，镜头内容随后）：${buildVisualStylePrompt(styleNode.id)}`,
-        `适配说明：${styleNode.note}`,
+        L(`质感关键词：${styleNode.keywords.join('、')}`, `Texture keywords: ${styleNode.keywords.join(', ')}`),
+        L(`英文画风提示词（喂入生图/视频模型时置于每个镜头提示词最前，镜头内容随后）：${buildVisualStylePrompt(styleNode.id)}`, `English style prompt (prepend to every shot prompt for image/video models, then the shot content): ${buildVisualStylePrompt(styleNode.id)}`),
+        L(`适配说明：${styleNode.note}`, `Adaptation note: ${styleNode.note}`),
       ].join('\n') });
     }
     // v2.149 镜头语言锚点：opts 显式传入优先，回退 project.bible.cameraStyleId；非法编号静默跳过（老项目零影响）
     const camId = (opts.cameraStyleId || (project.bible as { cameraStyleId?: unknown } | null)?.cameraStyleId) as string | undefined;
     const camNode = typeof camId === 'string' ? resolveCameraStyle(camId) : null;
     if (camNode) {
-      blocks.push({ kind: 'h2', text: `镜头语言锚点 ${camNode.id} · ${camNode.label}（全部镜头统一镜头语法，禁止逐镜漂移）` });
+      blocks.push({ kind: 'h2', text: L(`镜头语言锚点 ${camNode.id} · ${camNode.label}（全部镜头统一镜头语法，禁止逐镜漂移）`, `Camera language anchor ${camNode.id} · ${camNode.label} (one camera grammar for all shots; no per-shot drift)`) });
       blocks.push({ kind: 'p', text: [
-        `镜头语法：${camNode.grammar}`,
-        `镜头关键词：${camNode.keywords.join('、')}`,
-        `英文镜头语言提示词（跟在画风提示词之后、镜头内容之前，约束每个镜头的节奏/运镜/转场）：${buildCameraStylePrompt(camNode.id)}`,
-        `适配说明：${camNode.note}`,
+        L(`镜头语法：${camNode.grammar}`, `Camera grammar: ${camNode.grammar}`),
+        L(`镜头关键词：${camNode.keywords.join('、')}`, `Camera keywords: ${camNode.keywords.join(', ')}`),
+        L(`英文镜头语言提示词（跟在画风提示词之后、镜头内容之前，约束每个镜头的节奏/运镜/转场）：${buildCameraStylePrompt(camNode.id)}`, `English camera prompt (after the style prompt, before the shot content; constrains pacing/movement/transitions): ${buildCameraStylePrompt(camNode.id)}`),
+        L(`适配说明：${camNode.note}`, `Adaptation note: ${camNode.note}`),
       ].join('\n') });
     }
     const withShotList = opts.includeShotList !== false && canExportShotList(level);
@@ -340,7 +350,7 @@ export function buildScriptDoc(
       try { comp = analyzeAigcComposition(e.content || ''); } catch { comp = null; }
       let m: ReturnType<typeof buildShotManifest> | null = null;
       if (withShotList) { try { m = buildShotManifest(e.content || ''); } catch { m = null; } }
-      blocks.push({ kind: 'h2', text: `第${e.epNo}集 ${e.title || ''}${m ? `（机器分镜 ${m.shotCount} 镜）` : ''}` });
+      blocks.push({ kind: 'h2', text: L(`第${e.epNo}集 ${e.title || ''}${m ? `（机器分镜 ${m.shotCount} 镜）` : ''}`, `Episode ${e.epNo} ${e.title || ''}${m ? ` (${m.shotCount} shots)` : ''}`) });
       if (comp && comp.totalCjk > 0) {
         blocks.push({ kind: 'p', text: `构成概览：总字数${comp.totalCjk}｜画面叙述${comp.narrativeCjk}字｜台词+OS ${comp.spokenCjk}字（发声占比${Math.round(comp.spokenRatio * 100)}%，目标18%-28%）｜台词${comp.dialogueLines}句、单句均${comp.avgDialogueLen}字${comp.compositionIssues.length ? '｜提示：' + comp.compositionIssues.join('；') : ''}` });
       }
@@ -356,12 +366,12 @@ export function buildScriptDoc(
           blocks.push({ kind: 'p', text: segs.join('\n') });
         });
       } else if (!withShotList) {
-        blocks.push({ kind: 'p', text: '完整逐镜分镜表（景别/运镜/光影/画面/台词/声音逐镜拆分）为高级会员及以上导出权益，升级后本附录将自动展开为可直接喂入 AI 视频流水线的分镜清单。' });
+        blocks.push({ kind: 'p', text: L('完整逐镜分镜表（景别/运镜/光影/画面/台词/声音逐镜拆分）为高级会员及以上导出权益，升级后本附录将自动展开为可直接喂入 AI 视频流水线的分镜清单。', 'The full shot-by-shot list (size / camera movement / lighting / visual / dialogue / sound) is an Advanced+ export benefit. After upgrading, this appendix expands into a shot list ready for an AI video pipeline.') });
       }
     });
   }
 
-  return { title: project.title, blocks, watermark, epCount: eps.length };
+  return { title: project.title, blocks, watermark, epCount: eps.length, lang: docLang };
 }
 
 /* ------------------------------------------------------------------ */

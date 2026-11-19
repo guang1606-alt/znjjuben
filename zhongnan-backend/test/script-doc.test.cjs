@@ -289,3 +289,47 @@ describe('v2.193 c193 · buildScriptDoc 故事大纲/人物小传畸形 bible �
     assert.ok(text.includes('林晚') && text.includes('稳') && text.includes('场景一') && text.includes('正文'), '好数据不被坏字段连坐');
   });
 });
+
+// v2.533 导出结构标签跟随剧本语言：导演页/物料页此前已按正文语言出标题，但封面、故事大纲、
+// 人物小传、分集目录、分集头与页脚仍是中文——全英文剧本导出后中英混排，交付物与剧本语言不一致。
+describe('v2.533 导出结构标签跟随剧本语言', () => {
+  const fs = require('node:fs');
+  const path = require('node:path');
+  const enProject = { title: 'Demo', mode: 'tags', format: 'LIVE_ACTION', totalEps: 1, bible: { worldview: 'Modern city', timeline: ['A chef fights back'], foreshadow: ['A mystery guest'] } };
+  const enScripts = [{ epNo: 1, title: '', synopsis: 'She is fired', content: 'INT. RESTAURANT - NIGHT\nShe puts down the chopsticks.', wordCount: 20 }];
+
+  it('全英文剧本 → 结构标签全英文且 lang=en', () => {
+    const d = buildScriptDoc(enProject, enScripts, { level: 'BASIC' });
+    assert.strictEqual(d.lang, 'en');
+    const text = d.blocks.map((b) => JSON.stringify(b)).join('');
+    assert.ok(text.includes('Story Outline') && text.includes('Characters') && text.includes('Episode List'), '核心章节标题须英文');
+    assert.ok(text.includes('Episode 1'), '分集目录/分集头须用 Episode N');
+    assert.ok(text.includes('Worldview:') && text.includes('Main foreshadowing:'), '大纲字段标签须英文');
+    for (const zh of ['故事大纲', '人物小传', '分集目录', '第1集', '世界观：', '主线伏笔：']) {
+      assert.ok(!text.includes(zh), '英文导出不得残留中文标签：' + zh);
+    }
+  });
+
+  it('中文剧本（含英文标题）仍按中文导出，行为不变', () => {
+    const d = buildScriptDoc({ ...project, title: 'Demo' }, scripts, { level: 'BASIC' });
+    assert.strictEqual(d.lang, 'zh');
+    const text = d.blocks.map((b) => JSON.stringify(b)).join('');
+    assert.ok(text.includes('故事大纲') && text.includes('第1集'));
+    assert.ok(!text.includes('Story Outline'));
+  });
+
+  it('空正文项目按中文兜底（不因无 CJK 误判英文）', () => {
+    const d = buildScriptDoc({ title: 'Empty' }, [], { level: 'FREE' });
+    assert.strictEqual(d.lang, 'zh');
+  });
+
+  it('docx / pdf 渲染器按 doc.lang 出目录与页码标签', () => {
+    const root = path.join(__dirname, '..');
+    const docx = fs.readFileSync(path.join(root, 'src', 'lib', 'export-docx.ts'), 'utf8');
+    const pdf = fs.readFileSync(path.join(root, 'src', 'lib', 'export-pdf.ts'), 'utf8');
+    assert.ok(docx.includes("const en = doc.lang === 'en';"), 'docx 未按 doc.lang 分流');
+    assert.ok(docx.includes("tr('Page '") && docx.includes("tr(' of '"), 'docx 页脚未出英文页码');
+    assert.ok(pdf.includes("const en = doc.lang === 'en';"), 'pdf 未按 doc.lang 分流');
+    assert.ok(pdf.includes('Page ${i + 1} of ${realTotal}'), 'pdf 页脚未出英文页码');
+  });
+});
