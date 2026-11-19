@@ -118,6 +118,13 @@ test('T6 空壳判据单一入口且真实入口等待内容渲染', () => {
   assert.match(src, /data\.shell = isShell\(data, false\)/, '强开兜底分支必须复用 isShell');
   assert.match(src, /sk-list\[aria-busy="true"\]/, '必须能识别加载骨架');
   assert.match(src, /overlayEmptyState|overlayReady/, '必须采样空态/已渲染标记，避免空数据误报');
+  // v2.557：采样值必须真的回传到 Node 侧，否则 isShell 只能读到 undefined，
+  // 「空态豁免」写了等于没写——真实入口打开的空数据弹窗会被永远误判 emptyModal。
+  for (const k of ['overlaySkeleton', 'overlayEmptyState', 'overlayReady']) {
+    assert.match(src, new RegExp('^\\s*' + k + ',\\s*$', 'm'), 'inPageAudit 必须回传 ' + k + '，否则空壳判据读不到');
+  }
+  assert.ok(src.includes('.some((el) => painted(el) !== null)'),
+    '空态标记必须要求元素真的可见：隐藏的占位 .muted 不得豁免空壳判定');
 });
 
 // T7 v2.482 深链形态必须进入巡检：v2.480 的离线壳失效只在深链文档下出现，

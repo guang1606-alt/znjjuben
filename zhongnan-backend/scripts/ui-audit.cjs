@@ -233,7 +233,9 @@ function inPageAudit() {
     overlayTextLen = (overlay.innerText || '').replace(/\s+/g, ' ').trim().length;
     overlayVisibleNodes = [...overlay.querySelectorAll('*')].filter((el) => painted(el)).length;
     overlaySkeleton = !!overlay.querySelector('.sk-list[aria-busy="true"], .skeleton');
-    overlayEmptyState = !!overlay.querySelector('.zn-empty, .muted, [class*="empty"]');
+    // 空态文案必须真的可见：hidden 的占位 .muted（如 #myPostersEmpty 列表非空时）不代表「已渲染出空态」，
+    // 否则任何含隐藏提示位的弹窗都会被豁免，emptyModal 形同虚设。
+    overlayEmptyState = [...overlay.querySelectorAll('.zn-empty, .muted, [class*="empty"]')].some((el) => painted(el) !== null);
     overlayReady = overlay.getAttribute('data-content-ready') === '1';
   }
 
@@ -354,6 +356,10 @@ function inPageAudit() {
     overlayControls,
     overlayTextLen,
     overlayVisibleNodes,
+    // v2.557：isShell 依赖这三项，必须真的回传给 Node 侧，否则空态豁免永远不生效（真实入口打开的空数据弹窗被误判 emptyModal）
+    overlaySkeleton,
+    overlayEmptyState,
+    overlayReady,
     activeNavHidden,
     view: (location.hash || '').replace(/^#\/?/, '') || 'home',
   };
