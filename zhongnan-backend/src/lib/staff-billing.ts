@@ -32,7 +32,10 @@ export async function staffChargeTx(tx: any, userId: string, refId: string, idem
   if (charges.length > refunds.length) return { charged: false, idem: '' };
   const idem = `${idemPrefix}:${refId}:a${charges.length + 1}`;
   if (await tx.ledgerExists(idem)) return { charged: false, idem: '' };
-  const acc = await tx.getAccount(userId).catch(() => null);
+  // v2.574 账本余额快照必须真实：旧实现 `.catch(() => null)` 会把数据库瞬时错误伪装成「无账户」，
+  // 流水记下 balanceAfter=0 与事实不符。getAccount 本身对「无账户」已返回 null，此处不再吞异常，
+  // 真实读失败让事务整体回滚（内部账户可重试），绝不留错账。
+  const acc = await tx.getAccount(userId);
   await tx.writeLedger({
     userId, direction: 'OUT', bucket: 'RECHARGE', amount: 0,
     reason: 'STAFF_FREE', refType: 'value_added', refId,
@@ -45,7 +48,8 @@ export async function staffChargeTx(tx: any, userId: string, refId: string, idem
 export async function staffRefundTx(tx: any, userId: string, refId: string, idem: string): Promise<void> {
   const refundKey = `refund:${idem}`;
   if (await tx.ledgerExists(refundKey)) return;
-  const acc = await tx.getAccount(userId).catch(() => null);
+  // v2.574 同上：配对退款流水的余额快照同样不得被吞成 0，读失败即整体回滚
+  const acc = await tx.getAccount(userId);
   await tx.writeLedger({
     userId, direction: 'IN', bucket: 'RECHARGE', amount: 0,
     reason: 'STAFF_FREE:REFUND', refType: 'value_added', refId,

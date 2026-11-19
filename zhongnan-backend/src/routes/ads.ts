@@ -9,6 +9,7 @@ import { z } from 'zod';
 import { authRequired, AuthRequest } from '../middleware/auth';
 import { createRequireAdmin, requireSuperAdmin } from '../middleware/admin';
 import { prisma as defaultPrisma } from '../lib/prisma';
+import { logInternal } from '../lib/http-errors';
 
 type PrismaLike = typeof defaultPrisma;
 
@@ -37,7 +38,10 @@ export function createAdsRouter(prisma: PrismaLike | any) {
   });
 
   router.post('/:id/click', async (req, res) => {
-    try { await prisma.advert.update({ where: { id: req.params.id }, data: { clicks: { increment: 1 } } }); } catch { /* 计数失败不影响用户 */ }
+    // v2.574 跳转优先：计数失败仍回 ok，但除「广告已删除」（P2025，客户端缓存里的旧 id）外必须留痕，
+    // 否则投放点击长期少计、按点击对账时查无实据。
+    try { await prisma.advert.update({ where: { id: req.params.id }, data: { clicks: { increment: 1 } } }); }
+    catch (e: any) { if (e?.code !== 'P2025') logInternal(e, 'ads.click'); }
     res.json({ ok: true });
   });
 
@@ -89,7 +93,15 @@ export function createAdsRouter(prisma: PrismaLike | any) {
   });
 
   router.post('/admin/:id/delete', ...admin, async (req: AuthRequest, res) => {
-    await prisma.advert.delete({ where: { id: req.params.id } }).catch(() => null);
+    // v2.574 旧实现 `.catch(() => null)` 把任何数据库错误都当成功——管理员以为已下线，广告其实还在投放。
+    // 仅「本就查无此广告」(P2025) 按幂等成功处理；其余失败如实 500 并留痕，可重试。
+    try {
+      await prisma.advert.delete({ where: { id: req.params.id } });
+    } catch (e: any) {
+      if (e?.code === 'P2025') return res.json({ ok: true });
+      logInternal(e, 'ads.delete');
+      return res.status(500).json({ error: '删除失败，请重试' });
+    }
     res.json({ ok: true });
   });
 
