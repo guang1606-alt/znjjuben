@@ -2,6 +2,8 @@
  * Express 应用装配工厂：生产 index.ts 与 HTTP 层测试共用。
  * 测试可注入任意路由（如内存桩版 authRouter），未注入的使用真实默认路由。
  */
+// v2.567 必须排在所有路由导入之前：路由是模块级单例，导入即注册处理器，晚一步就补不上异步兜底
+import './async-guard';
 import express, { Express, Router } from 'express';
 import cors from 'cors';
 import compression from 'compression';
