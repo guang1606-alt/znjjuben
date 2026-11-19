@@ -14,6 +14,7 @@ function createMemoryPrisma() {
   const scripts = [];
   const tasks = new Map();
   const callLogs = [];
+  const modelSpendBudgets = new Map();
 
   const pointsAccount = {
     async findUnique({ where }) { return accounts.get(where.userId) ?? null; },
@@ -529,6 +530,39 @@ function createMemoryPrisma() {
       return { count: n };
     },
   };
+  const applyBudgetData = (row, data) => {
+    for (const [k, v] of Object.entries(data)) {
+      if (v && typeof v === 'object' && 'increment' in v) row[k] = (row[k] ?? 0) + v.increment;
+      else if (v && typeof v === 'object' && 'decrement' in v) row[k] = (row[k] ?? 0) - v.decrement;
+      else row[k] = v;
+    }
+    row.updatedAt = new Date();
+    return row;
+  };
+  const modelSpendBudget = {
+    async create({ data }) {
+      if (modelSpendBudgets.has(data.id)) throw { code: 'P2002', meta: { modelName: 'ModelSpendBudget', target: ['id'] } };
+      const row = { reservedFen: 0, spentFen: 0, createdAt: new Date(), updatedAt: new Date(), ...data };
+      modelSpendBudgets.set(row.id, row); return row;
+    },
+    async findUnique({ where }) { return modelSpendBudgets.get(where.id) ?? null; },
+    async findMany() { return [...modelSpendBudgets.values()]; },
+    async update({ where, data }) {
+      const row = modelSpendBudgets.get(where.id);
+      if (!row) throw new Error('MODEL_SPEND_BUDGET_NOT_FOUND');
+      return applyBudgetData(row, data);
+    },
+    async updateMany({ where = {}, data }) {
+      let count = 0;
+      for (const row of modelSpendBudgets.values()) {
+        if (where.id && row.id !== where.id) continue;
+        if (where.limitFen !== undefined && row.limitFen !== where.limitFen) continue;
+        if (where.availableFen?.gte !== undefined && row.availableFen < where.availableFen.gte) continue;
+        applyBudgetData(row, data); count++;
+      }
+      return { count };
+    },
+  };
   // —— v2.612 API 余额监控：providerBalance 单独数组，按 providerId 取最新 ——
   const providerBalances = [];
   const providerBalance = {
@@ -558,7 +592,7 @@ function createMemoryPrisma() {
   };
   // 行锁 SELECT ... FOR UPDATE 在内存实现里为空操作（单线程测试无并发竞争）
   const $queryRaw = async () => [];
-  const tx = { user, invitation, pointsAccount, storageObject, ledgerEntry, project, script, generationTask, modelCallLog, feedback, order, payment, membership, post, postLike, poster, pkBattle, knowledgeItem, learningReport, announcement, modelConfig, safetyConfig, listing, purchase, writersRoom, roomMessage, teardownRecord, advert, characterAsset, propAsset, sceneAsset, matureConsent, interviewSession, providerBalance, $queryRaw };
+  const tx = { user, invitation, pointsAccount, storageObject, ledgerEntry, project, script, generationTask, modelCallLog, feedback, order, payment, membership, post, postLike, poster, pkBattle, knowledgeItem, learningReport, announcement, modelConfig, safetyConfig, listing, purchase, writersRoom, roomMessage, teardownRecord, advert, characterAsset, propAsset, sceneAsset, matureConsent, interviewSession, providerBalance, modelSpendBudget, $queryRaw };
   // v2.316：$transaction 回滚语义（对齐 PG——回调抛错则本事务全部写入撤销）。
   // 交错测试会在 A 事务内嵌套跑 B 的独立发货事务：嵌套事务视为独立已提交事务
   // （测试用嵌套 await 模拟另一连接的独立提交），其提交点做 checkpoint，
@@ -568,7 +602,7 @@ function createMemoryPrisma() {
     storageObjects, feedbacks, orders, payments, memberships, posts, postLikes, posters, pkBattles,
     writersRooms, roomMessages, teardownRecords, adverts, interviewSessions, knowledgeItems, listings,
     purchases, learningReports, modelConfigRows, announcements, characterAssets, propAssets, sceneAssets,
-    consents, providerBalances,
+    consents, providerBalances, modelSpendBudgets,
   };
   const __snapshotTx = () => {
     const snap = {};
@@ -622,7 +656,7 @@ function createMemoryPrisma() {
   let __txCommittedDeltas = []; // 已提交嵌套事务的写入增量
   return {
     user, invitation, pointsAccount, ledgerEntry, project, script, generationTask, modelCallLog, feedback,
-    order, payment, membership, post, postLike, poster, pkBattle, knowledgeItem, learningReport, announcement, modelConfig, safetyConfig, listing, purchase, storageObject, writersRoom, roomMessage, teardownRecord, advert, characterAsset, propAsset, sceneAsset, matureConsent, interviewSession, providerBalance,
+    order, payment, membership, post, postLike, poster, pkBattle, knowledgeItem, learningReport, announcement, modelConfig, safetyConfig, listing, purchase, storageObject, writersRoom, roomMessage, teardownRecord, advert, characterAsset, propAsset, sceneAsset, matureConsent, interviewSession, providerBalance, modelSpendBudget,
     async $transaction(fn) {
       const isTop = __txDepth === 0;
       if (isTop) { __txBase = __snapshotTx(); __txCommittedDeltas = []; }

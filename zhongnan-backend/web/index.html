@@ -1223,6 +1223,17 @@
           <button class="btn-primary" id="admModelSave" data-i="admModelSave"></button>
         </div>
         <div class="notice" data-i="admModelNote"></div>
+        <!-- 测试期消费硬限额：总阀关闭即完全沿用原行为；开启后每次真实调用前预留额度 -->
+        <div class="subpanel" id="admSpendLimit" style="margin-bottom:12px">
+          <div class="adm-toolbar">
+            <strong>测试期消费限额</strong>
+            <label><input id="admSpendEnabled" type="checkbox" /> 开启总阀</label>
+            <label>总额度 <input id="admSpendTotal" autocomplete="off" type="number" min="0" step="1" style="width:120px" /> 元</label>
+            <span class="spacer"></span>
+            <button class="btn-primary" id="admSpendSave" type="button">保存限额</button>
+          </div>
+          <div class="muted">开启后每次真实模型调用前预留额度，成功按实际成本结算、失败或取消全额释放；总额度用尽即拒绝调用。单个 Key 限额填 0 表示不单独限制该 Key，但仍受总额约束。</div>
+        </div>
         <div id="admModelWrap"></div>
         <h3 style="margin-top:18px">模型选型体检（满 7 天提醒，满 14 天亮红线）</h3>
         <div class="adm-toolbar"><span class="muted" id="admRevStatus"></span><span class="spacer"></span><button class="btn-ghost" id="admRevRun">立即体检</button><button class="btn-ghost" id="admRevAck">今日已核对</button></div>
@@ -1243,6 +1254,7 @@
             <div class="adm-toolbar">
               <label>输入价 <input id="pvIn" autocomplete="off" type="number" min="0" step="0.1" style="width:90px" /> 元/百万tok</label>
               <label>输出价 <input id="pvOut" autocomplete="off" type="number" min="0" step="0.1" style="width:90px" /> 元/百万tok</label>
+              <label>测试期限额 <input id="pvSpend" autocomplete="off" type="number" min="0" step="0.1" style="width:90px" /> 元（0=不限）</label>
               <label><input id="pvEnabled" type="checkbox" checked /> 启用</label>
             </div>
             <button class="btn-primary" id="pvSave" type="button">新增/保存供应商</button>

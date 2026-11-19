@@ -212,6 +212,53 @@ describe('v2.41 供应商池/九岗路由/组合全景', { concurrency: 1 }, () 
   });
 });
 
+describe('测试期模型消费限额配置（仅超管、脱敏）', { concurrency: 1 }, () => {
+  const M = '/api/admin/model';
+  it('普通用户与副管理员均不能改写总阀', async () => {
+    assert.strictEqual((await put(M + '/spend-limit', 'u_norm', 'BASIC', { enabled: true, totalLimitYuan: 1 })).s, 403);
+    assert.strictEqual((await put(M + '/spend-limit', 'subadm', 'PRO', { enabled: true, totalLimitYuan: 1 })).s, 403);
+  });
+  it('负数或非法总额度 400', async () => {
+    assert.strictEqual((await put(M + '/spend-limit', 'admin1', 'PRO', { enabled: true, totalLimitYuan: -1 })).s, 400);
+  });
+  it('总开关与总额度可保存回读', async () => {
+    const r = await put(M + '/spend-limit', 'admin1', 'PRO', { enabled: true, totalLimitYuan: 20 });
+    assert.strictEqual(r.s, 200);
+    assert.deepStrictEqual(r.j.spendLimit, { enabled: true, totalLimitYuan: 20 });
+    const g = await get(M + '/spend-limit', 'admin1', 'PRO');
+    assert.strictEqual(g.s, 200);
+    assert.deepStrictEqual(g.j.spendLimit, { enabled: true, totalLimitYuan: 20 });
+    await put(M + '/spend-limit', 'admin1', 'PRO', { enabled: false, totalLimitYuan: 20 });
+  });
+  it('五档与供应商池均保存每 Key 限额，回显不含明文 Key', async () => {
+    const tier = await put(M + '/', 'admin1', 'PRO', skeleton({
+      text: { economy: { baseUrl: 'https://limit.local/v1', model: 'limit-model', apiKey: 'sk-tier-limit-secret', spendLimitYuan: 2.5 } },
+    }));
+    assert.strictEqual(tier.s, 200);
+    assert.strictEqual(tier.j.masked.text.economy.spendLimitYuan, 2.5);
+    assert.ok(!JSON.stringify(tier.j).includes('sk-tier-limit-secret'));
+
+    const r = await put(M + '/providers', 'admin1', 'PRO', {
+      name: '限额供应商', modality: 'text', baseUrl: 'https://pool-limit.local/v1',
+      model: 'pool-limit', apiKey: 'sk-pool-limit-secret', inYuanPerMTok: 1,
+      outYuanPerMTok: 2, spendLimitYuan: 3.5, enabled: true,
+    });
+    assert.strictEqual(r.s, 200);
+    const p = r.j.masked.providers.find((x) => x.name === '限额供应商');
+    assert.strictEqual(p.spendLimitYuan, 3.5);
+    assert.ok(p.apiKey.includes('•'));
+    assert.ok(!JSON.stringify(r.j).includes('sk-pool-limit-secret'));
+    await fetch(base + M + '/providers/' + p.id, { method: 'DELETE', headers: H('admin1', 'PRO') });
+  });
+  it('供应商限额为负数时 400', async () => {
+    const r = await put(M + '/providers', 'admin1', 'PRO', {
+      name: '非法限额', modality: 'text', baseUrl: 'https://bad-limit.local/v1',
+      model: 'x', apiKey: 'sk-x', spendLimitYuan: -0.1, enabled: true,
+    });
+    assert.strictEqual(r.s, 400);
+  });
+});
+
 describe('v2.53 全量API清单', { concurrency: 1 }, () => {
   it('GET /api-directory：超管可取，覆盖零缺失，含三档岗位链接与基础设施层', async () => {
     const { s, j } = await get('/api/admin/model/api-directory', 'admin1', 'PRO');

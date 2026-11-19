@@ -11,12 +11,14 @@ import {
   resolveProviderBaseUrl,
 } from './model-config-policy';
 
-export interface ProviderCfg { baseUrl?: string; apiKey?: string; model?: string }
+export interface ProviderCfg { baseUrl?: string; apiKey?: string; model?: string; spendLimitYuan?: number }
+export interface SpendLimitConfig { enabled: boolean; totalLimitYuan: number }
 export interface ModelConfigData {
   text: Record<'economy' | 'standard' | 'flagship' | 'overseas', ProviderCfg>;
   image: { standard: ProviderCfg; flagship: ProviderCfg };
   providers?: ProviderEntry[];                                  // v2.41 多供应商池（加密落库）
   routing?: Partial<Record<RoleId, string>>;                    // v2.41 九岗→供应商路由
+  spendLimit?: SpendLimitConfig;                                // 测试期消费硬限额；缺省读环境变量
   updatedAt?: string;
 }
 
@@ -29,12 +31,24 @@ const EMPTY: ModelConfigData = {
 let cache: { data: ModelConfigData; exp: number } | null = null;
 const TTL_MS = 60_000;
 
+function envLimit(name: string): number {
+  const n = Number(process.env[name] ?? 0);
+  return Number.isFinite(n) && n >= 0 ? n : 0;
+}
+function envSpendLimit(): SpendLimitConfig {
+  return {
+    enabled: process.env.MODEL_SPEND_LIMIT_ENABLED === 'true',
+    totalLimitYuan: envLimit('MODEL_SPEND_LIMIT_TOTAL_YUAN'),
+  };
+}
+
 function envText(tier: EngineTier): ProviderCfg {
   const t = tier.toUpperCase(); // 与 model-proxy 既有环境变量名保持一致
   return {
     baseUrl: process.env.MODEL_GATEWAY_BASE_URL || 'https://api.openai.com/v1',
     apiKey: process.env[`MODEL_TEXT_${t}_KEY`],
     model: process.env[`MODEL_${t}`],
+    spendLimitYuan: envLimit(`MODEL_TEXT_${t}_SPEND_LIMIT_YUAN`),
   };
 }
 
@@ -49,8 +63,8 @@ export async function resolveImage(flagship: boolean, p: any = prisma): Promise<
   const db = await loadConfig(p);
   const imgBase = process.env.MODEL_IMAGE_GATEWAY_BASE_URL || process.env.MODEL_GATEWAY_BASE_URL || 'https://api.openai.com/v1';
   const env: ProviderCfg = flagship
-    ? { baseUrl: imgBase, apiKey: process.env.MODEL_IMAGE_FLAGSHIP_KEY, model: process.env.MODEL_IMAGE_FLAGSHIP || 'gpt-image-1' }
-    : { baseUrl: imgBase, apiKey: process.env.MODEL_IMAGE_STANDARD_KEY, model: process.env.MODEL_IMAGE_STANDARD };
+    ? { baseUrl: imgBase, apiKey: process.env.MODEL_IMAGE_FLAGSHIP_KEY, model: process.env.MODEL_IMAGE_FLAGSHIP || 'gpt-image-1', spendLimitYuan: envLimit('MODEL_IMAGE_FLAGSHIP_SPEND_LIMIT_YUAN') }
+    : { baseUrl: imgBase, apiKey: process.env.MODEL_IMAGE_STANDARD_KEY, model: process.env.MODEL_IMAGE_STANDARD, spendLimitYuan: envLimit('MODEL_IMAGE_STANDARD_SPEND_LIMIT_YUAN') };
   const cfg = { ...env, ...stripEmpty(flagship ? db.image.flagship : db.image.standard) };
   return cfg.apiKey ? cfg : null;
 }
@@ -59,6 +73,7 @@ function stripEmpty(c: ProviderCfg): ProviderCfg {
   if (c.baseUrl) out.baseUrl = c.baseUrl;
   if (c.apiKey) out.apiKey = c.apiKey;
   if (c.model) out.model = c.model;
+  if (Number.isFinite(c.spendLimitYuan) && (c.spendLimitYuan ?? -1) >= 0) out.spendLimitYuan = c.spendLimitYuan;
   return out;
 }
 
@@ -74,6 +89,10 @@ export async function loadConfig(p: any = prisma): Promise<ModelConfigData> {
         image: { ...EMPTY.image, ...(parsed.image || {}) },
         providers: Array.isArray(parsed.providers) ? parsed.providers : [],
         routing: parsed.routing && typeof parsed.routing === 'object' ? parsed.routing : {},
+        spendLimit: parsed.spendLimit ? {
+          enabled: parsed.spendLimit.enabled === true,
+          totalLimitYuan: Math.max(0, Number(parsed.spendLimit.totalLimitYuan) || 0),
+        } : undefined,
         updatedAt: row.updatedAt.toISOString(),
       };
     }
@@ -92,6 +111,7 @@ export async function saveConfig(data: Omit<ModelConfigData, 'updatedAt'>, updat
     model: n.model ?? o.model,
     // 未填(空串)或传回脱敏占位(含•)都视为“未修改”，保留原密钥，避免只改其他项时误清空 key
     apiKey: !n.apiKey || n.apiKey.includes('•') ? o.apiKey : n.apiKey,
+    spendLimitYuan: n.spendLimitYuan ?? o.spendLimitYuan ?? 0,
   });
   const merged: ModelConfigData = {
     text: {
@@ -107,6 +127,29 @@ export async function saveConfig(data: Omit<ModelConfigData, 'updatedAt'>, updat
     // v2.41：五档密钥保存不动供应商池/路由，避免旧接口误清空
     providers: old.providers ?? [],
     routing: old.routing ?? {},
+    spendLimit: old.spendLimit,
+  };
+  await p.modelConfig.upsert({
+    where: { id: 'global' },
+    create: { id: 'global', payloadEnc: encrypt(JSON.stringify(merged)), updatedBy },
+    update: { payloadEnc: encrypt(JSON.stringify(merged)), updatedBy },
+  });
+  cache = null;
+}
+
+export async function loadSpendLimit(p: any = prisma): Promise<SpendLimitConfig> {
+  const d = await loadConfig(p);
+  return d.spendLimit ?? envSpendLimit();
+}
+
+export async function saveSpendLimit(data: SpendLimitConfig, updatedBy: string, p: any = prisma): Promise<void> {
+  const old = await loadConfig(p);
+  const merged: ModelConfigData = {
+    text: old.text,
+    image: old.image,
+    providers: old.providers ?? [],
+    routing: old.routing ?? {},
+    spendLimit: { enabled: data.enabled, totalLimitYuan: data.totalLimitYuan },
   };
   await p.modelConfig.upsert({
     where: { id: 'global' },
@@ -119,7 +162,7 @@ export async function saveConfig(data: Omit<ModelConfigData, 'updatedAt'>, updat
 /** 后台回显：key 脱敏，绝不返回明文 */
 export async function maskedConfig(p: any = prisma) {
   const d = await loadConfig(p);
-  const m = (c: ProviderCfg) => ({ baseUrl: c.baseUrl || '', model: c.model || '', hasKey: !!c.apiKey, keyMask: maskKey(c.apiKey || '') });
+  const m = (c: ProviderCfg) => ({ baseUrl: c.baseUrl || '', model: c.model || '', hasKey: !!c.apiKey, keyMask: maskKey(c.apiKey || ''), spendLimitYuan: c.spendLimitYuan ?? 0 });
   return {
     text: { economy: m(d.text.economy), standard: m(d.text.standard), flagship: m(d.text.flagship), overseas: m(d.text.overseas) },
     image: { standard: m(d.image.standard), flagship: m(d.image.flagship) },
@@ -138,7 +181,7 @@ export async function loadProviders(p: any = prisma): Promise<ProviderEntry[]> {
   });
 }
 function emptySafe(): ProviderEntry {
-  return { id: '', name: '', modality: 'text', baseUrl: '', apiKey: '', model: '', inYuanPerMTok: 0, outYuanPerMTok: 0, enabled: true };
+  return { id: '', name: '', modality: 'text', baseUrl: '', apiKey: '', model: '', inYuanPerMTok: 0, outYuanPerMTok: 0, spendLimitYuan: 0, enabled: true };
 }
 /** 读取岗位路由 */
 export async function loadRouting(p: any = prisma): Promise<Partial<Record<RoleId, string>>> {
@@ -154,7 +197,7 @@ export async function maskedProvidersConfig(p: any = prisma) {
 async function persistPool(providers: ProviderEntry[], routing: Partial<Record<RoleId, string>>, updatedBy: string, p: any) {
   const old = await loadConfig(p);
   const merged: ModelConfigData = {
-    text: old.text, image: old.image, providers, routing,
+    text: old.text, image: old.image, providers, routing, spendLimit: old.spendLimit,
   };
   await p.modelConfig.upsert({
     where: { id: 'global' },

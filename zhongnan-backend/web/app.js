@@ -10461,6 +10461,7 @@
     // 模型配置
     $('admModelReload').onclick = loadAdmModels;
     $('admModelSave').onclick = saveAdmModels;
+    $('admSpendSave').onclick = saveSpendLimit;
     // v2.41 组合全景/供应商池
     $('admPfReload').onclick = loadAdmPortfolio;
     // API 选型体检：立即体检 / 今日已核对（基准日前移，提醒归零）
@@ -10943,7 +10944,28 @@
     { kind: 'image', label: { zh: '图片引擎（剧本海报）', en: 'Image engines (poster)' }, tiers: [
       { key: 'standard', zh: '标准图片', en: 'Standard image' }, { key: 'flagship', zh: '旗舰图片（gpt-image）', en: 'Flagship (gpt-image)' }] },
   ];
+  /* 测试期消费硬限额：总阀 + 总额度（单 Key 限额在模型档位与供应商池各自表单内） */
+  async function loadSpendLimit() {
+    try {
+      const r = await admApi('/model/spend-limit');
+      const c = (r && r.spendLimit) || {};
+      $('admSpendEnabled').checked = !!c.enabled;
+      $('admSpendTotal').value = Number(c.totalLimitYuan) || 0;
+    } catch (e) { xnSay((e && e.message) || t('loadFail')); }
+  }
+  async function saveSpendLimit() {
+    const body = { enabled: !!$('admSpendEnabled').checked, totalLimitYuan: Math.max(0, Number($('admSpendTotal').value) || 0) };
+    if (body.enabled && body.totalLimitYuan <= 0) {
+      if (!(await uiConfirm({ body: '总额度为 0 时开启总阀，将拒绝所有真实模型调用（含剧本生成与海报）。确认继续？', okText: '确认开启' }))) return;
+    }
+    try {
+      await admApi('/model/spend-limit', { method: 'PUT', body: JSON.stringify(body) });
+      xnSay('限额已保存');
+      await loadSpendLimit();
+    } catch (e) { xnSay(e.message); }
+  }
   async function loadAdmModels() {
+    loadSpendLimit();
     let cfg;
     try { cfg = await admApi('/model/'); }
     catch (e) { $('admModelWrap').innerHTML = znErrorHtml((e && e.message) || t('loadFail')); return; }
@@ -10960,6 +10982,7 @@
             <input data-f="baseUrl" name="baseUrl" aria-label="Base URL" value="${escapeHtml(c.baseUrl || '')}" placeholder="${lang === 'en' ? 'Base URL (e.g. https://api.openai.com/v1)' : 'Base URL（如 https://api.openai.com/v1）'}" />
             <input data-f="model" name="model" aria-label="Model" value="${escapeHtml(c.model || '')}" placeholder="${lang === 'en' ? 'Model (e.g. gpt-4.1-mini / gpt-image-1)' : 'Model（如 gpt-4.1-mini / gpt-image-1）'}" />
             <input data-f="apiKey" name="apiKey" aria-label="API Key" type="password" autocomplete="new-password" placeholder="${c.hasKey ? (lang==='en'?'Leave blank to keep current key':'留空表示不修改已加密密钥') : 'API Key'}" />
+            <input data-f="spendLimitYuan" name="spendLimitYuan" type="number" min="0" step="1" aria-label="Spend limit" value="${Number(c.spendLimitYuan) || 0}" placeholder="${lang === 'en' ? 'Spend limit (yuan, 0 = unlimited)' : '测试期限额（元，0=不限）'}" />
           </div></div>`;
       }).join('');
       return `<div class="model-group"><h4>${lang === 'en' ? g.label.en : g.label.zh}</h4>${rows}</div>`;
@@ -10971,7 +10994,7 @@
       const kind = row.getAttribute('data-kind'), tier = row.getAttribute('data-tier');
     // @module admin
       const get = (f) => row.querySelector(`[data-f="${f}"]`).value.trim();
-      const entry = { baseUrl: get('baseUrl'), model: get('model') };
+      const entry = { baseUrl: get('baseUrl'), model: get('model'), spendLimitYuan: Math.max(0, Number(get('spendLimitYuan')) || 0) };
       const key = get('apiKey'); if (key) entry.apiKey = key; // 空则不传，后端保留原密钥
       body[kind][tier] = entry;
     });
@@ -11099,7 +11122,7 @@
     pvCache = await admApi('/model/providers');
     $('pvList').innerHTML = pvCache.providers.length ? pvCache.providers.map((p) => `
       <div class="model-row" style="margin-bottom:6px">
-        <div class="model-tier">${escapeHtml(p.name)} <span class="badge">${p.modality}</span> ${p.enabled ? '' : '<span class="badge">停用</span>'} <span class="muted">${escapeHtml(p.keyMask || p.apiKey || '')}</span></div>
+        <div class="model-tier">${escapeHtml(p.name)} <span class="badge">${p.modality}</span> ${p.enabled ? '' : '<span class="badge">停用</span>'} ${Number(p.spendLimitYuan) > 0 ? `<span class="badge">限额 ${Number(p.spendLimitYuan)} 元</span>` : ''} <span class="muted">${escapeHtml(p.keyMask || p.apiKey || '')}</span></div>
         <div class="row-actions">
           <button class="btn-ghost" data-pvedit="${p.id}">编辑</button>
           <button class="btn-ghost" data-pvdel="${p.id}">删除</button>
@@ -11117,6 +11140,7 @@
       editingPvId = p.id; $('pvName').value = p.name; $('pvModality').value = p.modality;
       $('pvModel').value = p.model; $('pvBase').value = p.baseUrl || '';
       $('pvIn').value = p.inYuanPerMTok; $('pvOut').value = p.outYuanPerMTok; $('pvEnabled').checked = p.enabled;
+      $('pvSpend').value = Number(p.spendLimitYuan) || 0;
       $('pvCatalog').value = p.catalogId || ''; $('pvKey').placeholder = '留空保留原密钥'; window.scrollTo({ top: $('pvName').offsetTop - 80 });
     });
     renderRouting();
@@ -11133,6 +11157,7 @@
       id: editingPvId || '', name: $('pvName').value.trim(), modality: $('pvModality').value,
       catalogId: $('pvCatalog').value, baseUrl: $('pvBase').value.trim(), model: $('pvModel').value.trim(),
       apiKey: $('pvKey').value.trim(), inYuanPerMTok: Number($('pvIn').value) || 0, outYuanPerMTok: Number($('pvOut').value) || 0,
+      spendLimitYuan: Math.max(0, Number($('pvSpend').value) || 0),
       enabled: $('pvEnabled').checked,
     };
     if (!body.name) { xnSay('供应商名称必填'); return; }
@@ -11140,6 +11165,7 @@
       await admApi('/model/providers', { method: 'PUT', body: JSON.stringify(body) });
       xnSay(editingPvId ? '已更新（密钥加密）' : '已新增（密钥加密）');
       editingPvId = ''; ['pvName', 'pvModel', 'pvBase', 'pvKey'].forEach((id) => $(id).value = '');
+      $('pvSpend').value = 0;
       await loadProviders(); await loadAdmPortfolio();
     } catch (e) { xnSay(e.message); }
   }

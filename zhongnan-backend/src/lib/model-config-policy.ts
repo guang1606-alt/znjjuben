@@ -14,6 +14,7 @@ export interface ProviderEntry {
   model: string;
   inYuanPerMTok: number;        // 文本输入单价（元/百万token）
   outYuanPerMTok: number;       // 文本输出单价
+  spendLimitYuan: number;       // 测试期该 Key 消费限额（元）；0=不单独限 Key，仍受总阀约束
   catalogId?: string;           // v2.41 对应 model-catalog 型号 id（选中则 baseUrl/单价可自动带出）
   enabled: boolean;
 }
@@ -30,7 +31,7 @@ export const ROLE_LABEL_ZH: Record<RoleId, string> = {
 };
 
 export function emptyProvider(modality: Modality): ProviderEntry {
-  return { id: '', name: '', modality, baseUrl: '', apiKey: '', model: '', inYuanPerMTok: 0, outYuanPerMTok: 0, enabled: true };
+  return { id: '', name: '', modality, baseUrl: '', apiKey: '', model: '', inYuanPerMTok: 0, outYuanPerMTok: 0, spendLimitYuan: 0, enabled: true };
 }
 
 /**
@@ -54,6 +55,7 @@ export function validateProvider(p: Partial<ProviderEntry>, catalogDefault?: str
   if (p.modality === 'text' && !p.model) problems.push('文本模型需填写模型名');
   if (p.modality === 'image' && !p.model) problems.push('图片模型需填写模型名');
   if ((p.inYuanPerMTok ?? 0) < 0 || (p.outYuanPerMTok ?? 0) < 0) problems.push('单价不能为负');
+  if (!Number.isFinite(p.spendLimitYuan ?? 0) || (p.spendLimitYuan ?? 0) < 0) problems.push('消费限额必须是非负数字');
   if (p.enabled && !p.apiKey) problems.push('启用前必须粘贴 API Key');
   return { ok: problems.length === 0, problems };
 }

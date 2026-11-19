@@ -8,7 +8,7 @@ import { failInternal } from '../lib/http-errors';
 import { authRequired, AuthRequest } from '../middleware/auth';
 import { createRequireAdmin, requireSuperAdmin } from '../middleware/admin';
 import { prisma } from '../lib/prisma';
-import { maskedConfig, saveConfig, ModelConfigData, maskedProvidersConfig, saveProvider, deleteProvider, saveRouting, loadProviders, loadRouting } from '../lib/model-config';
+import { maskedConfig, saveConfig, ModelConfigData, maskedProvidersConfig, saveProvider, deleteProvider, saveRouting, loadProviders, loadRouting, loadSpendLimit, saveSpendLimit } from '../lib/model-config';
 import {
   ALL_ROLE_IDS, ROLE_LABEL_ZH, routingCoverage, routedCostFenPerEp, RoleId, ProviderEntry, enrichProviderFromCatalog,
 } from '../lib/model-config-policy';
@@ -57,6 +57,20 @@ export function createAdminModelRouter(prisma: any) {
     } catch (e) {
       failInternal(res, e, 'admin-model');
     }
+  });
+
+  const spendLimitSchema = z.object({
+    enabled: z.boolean(),
+    totalLimitYuan: z.number().finite().min(0).max(1_000_000_000),
+  });
+  adminModelRouter.get('/spend-limit', authRequired, requireAdmin, requireSuperAdmin, async (_req, res) => {
+    res.json({ spendLimit: await loadSpendLimit(prisma) });
+  });
+  adminModelRouter.put('/spend-limit', authRequired, requireAdmin, requireSuperAdmin, async (req: AuthRequest, res) => {
+    const parsed = spendLimitSchema.safeParse(req.body);
+    if (!parsed.success) return res.status(400).json({ error: 'SPEND_LIMIT_INVALID 总开关或总额度无效' });
+    await saveSpendLimit(parsed.data, req.userId || 'admin', prisma);
+    res.json({ ok: true, spendLimit: await loadSpendLimit(prisma) });
   });
 
   // 每周 API 全面盘点（也可被定时任务调用）：体检/铁底/异构/代际/价格，留存报告
@@ -129,6 +143,7 @@ export function createAdminModelRouter(prisma: any) {
     model: z.string().max(120).default(''),
     inYuanPerMTok: z.number().min(0).max(100000).default(0),
     outYuanPerMTok: z.number().min(0).max(100000).default(0),
+    spendLimitYuan: z.number().finite().min(0).max(1_000_000_000).default(0),
     catalogId: z.string().max(60).optional().or(z.literal('')),
     enabled: z.boolean().default(true),
   });
@@ -149,6 +164,7 @@ export function createAdminModelRouter(prisma: any) {
       id: d.id || '', name: d.name.trim(), modality: d.modality,
       baseUrl: d.baseUrl.trim(), apiKey: d.apiKey.trim(), model: d.model.trim(),
       inYuanPerMTok: d.inYuanPerMTok, outYuanPerMTok: d.outYuanPerMTok,
+      spendLimitYuan: d.spendLimitYuan,
       catalogId: d.catalogId || undefined, enabled: d.enabled,
     };
     // 选目录型号时自动回填单价/baseUrl/model（用户手填优先）
@@ -383,12 +399,13 @@ export function createAdminModelRouter(prisma: any) {
 
 export const adminModelRouter = createAdminModelRouter(prisma);
 
-function pick(c: unknown): { baseUrl?: string; apiKey?: string; model?: string } {
+function pick(c: unknown): { baseUrl?: string; apiKey?: string; model?: string; spendLimitYuan?: number } {
   const o = (c || {}) as Record<string, unknown>;
   return {
     baseUrl: typeof o.baseUrl === 'string' ? o.baseUrl.trim() : undefined,
     apiKey: typeof o.apiKey === 'string' ? o.apiKey.trim() : undefined,
     model: typeof o.model === 'string' ? o.model.trim() : undefined,
+    spendLimitYuan: typeof o.spendLimitYuan === 'number' && Number.isFinite(o.spendLimitYuan) && o.spendLimitYuan >= 0 ? o.spendLimitYuan : undefined,
   };
 }
 

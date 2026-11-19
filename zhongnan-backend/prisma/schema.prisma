@@ -694,3 +694,16 @@ model ProviderBalance {
   @@index([providerId, createdAt])
   @@index([vendor])
 }
+
+// ============ 测试期模型消费硬限额 ============
+// total 为总账；key_<sha256> 为单 Key 分账，不保存明文 Key。
+// available = limit - reserved - spent；预留用 availableFen>=reserve 条件原子扣减防并发超支。
+model ModelSpendBudget {
+  id            String   @id
+  limitFen      Int
+  availableFen  Int
+  reservedFen   Int      @default(0)
+  spentFen      Int      @default(0)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+}

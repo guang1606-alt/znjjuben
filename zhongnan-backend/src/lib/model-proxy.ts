@@ -11,6 +11,7 @@
 import { EngineTier } from '../config/pricing';
 import { resolveText, resolveImage, loadProviders, loadRouting } from './model-config';
 import { ProviderEntry, RoleId, routeProvider } from './model-config-policy';
+import { isSpendLimitError, reserveModelSpend, settleModelSpend, SpendReservation } from './spend-limit';
 import https from 'node:https';
 import http from 'node:http';
 import { URL } from 'node:url';
@@ -125,7 +126,7 @@ function httpPost(url: string, init: { method: string; headers: Record<string, s
 }
 
 /** 文本候选端点：档位配置、九岗路由指定或供应商池替补，单价随实际端点核算 */
-interface Candidate { baseUrl: string; model: string; key: string; inY: number; outY: number }
+interface Candidate { baseUrl: string; model: string; key: string; inY: number; outY: number; keyLimitYuan: number }
 
 const TRANSIENT_HTTP = new Set([429, 408]); // 429 限流 / 408 请求超时：瞬态可重试；5xx 一并按瞬态处理
 function isTransientStatus(status: number): boolean { return TRANSIENT_HTTP.has(status) || (status >= 500 && status <= 599); }
@@ -164,6 +165,7 @@ async function tryCandidate(
   let lastErr: Error | null = null;
   for (let i = 0; i < 3; i++) {
     let failure: Error;
+    let reservation: SpendReservation | null = null;
     // 每次重试都要新建 AbortController/超时计时器，否则首试 abort 后信号已失效，后续重试无法超时
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), timeoutMs);
@@ -172,6 +174,9 @@ async function tryCandidate(
       else signal.addEventListener('abort', () => controller.abort(), { once: true });
     }
     try {
+      const promptBytes = Buffer.byteLength(prompt, 'utf8');
+      const reserveFen = yuanToFen((promptBytes / 1e6) * c.inY + (maxTokens / 1e6) * c.outY);
+      reservation = await reserveModelSpend({ apiKey: c.key, keyLimitYuan: c.keyLimitYuan, reserveFen });
       const url = `${c.baseUrl.replace(/\/$/, '')}/chat/completions`;
       const ip = pickInferenceParams(c.baseUrl, c.model);
       const body = JSON.stringify({
@@ -212,14 +217,22 @@ async function tryCandidate(
         // usage 缺失时输出 token 按 maxTokens 的 70% 保守估算，宁可成本高估也不能漏算导致毛利熔断失效
         const tokensOut = data.usage?.completion_tokens ?? Math.ceil(maxTokens * 0.7);
         const costYuan = (tokensIn / 1e6) * c.inY + (tokensOut / 1e6) * c.outY;
-        return { text: content, tokensIn, tokensOut, costFen: yuanToFen(costYuan) };
+        const result = { text: content, tokensIn, tokensOut, costFen: yuanToFen(costYuan) };
+        await settleModelSpend(reservation, result.costFen);
+        reservation = null;
+        return result;
       }
     } catch (e) {
       // 超时/中断/网络错误/坏 JSON：一律按瞬态处理（供应商异常页也常以网络异常形态出现）
       failure = e instanceof Error ? e : new Error(String(e));
     } finally {
       clearTimeout(timer);
+      if (reservation) {
+        try { await settleModelSpend(reservation, 0); }
+        catch (e) { failure = e instanceof Error ? e : new Error(String(e)); }
+      }
     }
+    if (isSpendLimitError(failure)) throw failure;
     if (/MODEL_FATAL_/.test(failure.message)) throw failure;
     if (signal?.aborted) throw new Error('CANCELLED');  // v2.542 用户取消：立即停止重试，不退避
     lastErr = failure;
@@ -248,18 +261,18 @@ export async function callText(
   // 1) v2.41 九岗路由：管理员把岗位指定到池内供应商则优先（与 routedCostFenPerEp 计费口径一致）
   const routed = routeProvider(providers, routing, ROLE_TO_ROUTE[role]);
   if (routed?.apiKey && routed.baseUrl) {
-    push({ baseUrl: routed.baseUrl, model: routed.model, key: routed.apiKey, inY: routed.inYuanPerMTok || r.inYuanPerMTok, outY: routed.outYuanPerMTok || r.outYuanPerMTok });
+    push({ baseUrl: routed.baseUrl, model: routed.model, key: routed.apiKey, inY: routed.inYuanPerMTok || r.inYuanPerMTok, outY: routed.outYuanPerMTok || r.outYuanPerMTok, keyLimitYuan: routed.spendLimitYuan });
   }
   // 2) 引擎档位配置（后台优先、env 兜底）
   const cfg = await resolveText(tier);
   if (cfg?.apiKey) {
-    push({ baseUrl: cfg.baseUrl || r.baseUrl, model: cfg.model || r.model, key: cfg.apiKey, inY: r.inYuanPerMTok, outY: r.outYuanPerMTok });
+    push({ baseUrl: cfg.baseUrl || r.baseUrl, model: cfg.model || r.model, key: cfg.apiKey, inY: r.inYuanPerMTok, outY: r.outYuanPerMTok, keyLimitYuan: cfg.spendLimitYuan ?? 0 });
   }
   // 3) 供应商池替补：Top3 封顶（首选+2），控制最坏时延；单价缺省按档位价保守核算
   for (const p of providers) {
     if (candidates.length >= 3) break;
     if (p.modality !== 'text' || !p.enabled || !p.apiKey || !p.baseUrl) continue;
-    push({ baseUrl: p.baseUrl, model: p.model, key: p.apiKey, inY: p.inYuanPerMTok || r.inYuanPerMTok, outY: p.outYuanPerMTok || r.outYuanPerMTok });
+    push({ baseUrl: p.baseUrl, model: p.model, key: p.apiKey, inY: p.inYuanPerMTok || r.inYuanPerMTok, outY: p.outYuanPerMTok || r.outYuanPerMTok, keyLimitYuan: p.spendLimitYuan });
   }
   // 未配置任何可用端点：进入沙盘模式（开发/演示/自动化测试可完整跑通协作链路）；
   // 生产可设 REQUIRE_REAL_MODEL=true 强制必须真实模型，杜绝“假装在创作”。
@@ -288,6 +301,8 @@ export async function callText(
       lastErr = e;
       if (opts.signal?.aborted) throw new Error('CANCELLED');  // v2.542 用户取消：不换候选立即上抛，不误降级健康分
       const msg = e instanceof Error ? e.message : String(e);
+      if (isSpendLimitError(e, 'TOTAL') || isSpendLimitError(e, 'UNAVAILABLE')) throw e;
+      if (isSpendLimitError(e, 'KEY')) continue;
       const fatal = msg.match(/MODEL_FATAL_HTTP_(\d{3})/);
       if (fatal && fatal[1] !== '401' && fatal[1] !== '403') throw e; // 请求/提示词级错误换模型也无意义，直接上抛
       markFailure(k); // 瞬态耗尽或 401/403：计入健康降级，累计 3 次熔断 10 分钟
@@ -298,7 +313,7 @@ export async function callText(
 
 export interface ImageResult { images: string[]; costFen: number; /** 首选端点失败、由替补端点完成（可观测用，不下发前端） */ fellback?: boolean }
 
-interface ImageCandidate { baseUrl: string; model: string; key: string; perImageFen: number }
+interface ImageCandidate { baseUrl: string; model: string; key: string; perImageFen: number; keyLimitYuan: number }
 
 /** v2.317 通义万相走 DashScope 原生异步协议（compatible-mode/images/generations 对 wanx2.1 实测 404） */
 const WANX_HOST_RE = /dashscope\.aliyuncs\.com/i;
@@ -364,7 +379,8 @@ async function tryImageCandidate(
 ): Promise<string[]> {
   let lastErr: Error | null = null;
   for (let i = 0; i < 2; i++) {
-    let failure: Error;
+    let failure: Error = new Error('IMAGE_UNKNOWN');
+    let reservation: SpendReservation | null = null;
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), timeoutMs);
     if (signal) {
@@ -372,40 +388,57 @@ async function tryImageCandidate(
       else signal.addEventListener('abort', () => controller.abort(), { once: true });
     }
     try {
+      // 每次真实图片请求前按张数预留额度；万相异步提交只预留一次，轮询不重复计费
+      reservation = await reserveModelSpend({
+        apiKey: c.key, keyLimitYuan: c.keyLimitYuan, reserveFen: c.perImageFen * n,
+      });
+      let images: string[] | null = null;
       // v2.317 万相（DashScope）：OpenAI 兼容图片端点实测 404，按域名分流原生异步提交+轮询协议
       if (WANX_HOST_RE.test(c.baseUrl)) {
-        return await wanxAsyncOnce(c, prompt, n, size, timeoutMs, controller.signal);
-      }
-      const url = `${c.baseUrl.replace(/\/$/, '')}/images/generations`;
-      const body = JSON.stringify({ model: c.model, prompt, n, size });
-      const transport = __injectedTransport ?? httpPost;
-      const resp = await transport(url, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${c.key}`, 'Content-Length': Buffer.byteLength(body) },
-        body, timeoutMs, signal: controller.signal,
-      });
-      if (!resp.ok) {
-        const detail = (await resp.text()).slice(0, 200);
-        failure = isTransientStatus(resp.status)
-          ? new Error(`IMAGE_TRANSIENT_HTTP_${resp.status}:${detail}`)
-          : new Error(`IMAGE_FATAL_HTTP_${resp.status}:${detail}`);
+        images = await wanxAsyncOnce(c, prompt, n, size, timeoutMs, controller.signal);
       } else {
-        const data = await resp.json() as { data?: { url?: string; b64_json?: string }[] };
-        // 供应商异常/被网关劫持时可能返回 {error:...} 等非标准结构，必须显式拒绝而不是崩在 .map 上；
-        // 这类劫持页多为瞬态，按瞬态处理允许重试/转移一次
-        if (!Array.isArray(data?.data)) failure = new Error('IMAGE_BAD_RESPONSE: 图片供应商返回结构异常');
-        else {
-          const images = data.data.map((d) => d.url || (d.b64_json ? `data:image/png;base64,${d.b64_json}` : '')).filter(Boolean);
-          if (images.length === 0) failure = new Error('IMAGE_BAD_RESPONSE: 图片供应商返回空数组');
-          else return images;
+        const url = `${c.baseUrl.replace(/\/$/, '')}/images/generations`;
+        const body = JSON.stringify({ model: c.model, prompt, n, size });
+        const transport = __injectedTransport ?? httpPost;
+        const resp = await transport(url, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${c.key}`, 'Content-Length': Buffer.byteLength(body) },
+          body, timeoutMs, signal: controller.signal,
+        });
+        if (!resp.ok) {
+          const detail = (await resp.text()).slice(0, 200);
+          failure = isTransientStatus(resp.status)
+            ? new Error(`IMAGE_TRANSIENT_HTTP_${resp.status}:${detail}`)
+            : new Error(`IMAGE_FATAL_HTTP_${resp.status}:${detail}`);
+        } else {
+          const data = await resp.json() as { data?: { url?: string; b64_json?: string }[] };
+          // 供应商异常/被网关劫持时可能返回 {error:...} 等非标准结构，必须显式拒绝而不是崩在 .map 上；
+          // 这类劫持页多为瞬态，按瞬态处理允许重试/转移一次
+          if (!Array.isArray(data?.data)) failure = new Error('IMAGE_BAD_RESPONSE: 图片供应商返回结构异常');
+          else {
+            images = data.data.map((d) => d.url || (d.b64_json ? `data:image/png;base64,${d.b64_json}` : '')).filter(Boolean);
+            if (images.length === 0) failure = new Error('IMAGE_BAD_RESPONSE: 图片供应商返回空数组');
+          }
         }
+      }
+      if (images) {
+        // 成功即计费：按实际返回张数结算，预留差额原路返还
+        await settleModelSpend(reservation, c.perImageFen * images.length);
+        reservation = null;
+        return images;
       }
     } catch (e) {
       // 超时/中断/网络错误/坏 JSON：瞬态（成功响应后 JSON 解析失败理论上不会扣费重试，但概率极低，可接受一次重试）
       failure = e instanceof Error ? e : new Error(String(e));
     } finally {
       clearTimeout(timer);
+      // 失败/取消：完整释放本次预留，避免额度被无消费占用
+      if (reservation) {
+        try { await settleModelSpend(reservation, 0); }
+        catch (e) { failure = e instanceof Error ? e : new Error(String(e)); }
+      }
     }
+    if (isSpendLimitError(failure)) throw failure;
     if (/IMAGE_FATAL_/.test(failure.message)) throw failure;
     if (signal?.aborted) throw new Error('CANCELLED');  // v2.542 用户取消：立即停止重试
     lastErr = failure;
@@ -426,15 +459,15 @@ export async function callImage(
   const perImageFen = isFlagship ? 140 : 10;
   const candidates: ImageCandidate[] = [];
   const seen = new Set<string>();
-  const push = (baseUrl: string, model: string, key: string): boolean => {
+  const push = (baseUrl: string, model: string, key: string, keyLimitYuan = 0): boolean => {
     const k = hKey(baseUrl, model);
     if (seen.has(k)) return false;
-    seen.add(k); candidates.push({ baseUrl, model, key, perImageFen }); return true;
+    seen.add(k); candidates.push({ baseUrl, model, key, perImageFen, keyLimitYuan }); return true;
   };
   // 1) 引擎档位图片配置（后台优先、env 兜底；旗舰位即 GPT-image）
   const cfg = await resolveImage(isFlagship);
   if (cfg?.apiKey) {
-    push(cfg.baseUrl || 'https://api.openai.com/v1', cfg.model || (isFlagship ? 'gpt-image-1' : 'image-standard'), cfg.apiKey);
+    push(cfg.baseUrl || 'https://api.openai.com/v1', cfg.model || (isFlagship ? 'gpt-image-1' : 'image-standard'), cfg.apiKey, cfg.spendLimitYuan ?? 0);
   }
   // 2) 供应商池 image 端点替补：Top3 封顶（含首选共 3 个），单价仍按档位下限保守核算（池内国产更便宜，成本只高估不低估）
   const src = __providerSource ?? (async () => ({ providers: await loadProviders(), routing: await loadRouting() }));
@@ -442,7 +475,7 @@ export async function callImage(
   for (const p of providers) {
     if (candidates.length >= 3) break;
     if (p.modality !== 'image' || !p.enabled || !p.apiKey || !p.baseUrl) continue;
-    push(p.baseUrl, p.model, p.apiKey);
+    push(p.baseUrl, p.model, p.apiKey, p.spendLimitYuan);
   }
   // 全部熔断时可用性优先照常尝试；一个可用端点都没有才报未配置（业务侧自动退款）
   const live = candidates.filter((c) => !isDegraded(hKey(c.baseUrl, c.model)));
@@ -466,6 +499,8 @@ export async function callImage(
       lastErr = e;
       if (opts.signal?.aborted) throw new Error('CANCELLED');  // v2.542 用户取消：不换候选立即上抛
       const msg = e instanceof Error ? e.message : String(e);
+      if (isSpendLimitError(e, 'TOTAL') || isSpendLimitError(e, 'UNAVAILABLE')) throw e;
+      if (isSpendLimitError(e, 'KEY')) continue;
       const fatal = msg.match(/IMAGE_FATAL_HTTP_(\d{3})/);
       if (fatal && fatal[1] !== '401' && fatal[1] !== '403') throw e; // 400/内容审核等换端点无意义，直接上抛
       markFailure(k); // 瞬态耗尽或 401/403：计入健康降级，累计 3 次熔断 10 分钟
