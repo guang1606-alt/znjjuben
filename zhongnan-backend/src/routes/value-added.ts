@@ -182,7 +182,8 @@ export function createValueAddedRouter(prisma: PrismaLike | any) {
         take: take + 1, // 多取一张判断 hasMore，避免 count 与列表不一致造成“有更多却取不到”
         select: { id: true, kind: true, size: true, createdAt: true },
       }).catch(() => []),
-      prisma.mediaAsset.count({ where: baseWhere }).catch(() => 0),
+      // v2.554 优化：cursor 翻页跳过 count（前端已有 fallback），省一次 DB 查询
+      cursor ? Promise.resolve(null) as Promise<number | null> : prisma.mediaAsset.count({ where: baseWhere }).catch(() => 0),
     ]);
     const list = (rows as any[]).slice(0, take);
     const last = list[list.length - 1];
