@@ -4128,7 +4128,7 @@
       const fresh = items.filter((it) => !seen.has(it.id));
       myPostersCursor = typeof d.nextCursor === 'string' ? d.nextCursor : '';
       myPostersHasMore = !!myPostersCursor;
-      list.insertAdjacentHTML('beforeend', fresh.map((it) => `<div data-poster-card="${escapeHtml(it.id)}" data-poster-cursor="${escapeHtml(it.cursor || '')}"><button class="poster-open" type="button" data-poster-open="${escapeHtml(it.id)}" data-poster-url="${escapeHtml(it.url)}" aria-label="${escapeHtml(t('viewPoster'))}" title="${escapeHtml(t('viewPoster'))}"><img src="${escapeHtml(it.url)}" alt="${escapeHtml(t('myPosters'))}" loading="lazy" width="360" height="640" /></button><div class="muted" style="display:flex;justify-content:space-between;align-items:center;margin-top:4px"><span>${fmtBytes(it.size)}</span><button class="btn-ghost" type="button" data-del-poster="${escapeHtml(it.id)}">${escapeHtml(t('delPoster'))}</button></div></div>`).join(''));
+      list.insertAdjacentHTML('beforeend', fresh.map((it) => `<div data-poster-card="${escapeHtml(it.id)}" data-poster-cursor="${escapeHtml(it.cursor || '')}"><button class="poster-open" type="button" data-poster-open="${escapeHtml(it.id)}" data-poster-url="${escapeHtml(it.url)}" aria-label="${escapeHtml(t('viewPoster'))}" title="${escapeHtml(t('viewPoster'))}"><img src="${escapeHtml(it.url)}" alt="${escapeHtml(t('myPosters'))}" loading="lazy" width="360" height="640" /></button><div class="muted" style="display:flex;justify-content:space-between;align-items:center;gap:6px;margin-top:4px"><span class="poster-when" title="${escapeHtml(posterTimeFull(it.createdAt))}">${escapeHtml(posterTimeText(it.createdAt))} · ${fmtBytes(it.size)}</span><button class="btn-ghost" type="button" data-del-poster="${escapeHtml(it.id)}">${escapeHtml(t('delPoster'))}</button></div></div>`).join(''));
       empty.hidden = list.querySelector('[data-poster-card]') !== null;
       more.hidden = !myPostersCursor;
       list.querySelectorAll('[data-del-poster]').forEach((b) => {
@@ -4266,6 +4266,19 @@
     doChangePw();
   };
   function fmtBytes(n) { if (!n) return '0 MB'; const mb = n / (1024 * 1024); return mb >= 1 ? mb.toFixed(1) + ' MB' : (n / 1024).toFixed(0) + ' KB'; }
+  // v2.561 海报卡片的生成时间：只显示体积时，多次生成后分不清哪张是刚做的，删除容易删错。
+  // 卡片空间窄，用 MM-DD HH:mm 紧凑格式；完整时间放 title，悬停/读屏可拿到。
+  function posterTimeText(iso) {
+    const d = iso ? new Date(iso) : null;
+    if (!d || Number.isNaN(d.getTime())) return '';
+    const p = (n) => String(n).padStart(2, '0');
+    const md = lang === 'en' ? `${p(d.getMonth() + 1)}/${p(d.getDate())}` : `${p(d.getMonth() + 1)}-${p(d.getDate())}`;
+    return `${md} ${p(d.getHours())}:${p(d.getMinutes())}`;
+  }
+  function posterTimeFull(iso) {
+    const d = iso ? new Date(iso) : null;
+    return d && !Number.isNaN(d.getTime()) ? d.toLocaleString(lang === 'en' ? 'en-US' : 'zh-CN') : '';
+  }
 
   /* ---------- 会员充值（目录只认服务端） ---------- */
   async function loadCatalog() {
@@ -5059,10 +5072,32 @@
         try {
           const r = await Api.request('/api/va/poster', { method: 'POST', body: JSON.stringify({ projectId: d.projectId, tier: 'STANDARD', style: '价值认证海报，金色质感，突出等级与指数' }) });
           const j = await Api.jsonOrThrow(r);
-          const pg = $('certPosters'); pg.classList.remove('hidden'); pg.innerHTML = (j.images || []).map((u, i) => `<img src="${escapeHtml(u)}" alt="poster${i}" /><div class="muted" style="text-align:center;font-size:11px">${lang === 'en' ? 'Option ' : '方案'}${i + 1}</div>`).join('');
+          // v2.561 付费生成的认证海报此前只有裸 <img>：提示让用户自行截图，等于降质保存。
+          // 与「我的海报」「生成结果页」统一为可点开大图 + 下载原图；点击与破图兜底都走委托，反复生成不会重复绑定。
+          const pg = $('certPosters'); pg.classList.remove('hidden');
+          pg.innerHTML = (j.images || []).map((u, i) => {
+            const id = (String(u).match(/^\/media\/([^/?#]+)/) || [])[1] || '';
+            const label = (lang === 'en' ? 'Option ' : '方案') + (i + 1);
+            return `<button class="poster-open" type="button" data-poster-open="${escapeHtml(id)}" data-poster-url="${escapeHtml(u)}" aria-label="${escapeHtml(t('viewPoster'))}" title="${escapeHtml(t('viewPoster'))}"><img src="${escapeHtml(u)}" alt="${escapeHtml(label)}" /><div class="muted" style="text-align:center;font-size:11px;line-height:1.6">${label}</div></button>`;
+          }).join('');
+          pg.onclick = (e) => {
+            const b = e.target.closest('[data-poster-open]');
+            if (b) openPosterModal(b.getAttribute('data-poster-open'), b.getAttribute('data-poster-url'));
+          };
+          if (!pg.dataset.errBound) {
+            pg.dataset.errBound = '1';
+            pg.addEventListener('error', (e) => {
+              const img = e.target;
+              if (!(img instanceof HTMLImageElement)) return;
+              const dead = document.createElement('span');
+              dead.className = 'poster-dead muted';
+              dead.textContent = t('posterBroken');
+              if (img.parentNode) img.replaceWith(dead);
+            }, true);
+          }
           xnSay(j.staff
-            ? (lang === 'en' ? 'Done — free for staff.' : '已生成，内部账户免费，可截图用于宣传')
-            : (lang === 'en' ? `Done, spent ${j.points} credits.` : `已生成，消耗${j.points}积分，可截图用于宣传`));
+            ? (lang === 'en' ? 'Done — free for staff. Tap a poster to view full size or download.' : '已生成，内部账户免费；点海报可看大图、下载原图')
+            : (lang === 'en' ? `Done, spent ${j.points} credits. Tap a poster to view full size or download.` : `已生成，消耗${j.points}积分；点海报可看大图、下载原图`));
         } catch (e) { xnSay(e.message); } finally { pbtn.disabled = false; pbtn.textContent = certStaff ? (lang === 'en' ? 'Certified poster · Free' : '生成认证海报（内部免费）') : (lang === 'en' ? 'Certified poster (39 pts)' : '生成认证海报（39积分）'); }
       };
     // v2.256：错误源已走 Api.jsonOrThrow 脱敏层；muted 弱提示改 znErrorHtml（⚠ + role=alert）

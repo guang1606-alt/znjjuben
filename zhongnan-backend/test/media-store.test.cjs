@@ -144,6 +144,35 @@ test('生成结果页高清海报必须可点开大图并下载，扩展名交�
   assert.match(app, /setAttribute\('download', ''\)/, '下载文件名应交给服务端 Content-Disposition');
 });
 
+// v2.561 价值参考面板的认证海报结果同样必须有「看大图 + 下载原图」入口：
+// 此前只有裸 <img> 且提示「可截图用于宣传」——39 积分付费生成后仍要靠截图，画质受损。
+test('价值参考面板的认证海报必须可点开大图并下载', () => {
+  const fs = require('node:fs');
+  const path = require('node:path');
+  const app = fs.readFileSync(path.join(__dirname, '..', 'web', 'app.js'), 'utf8');
+  const lines = app.split('\n');
+  const i = lines.findIndex((l) => l.includes("const pg = $('certPosters')"));
+  assert.ok(i >= 0, '未找到认证海报渲染处（certPosters）');
+  const block = lines.slice(i, i + 12).join('\n');
+  assert.match(block, /data-poster-open=/, '认证海报必须带预览/下载入口');
+  assert.match(block, /class="poster-open"/, '入口必须用按钮承载，键盘可达');
+  assert.match(block, /\.onclick = \(e\)/, '点击必须走委托（每次生成重插卡片，逐张绑定会失效）');
+  assert.doesNotMatch(app, /可截图用于宣传/, '支持下载后不得再引导用户截图');
+});
+
+// v2.561 我的海报卡片只显示体积，多次生成后无法区分哪张更新，删除时容易删错。
+test('我的海报卡片必须显示生成时间', () => {
+  const fs = require('node:fs');
+  const path = require('node:path');
+  const app = fs.readFileSync(path.join(__dirname, '..', 'web', 'app.js'), 'utf8');
+  const lines = app.split('\n');
+  const i = lines.findIndex((l) => l.includes('data-poster-card='));
+  assert.ok(i >= 0, '未找到我的海报卡片模板');
+  const block = lines.slice(i, i + 3).join('\n');
+  assert.match(block, /posterTimeText\(it\.createdAt\)/, '卡片必须渲染生成时间');
+  assert.match(app, /function posterTimeText\(iso\)/, '时间格式化应集中在一个函数');
+});
+
 // v2.539 前端海报渲染守卫：落库后返回的是 /media/:id 站内相对地址，
 // 前端若只放行 http(s)/data: 就会把持久化成功的海报整批过滤掉（提示成功却一张不显示）。
 test('前端海报渲染必须放行同源 /media/ 地址，且仍拒绝协议相对外链', () => {
