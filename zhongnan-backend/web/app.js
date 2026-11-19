@@ -5276,6 +5276,8 @@
   let paceStrategy = '', dialogueStrategy = '', emotionStrategy = '', characterStrategy = '', customStyleText = '';
   // c223 反套路档位（请求级）：'' = 系统默认 balanced 不传；classic 宽容 / innovative 严格
   let antiStrengthSel = '';
+  // v2.545 思考深度档位（请求级）：'' = 系统默认 balanced 不传；speed 极速 / depth 深度
+  let depthTierSel = '';
   let creationStrategiesLoaded = false;
   const beatPref = { mode: 'auto', strength: 'balanced', preferred: [], payoffFlavors: [], reversalFlavors: [], emotionFlavors: [] };
   // v2.57 逐集节拍点选（分层 pos→beatId），由节拍调色板写入；与风味软偏好互补
@@ -5497,6 +5499,31 @@
         arow.appendChild(c);
       });
       ag.appendChild(arow); box.appendChild(ag);
+    }
+    // v2.545 思考深度档位（请求级）：极速省 token 快出稿 / 标准 / 深度（额外目的陈述+跨界视角）
+    {
+      const dg = document.createElement('div'); dg.className = 'hook-group strategy-group';
+      const dt = document.createElement('div'); dt.className = 'hook-group-title';
+      dt.textContent = lang === 'en' ? 'Thinking depth' : '思考深度（影响方法论含量与耗时）';
+      dg.appendChild(dt);
+      const drow = document.createElement('div'); drow.className = 'chip-row';
+      const depths = [
+        { id: 'speed', zh: '极速（省时省 token）', en: 'Speed', tipZh: '仅保留精简方法论清单，适合快速出初稿', tipEn: 'Lean methodology line only; fastest first draft' },
+        { id: 'balanced', zh: '标准（系统默认）', en: 'Balanced (default)', tipZh: '完整方法论清单，多数题材推荐', tipEn: 'Full methodology line; recommended' },
+        { id: 'depth', zh: '深度（目的+跨界视角）', en: 'Deep', tipZh: '额外先写创作目的并给跨界改进建议，适合精品稿', tipEn: 'Adds purpose statement and cross-domain lens; premium drafts' },
+      ];
+      depths.forEach((t) => {
+        const c = document.createElement('button'); c.type = 'button'; c.className = 'chip strat-chip' + (depthTierSel === t.id || (t.id === 'balanced' && depthTierSel === '') ? ' on' : '');
+        c.textContent = lang === 'en' ? t.en : t.zh;
+        c.title = lang === 'en' ? t.tipEn : t.tipZh;
+        c.onclick = () => {
+          depthTierSel = t.id === 'balanced' ? '' : t.id; // balanced=默认不传，减负 payload
+          drow.querySelectorAll('.strat-chip').forEach((x) => x.classList.remove('on'));
+          c.classList.add('on');
+        };
+        drow.appendChild(c);
+      });
+      dg.appendChild(drow); box.appendChild(dg);
     }
     // v2.32 参考剧本学风格（会员能力）：只学叙事节奏与语言风格，不抄情节原句；≥100字才提交
     {
@@ -5976,6 +6003,7 @@
     if (emotionStrategy) base.emotionStrategy = emotionStrategy;
     if (characterStrategy) base.characterStrategy = characterStrategy;
     if (antiStrengthSel) base.antiStrength = antiStrengthSel; // c223 反套路档位（balanced 默认不传）
+    if (depthTierSel) base.depthTier = depthTierSel; // v2.545 思考深度档位（balanced 默认不传）
     if (customStyleText && customStyleText.replace(/\s/g, '').length >= 100) base.customStyleText = customStyleText;
     return base;
   }

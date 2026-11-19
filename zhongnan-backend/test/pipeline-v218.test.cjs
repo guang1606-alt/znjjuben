@@ -75,3 +75,27 @@ describe('c223 反套路档位请求级透传', () => {
     assert.ok(['low', 'mid', 'high'].includes(def._profile.colloquialLevel), 'colloquialLevel 随 _profile 一并落库');
   });
 });
+
+// —— v2.545 思考深度档位请求级透传：pipeline v2.326 三档能力（Method Trace/Purpose Gate/Range Lens）
+// 此前无路由入口，请求永远 balanced；本次补 genSchema/projectSchema + 透传 + _profile 落库 ——
+describe('v2.545 思考深度档位请求级透传', () => {
+  it('runEpisode 接受 depthTier 并在 _profile 原值返回；缺省与非法值回退 balanced', async () => {
+    stub();
+    const deep = await runEpisode(EngineTier.STANDARD, bible(), '都市甜宠', () => {}, { episodeCount: 1, episodeIndex: 0, lang: 'zh', depthTier: 'depth' });
+    assert.strictEqual(deep._profile.depthTier, 'depth', '显式档位必须原值进 _profile（透明可回溯）');
+    const def = await runEpisode(EngineTier.STANDARD, bible(), '都市甜宠', () => {}, { episodeCount: 1, episodeIndex: 0, lang: 'zh' });
+    assert.strictEqual(def._profile.depthTier, 'balanced', '缺省回退 pipeline 默认档');
+    const junk = await runEpisode(EngineTier.STANDARD, bible(), '都市甜宠', () => {}, { episodeCount: 1, episodeIndex: 0, lang: 'zh', depthTier: 'GODMODE' });
+    assert.strictEqual(junk._profile.depthTier, 'balanced', '非法档位运行时归一，不得穿透到指令构建');
+  });
+  it('depth 与 speed 真实改变架构师指令：depth 注入目的闸门、speed 降为极简方法论', async () => {
+    const cap = stub();
+    await runEpisode(EngineTier.STANDARD, bible(), '都市甜宠', () => {}, { mode: 'adapt', episodeCount: 1, episodeIndex: 0, lang: 'zh', depthTier: 'depth' });
+    assert.ok(arch(cap).includes('本集改编的根本目的'), 'depth 档必须注入 Purpose Gate');
+    assert.ok(!arch(cap).includes('（简要列用到的方法，1-3 条即可）'), 'depth 档不应走极简方法论占位');
+    const cap2 = stub();
+    await runEpisode(EngineTier.STANDARD, bible(), '都市甜宠', () => {}, { mode: 'adapt', episodeCount: 1, episodeIndex: 0, lang: 'zh', depthTier: 'speed' });
+    assert.ok(!arch(cap2).includes('本集改编的根本目的'), 'speed 档不得注入 Purpose Gate');
+    assert.ok(arch(cap2).includes('（简要列用到的方法，1-3 条即可）'), 'speed 档走极简方法论占位');
+  });
+});

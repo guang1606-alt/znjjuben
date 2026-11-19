@@ -2234,6 +2234,48 @@ describe('c212 /fix 后 32 结构维度按新正文重算覆盖，台账不毁',
   });
 });
 
+// v2.545 思考深度档位（speed/balanced/depth）：pipeline 三层能力此前无路由入口，
+// 请求永远 balanced；本次补立项落库 + /episodes 请求级透传 + 非法档位 400 + 生效档进 qcReport._profile。
+describe('v2.545 思考深度档位路由入口', { concurrency: 1 }, () => {
+  async function createProject(uid, body) {
+    const headers = { 'Content-Type': 'application/json', Authorization: `Bearer ${signAccess({ sub: uid, level: 'BASIC' })}` };
+    mem._seedUser({ id: uid, level: 'BASIC', balance: 0 });
+    const r = await fetch(base + '/api/generate/projects', { method: 'POST', headers, body: JSON.stringify(Object.assign({ title: '深度档项目', mode: 'tags' }, body)) });
+    return { s: r.status, j: await r.json().catch(() => null) };
+  }
+
+  it('立项接受 depthTier 并随 bible 落库；非法档位 400（不得静默降级）', async () => {
+    const ok = await createProject('u_dt1', { depthTier: 'depth' });
+    assert.strictEqual(ok.s, 200);
+    assert.strictEqual(ok.j.bible?.depthTier, 'depth', '立项深度档必须落库，续写按项目档沿用');
+    const bad = await createProject('u_dt2', { depthTier: 'GODMODE' });
+    assert.strictEqual(bad.s, 400, '未知档位必须 400，避免静默跑默认档还显示已选深度');
+  });
+
+  it('/episodes 请求级 depthTier 生效并写入 qcReport._profile；项目未传时沿用 bible 档', async () => {
+    const uid = 'u_dt3';
+    mem._seedUser({ id: uid, level: 'BASIC', balance: 1000 });
+    const pid = `proj_${uid}`;
+    mem._projects.set(pid, { id: pid, userId: uid, bible: { depthTier: 'speed' } });
+    const r = await call(uid, 'BASIC', { projectId: pid, brief });
+    assert.strictEqual(r.status, 200);
+    const saved = mem._scripts.filter((s) => s.projectId === pid).pop();
+    assert.strictEqual(saved?.qcReport?._profile?.depthTier, 'speed', '项目落库档必须在未显式传值时沿用，且进 _profile 可回溯');
+    // 请求级显式值必须高于项目落库档（否则用户改选深度仍跑项目旧档 = 入口失效）
+    const r2 = await call(uid, 'BASIC', { projectId: pid, brief, depthTier: 'depth' });
+    assert.strictEqual(r2.status, 200);
+    const saved2 = mem._scripts.filter((s) => s.projectId === pid).pop();
+    assert.strictEqual(saved2?.qcReport?._profile?.depthTier, 'depth', '请求显式 depthTier 必须覆盖项目落库档');
+  });
+
+  it('/episodes 非法 depthTier 在 SSE 建立前 400', async () => {
+    const pid = seed('u_dt4', 'BASIC', 1000);
+    const r = await call('u_dt4', 'BASIC', { projectId: pid, brief, depthTier: 'GODMODE' });
+    assert.strictEqual(r.status, 400);
+    assert.ok(r.json && r.json.error, '错误响应须为 JSON');
+  });
+});
+
 // v2.336 生成侧制式同口径：类型强制优先于项目落库旧值（历史脏组合自动纠正）
 describe('v2.336 生成侧剧本类型 → 制式归一', { concurrency: 1 }, () => {
   const run = async (uid, projectPatch) => {

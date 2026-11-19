@@ -299,6 +299,9 @@ const projectSchema = z.object({
     avoid: z.array(z.string().max(40)).max(40).optional(),
     manual: z.record(z.any()).optional(),
   }).passthrough().optional(),
+  // v2.545 思考深度档位：speed=极速 / balanced=标准 / depth=深度（Method Trace + Purpose Gate + Range Lens 三档递进）。
+  // 立项落库、续写沿用；此前 pipeline v2.326 三层已支持但无路由入口 = 能力无入口，请求永远 balanced。
+  depthTier: z.enum(['speed', 'balanced', 'depth']).optional(),
 });
 generateRouter.post('/projects', authRequired, async (req: AuthRequest, res) => {
   const parsed = projectSchema.safeParse(req.body);
@@ -493,6 +496,8 @@ generateRouter.post('/projects', authRequired, async (req: AuthRequest, res) => 
     ...(projectSourceText.length >= 10 ? { sourceText: projectSourceText } : {}),
     ...(hookPrefs ? { hookPrefs } : {}),
     ...(beatPrefs ? { beatPrefs } : {}),
+    // v2.545 思考深度档位随项目落库（续写/重生成沿用同一深度，不要求每次重填）
+    ...(d.depthTier ? { depthTier: d.depthTier } : {}),
     // v2.345 四模式表单事实源快照：立项即锁定（全剧沿用，续写/重生成自动读取，生成时注入架构师/撰写师）
     ...(modeInput ? { modeInput } : {}),
     // v2.148 视觉画风编号：仅 AIGC 项目接受，非法编号静默丢弃（不阻断建项目）
@@ -2547,6 +2552,8 @@ const genSchema = z.object({
   // c223 请求级反套路档位：pipeline（L626 options.antiStrength）与 /fix 重放（_profile 读档）三层
   // 全支持，但此前路由 schema 无此字段 = 能力无入口，请求永远走默认 balanced。
   antiStrength: z.enum(['classic', 'balanced', 'innovative']).optional(),
+  // v2.545 请求级思考深度档位：显式传值优先，否则沿用项目 bible.depthTier，均缺省 balanced
+  depthTier: z.enum(['speed', 'balanced', 'depth']).optional(),
   // v2.32 用户自带参考剧本学风格（只学节奏/语感不抄内容）；仅 BASIC 及以上，上限2万字
   customStyleText: z.string().min(100).max(20000).optional(),
   aigcDurationMin: z.number().min(0.5).max(5).optional(), // v2.33 AIGC 成片时长，按分钟精算字数/台词配比
@@ -3290,6 +3297,12 @@ generateRouter.post('/episodes', authRequired, async (req: AuthRequest, res) => 
     const storedModeInput = (() => {
       try { return sanitizeModeInput((bible as any)?.modeInput, projCanonMode ?? '') ?? null; } catch { return null; }
     })();
+    // v2.545 思考深度档位：请求显式优先；否则沿用立项落库档（脏数据/旧项目无该键回退 undefined → pipeline 默认 balanced）
+    const storedDepthTier = (() => {
+      const rawDepth = (bible as any)?.depthTier;
+      return rawDepth === 'speed' || rawDepth === 'balanced' || rawDepth === 'depth' ? rawDepth as 'speed' | 'balanced' | 'depth' : undefined;
+    })();
+    const depthTierOpt = parsed.data.depthTier ?? storedDepthTier;
     // v2.84 自主学习知识库：拉取已生效知识（高分剧本技法/市场趋势/政策规则），按 brief 相关性注入各岗位
     const knowledgeRows = await prisma.knowledgeItem.findMany({
       where: { status: 'APPROVED' },
@@ -3350,6 +3363,8 @@ generateRouter.post('/episodes', authRequired, async (req: AuthRequest, res) => 
       // c223 请求级反套路档位透传（classic/balanced/innovative，缺省走 pipeline 默认 balanced）；
       // 实际生效档位随 result._profile 落库，/fix 重放同档（c222 闭环）
       ...(parsed.data.antiStrength ? { antiStrength: parsed.data.antiStrength } : {}),
+      // v2.545 思考深度档位透传（请求 > 项目落库 > 默认；生效档随 _profile 落库，透明度可回溯）
+      ...(depthTierOpt ? { depthTier: depthTierOpt } : {}),
       // v2.35 补漏：项目制式（真人实拍/AIGC制作）必须真正传入创作管线，此前 AIGC 只落库未生效
       ...(isAIGC ? { scriptFormat: 'AIGC' as const } : { scriptFormat: 'LIVE' as const }),
       ...(projCanonMode ? { mode: projRawMode } : {}),
