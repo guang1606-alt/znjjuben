@@ -25,6 +25,7 @@ mem._seedUser({ id: 'me', balance: 500 });
 mem._seedUser({ id: 'other', balance: 500 });
 mem._seedUser({ id: 'full', balance: 500 });
 mem._seedUser({ id: 'pages', balance: 0 });
+mem._seedUser({ id: 'cursor', balance: 0 });
 const H = (uid) => ({ 'Content-Type': 'application/json', Authorization: `Bearer ${signAccess({ sub: uid, level: 'BASIC' })}` });
 
 const seedPoster = (userId, size = 10) => mem.mediaAsset.create({
@@ -91,13 +92,47 @@ describe('我的海报：归属 / 删除释放 / 配额硬校验', { concurrency
     assert.strictEqual(p3.items.length, 5, 'limit 超上限只做截断，不得改变数据');
   });
 
-  it('前端「我的海报」必须带 offset 分页并提供加载更多入口', () => {
+  // v2.551 游标分页：offset 分页在「翻页期间有新图插入」时会重复返回已看过的卡片，
+  // 并发（另一端生成海报）正是本列表最常见的写入时序；改用 (createdAt,id) 键集游标，插入/删除都不重不漏。
+  it('列表游标分页：翻页期间新图插入也不重复、不跳过', async () => {
+    const seeded = [];
+    for (let i = 0; i < 5; i++) {
+      seeded.push(await mem.mediaAsset.create({
+        data: { userId: 'cursor', kind: 'poster', mime: 'image/png', size: i + 1, bytes: Buffer.alloc(i + 1), createdAt: new Date(Date.now() - (i + 1) * 1000) },
+      }));
+    }
+    const q = (qs) => fetch(base + '/api/va/posters' + qs, { headers: H('cursor') }).then((r) => r.json());
+    const p1 = await q('?limit=2');
+    assert.strictEqual(p1.items.length, 2);
+    assert.ok(p1.nextCursor, '必须回传 nextCursor，否则前端无法续页');
+    assert.ok(p1.items[0].cursor, '每一项都要回传 cursor，删除加载区末端那张后才能就地续页');
+    // 翻页途中另一处生成了一张新海报（比所有旧图都新）——offset 分页此时会让第二页重复第一页末张
+    await mem.mediaAsset.create({ data: { userId: 'cursor', kind: 'poster', mime: 'image/png', size: 9, bytes: Buffer.alloc(9), createdAt: new Date() } });
+    const p2 = await q('?limit=2&cursor=' + encodeURIComponent(p1.nextCursor));
+    assert.strictEqual(p2.items.length, 2);
+    const paged = [...p1.items, ...p2.items].map((x) => x.id);
+    assert.strictEqual(new Set(paged).size, paged.length, '翻页不得重复返回同一张');
+    assert.deepStrictEqual(paged, seeded.slice(0, 4).map((r) => r.id), '第二页应是原始第 3/4 张（新图插最前也不得跳过）');
+    const p3 = await q('?limit=2&cursor=' + encodeURIComponent(p2.nextCursor));
+    assert.strictEqual(p3.items.length, 1);
+    assert.strictEqual(p3.hasMore, false);
+    assert.strictEqual(p3.nextCursor, '', '最后一页 nextCursor 必须为空');
+  });
+
+  it('游标是脏值时回到第一页（不 500、不空列表）', async () => {
+    const d = await fetch(base + '/api/va/posters?limit=2&cursor=not-a-cursor', { headers: H('cursor') }).then((r) => r.json());
+    assert.strictEqual(d.items.length, 2, '脏游标应安全退化为第一页，不能把用户列表变成空白');
+  });
+
+  it('前端「我的海报」使用游标续页并去重，且保留加载更多入口', () => {
     const fs = require('node:fs');
     const path = require('node:path');
     const app = fs.readFileSync(path.join(__dirname, '..', 'web', 'app.js'), 'utf8');
-    assert.match(app, /\/api\/va\/posters\?offset=' \+ myPostersOffset/, '请求必须带 offset，否则永远只看得到第一页');
+    assert.ok(app.includes("'?cursor=' + encodeURIComponent(myPostersCursor)"), '请求必须带游标续页，否则永远只看得到第一页');
+    assert.ok(app.includes('d.nextCursor'), '必须用 nextCursor 续页（offset 会重复卡片）');
+    assert.ok(app.includes('!seen.has(it.id)'), '追加时必须按 id 去重（并发新图插入不重复卡片）');
+    assert.ok(app.includes('data-poster-cursor'), '卡片必须记录自身游标（删除加载区末端后回退续页）');
     assert.match(app, /myPostersMore/, '必须有加载更多按钮接线');
-    assert.match(app, /d\.hasMore/, '必须按 hasMore 决定是否显示加载更多');
     const html = fs.readFileSync(path.join(__dirname, '..', 'web', 'index.html'), 'utf8');
     assert.match(html, /id="myPostersMore"/, '弹窗内必须有加载更多按钮');
   });

@@ -34,6 +34,28 @@ const BENCHMARK_SCRIPT = [
   '（本集完）',
 ].join('\n');
 
+/** v2.551 海报列表键集游标：锚点取 (createdAt, id)，翻页期间新图插入或旧图删除都不会重复/跳过。
+ *  历史上用 offset，并发写入（另一端生成海报）时第二页会重复第一页末张；offset 参数继续兼容。 */
+function encodePosterCursor(createdAt: unknown, id: string): string {
+  try {
+    const d = new Date(createdAt as any);
+    if (Number.isNaN(d.getTime())) return '';
+    return Buffer.from(`${d.toISOString()}|${id}`, 'utf8').toString('base64url');
+  } catch { return ''; }
+}
+function decodePosterCursor(raw: unknown): { createdAt: Date; id: string } | null {
+  if (typeof raw !== 'string' || !raw.trim()) return null;
+  try {
+    const s = Buffer.from(raw.trim(), 'base64url').toString('utf8');
+    const at = s.lastIndexOf('|');
+    if (at <= 0) return null;
+    const d = new Date(s.slice(0, at));
+    const id = s.slice(at + 1);
+    if (!id || Number.isNaN(d.getTime())) return null;
+    return { createdAt: d, id };
+  } catch { return null; }
+}
+
 export function createValueAddedRouter(prisma: PrismaLike | any) {
   const vaRouter = asyncRouter();
   /**
@@ -133,27 +155,43 @@ export function createValueAddedRouter(prisma: PrismaLike | any) {
     }
   });
 
-  /** 我的海报：列表（仅本人，分页 60/页，返回 total/hasMore 避免静默截断导致旧图删不掉）+ 删除（同时释放存储用量） */
+  /** 我的海报：列表（仅本人，分页 60/页，返回 total/hasMore/nextCursor）+ 删除（同时释放存储用量） */
   vaRouter.get('/posters', authRequired, async (req: AuthRequest, res) => {
     // v2.543 静默截断修复：旧实现固定 take 60 且不告诉前端还有没有——超过 60 张后旧海报既看不到也删不掉，
-    // 存储只能一路涨到配额满。现在支持 offset 分页并回传 total/hasMore。
+    // 存储只能一路涨到配额满。现在分页并回传 total/hasMore。
+    // v2.551 重复卡片修复：offset 在“翻页期间有新图插入”时会让第二页重复第一页末张（并发生成海报是常见时序），
+    // 改用 (createdAt,id) 键集游标；nextCursor 为空表示到底。offset 保留兼容，有 cursor 时优先。
     const take = Math.min(Math.max(Number(req.query.limit) || 60, 1), 120);
-    const skip = Math.max(Number(req.query.offset) || 0, 0);
-    const where = { userId: req.userId! };
+    const cursor = decodePosterCursor(req.query.cursor);
+    const skip = cursor ? 0 : Math.max(Number(req.query.offset) || 0, 0);
+    const baseWhere = { userId: req.userId! };
+    const where: any = cursor
+      ? {
+        ...baseWhere,
+        OR: [
+          { createdAt: { lt: cursor.createdAt } },
+          { createdAt: cursor.createdAt, id: { lt: cursor.id } },
+        ],
+      }
+      : baseWhere;
     const [rows, total] = await Promise.all([
       prisma.mediaAsset.findMany({
         where,
         orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
         skip,
-        take,
+        take: take + 1, // 多取一张判断 hasMore，避免 count 与列表不一致造成“有更多却取不到”
         select: { id: true, kind: true, size: true, createdAt: true },
       }).catch(() => []),
-      prisma.mediaAsset.count({ where }).catch(() => 0),
+      prisma.mediaAsset.count({ where: baseWhere }).catch(() => 0),
     ]);
+    const list = (rows as any[]).slice(0, take);
+    const last = list[list.length - 1];
     res.json({
-      items: (rows as any[]).map((r) => ({ id: r.id, url: `/media/${r.id}`, kind: r.kind, size: r.size, createdAt: r.createdAt })),
+      // 逐项回传 cursor：前端删除“加载区末端”那张后，可直接用上一张在册卡片的游标续页，无需重新从第一页扫
+      items: list.map((r) => ({ id: r.id, url: `/media/${r.id}`, kind: r.kind, size: r.size, createdAt: r.createdAt, cursor: encodePosterCursor(r.createdAt, r.id) })),
       total,
-      hasMore: skip + (rows as any[]).length < total,
+      hasMore: cursor ? rows.length > take : skip + list.length < total,
+      nextCursor: rows.length > take && last ? encodePosterCursor(last.createdAt, last.id) : '',
     });
   });
 

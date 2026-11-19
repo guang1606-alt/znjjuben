@@ -4046,18 +4046,24 @@
   // v2.538 我的海报：列出生图、删除即释放存储用量（配额闭环的前端入口）
   // v2.543 分页：接口按 60 张/页返回 total/hasMore——旧实现静默截断，超过 60 张的旧海报
   // 既看不到也删不掉，存储只能一路涨到配额满；现在提供「加载更多」按页追加。
-  let myPostersOffset = 0;
+  // v2.551 游标续页：offset 在「翻页期间有新图插入」时会重复返回已看过的卡片（另一端生成海报是常见时序），
+  // 改用后端 (createdAt,id) 键集游标；追加时再按 id 去重兜底；删除末张时把游标回退到最后一张在册卡片。
+  let myPostersCursor = '';
+  let myPostersHasMore = false;
   async function loadMyPosters(append) {
     const list = $('myPostersList'); const empty = $('myPostersEmpty'); const more = $('myPostersMore');
-    if (!append) { list.innerHTML = ''; empty.hidden = true; myPostersOffset = 0; }
+    if (!append) { list.innerHTML = ''; empty.hidden = true; myPostersCursor = ''; }
     more.hidden = true; more.disabled = true;
     try {
-      const res = await Api.request('/api/va/posters?offset=' + myPostersOffset); const d = await Api.jsonOrThrow(res);
+      const res = await Api.request('/api/va/posters' + (myPostersCursor ? '?cursor=' + encodeURIComponent(myPostersCursor) : '')); const d = await Api.jsonOrThrow(res);
       const items = Array.isArray(d.items) ? d.items : [];
-      myPostersOffset += items.length;
-      empty.hidden = myPostersOffset > 0;
-      list.insertAdjacentHTML('beforeend', items.map((it) => `<div data-poster-card="${escapeHtml(it.id)}"><img src="${escapeHtml(it.url)}" alt="${escapeHtml(t('myPosters'))}" loading="lazy" /><div class="muted" style="display:flex;justify-content:space-between;align-items:center;margin-top:4px"><span>${fmtBytes(it.size)}</span><button class="btn-ghost" type="button" data-del-poster="${escapeHtml(it.id)}">${escapeHtml(t('delPoster'))}</button></div></div>`).join(''));
-      more.hidden = !d.hasMore;
+      const seen = new Set([...list.querySelectorAll('[data-poster-card]')].map((el) => el.getAttribute('data-poster-card')));
+      const fresh = items.filter((it) => !seen.has(it.id));
+      myPostersCursor = typeof d.nextCursor === 'string' ? d.nextCursor : '';
+      myPostersHasMore = !!myPostersCursor;
+      list.insertAdjacentHTML('beforeend', fresh.map((it) => `<div data-poster-card="${escapeHtml(it.id)}" data-poster-cursor="${escapeHtml(it.cursor || '')}"><img src="${escapeHtml(it.url)}" alt="${escapeHtml(t('myPosters'))}" loading="lazy" /><div class="muted" style="display:flex;justify-content:space-between;align-items:center;margin-top:4px"><span>${fmtBytes(it.size)}</span><button class="btn-ghost" type="button" data-del-poster="${escapeHtml(it.id)}">${escapeHtml(t('delPoster'))}</button></div></div>`).join(''));
+      empty.hidden = list.querySelector('[data-poster-card]') !== null;
+      more.hidden = !myPostersCursor;
       list.querySelectorAll('[data-del-poster]').forEach((b) => {
         b.onclick = async () => {
           const ok = await uiConfirm(lang === 'en' ? 'Delete this poster? Storage usage will be released.' : '删除这张海报？存储用量将同步释放。');
@@ -4067,9 +4073,17 @@
             const r = await Api.request('/api/va/posters/' + encodeURIComponent(b.getAttribute('data-del-poster')), { method: 'DELETE' });
             await Api.jsonOrThrow(r);
             const card = b.closest('[data-poster-card]');
+            const wasLast = card !== null && card === list.querySelector('[data-poster-card]:last-child');
             if (card) card.remove();
-            myPostersOffset = Math.max(0, myPostersOffset - 1);
             empty.hidden = list.querySelector('[data-poster-card]') !== null;
+            // 删掉的正好是游标锚点（加载区末端）时，把游标回退到最后一张仍在册的卡片；
+            // 已看区域被整段删空则重拉第一页，避免“有更多却再也点不出来”。
+            if (wasLast && myPostersHasMore) {
+              const cards = list.querySelectorAll('[data-poster-card]');
+              const last = cards[cards.length - 1];
+              if (last) { myPostersCursor = last.getAttribute('data-poster-cursor') || ''; more.hidden = !myPostersCursor; }
+              else { await loadMyPosters(); }
+            }
             await loadMe();
           } catch (e) { xnSay(e.message); b.disabled = false; }
         };

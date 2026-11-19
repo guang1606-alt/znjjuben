@@ -601,8 +601,27 @@ function createMemoryPrisma() {
       return null;
     },
     async findMany({ where = {}, orderBy, take, skip, select } = {}) {
-      let rows = [...mediaAssets.values()].filter((r) => Object.entries(where).every(([k, v]) => r[k] === v));
-      rows.sort((a, b) => (where.id ? 0 : (new Date(b.createdAt) - new Date(a.createdAt))));
+      // v2.551 键集游标：支持 where.OR + lt/lte/gt/gte（对齐 Prisma 的 (createdAt,id) 复合比较）
+      // 注意不能用全局 cmp 做区间比较：它把“相等但非同引用（两个等价 Date）”判为 -1，会让 lt 误收游标行本身
+      const ord = (a, b) => {
+        const av = a instanceof Date ? a.getTime() : a;
+        const bv = b instanceof Date ? b.getTime() : b;
+        return av === bv ? 0 : (av > bv ? 1 : -1);
+      };
+      const matchLeaf = (row, clause) => Object.entries(clause).every(([k, v]) => {
+        if (v && typeof v === 'object' && !(v instanceof Date)) {
+          if ('lt' in v) return ord(row[k], v.lt) < 0;
+          if ('lte' in v) return ord(row[k], v.lte) <= 0;
+          if ('gt' in v) return ord(row[k], v.gt) > 0;
+          if ('gte' in v) return ord(row[k], v.gte) >= 0;
+        }
+        return row[k] === v;
+      });
+      const { OR, ...rest } = where || {};
+      let rows = [...mediaAssets.values()].filter((r) => matchLeaf(r, rest) && (!Array.isArray(OR) || OR.some((c) => matchLeaf(r, c))));
+      const ob = Array.isArray(orderBy) ? orderBy : (orderBy ? [orderBy] : []);
+      if (ob.length) rows.sort((a, b) => { for (const o of ob) { const k = Object.keys(o)[0]; const dir = o[k] === 'desc' ? -1 : 1; const c = cmp(a[k], b[k]); if (c !== 0) return c * dir; } return 0; });
+      else rows.sort((a, b) => (new Date(b.createdAt) - new Date(a.createdAt)));
       // v2.543 我的海报分页：对齐 Prisma 的 skip/take
       if (typeof skip === 'number' && skip > 0) rows = rows.slice(skip);
       if (typeof take === 'number') rows = rows.slice(0, take);
