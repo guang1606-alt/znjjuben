@@ -206,3 +206,31 @@ describe('v2.528 资方视角与情绪波形的语言接线', () => {
     assert.ok(/wloc === 'zh' \? '｜' : ' \| '/.test(seg), '波形标签竖线未随语言');
   });
 });
+
+// v2.529 英文界面仍有多处「括号与集号」硬编码中文全角：投稿渠道展开按钮、成人准入状态、
+// 方法卡分组计数、上架下拉、资产截断提示、体检优先修改清单标题与复制报告、跨项目对标集号。
+describe('v2.529 英文界面括号与集号不外溢', () => {
+  it('投稿渠道展开按钮的计数括号随语言', () => {
+    const seg = app.slice(app.indexOf('function syncSubAllLabel('), app.indexOf('function syncSubAllLabel(') + 700);
+    assert.ok(/lang === 'en'/.test(seg), '展开态文案未按语言分支');
+    assert.ok(/\(`?\$\{t\('subHideAll'\)\} \(\$\{subAllCache\.channels\}/.test(seg) || /\$\{t\('subHideAll'\)\} \(\$\{subAllCache\.channels\}/.test(seg), '英文分支仍用全角括号');
+    assert.ok(/（\$\{subAllCache\.channels\}/.test(seg), '中文分支应保持全角括号');
+  });
+
+  it('成人准入状态与跨项目对标集号随语言', () => {
+    assert.ok(/lang === 'en' \? ` \(\$\{T\.signed\}\$\{until\}\)` : `（\$\{T\.signed\}\$\{until\}）`/.test(app), '准入状态括号未按语言');
+    assert.ok(/lang === 'en' \? ` \(\$\{p\.totalEps\} eps\)` : `（\$\{p\.totalEps\}集）`/.test(app), '对标项目集号未按语言');
+  });
+
+  it('方法卡分组计数、上架下拉、截断提示的括号随语言', () => {
+    assert.ok(app.includes("` (${g.count})` : `（${g.count}）`"), '方法卡分组计数未按语言');
+    assert.ok(app.includes("` (${p.totalEps || 0} eps)` : `（${p.totalEps || 0} eps）`"), '上架下拉未按语言');
+    assert.ok(app.includes("` (${t('dashTrunc'"), '资产截断提示英文仍用全角括号');
+  });
+
+  it('体检优先修改清单标题与复制报告随语言', () => {
+    assert.ok(app.includes("` (${fixes.length})` : `（${fixes.length}）`"), '优先修改清单标题未按语言');
+    assert.ok(app.includes('[Full-script quality report] Overall '), '复制报告头未按语言');
+    assert.ok(app.includes("en ? '[Priority fix list]' : '【优先修改清单】'"), '复制报告分组未按语言');
+  });
+});

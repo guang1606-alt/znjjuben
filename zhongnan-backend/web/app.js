@@ -736,7 +736,7 @@
     status.classList.remove('hidden');
     if (j.pass) {
       const until = j.expireAt ? new Date(j.expireAt).toLocaleDateString() : '';
-      status.textContent = T.pass + (until ? `（${T.signed}${until}）` : '');
+      status.textContent = T.pass + (until ? (lang === 'en' ? ` (${T.signed}${until})` : `（${T.signed}${until}）`) : '');
     } else {
     // @module misc
       const needPro = (j.reasons || []).some((x) => x.includes('专业会员') || x.includes('PRO'));
@@ -1840,7 +1840,7 @@
       // v2.525 张数取分类库总量：写死 43 会在库增删后失真
       const totalCards = (craftTaxonomy.totals && craftTaxonomy.totals.cards) || craftTaxonomy.cardGroups.reduce((n, g) => n + g.cards.length, 0);
       html += `<details class="craft-all"><summary>${lang === 'en' ? `Browse all ${totalCards} craft cards` : `浏览全部 ${totalCards} 张方法卡`}</summary>` +
-        craftTaxonomy.cardGroups.map((g) => `<div class="craft-group-label">${escapeHtml(g.name)}（${g.count}）</div><div class="craft-grid">` +
+        craftTaxonomy.cardGroups.map((g) => `<div class="craft-group-label">${escapeHtml(g.name)}${lang === 'en' ? ` (${g.count})` : `（${g.count}）`}</div><div class="craft-grid">` +
           g.cards.filter((c) => !recIds.has(c.id)).map((c) => cardHtml(c, false)).join('') + '</div>').join('') + '</details>';
     }
     box.innerHTML = html || `<span class="tag-empty">${lang === 'en' ? 'Free local toolkit — hit Suggest.' : '免费本地工艺库，点「按当前创意递招」开始'}</span>`;
@@ -4828,7 +4828,7 @@
     if (!res.ok) { xnSay(znSanitizeErr((await res.json().catch(() => ({}))).error, res.status) || 'error'); return; }
     const projects = await res.json();
     if (!projects.length) { xnSay(lang === 'en' ? 'Create a script first.' : '请先创作一部剧本再上架'); return; }
-    $('listScript').innerHTML = projects.map((p) => `<option value="${p.id}">${escapeHtml(p.title)}（${p.totalEps || 0} eps）</option>`).join('');
+    $('listScript').innerHTML = projects.map((p) => `<option value="${p.id}">${escapeHtml(p.title)}${lang === 'en' ? ` (${p.totalEps || 0} eps)` : `（${p.totalEps || 0} eps）`}</option>`).join('');
     $('listValue').classList.add('hidden'); $('listValue').innerHTML = '';
     $('listScript').onchange = () => previewListingValue($('listScript').value);
     if (projects.length) previewListingValue(projects[0].id);
@@ -6375,7 +6375,7 @@
       // （c156"截断必须可见"铁律：静默截断是数据丢失通道，编导资产 >10 或冷门 >5 时必须告诉编导还有多少没展示）
       const sec = (label, list, renderer, fam, total) => {
         const shown = list.length;
-        const trunc = typeof total === 'number' && total > shown ? ` <span style="font-size:11px;color:var(--muted,#888);font-weight:400">（${t('dashTrunc', { shown, total })}）</span>` : '';
+        const trunc = typeof total === 'number' && total > shown ? ` <span style="font-size:11px;color:var(--muted,#888);font-weight:400">${lang === 'en' ? ` (${t('dashTrunc', { shown, total })})` : `（${t('dashTrunc', { shown, total })}）`}</span>` : '';
         return `<div style="margin:10px 0 4px;font-size:13px;color:var(--muted,#888);font-weight:600">${label}${trunc}</div>${shown ? list.map((a) => renderer(a, fam)).join('') : `<div class="muted" style="padding:6px 8px">${t('dashFamEmpty')}</div>`}`;
       };
       // v2.173 dashboard 资产健康总览卡片：三族并排，每族显示总数/平均分/空壳/可用/完整/冲突
@@ -8864,7 +8864,7 @@
     const fixes = d.topFixes || [];
     const head = lang === 'en' ? 'Priority fixes' : '优先修改清单';
     const fixHtml = fixes.length
-      ? `<div class="diag-fix-head">${head}（${fixes.length}）</div>` + fixes.map((f, i) => {
+      ? `<div class="diag-fix-head">${head}${lang === 'en' ? ` (${fixes.length})` : `（${fixes.length}）`}</div>` + fixes.map((f, i) => {
         const tagCls = f.level === 'P0' ? 'fix-p0' : f.level === 'P1' ? 'fix-p1' : 'fix-p2';
         const lvTxt = lang === 'en' ? { P0: 'block', P1: 'high', P2: 'tip' }[f.level] : f.level;
         const dimLab = lang === 'en' ? (dimEn[f.dimLabel] || f.dimLabel) : f.dimLabel;
@@ -9462,7 +9462,10 @@
     const box = $('submissionAllList');
     if (!box || box.classList.contains('hidden')) { subAllBtn.textContent = t('subShowAll'); return; }
     subAllBtn.textContent = subAllCache
-      ? `${t('subHideAll')}（${subAllCache.channels} ${t('subAllCount')} · ${subAllCache.unv} ${t('subUnverifiedN')}）`
+      // v2.529 英文界面原先也是全角括号：Hide all（12 channels · 3 unverified）
+      ? (lang === 'en'
+        ? `${t('subHideAll')} (${subAllCache.channels} ${t('subAllCount')} · ${subAllCache.unv} ${t('subUnverifiedN')})`
+        : `${t('subHideAll')}（${subAllCache.channels} ${t('subAllCount')} · ${subAllCache.unv} ${t('subUnverifiedN')}）`)
       : t('subShowAll');
   }
   if (subAllBtn) subAllBtn.onclick = async () => {
@@ -9541,7 +9544,7 @@
       (projects || []).filter((p) => p.id !== currentProjectId && (p.totalEps || 0) > 0).slice(0, 8).forEach((p) => {
         const el = document.createElement('div');
         el.className = 'pk-opp';
-        el.textContent = `📄 ${p.title}（${p.totalEps}集）`;
+        el.textContent = `📄 ${p.title}${lang === 'en' ? ` (${p.totalEps} eps)` : `（${p.totalEps}集）`}`;
         el.onclick = () => { pkOpponentId = p.id; document.querySelectorAll('.pk-opp').forEach((o) => o.classList.remove('selected')); el.classList.add('selected'); };
         box.appendChild(el);
       });
@@ -10004,10 +10007,15 @@
   $('diagCopyBtn').onclick = () => {
     if (!lastDiagnosis) return;
     const sc = lastDiagnosis.scorecard;
-    const lines = [`【全本质量诊断】总评 ${sc.total}（${sc.level}）`,
-      ...lastDiagnosis.groups.map((g) => `· ${g.label} ${g.score}`),
-      '', '【优先修改清单】',
-      ...lastDiagnosis.topFixes.map((f, i) => `${i + 1}. [${f.level}/${f.dimLabel}] ${f.advice}`)];
+    // v2.529 英文界面：体检测评分组与问题明细已是英文，但复制出来的报告头仍是中文
+    // （【全本质量诊断】/总评/【优先修改清单】），发出去中英混排。
+    const en = lang === 'en';
+    const lines = [en
+      ? `[Full-script quality report] Overall ${sc.total} (${sc.level})`
+      : `【全本质量诊断】总评 ${sc.total}（${sc.level}）`,
+    ...lastDiagnosis.groups.map((g) => `· ${g.label} ${g.score}`),
+    '', en ? '[Priority fix list]' : '【优先修改清单】',
+    ...lastDiagnosis.topFixes.map((f, i) => `${i + 1}. [${f.level}/${f.dimLabel}] ${f.advice}`)];
     copy(lines.join('\n'), lang === 'en' ? 'Fix list copied' : '修改清单已复制，可直接发给小南或编剧协作者');
   };
 
