@@ -546,6 +546,15 @@ function createMemoryPrisma() {
       modelSpendBudgets.set(row.id, row); return row;
     },
     async findUnique({ where }) { return modelSpendBudgets.get(where.id) ?? null; },
+    async createMany({ data, skipDuplicates }) {
+      let count = 0;
+      for (const d of data) {
+        if (modelSpendBudgets.has(d.id)) { if (!skipDuplicates) throw { code: 'P2002' }; continue; }
+        const row = { reservedFen: 0, spentFen: 0, createdAt: new Date(), updatedAt: new Date(), ...d };
+        modelSpendBudgets.set(row.id, row); count++;
+      }
+      return { count };
+    },
     async findMany() { return [...modelSpendBudgets.values()]; },
     async update({ where, data }) {
       const row = modelSpendBudgets.get(where.id);
@@ -592,7 +601,33 @@ function createMemoryPrisma() {
   };
   // 行锁 SELECT ... FOR UPDATE 在内存实现里为空操作（单线程测试无并发竞争）
   const $queryRaw = async () => [];
-  const tx = { user, invitation, pointsAccount, storageObject, ledgerEntry, project, script, generationTask, modelCallLog, feedback, order, payment, membership, post, postLike, poster, pkBattle, knowledgeItem, learningReport, announcement, modelConfig, safetyConfig, listing, purchase, writersRoom, roomMessage, teardownRecord, advert, characterAsset, propAsset, sceneAsset, matureConsent, interviewSession, providerBalance, modelSpendBudget, $queryRaw };
+  // PG 事务语义：任一语句抛错后整个事务进入 aborted 状态，后续语句一律 25P02
+  // （真实事故：create 撞 P2002 后仍尝试 findUnique，被 PG 判 25P02 → 误报限额不可用）
+  let __txAborted = false;
+  const __abortErr = () => Object.assign(
+    new Error('current transaction is aborted, commands ignored until end of transaction block'),
+    { code: '25P02' },
+  );
+  // 动态取 model[k]：测试常在 create 后改写模型方法注入并发交错，静态捕获 fn 会让改写失效。
+  const __guard = (model) => Object.fromEntries(Object.keys(model).map((k) => [k, async (...args) => {
+    if (__txAborted) throw __abortErr();
+    try { return await model[k](...args); } catch (e) { if (e && e.code === 'P2002') __txAborted = true; throw e; }
+  }]));
+  const tx = {
+    ...Object.fromEntries([
+      ['user', user], ['invitation', invitation], ['pointsAccount', pointsAccount], ['storageObject', storageObject],
+      ['ledgerEntry', ledgerEntry], ['project', project], ['script', script], ['generationTask', generationTask],
+      ['modelCallLog', modelCallLog], ['feedback', feedback], ['order', order], ['payment', payment],
+      ['membership', membership], ['post', post], ['postLike', postLike], ['poster', poster], ['pkBattle', pkBattle],
+      ['knowledgeItem', knowledgeItem], ['learningReport', learningReport], ['announcement', announcement],
+      ['modelConfig', modelConfig], ['safetyConfig', safetyConfig], ['listing', listing], ['purchase', purchase],
+      ['writersRoom', writersRoom], ['roomMessage', roomMessage], ['teardownRecord', teardownRecord],
+      ['advert', advert], ['characterAsset', characterAsset], ['propAsset', propAsset], ['sceneAsset', sceneAsset],
+      ['matureConsent', matureConsent], ['interviewSession', interviewSession], ['providerBalance', providerBalance],
+      ['modelSpendBudget', modelSpendBudget],
+    ].map(([k, m]) => [k, __guard(m)])),
+    $queryRaw,
+  };
   // v2.316：$transaction 回滚语义（对齐 PG——回调抛错则本事务全部写入撤销）。
   // 交错测试会在 A 事务内嵌套跑 B 的独立发货事务：嵌套事务视为独立已提交事务
   // （测试用嵌套 await 模拟另一连接的独立提交），其提交点做 checkpoint，
@@ -659,7 +694,7 @@ function createMemoryPrisma() {
     order, payment, membership, post, postLike, poster, pkBattle, knowledgeItem, learningReport, announcement, modelConfig, safetyConfig, listing, purchase, storageObject, writersRoom, roomMessage, teardownRecord, advert, characterAsset, propAsset, sceneAsset, matureConsent, interviewSession, providerBalance, modelSpendBudget,
     async $transaction(fn) {
       const isTop = __txDepth === 0;
-      if (isTop) { __txBase = __snapshotTx(); __txCommittedDeltas = []; }
+      if (isTop) { __txBase = __snapshotTx(); __txCommittedDeltas = []; __txAborted = false; }
       const nestedBefore = isTop ? null : __snapshotTx();
       if (!isTop) __txNestedStack.push(nestedBefore);
       __txDepth++;
@@ -676,7 +711,7 @@ function createMemoryPrisma() {
       } finally {
         __txDepth--;
         if (!isTop) __txNestedStack.pop();
-        if (isTop) { __txBase = null; __txCommittedDeltas = []; __txNestedStack = []; }
+        if (isTop) { __txBase = null; __txCommittedDeltas = []; __txNestedStack = []; __txAborted = false; }
       }
     },
     _users: users, _accounts: accounts, _projects: projects, _scripts: scripts, _tasks: tasks, _ledgers: ledgers,

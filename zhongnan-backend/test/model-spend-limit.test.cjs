@@ -32,6 +32,29 @@ afterEach(() => {
   for (const k of ENV_KEYS) delete process.env[k];
 });
 
+test('同一 Key 已有台账后再次预留：只做条件扣减，不因建行冲突 fail-closed', async () => {
+  const mem = createMemoryPrisma();
+  control(mem, { totalLimitYuan: 2 });
+  const r1 = await SL.reserveModelSpend({ apiKey: 'sk-dup', keyLimitYuan: 1, reserveFen: 50 });
+  assert.ok(r1);
+  const r2 = await SL.reserveModelSpend({ apiKey: 'sk-dup', keyLimitYuan: 1, reserveFen: 20 });
+  assert.ok(r2, '第二个预留必须成功，不能因预算行已存在而 UNAVAILABLE');
+  await assert.rejects(
+    SL.reserveModelSpend({ apiKey: 'sk-dup', keyLimitYuan: 1, reserveFen: 40 }),
+    /MODEL_SPEND_LIMIT_KEY/,
+  );
+  await SL.settleModelSpend(r1, 0);
+  await SL.settleModelSpend(r2, 0);
+  const key = await mem.modelSpendBudget.findMany();
+  assert.equal(key.length, 2, '只有 total 与一条 Key 分账');
+  for (const b of key) {
+    assert.equal(b.reservedFen, 0);
+    assert.equal(b.spentFen, 0);
+    assert.equal(b.availableFen, b.limitFen);
+  }
+  assert.equal((await budget(mem, 'total')).limitFen, 200);
+});
+
 test('限额总阀关闭：不建台账，维持原有真实调用', async () => {
   const mem = createMemoryPrisma();
   control(mem, { enabled: false, totalLimitYuan: 0 });

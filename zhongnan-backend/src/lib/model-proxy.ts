@@ -198,7 +198,7 @@ async function tryCandidate(
           : new Error(`MODEL_FATAL_HTTP_${resp.status}:${detail}`);
       } else {
         const data = await resp.json() as {
-          choices?: { message?: { content?: string; reasoning_content?: string } }[];
+          choices?: { message?: { content?: string; reasoning_content?: string }; finish_reason?: string }[];
           usage?: { prompt_tokens: number; completion_tokens: number };
         };
         // v2.317 思维链剥离：MiniMax-M3 / 部分 Qwen 思考档把推理过程以 <think>…</think> 内联在 content 里
@@ -211,7 +211,14 @@ async function tryCandidate(
         // 业务正文只认 content；空内容按瞬态失败处理（同模型重试→候选链切池→耗尽整集失败退款），
         // 绝不静默返回空正文（上层曾因此误判沙盘、套静态人物卡产出真假混合稿），也不按假 usage 满额计费。
         if (content.trim() === '') {
-          throw new Error('MODEL_EMPTY_CONTENT:HTTP200 choices/message/content 为空（可能仅返回 reasoning_content）');
+          // 思考吃满 maxTokens 且正文为空（DeepSeek 等 reasoning 模型实测形态）：同参数同候选重试必然复现，
+          // 直接换候选省两次费用；普通空响应仍是瞬态，保留下方同候选重试。
+          const msg = data.choices?.[0]?.message;
+          const truncatedWhileThinking = data.choices?.[0]?.finish_reason === 'length'
+            && typeof msg?.reasoning_content === 'string' && msg.reasoning_content.trim() !== '';
+          throw new Error(truncatedWhileThinking
+            ? 'MODEL_EMPTY_CONTENT_TRUNCATED:HTTP200 思考吃满 maxTokens 且正文为空，同候选重试无意义'
+            : 'MODEL_EMPTY_CONTENT:HTTP200 choices/message/content 为空（可能仅返回 reasoning_content）');
         }
         const tokensIn = data.usage?.prompt_tokens ?? Math.ceil(prompt.length / 2);
         // usage 缺失时输出 token 按 maxTokens 的 70% 保守估算，宁可成本高估也不能漏算导致毛利熔断失效
@@ -233,6 +240,8 @@ async function tryCandidate(
       }
     }
     if (isSpendLimitError(failure)) throw failure;
+    // 思考吃满 maxTokens 的空正文重试必然复现：直接换候选，省两次费用（普通空响应仍按瞬态重试）
+    if (/MODEL_EMPTY_CONTENT_TRUNCATED/.test(failure.message)) throw failure;
     if (/MODEL_FATAL_/.test(failure.message)) throw failure;
     if (signal?.aborted) throw new Error('CANCELLED');  // v2.542 用户取消：立即停止重试，不退避
     lastErr = failure;

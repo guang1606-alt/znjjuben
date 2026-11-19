@@ -26,24 +26,14 @@ function limitError(kind: 'TOTAL' | 'KEY'): Error {
   return new Error(`MODEL_SPEND_LIMIT_${kind} ${kind === 'TOTAL' ? '测试期总额度已不足' : '该 API Key 的消费额度已不足'}`);
 }
 
-/** 行存在则保留消费台账；额度调整按差额原子修正可用量，并发预留只认 availableFen 条件扣减。 */
+/** 行存在则保留消费台账；额度调整按差额原子修正可用量，并发预留只认 availableFen 条件扣减。
+ *  建行必须用 ON CONFLICT DO NOTHING（createMany.skipDuplicates）：PG 里 create 撞唯一键会把整个事务标成 aborted，
+ *  后续 findUnique 直接 25P02，真实调用会被误判为台账不可用。 */
 async function ensureRow(p: any, id: string, limitFen: number): Promise<void> {
-  const data = { id, limitFen, availableFen: limitFen, reservedFen: 0, spentFen: 0 };
-  try {
-    await p.modelSpendBudget.create({ data });
-    return;
-  } catch (e: any) {
-    if (e?.code !== 'P2002') {
-      const old = await p.modelSpendBudget.findUnique({ where: { id } });
-      if (!old) throw e;
-      if (old.limitFen === limitFen) return;
-      await p.modelSpendBudget.updateMany({
-        where: { id, limitFen: old.limitFen },
-        data: { limitFen, availableFen: { increment: limitFen - old.limitFen } },
-      });
-      return;
-    }
-  }
+  await p.modelSpendBudget.createMany({
+    data: [{ id, limitFen, availableFen: limitFen, reservedFen: 0, spentFen: 0 }],
+    skipDuplicates: true,
+  });
   const old = await p.modelSpendBudget.findUnique({ where: { id } });
   if (!old) throw new Error('MODEL_SPEND_LIMIT_UNAVAILABLE 预算行创建失败');
   if (old.limitFen === limitFen) return;
@@ -62,8 +52,14 @@ async function reserveOne(p: any, id: string, limitFen: number, reserveFen: numb
   if (r.count !== 1) throw limitError(kind);
 }
 
+/** 测试进程不连真实库：未显式注入控制面时默认关闭，否则开发库里遗留的限额配置会把无关用例全部阻断。 */
+async function resolveControl(): Promise<SpendControl> {
+  if (process.env.NODE_ENV === 'test') return { prisma, enabled: false, totalLimitYuan: 0 };
+  return { prisma, ...(await loadSpendLimit(prisma)) };
+}
+
 export async function reserveModelSpend(input: { apiKey: string; keyLimitYuan: number; reserveFen: number }): Promise<SpendReservation | null> {
-  const control: SpendControl = __controlForTest ?? { prisma, ...(await loadSpendLimit(prisma)) };
+  const control: SpendControl = __controlForTest ?? (await resolveControl());
   if (!control.enabled) return null;
   const reserveFen = Math.max(0, Math.ceil(input.reserveFen));
   const totalLimitFen = fen(control.totalLimitYuan);
