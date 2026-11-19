@@ -118,6 +118,8 @@ const REAL_TRIGGERS = {
   xMatureModal: { view: 'studio', pre: ['#modeBackBtn'], sel: ['#matureManageBtn'], needsAuth: true },
   // v2.538 我的海报：入口在作品页个人资料卡；空列表由 #myPostersEmpty 空态标记承接（不会被判空壳）。
   myPostersModal: { view: 'works', sel: ['#myPostersBtn'], needsAuth: true },
+  // v2.558 海报大图预览：先开「我的海报」，再点第一张缩略图（dev-server 种了 demo_media_1 兜底）。
+  posterModal: { view: 'works', pre: ['#myPostersBtn'], sel: ['[data-poster-open]'], needsAuth: true },
 };
 
 function log(...a) { if (!JSON_ONLY) console.log(...a); }

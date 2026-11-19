@@ -24,6 +24,7 @@ import { createAdminModelRouter } from './routes/admin-model';
 import { createAdminRouter } from './routes/admin';
 import { createAdminSafetyRouter } from './routes/admin-safety';
 import { createAdminHandoffRouter } from './routes/admin-handoff';
+import { createMediaRouter } from './routes/media';
 import { hashPassword } from './lib/auth';
 
 const mem = createMemoryPrisma();
@@ -51,6 +52,8 @@ const app = createApp({
   admin: createAdminRouter(mem),
   adminSafety: createAdminSafetyRouter(mem),
   adminHandoff: createAdminHandoffRouter(mem),
+  // v2.558：媒体读取必须同样落在内存桩上，否则种子海报 /media/demo_media_1 会 404
+  media: createMediaRouter(mem),
 });
 
 // 预置四个等级的演示账号（手机号登录，密码统一 demo123456）
@@ -114,6 +117,18 @@ void (async function seedDemoContent() {
         priceFen: 12800, pricePoints: 128, feeFen: 1280, status: 'SETTLED',
         contentSnapshot: { title: '夜班出租车', episodes: 12, content: SCRIPT_CONTENT },
         createdAt: new Date(Date.now() - 86400000 * 2), updatedAt: new Date(),
+      },
+    });
+    // v2.558 我的海报：种一张带真实字节的演示海报，让「大图预览/下载原图」弹窗在巡检中有真实入口；
+    // 只种内存字节，重启清空，不产生 TOS 依赖。
+    const demoPng = Buffer.from(
+      'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==',
+      'base64',
+    );
+    await mem.mediaAsset.create({
+      data: {
+        id: 'demo_media_1', userId: 'demo_pro', kind: 'poster', mime: 'image/png',
+        size: demoPng.length, bytes: demoPng, createdAt: new Date(Date.now() - 3600000),
       },
     });
   } catch (e) {

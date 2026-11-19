@@ -993,6 +993,19 @@
           <button class="btn-ghost" id="myPostersMore" type="button" data-i="loadMore" hidden></button>
         </div>
       </div>
+      <!-- v2.558 海报大图预览：付费生成物此前只有缩略图，既看不了成片细节也保存不下来；点击缩略图进大图，可下载原图/删除 -->
+      <div class="modal-mask hidden" id="posterModal" aria-labelledby="posterTitle">
+        <div class="modal">
+          <button class="modal-x" data-close="posterModal">×</button>
+          <h3 id="posterTitle" data-i="myPosters"></h3>
+          <div class="muted" id="posterBroken" data-i="posterBroken" hidden></div>
+          <img id="posterBig" class="poster-big" alt="" />
+          <div class="row-actions">
+            <a class="btn-primary" id="posterDownload" href="#" download data-i="posterDownload"></a>
+            <button class="btn-ghost" id="posterDel" type="button" data-i="delPoster"></button>
+          </div>
+        </div>
+      </div>
       <!-- 购买后全本弹窗 -->
       <div class="modal-mask hidden" id="fullModal" aria-labelledby="fullTitle">
         <div class="modal modal-wide">

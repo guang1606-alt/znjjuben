@@ -98,6 +98,35 @@ test('无字节但有 externalUrl 的元数据行 302 到对象存储；两者�
   assert.equal(miss.status, 404, '既无字节也无外链不得当成空图返回 200');
 });
 
+// v2.558 下载原图：?download=1 必须补 Content-Disposition（文件名带扩展名），
+// 不带参数时仍内联显示（缩略图/预览需要能被 <img> 直接渲染）。
+test('GET /media/:id?download=1 返回附件下载头，不带参数时仍内联', async () => {
+  const url = await persistImage(PNG_1PX, 'poster', mem);
+  const dl = await fetch(base + url + '?download=1');
+  assert.equal(dl.status, 200);
+  assert.match(dl.headers.get('content-disposition') || '', /^attachment; filename="poster-ma_\d+\.png"$/);
+  const inline = await fetch(base + url);
+  assert.equal(inline.headers.get('content-disposition'), null, '不带 download 参数不得强制下载');
+});
+
+// v2.558 前端海报预览守卫：付费生成物必须有「点开大图 + 下载原图」入口，
+// 且卡片缩略图必须用按钮承载（裸 img 不可键盘聚焦，读屏/键盘用户无法预览）。
+test('前端海报卡片可开大图并下载原图，破图必须替换为可删占位', () => {
+  const fs = require('node:fs');
+  const path = require('node:path');
+  const app = fs.readFileSync(path.join(__dirname, '..', 'web', 'app.js'), 'utf8');
+  const html = fs.readFileSync(path.join(__dirname, '..', 'web', 'index.html'), 'utf8');
+  assert.ok(html.includes('id="posterModal"'), 'index.html 必须有海报预览弹窗');
+  assert.ok(html.includes('data-close="posterModal"'), '预览弹窗必须能关闭');
+  assert.ok(html.includes('id="posterDownload"'), '预览弹窗必须有下载入口');
+  assert.match(app, /data-poster-open=/, '卡片缩略图必须带预览触发标记');
+  assert.match(app, /class="poster-open"/, '缩略图必须用按钮承载，键盘可达');
+  assert.match(app, /\$\('myPostersList'\)\.addEventListener\('click'/, '预览点击必须走事件委托');
+  assert.match(app, /'download=1'/, '下载链接必须带 download=1 让服务端补附件头');
+  assert.match(app, /poster-dead/, '图片失效必须换成占位块而不是破图标');
+  assert.match(app, /\.addEventListener\('error'/, '必须有图片加载失败兜底');
+});
+
 // v2.539 前端海报渲染守卫：落库后返回的是 /media/:id 站内相对地址，
 // 前端若只放行 http(s)/data: 就会把持久化成功的海报整批过滤掉（提示成功却一张不显示）。
 test('前端海报渲染必须放行同源 /media/ 地址，且仍拒绝协议相对外链', () => {

@@ -4111,18 +4111,24 @@
   // 改用后端 (createdAt,id) 键集游标；追加时再按 id 去重兜底；删除末张时把游标回退到最后一张在册卡片。
   let myPostersCursor = '';
   let myPostersHasMore = false;
+  // v2.558 删除共用：卡片内删除与预览弹窗内删除走同一接口，避免两处逻辑漂移。
+  async function deletePosterApi(id) {
+    const r = await Api.request('/api/va/posters/' + encodeURIComponent(id), { method: 'DELETE' });
+    await Api.jsonOrThrow(r);
+  }
   async function loadMyPosters(append) {
     const list = $('myPostersList'); const empty = $('myPostersEmpty'); const more = $('myPostersMore');
-    if (!append) { list.innerHTML = ''; empty.hidden = true; myPostersCursor = ''; }
+    if (!append) { empty.hidden = true; myPostersCursor = ''; znSkeleton(list, 'grid'); }
     more.hidden = true; more.disabled = true;
     try {
       const res = await Api.request('/api/va/posters' + (myPostersCursor ? '?cursor=' + encodeURIComponent(myPostersCursor) : '')); const d = await Api.jsonOrThrow(res);
       const items = Array.isArray(d.items) ? d.items : [];
+      if (!append) list.innerHTML = ''; // 首屏响应回来先撤骨架，再插卡片（骨架留着会被当成「还在加载」）
       const seen = new Set([...list.querySelectorAll('[data-poster-card]')].map((el) => el.getAttribute('data-poster-card')));
       const fresh = items.filter((it) => !seen.has(it.id));
       myPostersCursor = typeof d.nextCursor === 'string' ? d.nextCursor : '';
       myPostersHasMore = !!myPostersCursor;
-      list.insertAdjacentHTML('beforeend', fresh.map((it) => `<div data-poster-card="${escapeHtml(it.id)}" data-poster-cursor="${escapeHtml(it.cursor || '')}"><img src="${escapeHtml(it.url)}" alt="${escapeHtml(t('myPosters'))}" loading="lazy" /><div class="muted" style="display:flex;justify-content:space-between;align-items:center;margin-top:4px"><span>${fmtBytes(it.size)}</span><button class="btn-ghost" type="button" data-del-poster="${escapeHtml(it.id)}">${escapeHtml(t('delPoster'))}</button></div></div>`).join(''));
+      list.insertAdjacentHTML('beforeend', fresh.map((it) => `<div data-poster-card="${escapeHtml(it.id)}" data-poster-cursor="${escapeHtml(it.cursor || '')}"><button class="poster-open" type="button" data-poster-open="${escapeHtml(it.id)}" data-poster-url="${escapeHtml(it.url)}" aria-label="${escapeHtml(t('viewPoster'))}" title="${escapeHtml(t('viewPoster'))}"><img src="${escapeHtml(it.url)}" alt="${escapeHtml(t('myPosters'))}" loading="lazy" width="360" height="640" /></button><div class="muted" style="display:flex;justify-content:space-between;align-items:center;margin-top:4px"><span>${fmtBytes(it.size)}</span><button class="btn-ghost" type="button" data-del-poster="${escapeHtml(it.id)}">${escapeHtml(t('delPoster'))}</button></div></div>`).join(''));
       empty.hidden = list.querySelector('[data-poster-card]') !== null;
       more.hidden = !myPostersCursor;
       list.querySelectorAll('[data-del-poster]').forEach((b) => {
@@ -4131,8 +4137,7 @@
           if (!ok) return;
           b.disabled = true;
           try {
-            const r = await Api.request('/api/va/posters/' + encodeURIComponent(b.getAttribute('data-del-poster')), { method: 'DELETE' });
-            await Api.jsonOrThrow(r);
+            await deletePosterApi(b.getAttribute('data-del-poster'));
             const card = b.closest('[data-poster-card]');
             const wasLast = card !== null && card === list.querySelector('[data-poster-card]:last-child');
             if (card) card.remove();
@@ -4149,9 +4154,49 @@
           } catch (e) { xnSay(e.message); b.disabled = false; }
         };
       });
-    } catch (e) { xnSay(e.message); }
+    } catch (e) { if (!append) list.innerHTML = ''; xnSay(e.message); }
     finally { more.disabled = false; }
   }
+  // v2.558 大图预览：付费生成物需要能看清成片与保存原图；下载走 ?download=1 让服务端补
+  // Content-Disposition（TOS 模式下地址是跨域重定向，download 属性会失效）。
+  let posterViewId = '';
+  function openPosterModal(id, url) {
+    posterViewId = id;
+    const big = $('posterBig'); const broken = $('posterBroken'); const dl = $('posterDownload');
+    big.hidden = false; broken.hidden = true;
+    big.src = url;
+    dl.href = url + (url.includes('?') ? '&' : '?') + 'download=1';
+    dl.setAttribute('download', 'poster-' + id + '.png');
+    openModal('posterModal');
+  }
+  $('posterBig').addEventListener('error', () => { $('posterBig').hidden = true; $('posterBroken').hidden = false; });
+  $('posterDel').onclick = async () => {
+    if (!posterViewId) return;
+    const ok = await uiConfirm(lang === 'en' ? 'Delete this poster? Storage usage will be released.' : '删除这张海报？存储用量将同步释放。');
+    if (!ok) return;
+    $('posterDel').disabled = true;
+    try {
+      await deletePosterApi(posterViewId);
+      closeModalEl($('posterModal'));
+      await loadMyPosters(); await loadMe();
+    } catch (e) { xnSay(e.message); }
+    finally { $('posterDel').disabled = false; }
+  };
+  // 卡片缩略图点击/键盘触发走事件委托（卡片是异步插进来的，逐个绑定会随翻页反复重绑）
+  $('myPostersList').addEventListener('click', (e) => {
+    const btn = e.target.closest('[data-poster-open]');
+    if (btn) openPosterModal(btn.getAttribute('data-poster-open'), btn.getAttribute('data-poster-url'));
+  });
+  // 图片 404（旧直链过期/对象被清理）时在按钮内换成占位块，而不是留一个破图标；
+  // 按钮本身保留，用户仍可点开预览（大图同样会显示失效提示）并从预览里删除。
+  $('myPostersList').addEventListener('error', (e) => {
+    const img = e.target;
+    if (!(img instanceof HTMLImageElement)) return;
+    const dead = document.createElement('span');
+    dead.className = 'poster-dead muted';
+    dead.textContent = t('posterBroken');
+    if (img.parentNode) img.replaceWith(dead);
+  }, true);
   function openMyPosters() {
     if (!Api.isAuthed()) { openAuth('login'); return; }
     openModal('myPostersModal'); loadMyPosters();
