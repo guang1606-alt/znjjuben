@@ -32,13 +32,13 @@ function sha256hex(data: Buffer | string): string {
 }
 
 /** 下载远程图片或解码 base64 data URI，返回二进制 Buffer 与 MIME */
-async function fetchImage(input: string): Promise<{ buf: Buffer; mime: string }> {
+export async function fetchImageBytes(input: string, timeoutMs = 5000): Promise<{ buf: Buffer; mime: string }> {
   if (input.startsWith('data:')) {
     const m = input.match(/^data:([^;]+);base64,(.+)$/);
     if (!m) throw new Error('invalid data URI');
     return { buf: Buffer.from(m[2], 'base64'), mime: m[1] || 'image/png' };
   }
-  const resp = await fetch(input);
+  const resp = await fetch(input, { signal: AbortSignal.timeout(timeoutMs) });
   if (!resp.ok) throw new Error(`fetch image failed: ${resp.status}`);
   const buf = Buffer.from(await resp.arrayBuffer());
   const mime = resp.headers.get('content-type') || 'image/png';
@@ -94,7 +94,7 @@ async function putObject(key: string, buf: Buffer, mime: string): Promise<string
 export async function uploadImageToTos(input: string, keyPrefix = 'poster'): Promise<string> {
   if (!tosEnabled()) return input;
   try {
-    const { buf, mime } = await fetchImage(input);
+    const { buf, mime } = await fetchImageBytes(input);
     const ext = mime.includes('jpeg') ? 'jpg' : mime.includes('webp') ? 'webp' : 'png';
     const key = `${keyPrefix}/${Date.now()}-${crypto.randomBytes(6).toString('hex')}.${ext}`;
     return await putObject(key, buf, mime);

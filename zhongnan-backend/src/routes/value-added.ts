@@ -12,7 +12,7 @@ import { userMessageOf, modelErrorMeta } from '../lib/model-error-message';
 import { buildVisualStylePrompt } from '../engine/visual-style-library'; // v2.148 视觉画风编码库（海报画风编码注入）
 import { runPk } from '../lib/script-pk';
 import { buildRankBoard, nextTierProgress } from '../lib/pk-rank';
-import { uploadImageToTos } from '../lib/tos';
+import { persistImage } from '../lib/media-store';
 
 type PrismaLike = typeof defaultPrisma;
 
@@ -102,8 +102,8 @@ export function createValueAddedRouter(prisma: PrismaLike | any) {
       const styleFragment = posterStyleId ? buildVisualStylePrompt(posterStyleId) : '';
       const prompt = `竖屏短剧海报，9:16，电影级质感。${styleFragment ? styleFragment + '。' : ''}剧名《${project.title}》。${project.tags.join('、')}。${p.data.style ?? ''}。只渲染画面氛围与人物，不生成任何文字。${STABILITY_SUFFIX}`;
       const { images, costFen } = await callImage(p.data.tier === 'FLAGSHIP' ? EngineTier.FLAGSHIP : EngineTier.STANDARD, prompt, 4);
-      // 模型返回的 URL 可能临时过期，转存 TOS 拿永久地址（未配置 TOS 时原样返回）
-      const permanentImages = await Promise.all(images.map((img) => uploadImageToTos(img)));
+      // 模型返回的 URL 可能临时过期：优先转存 TOS，未配置 TOS 时落库为 /media/:id 永久地址
+      const permanentImages = await Promise.all(images.map((img) => persistImage(img, 'poster', prisma)));
       const poster = await prisma.poster.create({
         data: { projectId: project.id, tier: p.data.tier, imageUrl: permanentImages[0] ?? null, pointsCost: staff ? 0 : VALUE_ADDED[key].points },
       });

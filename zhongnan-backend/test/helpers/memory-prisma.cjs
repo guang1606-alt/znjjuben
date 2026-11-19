@@ -572,6 +572,15 @@ function createMemoryPrisma() {
       return { count };
     },
   };
+  // —— 生成图片永久留存：/media/:id 读取落库二进制 ——
+  const mediaAssets = new Map();
+  const mediaAsset = {
+    async create({ data }) {
+      const row = { id: `ma_${++seq}`, kind: 'poster', createdAt: new Date(), ...data };
+      mediaAssets.set(row.id, row); return row;
+    },
+    async findUnique({ where }) { return mediaAssets.get(where.id) ?? null; },
+  };
   // —— v2.612 API 余额监控：providerBalance 单独数组，按 providerId 取最新 ——
   const providerBalances = [];
   const providerBalance = {
@@ -625,6 +634,7 @@ function createMemoryPrisma() {
       ['advert', advert], ['characterAsset', characterAsset], ['propAsset', propAsset], ['sceneAsset', sceneAsset],
       ['matureConsent', matureConsent], ['interviewSession', interviewSession], ['providerBalance', providerBalance],
       ['modelSpendBudget', modelSpendBudget],
+      ['mediaAsset', mediaAsset],
     ].map(([k, m]) => [k, __guard(m)])),
     $queryRaw,
   };
@@ -691,7 +701,7 @@ function createMemoryPrisma() {
   let __txCommittedDeltas = []; // 已提交嵌套事务的写入增量
   return {
     user, invitation, pointsAccount, ledgerEntry, project, script, generationTask, modelCallLog, feedback,
-    order, payment, membership, post, postLike, poster, pkBattle, knowledgeItem, learningReport, announcement, modelConfig, safetyConfig, listing, purchase, storageObject, writersRoom, roomMessage, teardownRecord, advert, characterAsset, propAsset, sceneAsset, matureConsent, interviewSession, providerBalance, modelSpendBudget,
+    order, payment, membership, post, postLike, poster, pkBattle, knowledgeItem, learningReport, announcement, modelConfig, safetyConfig, listing, purchase, storageObject, writersRoom, roomMessage, teardownRecord, advert, characterAsset, propAsset, sceneAsset, matureConsent, interviewSession, providerBalance, modelSpendBudget, mediaAsset,
     async $transaction(fn) {
       const isTop = __txDepth === 0;
       if (isTop) { __txBase = __snapshotTx(); __txCommittedDeltas = []; __txAborted = false; }

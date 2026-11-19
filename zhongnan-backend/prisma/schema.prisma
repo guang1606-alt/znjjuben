@@ -707,3 +707,14 @@ model ModelSpendBudget {
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 }
+
+// 生成图片永久留存：模型返回的临时 URL 会过期（未配置 TOS 时尤其明显），落库后由 /media/:id 稳定读取
+model MediaAsset {
+  id        String   @id @default(cuid())
+  kind      String   @default("poster")
+  mime      String
+  size      Int
+  bytes     Bytes
+  createdAt DateTime @default(now())
+  @@index([kind, createdAt])
+}
