@@ -71,7 +71,10 @@
     const r = state.report; const t = T();
     $('tdResult').classList.remove('hidden');
     $('tdBoom').innerHTML = r.boomReasons.map((x) => `<div class="td-line"><b>${esc(x.dim)}</b><span>${esc(x.conclusion)}</span></div>`).join('');
-    $('tdTech').innerHTML = r.techniques.map((x, i) => `<div class="td-line"><b>${i + 1}. ${esc(x.point)}</b><span>${esc(x.why)}｜${t.reuse}：${esc(x.reuse)}</span></div>`).join('');
+    // v2.527 英文界面：技法行此前固定用全角「｜」「：」，英文拆解结果里会混进中文标点。
+    const sepDot = en() ? ' | ' : '｜';
+    const sepColon = en() ? ': ' : '：';
+    $('tdTech').innerHTML = r.techniques.map((x, i) => `<div class="td-line"><b>${i + 1}. ${esc(x.point)}</b><span>${esc(x.why)}${sepDot}${t.reuse}${sepColon}${esc(x.reuse)}</span></div>`).join('');
     // 新拆解默认全选；恢复历史记录时按当时 pickedTags 勾选（标签池始终以当前报告为准，旧标签已失效则自然过滤）
     const poolLabels = r.tagPool.map((x) => x.label);
     const wanted = state.restoreTags == null ? poolLabels : state.restoreTags.filter((x) => poolLabels.includes(x));

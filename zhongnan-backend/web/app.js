@@ -7589,9 +7589,9 @@
         <div class="ad-block">
           ${bar(en ? 'Visual narrative (non-spoken)' : '画面叙述（不发声）', narr / tot, '#5b8def')}
           ${bar(en ? 'Dialogue+V.O. (spoken, target 18-28%)' : '台词+OS（发声，目标18-28%）', spokenPct, inBand ? '#3fbf8f' : '#e08a2e')}
-          <div class="ad-meta">${en ? 'Total chars' : '全集字数'}：${fmt.cjk} / ${fmt.range[0]}-${fmt.range[1]}${fmt.inRange ? '✓' : '⚠'}　
-            ${en ? 'Machine shots' : '机器分镜'}：${manifest ? manifest.shotCount : '-'}　
-            ${en ? 'Format score' : '制式得分'}：${fmt.score}</div>
+          <div class="ad-meta">${en ? 'Total chars' : '全集字数'}${en ? ': ' : '：'}${fmt.cjk} / ${fmt.range[0]}-${fmt.range[1]}${fmt.inRange ? '✓' : '⚠'}　
+            ${en ? 'Machine shots' : '机器分镜'}${en ? ': ' : '：'}${manifest ? manifest.shotCount : '-'}　
+            ${en ? 'Format score' : '制式得分'}${en ? ': ' : '：'}${fmt.score}</div>
         </div>
         <div class="ad-block">
           <div class="ad-lbl">${en ? 'Per-scene spoken ratio (blue=in band, orange=off)' : '逐场发声占比（蓝=合理，橙=偏）'}</div>
@@ -7838,12 +7838,21 @@
     // v2.103 AIGC 微节拍计划展示
     const abTip = $('aigcBeatTip');
     if (abTip) {
+      // v2.527 英文界面：这张卡此前无论界面语言都输出中文（AIGC微节拍/第N拍/制作提示），
+      // 英文用户看到的是整块中文，与同一屏其余卡片的主英双语不一致。
+      const en = lang === 'en';
       const bp = done.aigcBeatPlan;
       if (bp && bp.beats && bp.beats.length) {
         abTip.classList.remove('hidden');
-        const beatsList = bp.beats.map((b) => `第${b.no}拍(${b.startSec}-${b.endSec}s${b.isTail ? '·尾' : ''})`).join(' | ');
-        abTip.innerHTML = `<b style="color:var(--info-text)">AIGC微节拍</b> · 约${bp.totalSeconds}秒 / ${bp.beatCount}个30秒单元 · ${beatsList}`;
-        abTip.title = bp.beats.map((b) => `第${b.no}拍：${b.arcPrompt}\n制作提示：${b.productionHints.join('；')}`).join('\n\n');
+        const beatsList = bp.beats.map((b) => (en
+          ? `Beat ${b.no} (${b.startSec}-${b.endSec}s${b.isTail ? ' · tail' : ''})`
+          : `第${b.no}拍(${b.startSec}-${b.endSec}s${b.isTail ? '·尾' : ''})`)).join(' | ');
+        abTip.innerHTML = (en
+          ? `<b style="color:var(--info-text)">AIGC micro-beats</b> · ~${bp.totalSeconds}s / ${bp.beatCount} × 30s units · ${beatsList}`
+          : `<b style="color:var(--info-text)">AIGC微节拍</b> · 约${bp.totalSeconds}秒 / ${bp.beatCount}个30秒单元 · ${beatsList}`);
+        abTip.title = bp.beats.map((b) => (en
+          ? `Beat ${b.no}: ${b.arcPrompt}\nProduction tips: ${b.productionHints.join('; ')}`
+          : `第${b.no}拍：${b.arcPrompt}\n制作提示：${b.productionHints.join('；')}`)).join('\n\n');
       } else abTip.classList.add('hidden');
     }
     // v2.108 伏笔账本展示
@@ -7852,11 +7861,19 @@
       const fs = done.foreshadow;
       if (fs) {
         fsTip.classList.remove('hidden');
+        // v2.527 英文界面：伏笔账本的标题、植入/回收、悬空清单此前固定中文，
+        // 英文用户看到的整块中文与同屏「爆款逆向」卡已双语不一致。
+        const en = lang === 'en';
         const sc = fs.score;
         const scColor = sc >= 70 ? 'var(--ok-text)' : sc >= 40 ? 'var(--warn-text)' : 'var(--danger-text)';
-        const danglingList = (fs.dangling || []).map((d) => `${d.signal}(第${d.plantedInEp}集种)`);
-        fsTip.innerHTML = `<b style="color:var(--gold-text)">伏笔账本</b> · <span style="color:${scColor}">健康度 ${sc}</span> · 植入 ${fs.plants} / 回收 ${fs.payoffs}${danglingList.length ? ' · <span style="color:var(--danger-text)">悬空: ' + danglingList.join('、') + '</span>' : ''}`;
-        fsTip.title = (fs.issues || []).map((i) => `[${i.severity}] ${i.advice}`).join('\n') || '伏笔状态良好';
+        const danglingList = (fs.dangling || []).map((d) => (en
+          ? `${d.signal} (planted in Ep ${d.plantedInEp})`
+          : `${d.signal}(第${d.plantedInEp}集种)`));
+        fsTip.innerHTML = en
+          ? `<b style="color:var(--gold-text)">Foreshadow ledger</b> · <span style="color:${scColor}">health ${sc}</span> · planted ${fs.plants} / paid off ${fs.payoffs}${danglingList.length ? ' · <span style="color:var(--danger-text)">dangling: ' + danglingList.join(', ') + '</span>' : ''}`
+          : `<b style="color:var(--gold-text)">伏笔账本</b> · <span style="color:${scColor}">健康度 ${sc}</span> · 植入 ${fs.plants} / 回收 ${fs.payoffs}${danglingList.length ? ' · <span style="color:var(--danger-text)">悬空: ' + danglingList.join('、') + '</span>' : ''}`;
+        fsTip.title = (fs.issues || []).map((i) => `[${i.severity}] ${i.advice}`).join('\n')
+          || (en ? 'Foreshadow state is healthy' : '伏笔状态良好');
       } else fsTip.classList.add('hidden');
     }
     // v2.108 角色弧光追踪展示
@@ -7865,15 +7882,31 @@
       const at = done.arcTrack;
       if (at) {
         atTip.classList.remove('hidden');
+        // v2.527 英文界面：角色弧光卡此前固定中文标签（角色弧光/完整度/·停/停滞/跳变），
+        // 且原样吐出 emotion/stage 英文枚举（anger/conflict），中英两种界面都名实不符；
+        // 这里按界面语言同时本地化标题与枚举标签。
+        const en = lang === 'en';
+        const emoLabel = (k) => ({
+          joy: en ? 'joy' : '喜悦', hope: en ? 'hope' : '希望', calm: en ? 'calm' : '平静',
+          anger: en ? 'anger' : '愤怒', fear: en ? 'fear' : '恐惧',
+          despair: en ? 'despair' : '绝望', unknown: en ? 'unknown' : '未知',
+        }[k] || k);
+        const stageLabel = (k) => ({
+          setup: en ? 'setup' : '铺垫', conflict: en ? 'conflict' : '冲突',
+          crisis: en ? 'crisis' : '危机', transformation: en ? 'transformation' : '转变',
+          resolution: en ? 'resolution' : '收束', unknown: en ? 'unknown' : '未知',
+        }[k] || k);
         const sc = at.score;
         const scColor = sc >= 70 ? 'var(--ok-text)' : sc >= 40 ? 'var(--warn-text)' : 'var(--danger-text)';
-        const chars = (at.characters || []).map((c) => `${c.name}:${c.emotion}/${c.stage}${c.changed ? '' : '·停'}`);
-        atTip.innerHTML = `<b style="color:var(--ok-text)">角色弧光</b> · <span style="color:${scColor}">完整度 ${sc}</span> · ${chars.join(' | ')}`;
+        const chars = (at.characters || []).map((c) => `${c.name}:${emoLabel(c.emotion)}/${stageLabel(c.stage)}${c.changed ? '' : (en ? ' · flat' : '·停')}`);
+        atTip.innerHTML = en
+          ? `<b style="color:var(--ok-text)">Character arcs</b> · <span style="color:${scColor}">completeness ${sc}</span> · ${chars.join(' | ')}`
+          : `<b style="color:var(--ok-text)">角色弧光</b> · <span style="color:${scColor}">完整度 ${sc}</span> · ${chars.join(' | ')}`;
         const tips = [];
-        if (at.stalled && at.stalled.length) tips.push(...at.stalled.map((s) => `[停滞] ${s.name}: ${s.reason}`));
-        if (at.jumpCut && at.jumpCut.length) tips.push(...at.jumpCut.map((j) => `[跳变] ${j.name}: ${j.from}→${j.to} ${j.reason}`));
+        if (at.stalled && at.stalled.length) tips.push(...at.stalled.map((s) => `${en ? '[stalled]' : '[停滞]'} ${s.name}: ${s.reason}`));
+        if (at.jumpCut && at.jumpCut.length) tips.push(...at.jumpCut.map((j) => `${en ? '[jump]' : '[跳变]'} ${j.name}: ${j.from}→${j.to} ${j.reason}`));
         if (at.issues) tips.push(...at.issues.map((i) => `[${i.severity}] ${i.advice}`));
-        atTip.title = tips.join('\n') || '角色弧光正常';
+        atTip.title = tips.join('\n') || (en ? 'Character arcs are healthy' : '角色弧光正常');
       } else atTip.classList.add('hidden');
     }
     // v2.97 爆款逆向·源文本结构化拆解：钩子类型/人设反差/爽点密度/张力曲线/为什么爆/可取技法
@@ -7882,12 +7915,17 @@
       const ht = done.hitTeardown;
       if (ht) {
         htTip.classList.remove('hidden');
-        const reasons = (ht.boomReasons || []).map((b) => `${b.dim}：${b.conclusion}`).join('；');
-        const tech = (ht.techniques || []).map((t) => `${t.point}（${t.reuse}）`).join('；');
-        htTip.innerHTML = (lang === 'en'
+        // v2.527 英文下这两行拼接仍用全角「：」「；」「（）」，提示里会出现中文标点；
+        // 分隔符随语言切换，中文界面维持原排版。
+        const en = lang === 'en';
+        const sep = en ? ': ' : '：';
+        const join = en ? '; ' : '；';
+        const reasons = (ht.boomReasons || []).map((b) => `${b.dim}${sep}${b.conclusion}`).join(join);
+        const tech = (ht.techniques || []).map((t) => (en ? `${t.point} (${t.reuse})` : `${t.point}（${t.reuse}）`)).join(join);
+        htTip.innerHTML = (en
           ? `<b style="color:var(--info-text)">Hit reverse-engineering</b> · hook ${ht.hookType} · persona contrast ${ht.personaContrast} · payoff density ${Number(ht.coolDensity).toFixed(2)}/100 chars`
           : `<b style="color:var(--info-text)">爆款逆向拆解</b> · 钩子「${ht.hookType}」· 人设反差 ${ht.personaContrast} · 爽点密度 ${Number(ht.coolDensity).toFixed(2)}/百字`);
-        htTip.title = `${lang === 'en' ? 'Why it works' : '为什么爆'}：${reasons}\n${lang === 'en' ? 'Reusable techniques' : '可取技法'}：${tech}\n${lang === 'en' ? 'Tension curve' : '张力曲线'}：${JSON.stringify(ht.tensionCurve)}`;
+        htTip.title = `${en ? 'Why it works' : '为什么爆'}${sep}${reasons}\n${en ? 'Reusable techniques' : '可取技法'}${sep}${tech}\n${en ? 'Tension curve' : '张力曲线'}${sep}${JSON.stringify(ht.tensionCurve)}`;
       } else htTip.classList.add('hidden');
     }
     renderAigcDash(done);
@@ -7917,7 +7955,9 @@
       const eps = latestScriptsByEpisode(await Api.jsonOrThrow(r));
       if (!isPrivateSessionCurrent(account) || (currentProjectId && currentProjectId !== projectId)) return;
       currentScripts = eps;
-      const txt = eps.map((s) => `第${s.epNo}集 ${s.title || ''}\n${s.content || ''}`).join('\n\n');
+      // v2.527 英文界面：导出 TXT / 复制正文此前固定用「第N集」拼分集头，
+      // 英文用户拿到的成稿整篇是中文集号，与界面语言不符。
+      const txt = eps.map((s) => `${lang === 'en' ? 'Episode ' : '第'}${s.epNo}${lang === 'en' ? '' : '集'} ${s.title || ''}\n${s.content || ''}`).join('\n\n');
       $('scriptText').textContent = txt || (lang === 'en' ? 'No text in sandbox mode.' : '沙盘模式暂无正文，配置模型密钥后产出。');
       // c219 AIGC 构成仪表盘刷新复现：从最新集 qcReport._aigc 读取并渲染（此前仅 SSE done 时有，刷新即失明）
       const latest = eps.reduce((m, s) => (!m || s.epNo > m.epNo ? s : m), null);

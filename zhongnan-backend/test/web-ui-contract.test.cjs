@@ -129,3 +129,65 @@ describe('v2.526 英文界面全角标点不外溢', () => {
     assert.ok(dv.includes("join(en() ? ', ' : '、')"), '标签拼接仍固定顿号');
   });
 });
+
+// v2.527 结果页还有四张卡只在中文写死：AIGC 微节拍 / 伏笔账本 / 角色弧光 / 爆款逆向提示，
+// 英文界面整块中文，与同屏其它已双语卡不一致；导出 TXT 的分集头也固定「第N集」。
+// 这组守卫把「按界面语言出标签」钉住，防止后续重构把双语分支丢掉。
+describe('v2.527 结果页卡片与导出按界面语言出标签', () => {
+  const teardown = fs.readFileSync(path.join(ROOT, 'web', 'teardown-view.js'), 'utf8');
+  const slice = (start, len) => {
+    const i = app.indexOf(start);
+    assert.ok(i >= 0, `未找到锚点：${start}`);
+    return app.slice(i, i + len);
+  };
+
+  it('AIGC 微节拍卡中英双语', () => {
+    const seg = slice("const abTip = $('aigcBeatTip');", 1400);
+    assert.ok(seg.includes("AIGC micro-beats"), '缺少英文标题');
+    assert.ok(seg.includes('Beat ${b.no}'), '拍号未按语言拼');
+    assert.ok(seg.includes('Production tips:'), '制作提示未按语言拼');
+    assert.ok(!/abTip\.innerHTML = `[^`]*AIGC微节拍/.test(seg), '仍无条件输出中文标题');
+  });
+
+  it('伏笔账本卡中英双语', () => {
+    const seg = slice("const fsTip = $('foreshadowTip');", 1400);
+    assert.ok(seg.includes('Foreshadow ledger'), '缺少英文标题');
+    assert.ok(seg.includes('planted in Ep'), '悬空清单集号未按语言拼');
+    assert.ok(seg.includes('Foreshadow state is healthy'), '健康兜底未按语言拼');
+    assert.ok(!/fsTip\.innerHTML = `[^`]*伏笔账本/.test(seg), '仍无条件输出中文标题');
+  });
+
+  it('角色弧光卡中英双语且枚举不再裸出英文键', () => {
+    const seg = slice("const atTip = $('arcTrackTip');", 2600);
+    assert.ok(seg.includes('Character arcs'), '缺少英文标题');
+    assert.ok(seg.includes('emoLabel(') && seg.includes('stageLabel('), '情绪/阶段枚举未本地化');
+    assert.ok(seg.includes("'[stalled]'") && seg.includes("'[jump]'"), '停滞/跳变标签未按语言拼');
+    assert.ok(seg.includes('Character arcs are healthy'), '正常兜底未按语言拼');
+    assert.ok(!/atTip\.innerHTML = `[^`]*角色弧光/.test(seg), '仍无条件输出中文标题');
+  });
+
+  it('爆款逆向提示的分隔符随语言，英文不再出现全角冒号顿号', () => {
+    const seg = slice("const htTip = $('hitTeardownTip');", 1400);
+    assert.ok(seg.includes("const sep = en ? ': ' : '：';"), '缺少语言化冒号');
+    assert.ok(seg.includes("const join = en ? '; ' : '；';"), '缺少语言化分号');
+    assert.ok(!/\}：\$\{reasons\}/.test(seg), '英文提示仍固定全角冒号');
+    assert.ok(!/x\.point\}（\$\{t\.reuse\}/.test(seg), '技法括号未按语言拼');
+  });
+
+  it('AIGC 仪表盘元信息分隔符随语言', () => {
+    assert.ok(app.includes("${en ? 'Total chars' : '全集字数'}${en ? ': ' : '：'}"), '全集字数分隔符未按语言');
+    assert.ok(app.includes("${en ? 'Format score' : '制式得分'}${en ? ': ' : '：'}"), '制式得分分隔符未按语言');
+  });
+
+  it('导出 TXT 的分集头随界面语言（英文不再「第N集」）', () => {
+    const seg = app.slice(app.indexOf('async function refreshResultScripts('), app.indexOf('async function refreshResultScripts(') + 1200);
+    assert.ok(seg.includes("lang === 'en' ? 'Episode ' : '第'"), '分集头未按语言拼');
+    assert.ok(!/`第\$\{s\.epNo\}集 \$\{s\.title \|\| ''\}/.test(seg), '仍无条件输出「第N集」');
+  });
+
+  it('拆爆款技法行的竖线与冒号随界面语言', () => {
+    assert.ok(teardown.includes("const sepDot = en() ? ' | ' : '｜';"), '缺少语言化竖线');
+    assert.ok(teardown.includes("const sepColon = en() ? ': ' : '：';"), '缺少语言化冒号');
+    assert.ok(!/\}｜\$\{t\.reuse\}：/.test(teardown), '技法行仍固定全角标点');
+  });
+});
