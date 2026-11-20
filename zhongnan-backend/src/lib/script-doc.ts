@@ -20,6 +20,7 @@ import { buildBeatChain, formatBeatChainLines } from './beat-chain';
 import { buildCastArcPage, formatCastArcLines, normalizeBibleCharacters } from './cast-arc';
 import { buildProductionMaterials, formatMaterialsLines } from '../engine/production-materials'; // v2.154 制作物料清单（制片交付页）
 import { normalizeCuePref } from '../agents/pipeline';
+import { logInternal } from './http-errors';
 
 export type ExportFormat = 'docx' | 'pdf' | 'txt';
 
@@ -210,8 +211,9 @@ export function buildScriptDoc(
     // v2.60 节奏体检结论先行，再给火花线与逐集张力/主情绪
     rhythmLines.forEach((t) => blocks.push({ kind: 'p', text: t }));
     exportWave.textLines.forEach((t) => blocks.push({ kind: 'p', text: t }));
-  } catch {
+  } catch (e) {
     // 波形页任何异常都不得阻断导出主流程
+    logInternal(e, 'script-doc.wave');
   }
 
   // ④.6 逐集钩子地图·钩子编排页（v2.61）：四层钩子同源排布，与情绪页相邻，构成完整导演交付包
@@ -231,8 +233,9 @@ export function buildScriptDoc(
         : '四层钩子与实际创作管线同源、确定性可复现：黄金3秒开场钩、场末牵引、句子级微钩（动作/语言/氛围/情绪/信息差/伏笔）、集尾卡点；逐集排布、轮换防疲劳。',
     });
     formatHookMapLines(hookMap, hlang).forEach((t) => blocks.push({ kind: 'p', text: t }));
-  } catch {
+  } catch (e) {
     // 钩子页异常同样不阻断导出
+    logInternal(e, 'script-doc.hook-map');
   }
 
   // ④.7 爽点-反转兑现链时间线（v2.62）：逐集反转/爽点/情绪弧 + 兑现体检
@@ -252,8 +255,9 @@ export function buildScriptDoc(
         : '逐集列出反转卡点、即时爽点与「压抑→释放」情绪弧，与创作管线同源、确定性可复现；末尾体检自动识别爽点空窗与未兑现伏笔。',
     });
     formatBeatChainLines(chain, clang).forEach((t) => blocks.push({ kind: 'p', text: t }));
-  } catch {
+  } catch (e) {
     // 兑现链页异常不阻断导出
+    logInternal(e, 'script-doc.beat-chain');
   }
 
   // ④.8 人物表与成长弧一页纸（v2.63）：真实圣经人物卡 + 成稿出场/对手戏解析 + 五段成长阶段线
@@ -284,8 +288,9 @@ export function buildScriptDoc(
       blocks.push({ kind: 'p', text: alang === 'en' ? 'Protagonist five-stage growth curve:' : '主角五段成长曲线：' });
       castLines.growth.forEach((t) => blocks.push({ kind: 'p', text: t }));
     }
-  } catch {
+  } catch (e) {
     // 人物页异常不阻断导出
+    logInternal(e, 'script-doc.cast-arc');
   }
 
   // ④.9 制作物料清单（v2.154）：场景总表/角色出场表/道具总表，从成稿确定性聚合的制片交付页
@@ -304,8 +309,9 @@ export function buildScriptDoc(
       });
       formatMaterialsLines(mats, mlang).forEach((t) => blocks.push({ kind: 'p', text: t }));
     }
-  } catch {
+  } catch (e) {
     // 物料页异常不阻断导出
+    logInternal(e, 'script-doc.materials');
   }
 
   // ⑤ 完整分集正文
