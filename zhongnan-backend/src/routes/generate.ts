@@ -1,4 +1,5 @@
 import { asyncRouter } from '../lib/async-router';
+import { logInternal } from '../lib/http-errors';
 import { z } from 'zod';
 import { authRequired, AuthRequest } from '../middleware/auth';
 import { isAdminUser } from '../middleware/admin';
@@ -801,7 +802,15 @@ generateRouter.post('/character-assets', authRequired, async (req: AuthRequest, 
 generateRouter.delete('/character-assets/:id', authRequired, async (req: AuthRequest, res) => {
   const row = await prisma.characterAsset.findUnique({ where: { id: req.params.id } }).catch(() => null as any);
   if (!row || row.userId !== req.userId) return res.status(404).json({ error: 'CAST_ASSET_NOT_FOUND' });
-  await prisma.characterAsset.delete({ where: { id: row.id } }).catch(() => null);
+  // v2.584：旧实现 `.catch(() => null)` 把任何数据库错误都当成功——前端移除卡片并提示已删除，
+  // 刷新后角色又回来了（仍在参与创作注入/资产体检）。仅并发已删（P2025）按幂等成功，其余如实 500 可重试。
+  try {
+    await prisma.characterAsset.delete({ where: { id: row.id } });
+  } catch (e: any) {
+    if (e?.code === 'P2025') return res.json({ ok: true });
+    logInternal(e, 'character-asset.delete');
+    return res.status(500).json({ error: '删除失败，请重试' });
+  }
   res.json({ ok: true });
 });
 // 一键沉淀：项目全局圣经 + 最近成稿 → 确定性提取草稿（零 token），同名覆盖保留 usedCount
@@ -1009,7 +1018,14 @@ generateRouter.post('/prop-assets', authRequired, async (req: AuthRequest, res) 
 generateRouter.delete('/prop-assets/:id', authRequired, async (req: AuthRequest, res) => {
   const row = await prisma.propAsset.findUnique({ where: { id: req.params.id } }).catch(() => null as any);
   if (!row || row.userId !== req.userId) return res.status(404).json({ error: 'PROP_ASSET_NOT_FOUND' });
-  await prisma.propAsset.delete({ where: { id: row.id } }).catch(() => null);
+  // v2.584：同角色资产——删除失败不得回 ok（P2025 并发已删幂等）。
+  try {
+    await prisma.propAsset.delete({ where: { id: row.id } });
+  } catch (e: any) {
+    if (e?.code === 'P2025') return res.json({ ok: true });
+    logInternal(e, 'prop-asset.delete');
+    return res.status(500).json({ error: '删除失败，请重试' });
+  }
   res.json({ ok: true });
 });
 // 一键沉淀：全部分集成稿 × 信物词典（与信物账本/物料道具总表同词典）→ 确定性聚合草稿（零 token），
@@ -1281,7 +1297,14 @@ generateRouter.post('/scene-assets', authRequired, async (req: AuthRequest, res)
 generateRouter.delete('/scene-assets/:id', authRequired, async (req: AuthRequest, res) => {
   const row = await prisma.sceneAsset.findUnique({ where: { id: req.params.id } }).catch(() => null as any);
   if (!row || row.userId !== req.userId) return res.status(404).json({ error: 'SCENE_ASSET_NOT_FOUND' });
-  await prisma.sceneAsset.delete({ where: { id: row.id } }).catch(() => null);
+  // v2.584：同角色资产——删除失败不得回 ok（P2025 并发已删幂等）。
+  try {
+    await prisma.sceneAsset.delete({ where: { id: row.id } });
+  } catch (e: any) {
+    if (e?.code === 'P2025') return res.json({ ok: true });
+    logInternal(e, 'scene-asset.delete');
+    return res.status(500).json({ error: '删除失败，请重试' });
+  }
   res.json({ ok: true });
 });
 // 一键沉淀：全部分集成稿 × 场头解析（与物料场景总表同口径同源）→ 确定性聚合草稿（零 token），
