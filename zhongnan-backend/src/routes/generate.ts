@@ -925,7 +925,13 @@ generateRouter.post('/character-assets/from-project/:projectId', authRequired, a
     } else if (c && typeof c === 'object') {
       for (const [k, v] of Object.entries(c)) put(k, v);
     }
-  } catch { chars = {}; }
+  } catch (e) {
+    // v2.629 与 v2.627 同根：序列化圣经被截断/损坏时 chars 会静默置空，用户点「一键沉淀」得到 0 条
+    // 且分不清是项目真没人物还是数据损坏。纯文本人物字段属常态，保持零日志不刷噪声。
+    const rawChars = (project.bible as any)?.characters;
+    if (typeof rawChars === 'string' && /^\s*[\{\[]/.test(rawChars)) logInternal(e, 'generate.asset.cast.parse');
+    chars = {};
+  }
   // v2.603：最近成稿读失败不得按「没有成稿」静默降级（声纹/台词会按空重算）——留痕后 fail-open，bible 一手源仍可沉淀
   let latest: any = null;
   try {
