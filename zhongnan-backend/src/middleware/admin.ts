@@ -7,6 +7,7 @@
  * 副管理员保留身份标记，但所有后台操作需额外通过 requireSuperAdmin。
  */
 import { AuthRequest } from './auth';
+import { logInternal } from '../lib/http-errors';
 
 export const SUPER_ADMIN_PHONE = '18891995171';
 
@@ -37,7 +38,10 @@ export function createRequireAdmin(prisma: any, denyMsg = '仅超级管理员主
       if (!isAdminUser(u)) return res.status(403).json({ error: denyMsg, needAdmin: true });
       (req as any).adminUser = u;
       next();
-    } catch {
+    } catch (e) {
+      // v2.616 读库失败此前被伪装成「管理员鉴权失败」，管理员会误以为自己被降权；
+      // 对外维持 403 宁拒勿放，但必须留痕（用户表读失败 / 连接池耗尽可区分）。
+      logInternal(e, 'admin.require');
       res.status(403).json({ error: '管理员鉴权失败' });
     }
   };
