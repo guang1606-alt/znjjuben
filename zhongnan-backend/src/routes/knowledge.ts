@@ -50,10 +50,18 @@ export function createKnowledgeRouter(prisma: PrismaLike | any) {
     const category = (p.data.category ?? 'plot') as string;
     const illegal = await complianceCheck(p.data.content, prisma);
     // 去冗 · 相悖：与既有已收录/待审知识比对
-    const prior = await prisma.knowledgeItem.findMany({
-      where: { status: { in: ['APPROVED', 'PENDING'] } },
-      select: { content: true, category: true }, take: 500,
-    }).catch(() => [] as { content: string; category: string }[]);
+    // v2.602：去重比对读失败不得按"无既有知识"继续——否则响应里的 dedup 是在没比对的情况下报出来的
+    //  → fail-closed 中止上传（可重试），避免重复/相悖条目静默入库
+    let prior: { content: string; category: string }[];
+    try {
+      prior = await prisma.knowledgeItem.findMany({
+        where: { status: { in: ['APPROVED', 'PENDING'] } },
+        select: { content: true, category: true }, take: 500,
+      });
+    } catch (e) {
+      logInternal(e, 'knowledge.upload.dedup');
+      return res.status(500).json({ error: '知识库比对失败，请重试' });
+    }
     const recon = reconcileKnowledge(p.data.content, category, prior);
     let status: 'PENDING' | 'APPROVED' | 'REJECTED' = 'PENDING';
     const notes: string[] = [];

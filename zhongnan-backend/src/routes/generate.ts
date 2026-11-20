@@ -904,7 +904,14 @@ generateRouter.post('/character-assets/from-project/:projectId', authRequired, a
   let created = 0, updated = 0;
   const assets: any[] = [];
   for (const dft of drafts) {
-    const existing = await prisma.characterAsset.findFirst({ where: { userId: req.userId!, name: dft.name } }).catch(() => null as any);
+    // v2.602：查重读失败不得按"不存在"新建（会跨项目重复建档）——留痕并跳过该条（计入 skipped）
+    let existing: any;
+    try {
+      existing = await prisma.characterAsset.findFirst({ where: { userId: req.userId!, name: dft.name } });
+    } catch (e) {
+      logInternal(e, 'generate.asset.cast.fromProject.lookup');
+      continue;
+    }
     // v2.153 复盘修复：更新只增强不降级——空值不覆盖，手动精修的 voice/signatureLines/声纹不被沉淀稿静默回退清空
     // （与沉淀不触碰 visualAnchor/tags 的保护语义对称）；新建仍全量落库。
     // v2.160 复盘修复：bible 角色只有 voice（traits/arc 全空）时草稿 persona 是占位文案（"人设待补"），
@@ -923,8 +930,8 @@ generateRouter.post('/character-assets/from-project/:projectId', authRequired, a
       sourceProjectId: project.id, sourceProjectTitle: (project as any).title ?? null,
     };
     const row = existing
-      ? await prisma.characterAsset.update({ where: { id: existing.id }, data: updateData }).catch(() => null)
-      : await prisma.characterAsset.create({ data: { ...createData, name: dft.name, userId: req.userId! } }).catch(() => null);
+      ? await prisma.characterAsset.update({ where: { id: existing.id }, data: updateData }).catch((e: any) => { logInternal(e, 'generate.asset.cast.fromProject.write'); return null; })
+      : await prisma.characterAsset.create({ data: { ...createData, name: dft.name, userId: req.userId! } }).catch((e: any) => { logInternal(e, 'generate.asset.cast.fromProject.write'); return null; });
     if (row) { assets.push(row); if (existing) updated++; else created++; }
   }
   res.json({ created, updated, skipped: drafts.length - created - updated, assets });
@@ -1145,7 +1152,14 @@ generateRouter.post('/prop-assets/from-project/:projectId', authRequired, async 
     // c157 复盘：沉淀名 trim 归一（与手动 upsert 的 schema trim 同口径，防孤儿档 + dup_name 分组漏检）
     const name = String(dft.name ?? '').trim();
     if (!name) continue;
-    const existing = await prisma.propAsset.findFirst({ where: { userId: req.userId!, name } }).catch(() => null as any);
+    // v2.602：查重读失败不得按"不存在"新建（会跨项目重复建档）——留痕并跳过该条
+    let existing: any;
+    try {
+      existing = await prisma.propAsset.findFirst({ where: { userId: req.userId!, name } });
+    } catch (e) {
+      logInternal(e, 'generate.asset.prop.fromProject.lookup');
+      continue;
+    }
     const commonData = {
       sourceProjectId: project.id, sourceProjectTitle: (project as any).title ?? null,
     };
@@ -1161,13 +1175,13 @@ generateRouter.post('/prop-assets/from-project/:projectId', authRequired, async 
             closedEps: normalizeEps([...(Array.isArray(existing.closedEps) ? existing.closedEps : []), ...dft.closedEps]),
             ...commonData,
           },
-        }).catch(() => null)
+        }).catch((e: any) => { logInternal(e, 'generate.asset.prop.fromProject.write'); return null; })
       : await prisma.propAsset.create({
           data: {
             name, meaning: dft.meaning || (String((req.query.lang as string) || 'zh') === 'en' ? 'meaning pending' : '含义待补'),
             eps: dft.eps, closedEps: dft.closedEps, ...commonData, userId: req.userId!,
           },
-        }).catch(() => null);
+        }).catch((e: any) => { logInternal(e, 'generate.asset.prop.fromProject.write'); return null; });
     if (row) { assets.push(row); if (existing) updated++; else created++; }
   }
   res.json({ created, updated, skipped: drafts.length - created - updated, assets });
@@ -1486,7 +1500,14 @@ generateRouter.post('/scene-assets/from-project/:projectId', authRequired, async
     // c157 复盘：沉淀名 trim 归一（与手动 upsert 的 schema trim 同口径，防孤儿档 + dup_name 分组漏检）
     const name = String(dft.name ?? '').trim();
     if (!name) continue;
-    const existing = await prisma.sceneAsset.findFirst({ where: { userId: req.userId!, name } }).catch(() => null as any);
+    // v2.602：查重读失败不得按"不存在"新建（会跨项目重复建档）——留痕并跳过该条
+    let existing: any;
+    try {
+      existing = await prisma.sceneAsset.findFirst({ where: { userId: req.userId!, name } });
+    } catch (e) {
+      logInternal(e, 'generate.asset.scene.fromProject.lookup');
+      continue;
+    }
     const commonData = {
       sourceProjectId: project.id, sourceProjectTitle: (project as any).title ?? null,
     };
@@ -1498,13 +1519,13 @@ generateRouter.post('/scene-assets/from-project/:projectId', authRequired, async
             eps: normalizeEps([...(Array.isArray(existing.eps) ? existing.eps : []), ...dft.eps]),
             ...commonData,
           },
-        }).catch(() => null)
+        }).catch((e: any) => { logInternal(e, 'generate.asset.scene.fromProject.write'); return null; })
       : await prisma.sceneAsset.create({
           data: {
             name, meaning: String((req.query.lang as string) || 'zh') === 'en' ? 'function pending' : '功能待补',
             eps: dft.eps, ...commonData, userId: req.userId!,
           },
-        }).catch(() => null);
+        }).catch((e: any) => { logInternal(e, 'generate.asset.scene.fromProject.write'); return null; });
     if (row) { assets.push(row); if (existing) updated++; else created++; }
   }
   res.json({ created, updated, skipped: drafts.length - created - updated, assets });

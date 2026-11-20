@@ -4,7 +4,7 @@
   'use strict';
   const C = {};
 // v2.498 运行时版本号（首页更新通知用；bump-version.cjs 同步更新）
-C.ZN_VERSION = '2.601.0';
+C.ZN_VERSION = '2.602.0';
 C.HOME_TOOLS = [
     { id: 'toolPitch', key: 'tbCardPitch', desc: 'tbCardPitchP', cost: 'tbCostPitch' },
     { id: 'toolRead', key: 'tbCardRead', desc: 'tbCardReadP', cost: 'tbCostRead' },
