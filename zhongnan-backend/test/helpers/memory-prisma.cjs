@@ -590,7 +590,7 @@ function createMemoryPrisma() {
     async findUnique({ where }) { return arr.find((x) => x.id === where.id) ?? null; },
     async findFirst({ where = {} }) { return arr.find((x) => matchWhere(x, where)) ?? null; },
     async count({ where = {} } = {}) { return arr.filter((x) => matchWhere(x, where)).length; },
-    async update({ where, data }) { const x = arr.find((y) => y.id === where.id); if (!x) throw new Error('not found'); Object.entries(data).forEach(([k, v]) => { x[k] = (v && typeof v === 'object' && 'increment' in v) ? (x[k] ?? 0) + v.increment : v; }); return x; },
+    async update({ where, data }) { const x = arr.find((y) => y.id === where.id); if (!x) throw Object.assign(new Error('not found'), { code: 'P2025' }); Object.entries(data).forEach(([k, v]) => { x[k] = (v && typeof v === 'object' && 'increment' in v) ? (x[k] ?? 0) + v.increment : v; }); return x; },
     async updateMany({ where = {}, data }) {
       let c = 0;
       arr.forEach((x) => { if (matchWhere(x, where)) { Object.entries(data).forEach(([k, v]) => { x[k] = (v && typeof v === 'object' && 'increment' in v) ? (x[k] ?? 0) + v.increment : v; }); c += 1; } });

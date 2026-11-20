@@ -1,5 +1,5 @@
 import { asyncRouter } from '../lib/async-router';
-import { failInternal } from '../lib/http-errors';
+import { failInternal, logInternal } from '../lib/http-errors';
 import { z } from 'zod';
 import { prisma as defaultPrisma } from '../lib/prisma';
 import { authRequired, AuthRequest } from '../middleware/auth';
@@ -144,13 +144,23 @@ export function createKnowledgeRouter(prisma: PrismaLike | any) {
       });
       created.push({ id: item.id, title: c.title, decision: c.decision, confidence: c.confidence });
     }
-    // 自主淘汰
+    // 自主淘汰（v2.582：逐条留痕——写库失败不得计入 archived，更不得在报告里宣称"已自动归档"）
     const prune = pruneKnowledge(stored, { staleDays: parsed.data.staleDays, blockedByPolicy: parsed.data.blockedByPolicy });
+    const archived: typeof prune.archived = [];
+    const archiveFailed: { id: string; title: string; error: string }[] = [];
     for (const a of prune.archived) {
-      await prisma.knowledgeItem.update({ where: { id: a.id }, data: { status: 'ARCHIVED', pruneReason: a.reason, archivedAt: new Date() } }).catch(() => null);
+      try {
+        await prisma.knowledgeItem.update({ where: { id: a.id }, data: { status: 'ARCHIVED', pruneReason: a.reason, archivedAt: new Date() } });
+        archived.push(a);
+      } catch (e) {
+        const error = (e as Error)?.message ?? String(e);
+        logInternal({ id: a.id, title: a.title, error }, 'knowledge.self-learn.prune');
+        archiveFailed.push({ id: a.id, title: a.title, error });
+      }
     }
-    const report = buildLearningReport(cycle, prune);
-    res.json({ ok: true, report, created, archived: prune.archived });
+    // 报告按真实归档结果生成，避免"报告说已归档、库里仍在生效"
+    const report = buildLearningReport(cycle, { archived, kept: prune.kept });
+    res.json({ ok: true, report, created, archived, archiveFailed });
   });
 
   /** 知识库快照报告（仅管理员）：来源/状态/分类分布、自主学习贡献、待审积压 */
@@ -194,18 +204,30 @@ export function createKnowledgeRouter(prisma: PrismaLike | any) {
 
   /** 手动归档（自主淘汰的人工入口，可恢复） */
   knowledgeRouter.post('/:id/archive', authRequired, requireAdmin, requireSuperAdmin, async (req, res) => {
-    const item = await prisma.knowledgeItem.update({
-      where: { id: req.params.id }, data: { status: 'ARCHIVED', pruneReason: String(req.body?.reason ?? '管理员手动归档'), archivedAt: new Date() },
-    }).catch(() => null);
-    if (!item) return res.status(404).json({ error: '知识不存在' });
+    // v2.582：区分「记录不存在（P2025）」与「数据库故障」——旧实现一律 404「知识不存在」，
+    // 写库瞬时失败时条目明明还在生效，用户却被误导成数据丢失。
+    try {
+      await prisma.knowledgeItem.update({
+        where: { id: req.params.id }, data: { status: 'ARCHIVED', pruneReason: String(req.body?.reason ?? '管理员手动归档'), archivedAt: new Date() },
+      });
+    } catch (e: any) {
+      if (e?.code === 'P2025') return res.status(404).json({ error: '知识不存在' });
+      logInternal(e, 'knowledge.archive');
+      return res.status(500).json({ error: '归档失败，请重试' });
+    }
     res.json({ ok: true });
   });
   /** 恢复归档知识（重新进入待审，不直接生效，安全） */
   knowledgeRouter.post('/:id/restore', authRequired, requireAdmin, requireSuperAdmin, async (req, res) => {
-    const item = await prisma.knowledgeItem.update({
-      where: { id: req.params.id }, data: { status: 'PENDING', pruneReason: null, archivedAt: null },
-    }).catch(() => null);
-    if (!item) return res.status(404).json({ error: '知识不存在' });
+    try {
+      await prisma.knowledgeItem.update({
+        where: { id: req.params.id }, data: { status: 'PENDING', pruneReason: null, archivedAt: null },
+      });
+    } catch (e: any) {
+      if (e?.code === 'P2025') return res.status(404).json({ error: '知识不存在' });
+      logInternal(e, 'knowledge.restore');
+      return res.status(500).json({ error: '恢复失败，请重试' });
+    }
     res.json({ ok: true, message: '已恢复并转入待审队列' });
   });
 

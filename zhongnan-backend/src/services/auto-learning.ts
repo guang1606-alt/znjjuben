@@ -7,6 +7,7 @@
  * 诚信原则：榜单/政策采集器由 deps 注入（官方接口/RSS/运营录入/合规采集），无注入则该来源为空，绝不编造市场数据。
  */
 import { BLOCK_RULES } from '../lib/content-safety';
+import { logInternal } from '../lib/http-errors';
 import { runSelfLearning, pruneKnowledge, buildLearningReport, StoredKnowledge } from '../engine/self-learning';
 import {
   collectAllSignals, onlyNewSignals, KeyedLearnSignal, PolicyDoc, TopScriptLike,
@@ -38,6 +39,8 @@ export interface DailyCycleResult {
   report: ReturnType<typeof buildLearningReport>;
   created: { id: string; title: string; decision: string; confidence: number }[];
   archived: { id: string; title: string; reason: string }[];
+  /** v2.582：归档写库失败的条目（不计入 archived，报告不得谎称已归档） */
+  archiveFailed: { id: string; title: string; error: string }[];
   reportId?: string;
   /** v2.186：三类采集源的可见性诊断，让"采集0"的原因可定位（避免静默回退） */
   sources: CycleSources;
@@ -133,22 +136,36 @@ export async function runDailyLearningCycle(prisma: any, deps: AutoDeps = {}, cr
   }
 
   // 5) 自主淘汰：过时/被替代/与最新合规相悖 → 归档
+  // v2.582：逐条留痕——旧实现 `.catch(() => null)` 后无条件 push，写库失败也计入 archived，
+  // 报告与历史记录都谎称"已自动归档"，条目实际仍以 APPROVED 参与创作。
   const prune = pruneKnowledge(stored, { blockedByPolicy: currentPolicyBlockWords() });
   const archived: DailyCycleResult['archived'] = [];
+  const archiveFailed: DailyCycleResult['archiveFailed'] = [];
   for (const a of prune.archived) {
-    await prisma.knowledgeItem.update({
-      where: { id: a.id }, data: { status: 'ARCHIVED', pruneReason: a.reason, archivedAt: new Date() },
-    }).catch(() => null);
-    archived.push(a);
+    try {
+      await prisma.knowledgeItem.update({
+        where: { id: a.id }, data: { status: 'ARCHIVED', pruneReason: a.reason, archivedAt: new Date() },
+      });
+      archived.push(a);
+    } catch (e) {
+      const error = (e as Error)?.message ?? String(e);
+      logInternal({ id: a.id, title: a.title, error }, 'auto-learning.prune');
+      archiveFailed.push({ id: a.id, title: a.title, error });
+    }
   }
 
-  // 6) 学习报告留痕
-  const report = buildLearningReport(cycle, prune);
-  const row = await prisma.learningReport.create({
-    data: { kind: 'DAILY_LEARN', summary: report.summary, text: report.text, createdById: createdById ?? null },
-  }).catch(() => null);
+  // 6) 学习报告留痕（按真实归档结果生成；报告落库失败需留痕但不应让整轮学习失败）
+  const report = buildLearningReport(cycle, { archived, kept: prune.kept });
+  let row: { id: string } | null = null;
+  try {
+    row = await prisma.learningReport.create({
+      data: { kind: 'DAILY_LEARN', summary: report.summary, text: report.text, createdById: createdById ?? null },
+    });
+  } catch (e) {
+    logInternal(e, 'auto-learning.report');
+  }
 
-  return { collected: signals.length, fresh: fresh.length, skippedKnown: skipped, report, created, archived, reportId: row?.id, sources };
+  return { collected: signals.length, fresh: fresh.length, skippedKnown: skipped, report, created, archived, archiveFailed, reportId: row?.id, sources };
 }
 
 export interface WeeklyAuditResult { report: ModelAuditReport; reportId?: string }
