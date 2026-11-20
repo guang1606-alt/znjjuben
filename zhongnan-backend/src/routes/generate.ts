@@ -1283,19 +1283,33 @@ generateRouter.get('/asset-dashboard', authRequired, async (req: AuthRequest, re
   // v2.173 复盘修复（c169）：take 200→500，与 health 端点同口径（c155"查重必须全量"铁律复发）
   // 痛点：c168 加的 buildStats conflicts/stats 跑 take 200，编导 >200 条资产时漏第 201+ 条的空壳/冲突
   // dash 端点加 stats 后已是运营决策面板，conflicts 必须跑全量（与 health 端点 take 500 同口径），否则编导在 dashboard 看到"3 条冲突"去 health 却看到"5 条冲突"数字不一致
-  const [castRows, propRows, sceneRows] = await Promise.all([
-    prisma.characterAsset.findMany({ where: { userId: req.userId! }, orderBy: { usedCount: 'desc' }, take: 500 }).catch(() => [] as any[]),
-    prisma.propAsset.findMany({ where: { userId: req.userId! }, orderBy: { usedCount: 'desc' }, take: 500 }).catch(() => [] as any[]),
-    prisma.sceneAsset.findMany({ where: { userId: req.userId! }, orderBy: { usedCount: 'desc' }, take: 500 }).catch(() => [] as any[]),
-  ]);
+  // v2.595 修复：两阶段 Promise.all 各自不再静默吞异常。findMany 或 count 任一阶段 DB 故障 → 500 + 留痕，
+  // 绝不伪装成「空板」（与 v2.594 三族资产库 list/health 故障由 200-空→500 同族修复）。
+  let castRows: any[], propRows: any[], sceneRows: any[];
+  try {
+    [castRows, propRows, sceneRows] = await Promise.all([
+      prisma.characterAsset.findMany({ where: { userId: req.userId! }, orderBy: { usedCount: 'desc' }, take: 500 }),
+      prisma.propAsset.findMany({ where: { userId: req.userId! }, orderBy: { usedCount: 'desc' }, take: 500 }),
+      prisma.sceneAsset.findMany({ where: { userId: req.userId! }, orderBy: { usedCount: 'desc' }, take: 500 }),
+    ]);
+  } catch (e) {
+    logInternal(e, 'generate.asset.dashboard.list');
+    return res.status(500).json({ error: '资产看板加载失败，请重试' });
+  }
   // v2.173 复盘修复：真实总数（prisma.count），>500 时告诉编导"共 600 条，展示前 500"——c156"截断必须可见"铁律
   // 痛点：c168 的 castStats.total = castRows.length = 500（达到硬帽时编导看到"总数 500"实际可能是 600），hotCastTotal 同理
   // castStats.total 与 hotCastTotal 都用真实总数，>500 时前端 dashStatsCard 显示截断提示
-  const [castTotalTrue, propTotalTrue, sceneTotalTrue] = await Promise.all([
-    prisma.characterAsset.count({ where: { userId: req.userId! } }).catch(() => castRows.length),
-    prisma.propAsset.count({ where: { userId: req.userId! } }).catch(() => propRows.length),
-    prisma.sceneAsset.count({ where: { userId: req.userId! } }).catch(() => sceneRows.length),
-  ]);
+  let castTotalTrue: number, propTotalTrue: number, sceneTotalTrue: number;
+  try {
+    [castTotalTrue, propTotalTrue, sceneTotalTrue] = await Promise.all([
+      prisma.characterAsset.count({ where: { userId: req.userId! } }),
+      prisma.propAsset.count({ where: { userId: req.userId! } }),
+      prisma.sceneAsset.count({ where: { userId: req.userId! } }),
+    ]);
+  } catch (e) {
+    logInternal(e, 'generate.asset.dashboard.count');
+    return res.status(500).json({ error: '资产看板加载失败，请重试' });
+  }
   // 热度榜 top10：每个资产带 usedCount + 五维体检（编导看"明星资产是否也在退化"——热度高但 score<55 = 明星空壳，最危险）
   const hotCast = castRows.slice(0, 10).map((r: any) => ({ id: r.id, name: r.name, usedCount: r.usedCount ?? 0, ...scoreCastAsset(r, lang) }));
   const hotProp = propRows.slice(0, 10).map((r: any) => ({ id: r.id, name: r.name, usedCount: r.usedCount ?? 0, ...scorePropAsset(r, lang) }));
