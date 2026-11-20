@@ -13,6 +13,7 @@
  */
 import { EngineTier } from '../config/pricing';
 import { callText, extractJson } from '../lib/model-proxy';
+import { logInternal } from '../lib/http-errors';
 
 export type Lang = 'zh' | 'en';
 export const MATERIAL_CAP = 40; // 每维素材上限，防提示词膨胀
@@ -179,7 +180,7 @@ export async function interviewTurn(
       });
       aiExtract = true;
     }
-  } catch { /* 兜底已归档 rawNotes */ }
+  } catch (e) { logInternal(e, 'interview.extract'); /* 兜底已归档 rawNotes */ }
 
   // 2) AI 下一问（失败→规则问）
   let question = ruleGapQuestion(materials, transcript.length, lang);
@@ -191,7 +192,7 @@ export async function interviewTurn(
     costFen += r.costFen;
     const q = r.text.trim().split('\n').filter(Boolean).pop() ?? '';
     if (q.length >= 6 && q.length <= 120 && !/^[0-9１-９]/.test(q)) { question = q; aiQuestion = true; }
-  } catch { /* 规则问兜底 */ }
+  } catch (e) { logInternal(e, 'interview.question'); /* 规则问兜底 */ }
 
   // 3) transcript 追加本轮（调用方持久化）
   const full = [...transcript, { q: lastQuestion, a: trimmed }];
