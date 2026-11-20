@@ -5,6 +5,7 @@
  * - 开发环境未设置时回退到默认密钥并 warn，便于本地启动。
  */
 import crypto from 'crypto';
+import { logInternal } from './http-errors';
 
 const isProd = process.env.NODE_ENV === 'production';
 const SECRET = process.env.CONFIG_SECRET || (isProd ? '' : 'zhongnan-dev-secret-change-in-production-32b');
@@ -30,7 +31,11 @@ export function decrypt(payload: string): string {
     const decipher = crypto.createDecipheriv('aes-256-gcm', KEY, Buffer.from(ivB64, 'base64'));
     decipher.setAuthTag(Buffer.from(tagB64, 'base64'));
     return Buffer.concat([decipher.update(Buffer.from(dataB64, 'base64')), decipher.final()]).toString('utf8');
-  } catch {
+  } catch (e) {
+    // v2.624 静默返回 '' 会把「密钥轮换/密文损坏」伪装成「未配置」：超管后台显示已保存、
+    // 实际供应商 Key 全部解不出（回落 env 或报未配置）；handoff 也会静默回落空态。
+    // 留痕只说异常本身，绝不回显密文；对外契约仍是返回 '' 不抛错。
+    logInternal(e, 'crypto.decrypt');
     return ''; // 解密失败按“未配置”处理，绝不抛堆栈给用户
   }
 }
