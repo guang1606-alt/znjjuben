@@ -186,6 +186,8 @@ export function createApp(routers: AppRouters = {}, preErrorRouter?: Router | Ro
     } catch { return '0'; }
   })();
   let indexCache: { mtimeMs: number; html: string; htmlAbs: string } = { mtimeMs: 0, html: '', htmlAbs: '' };
+  /** v2.626 入口读失败留痕节流：入口是最高频请求，持续失败时逐请求打日志会淹掉其它告警 */
+  let indexWarnAt = 0;
   function renderIndexHtml(absolute = false): string | null {
     try {
       const file = path.join(webDir, 'index.html');
@@ -203,7 +205,12 @@ export function createApp(routers: AppRouters = {}, preErrorRouter?: Router | Ro
         };
       }
       return absolute ? indexCache.htmlAbs : indexCache.html;
-    } catch { return null; }
+    } catch (e) {
+      // v2.626 读不到入口=全站首页与所有深链一起 404（漏包/权限/磁盘异常），此前完全静默；
+      // 按分钟节流留痕，既能第一时间归因，又不会在持续故障时把日志刷爆。
+      if (Date.now() - indexWarnAt >= 60_000) { indexWarnAt = Date.now(); logInternal(e, 'spa.index'); }
+      return null;
+    }
   }
   const sendIndex = (res: express.Response, absolute = false) => {
     const html = renderIndexHtml(absolute);
