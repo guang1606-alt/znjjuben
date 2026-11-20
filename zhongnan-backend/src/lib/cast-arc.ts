@@ -6,6 +6,7 @@
  *  3) 主角成长阶段线：复用 beat-chain 同源反转排布，累计反转推进五段成长阶段，确定性可复现。
  */
 import { buildBeatChain } from './beat-chain';
+import { logInternal } from './http-errors';
 
 export interface BibleChar { traits?: string; arc?: string; voice?: string; visualAnchor?: string }
 
@@ -69,7 +70,13 @@ export function extractBibleCastNames(input: unknown, opts: { minLen?: number; m
   if (typeof data === 'string') {
     const s = data.trim();
     if (!s) return [];
-    try { data = JSON.parse(s); } catch { return []; } // 普通字符串不是 JSON，视同无圣经（不把拆字符当人名）
+    try { data = JSON.parse(s); } catch (e) {
+      // v2.627 普通字符串不是 JSON 属常态（视同无圣经，不把拆字符当人名），保持零日志；
+      // 但「以 { / [ 开头却解析失败」= 老库序列化的圣经被截断/损坏，名表会静默恒空、在场与
+      // 关系线台账双双失效，必须留痕可归因。
+      if (s.startsWith('{') || s.startsWith('[')) logInternal(e, 'cast.names.parse');
+      return [];
+    }
   }
   // 名表语义只认"被声明的名字"：对象形态键即名（值畸形不影响追踪）；数组形态字符串元素直接
   // 当名、对象元素取 name（与旧路由 typeof c === 'string' ? c : c?.name 口径一致，不回归）。
@@ -108,7 +115,11 @@ export function extractBibleCastArcs(input: unknown): Record<string, string> {
   if (typeof data === 'string') {
     const s = data.trim();
     if (!s) return {};
-    try { data = JSON.parse(s); } catch { return {}; }
+    try { data = JSON.parse(s); } catch (e) {
+      // v2.627 同 cast.names.parse：纯文本零日志；疑似 JSON 却损坏时 prevArc 回退会静默恒空，必须留痕。
+      if (s.startsWith('{') || s.startsWith('[')) logInternal(e, 'cast.arcs.parse');
+      return {};
+    }
   }
   const asStr = (v: unknown): string => (typeof v === 'string' ? v : '');
   const out: Record<string, string> = {};
