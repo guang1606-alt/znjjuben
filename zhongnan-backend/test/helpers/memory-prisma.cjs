@@ -307,6 +307,11 @@ function createMemoryPrisma() {
     },
   };
   const generationTask = {
+    async findUnique({ where, include } = {}) {
+      const t = tasks.get(where.id) ?? null;
+      if (t && include?.project) return { ...t, project: projects.get(t.projectId) ?? null };
+      return t;
+    },
     async create({ data }) { const id = `t_${++seq}`; const t = { id, createdAt: new Date(), ...data }; tasks.set(id, t); return t; },
     async update({ where, data }) { Object.assign(tasks.get(where.id), data); return tasks.get(where.id); },
     async findMany({ where = {} } = {}) { return [...tasks.values()].filter((t) => Object.entries(where).every(([k, v]) => t[k] === v)); },

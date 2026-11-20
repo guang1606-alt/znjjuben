@@ -4168,10 +4168,19 @@ generateRouter.post('/episodes', authRequired, async (req: AuthRequest, res) => 
 // 改为 include project 判 project.userId（项目主人即任务归属人），行为测试锁定
 generateRouter.post('/tasks/:id/cancel', authRequired, async (req: AuthRequest, res) => {
   const taskId = req.params.id;
-  const task = await prisma.generationTask.findUnique({
-    where: { id: taskId },
-    include: { project: { select: { userId: true } } },
-  }).catch(() => null);
+  // v2.590：区分「任务不存在/非本人（404）」与「数据库瞬时故障（500 可重试 + 留痕）」。
+  //      旧实现 .catch(() => null) 把库故障吞成 404「任务不存在」——用户取消扣费中的运行中任务
+  //      时看到任务凭空消失，无法停止扣费也无从重试，服务端无日志。
+  let task: any;
+  try {
+    task = await prisma.generationTask.findUnique({
+      where: { id: taskId },
+      include: { project: { select: { userId: true } } },
+    });
+  } catch (e) {
+    logInternal(e, 'generate.cancel.fetch');
+    return res.status(500).json({ error: '取消失败，请重试' });
+  }
   if (!task || task.project?.userId !== req.userId) return res.status(404).json({ error: '任务不存在' });
   if (task.status !== 'RUNNING') return res.status(409).json({ error: '任务不在运行中' });
   const ctrl = getActiveAbort(taskId);
