@@ -3433,11 +3433,17 @@ generateRouter.post('/episodes', authRequired, async (req: AuthRequest, res) => 
     const storedPlatform = isPlatformTargetId((bible as any)?.platform) ? (bible as any).platform as PlatformTargetId : undefined;
     const platformOpt = parsed.data.platform ?? storedPlatform;
     // v2.84 自主学习知识库：拉取已生效知识（高分剧本技法/市场趋势/政策规则），按 brief 相关性注入各岗位
-    const knowledgeRows = await prisma.knowledgeItem.findMany({
-      where: { status: 'APPROVED' },
-      select: { title: true, content: true, category: true },
-      orderBy: { approvedAt: 'desc' }, take: 30,
-    }).catch(() => [] as { title: string; content: string; category: string }[]);
+    // v2.592 知识注入是增强项：读取失败 fail-open（不中止付费生成），但必须 logInternal 留痕，使降质可观测可归因
+    let knowledgeRows: { title: string; content: string; category: string }[] = [];
+    try {
+      knowledgeRows = await prisma.knowledgeItem.findMany({
+        where: { status: 'APPROVED' },
+        select: { title: true, content: true, category: true },
+        orderBy: { approvedAt: 'desc' }, take: 30,
+      });
+    } catch (e) {
+      logInternal(e, 'generate.knowledge.fetch');
+    }
     const knowledgeHints = knowledgeRows.length
       ? knowledgeRows.map((k: { title: string; content: string; category: string }) => ({ title: k.title, content: k.content, category: k.category }))
       : null;
