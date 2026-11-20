@@ -1,5 +1,6 @@
 import { Request, Response, NextFunction } from 'express';
 import { verifyAccess, passwordVersion } from '../lib/auth';
+import { logInternal } from '../lib/http-errors';
 
 export interface AuthRequest extends Request {
   userId?: string;
@@ -82,8 +83,11 @@ export function bannedGuard(prisma: any) {
       // pv 为空的令牌是升级前签发/无密码账号：兼容放行，15 分钟内自然过期后全部换成带 pv 的令牌
       if (tokenPv && tokenPv !== entry.pv) return res.status(401).json({ error: 'SESSION_REVOKED' });
       return next();
-    } catch {
+    } catch (e) {
       // v2.302 修复：数据库异常时不得静默放行（封禁穿透）——503 拒绝并提示系统繁忙
+      // v2.615 该守卫覆盖每个带令牌的 /api 请求，DB 抖动时全站 503 但此前零日志；
+      // 补留痕以便区分封禁表读失败 / 连接池耗尽，对外状态码与话术保持不变。
+      logInternal(e, 'auth.session-guard');
       return res.status(503).json({ error: '系统繁忙，请稍后重试' });
     }
   };
