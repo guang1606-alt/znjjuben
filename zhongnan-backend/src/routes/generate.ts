@@ -1110,9 +1110,15 @@ generateRouter.delete('/prop-assets/:id', authRequired, async (req: AuthRequest,
 generateRouter.post('/prop-assets/from-project/:projectId', authRequired, async (req: AuthRequest, res) => {
   const project = await prisma.project.findFirst({ where: { id: req.params.projectId, userId: req.userId!, status: { not: 'deleted' } } }).catch(() => null as any);
   if (!project) return res.status(404).json({ error: 'PROJECT_NOT_FOUND' });
-  const allEps = await prisma.script.findMany({
-    where: { projectId: project.id }, select: { epNo: true, content: true }, orderBy: { epNo: 'asc' }, take: 500,
-  }).catch(() => [] as any[]);
+  let allEps: any[];
+  try {
+    allEps = await prisma.script.findMany({
+      where: { projectId: project.id }, select: { epNo: true, content: true }, orderBy: { epNo: 'asc' }, take: 500,
+    });
+  } catch (e) {
+    logInternal(e, 'generate.asset.prop.fromProject');
+    return res.status(500).json({ error: '资产一键沉淀加载失败，请重试' });
+  }
   const drafts = extractPropAssetDrafts(allEps.map((s: any) => ({ ep: s.epNo, content: s.content ?? '' })));
   let created = 0, updated = 0;
   const assets: any[] = [];
@@ -1445,9 +1451,15 @@ generateRouter.delete('/scene-assets/:id', authRequired, async (req: AuthRequest
 generateRouter.post('/scene-assets/from-project/:projectId', authRequired, async (req: AuthRequest, res) => {
   const project = await prisma.project.findFirst({ where: { id: req.params.projectId, userId: req.userId!, status: { not: 'deleted' } } }).catch(() => null as any);
   if (!project) return res.status(404).json({ error: 'PROJECT_NOT_FOUND' });
-  const allEps = await prisma.script.findMany({
-    where: { projectId: project.id }, select: { epNo: true, content: true }, orderBy: { epNo: 'asc' }, take: 500,
-  }).catch(() => [] as any[]);
+  let allEps: any[];
+  try {
+    allEps = await prisma.script.findMany({
+      where: { projectId: project.id }, select: { epNo: true, content: true }, orderBy: { epNo: 'asc' }, take: 500,
+    });
+  } catch (e) {
+    logInternal(e, 'generate.asset.scene.fromProject');
+    return res.status(500).json({ error: '资产一键沉淀加载失败，请重试' });
+  }
   const drafts = extractSceneAssetDrafts(allEps.map((s: any) => ({ ep: s.epNo, content: s.content ?? '' })));
   let created = 0, updated = 0;
   const assets: any[] = [];
