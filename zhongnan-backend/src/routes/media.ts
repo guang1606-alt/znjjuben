@@ -3,6 +3,7 @@ import { Router } from 'express';
 import { Readable } from 'node:stream';
 import { prisma as defaultPrisma } from '../lib/prisma';
 import { isOwnTosObjectUrl } from '../lib/tos';
+import { logInternal } from '../lib/http-errors';
 
 function extOf(mime: unknown): string {
   const m = String(mime || '').toLowerCase();
@@ -55,7 +56,9 @@ export function createMediaRouter(db: any = defaultPrisma): Router {
         res.setHeader('Content-Disposition', `attachment; filename="poster-${safeId}${extOf(asset.mime)}"`);
       }
       return res.send(Buffer.from(asset.bytes));
-    } catch {
+    } catch (e) {
+      // v2.610：500 也要可归因——用户看到「图片打不开」时服务端必须有线索
+      logInternal(e, 'media.asset.serve');
       return res.status(500).json({ error: 'INTERNAL_ERROR' });
     }
   });

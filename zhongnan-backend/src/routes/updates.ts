@@ -19,6 +19,7 @@ import { asyncRouter } from '../lib/async-router';
 import { authRequired, AuthRequest } from '../middleware/auth';
 import { createRequireAdmin, requireSuperAdmin } from '../middleware/admin';
 import { prisma as defaultPrisma } from '../lib/prisma';
+import { logInternal } from '../lib/http-errors';
 
 type PrismaLike = typeof defaultPrisma;
 
@@ -67,8 +68,10 @@ export function createUpdatesRouter(prisma: PrismaLike | any) {
       const latest = pinned ?? all[0] ?? null;
       const version = latest?.version ?? FALLBACK_VERSION;
       res.json({ announcement: publicAnnouncement(latest), version });
-    } catch {
+    } catch (e) {
       // v2.503 announcement 表缺失/无权限时降级到 package.json 版本，不抛 500 污染首页
+      // v2.610：降级可以，但必须留痕——否则 DB 故障期间超管新公告对全站不可见且零线索
+      logInternal(e, 'updates.latest');
       res.json({ announcement: null, version: FALLBACK_VERSION });
     }
   });
@@ -84,8 +87,10 @@ export function createUpdatesRouter(prisma: PrismaLike | any) {
       const all = await prisma.announcement.findMany({ orderBy: { createdAt: 'desc' }, take: 100 });
       const items = all.filter((a: any) => cmpVersion(a.version, v) > 0).map(publicAnnouncement);
       res.json({ items });
-    } catch {
+    } catch (e) {
       // v2.503 同上降级：表不可用时返回空列表，前端无新公告即可
+      // v2.610：留痕，避免「无新公告」掩盖 DB 故障
+      logInternal(e, 'updates.since');
       res.json({ items: [] });
     }
   });
