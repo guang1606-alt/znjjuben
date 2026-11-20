@@ -82,7 +82,7 @@ describe('反馈/Bug 三态处置闭环', { concurrency: 1 }, () => {
     assert.strictEqual(r.json.fixPath.route, 'tool_auto');
     assert.ok(r.json.reply.includes('墨白'));
     const mine = await get('/api/feedback/mine', 'u_pro', 'PRO');
-    const seen = mine.json.find((x) => x.ticketNo === c.json.ticketNo);
+    const seen = (mine.json.items || []).find((x) => x.ticketNo === c.json.ticketNo);
     assert.strictEqual(seen.status, 'EXECUTING');
     assert.ok(seen.reply.includes('墨白'));
   });

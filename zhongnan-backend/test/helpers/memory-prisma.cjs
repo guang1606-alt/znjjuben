@@ -351,6 +351,62 @@ function createMemoryPrisma() {
       return f;
     },
     async findMany({ where = {}, include, orderBy, take } = {}) {
+      // v2.591：给「我的工单」键集游标翻页用，where 含 OR/AND 或 lt/equals 等操作符时走 matchWhere；
+      // 旧 simple 路径（where 各字段相等）保持不变，零误伤既有测试。
+      const hasComplex = (() => {
+        const _qop = (v) => typeof v === 'object' && v && !Array.isArray(v) && ('lt' in v || 'lte' in v || 'gt' in v || 'gte' in v || 'not' in v);
+        try { return !!where?.OR || !!where?.AND || Object.values(where || {}).some(_qop); } catch { return false; }
+      })();
+      const ord = (a, b) => {
+        if (a instanceof Date && b instanceof Date) return a.getTime() - b.getTime();
+        if (a == null && b == null) return 0;
+        if (a == null) return -1;
+        if (b == null) return 1;
+        return a < b ? -1 : a > b ? 1 : 0;
+      };
+      if (hasComplex) {
+        const matchLeaf = (row, key, op) => {
+          const v = row[key];
+          if (op == null) return v == null;
+          if (typeof op === 'object' && !Array.isArray(op)) {
+            for (const [k, val] of Object.entries(op)) {
+              switch (k) {
+                case 'lt': if (!(ord(v, val) < 0)) return false; break;
+                case 'lte': if (!(ord(v, val) <= 0)) return false; break;
+                case 'gt': if (!(ord(v, val) > 0)) return false; break;
+                case 'gte': if (!(ord(v, val) >= 0)) return false; break;
+                case 'equals': if (!(ord(v, val) === 0)) return false; break;
+                case 'not': if (matchLeaf(row, key, val)) return false; break;
+                case 'in': if (!Array.isArray(val) || !val.some((x) => ord(v, x) === 0)) return false; break;
+                case 'contains': if (typeof v !== 'string' || !v.includes(val)) return false; break;
+                default: break;
+              }
+            }
+            return true;
+          }
+          return ord(v, op) === 0;
+        };
+        const matchWhere = (row, w) => {
+          if (!w || typeof w !== 'object') return true;
+          if (Array.isArray(w.AND) && w.AND.length) return w.AND.every((branch) => matchWhere(row, branch));
+          if (Array.isArray(w.OR) && w.OR.length) {
+            const orBranches = w.OR;
+            const topKeys = Object.entries(w).filter(([k]) => k !== 'OR' && k !== 'AND');
+            const topOk = topKeys.every(([k, v]) => matchLeaf(row, k, v));
+            if (topKeys.length === 0) return orBranches.some((branch) => matchWhere(row, branch));
+            return orBranches.some((branch) => matchWhere(row, branch) && topOk);
+          }
+          return Object.entries(w).every(([k, v]) => {
+            if (k === 'OR' || k === 'AND') return true;
+            return matchLeaf(row, k, v);
+          });
+        };
+        let r = feedbacks.filter((f) => matchWhere(f, where));
+        const ob = Array.isArray(orderBy) ? orderBy : (orderBy ? [orderBy] : [{ createdAt: 'desc' }]);
+        r.sort((a, b) => { for (const o of ob) { const k = Object.keys(o)[0]; const dir = o[k] === 'asc' ? 1 : -1; const c = ord(a[k], b[k]); if (c !== 0) return c * dir; } return 0; });
+        if (typeof take === 'number') r = r.slice(0, take);
+        return include?.user ? r.map((f) => ({ ...f, user: pickUser(users.get(f.userId), include.user?.select) })) : r;
+      }
       let r = feedbacks.filter((f) => Object.entries(where).every(([k, v]) => f[k] === v));
       if (orderBy) {
         const keys = Array.isArray(orderBy) ? orderBy : [orderBy];

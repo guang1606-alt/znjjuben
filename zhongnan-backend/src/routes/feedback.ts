@@ -3,11 +3,34 @@ import { z } from 'zod';
 import { authRequired, AuthRequest } from '../middleware/auth';
 import { createRequireAdmin, requireSuperAdmin } from '../middleware/admin';
 import { prisma as defaultPrisma } from '../lib/prisma';
+import { logInternal } from '../lib/http-errors';
 import {
   FeedbackAction, nextStatus, organizeRequest, xiaonanReply, queryTodos, resolveFixPath,
 } from '../engine/feedback';
 
 type PrismaLike = typeof defaultPrisma;
+
+/** v2.591 「我的工单」键集游标：锚点取 (createdAt, id)，翻页期间新反馈插入或旧记录变化都不会重复/跳过。
+ *  镜像 value-added.ts 海报游标范式；nextCursor 为空表示到底。 */
+function encodeFeedbackCursor(createdAt: unknown, id: string): string {
+  try {
+    const d = new Date(createdAt as any);
+    if (Number.isNaN(d.getTime())) return '';
+    return Buffer.from(`${d.toISOString()}|${id}`, 'utf8').toString('base64url');
+  } catch { return ''; }
+}
+function decodeFeedbackCursor(raw: unknown): { createdAt: Date; id: string } | null {
+  if (typeof raw !== 'string' || !raw.trim()) return null;
+  try {
+    const s = Buffer.from(raw.trim(), 'base64url').toString('utf8');
+    const at = s.lastIndexOf('|');
+    if (at <= 0) return null;
+    const d = new Date(s.slice(0, at));
+    const id = s.slice(at + 1);
+    if (!id || Number.isNaN(d.getTime())) return null;
+    return { createdAt: d, id };
+  } catch { return null; }
+}
 
 export function createFeedbackRouter(prisma: PrismaLike | any) {
   const feedbackRouter = asyncRouter();
@@ -44,12 +67,41 @@ export function createFeedbackRouter(prisma: PrismaLike | any) {
     res.json({ ok: true, ticketNo, message: '已收到，工单编号请留存' });
   });
 
-  /** 用户查自己的反馈与小南回复（三态处置后这里能看到被尊重的回应） */
+  /** 用户查自己的反馈与小南回复（三态处置后这里能看到被尊重的回应）。
+   *  v2.591：旧实现固定 take:20 且回传纯数组——累计超过 20 条后较早记录在库里仍在、但界面永远不可达
+   *  （看不到进度也看不到小南回复）。改为 (createdAt,id) 键集游标分页，回传 { items, hasMore, nextCursor }。
+   *  取 take+1 探活判断 hasMore；查询失败一律 500 + 可重试提示 + 留痕，不得裸抛成无业务文案的通用 500。 */
   feedbackRouter.get('/mine', authRequired, async (req: AuthRequest, res) => {
-    const list = await prisma.feedback.findMany({
-      where: { userId: req.userId! }, orderBy: { createdAt: 'desc' }, take: 20,
+    const take = Math.min(Math.max(Number(req.query.limit) || 20, 1), 50);
+    const cursor = decodeFeedbackCursor(req.query.cursor);
+    const baseWhere = { userId: req.userId! };
+    const where: any = cursor
+      ? {
+        ...baseWhere,
+        OR: [
+          { createdAt: { lt: cursor.createdAt } },
+          { createdAt: cursor.createdAt, id: { lt: cursor.id } },
+        ],
+      }
+      : baseWhere;
+    let rows: any[];
+    try {
+      rows = await prisma.feedback.findMany({
+        where,
+        orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+        take: take + 1,
+      });
+    } catch (e) {
+      logInternal(e, 'feedback.mine.list');
+      return res.status(500).json({ error: '反馈记录加载失败，请重试' });
+    }
+    const list = rows.slice(0, take);
+    const last = list[list.length - 1];
+    res.json({
+      items: list,
+      hasMore: rows.length > take,
+      nextCursor: rows.length > take && last ? encodeFeedbackCursor(last.createdAt, last.id) : '',
     });
-    res.json(list);
   });
 
   /** 管理员：全量工单，可按 status/type 过滤，紧急置顶、时间倒序 */

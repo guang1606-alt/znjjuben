@@ -4640,52 +4640,70 @@
       showPane('submit');
     }
 
-    async function loadMine() {
+    // v2.591 「我的工单」游标翻页：后端回传 { items, hasMore, nextCursor }（旧版纯数组，超过 20 条后旧记录不可达）。
+    // 首屏重置游标并渲染，点「加载更多」追加下一页；按 id 去重兜底，翻页失败走 toast 不覆盖已加载列表。
+    let fbMineCursor = '';
+    function fbCardHtml(f) {
+      const locale = lang === 'en' ? 'en-US' : 'zh-CN';
+      const rawStatus = String(f.status || 'PENDING');
+      const statusKey = 'fbStatus_' + rawStatus;
+      const looked = t(statusKey);
+      const statusText = looked === statusKey ? rawStatus : looked;
+      const isBug = f.type === 'BUG';
+      const urgentTag = f.urgent ? `<span class="fb-badge fb-urgent">${esc(t('fbUrgentTag'))}</span>` : '';
+      const time = f.createdAt
+        ? new Date(f.createdAt).toLocaleString(locale, { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })
+        : '';
+      const reply = f.reply
+        ? `<div class="fb-reply"><div class="fb-reply-h">${esc(t('fbReplyTitle'))}</div><div class="fb-reply-b">${esc(f.reply)}</div></div>`
+        : '';
+      const imgs = Array.isArray(f.images) && f.images.length
+        ? `<div class="fb-img-row">${f.images.map((s) => `<img src="${esc(s)}" class="fb-img-thumb-mini" alt="" />`).join('')}</div>`
+        : '';
+      return `<div class="fb-card" data-fb-card="${esc(f.id)}">
+        <div class="fb-card-h">
+          <span class="fb-badge ${isBug ? 'fb-bug' : 'fb-sug'}">${esc(isBug ? t('fbBadgeBug') : t('fbBadgeSug'))}</span>
+          ${urgentTag}
+          <span class="fb-status fb-st-${esc(rawStatus.toLowerCase())}">${esc(statusText)}</span>
+          <span class="fb-no">${esc(t('fbTicketLabel'))} ${esc(f.ticketNo || '')}</span>
+          <span class="fb-time">${esc(time)}</span>
+        </div>
+        <div class="fb-content">${esc(f.content)}</div>
+        ${imgs}
+        ${reply}
+      </div>`;
+    }
+    async function loadMine(append) {
       const box = $('fbMineList');
-      znSkeleton(box);
+      const more = $('fbMineMore');
+      if (!append) { fbMineCursor = ''; znSkeleton(box); }
+      if (more) { more.hidden = true; more.disabled = true; }
       try {
-        const r = await Api.request('/api/feedback/mine');
-        const list = await Api.jsonOrThrow(r);
-        if (!Array.isArray(list) || list.length === 0) {
+        const r = await Api.request('/api/feedback/mine' + (fbMineCursor ? '?cursor=' + encodeURIComponent(fbMineCursor) : ''));
+        const d = await Api.jsonOrThrow(r);
+        const items = Array.isArray(d.items) ? d.items : [];
+        if (!append) box.innerHTML = '';
+        if (!append && items.length === 0) {
           znEmpty(box, t('fbEmpty'));
+          if (more) more.hidden = true;
           return;
         }
-        const locale = lang === 'en' ? 'en-US' : 'zh-CN';
-        box.innerHTML = list.map((f) => {
-          const rawStatus = String(f.status || 'PENDING');
-          const statusKey = 'fbStatus_' + rawStatus;
-          const looked = t(statusKey);
-          const statusText = looked === statusKey ? rawStatus : looked;
-          const isBug = f.type === 'BUG';
-          const urgentTag = f.urgent ? `<span class="fb-badge fb-urgent">${esc(t('fbUrgentTag'))}</span>` : '';
-          const time = f.createdAt
-            ? new Date(f.createdAt).toLocaleString(locale, { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })
-            : '';
-          const reply = f.reply
-            ? `<div class="fb-reply"><div class="fb-reply-h">${esc(t('fbReplyTitle'))}</div><div class="fb-reply-b">${esc(f.reply)}</div></div>`
-            : '';
-          const imgs = Array.isArray(f.images) && f.images.length
-            ? `<div class="fb-img-row">${f.images.map((s) => `<img src="${esc(s)}" class="fb-img-thumb-mini" alt="" />`).join('')}</div>`
-            : '';
-          return `<div class="fb-card">
-            <div class="fb-card-h">
-              <span class="fb-badge ${isBug ? 'fb-bug' : 'fb-sug'}">${esc(isBug ? t('fbBadgeBug') : t('fbBadgeSug'))}</span>
-              ${urgentTag}
-              <span class="fb-status fb-st-${esc(rawStatus.toLowerCase())}">${esc(statusText)}</span>
-              <span class="fb-no">${esc(t('fbTicketLabel'))} ${esc(f.ticketNo || '')}</span>
-              <span class="fb-time">${esc(time)}</span>
-            </div>
-            <div class="fb-content">${esc(f.content)}</div>
-            ${imgs}
-            ${reply}
-          </div>`;
-        }).join('');
+        const seen = new Set([...box.querySelectorAll('[data-fb-card]')].map((el) => el.getAttribute('data-fb-card')));
+        const fresh = items.filter((it) => !seen.has(it.id));
+        fbMineCursor = typeof d.nextCursor === 'string' ? d.nextCursor : '';
+        box.insertAdjacentHTML('beforeend', fresh.map((f) => fbCardHtml(f)).join(''));
+        if (more) more.hidden = !fbMineCursor;
       } catch (e) {
         // token 过期且 refresh 失败时 Api 层已清登录态：必须引导重新登录，不能只甩一行英文错误码
         if (e && e.code === 'AUTH_REQUIRED') { $('feedbackModal').classList.add('hidden'); openAuth('login'); return; }
-        box.innerHTML = znErrorHtml(e.message || (lang === 'en' ? 'Failed to load, please retry later' : '加载失败，请稍后重试'));
+        if (append) { toastError(t('fbLoadMoreFail')); }
+        else { box.innerHTML = znErrorHtml(e.message || (lang === 'en' ? 'Failed to load, please retry later' : '加载失败，请稍后重试')); }
+      } finally {
+        if (more) more.disabled = false;
       }
     }
+    const _fbMineMore = $('fbMineMore');
+    if (_fbMineMore) _fbMineMore.onclick = () => loadMine(true);
 
     async function submitFeedback() {
       const contentEl = $('fbContent');

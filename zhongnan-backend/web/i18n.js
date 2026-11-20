@@ -101,6 +101,7 @@
       fbPromise: '每条反馈小南都会看；提交后可在「我的工单」跟踪处理进度与回复。', fbSubmitBtn: '提交反馈',
       fbNeedContent: '请先填写反馈内容', fbSubmitting: '提交中…', fbSubmitOk: '已收到，工单编号请留存',
       fbTicketLabel: '工单', fbEmpty: '还没有提交过反馈，有任何想法都欢迎告诉小南～',
+      fbLoadMoreFail: '加载更多失败，请重试',
       fbReplyTitle: '小南回复', fbUrgentTag: '紧急', fbBadgeSug: '建议', fbBadgeBug: 'Bug',
       
       fbStatus_PENDING: '待处理', fbStatus_EXECUTING: '已安排处理', fbStatus_TODO: '已列入待办', fbStatus_REJECTED: '暂不采纳',
@@ -302,6 +303,7 @@
       fbPromise: 'Xiaonan reads every ticket. Track status and replies in “My tickets”.', fbSubmitBtn: 'Submit feedback',
       fbNeedContent: 'Please describe your feedback first', fbSubmitting: 'Submitting…', fbSubmitOk: 'Received — please keep your ticket no.',
       fbTicketLabel: 'Ticket', fbEmpty: 'No feedback yet. Xiaonan would love to hear from you.',
+      fbLoadMoreFail: 'Failed to load more, please retry',
       fbReplyTitle: 'Xiaonan replies', fbUrgentTag: 'Urgent', fbBadgeSug: 'Idea', fbBadgeBug: 'Bug',
       
       fbStatus_PENDING: 'Pending', fbStatus_EXECUTING: 'Scheduled', fbStatus_TODO: 'On roadmap', fbStatus_REJECTED: 'Not now',
