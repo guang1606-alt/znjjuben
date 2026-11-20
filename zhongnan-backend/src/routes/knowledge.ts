@@ -85,19 +85,33 @@ export function createKnowledgeRouter(prisma: PrismaLike | any) {
 
   /** 审核通过 → 生效（同步到对应岗位智能体，生产发事件触发技能转化） */
   knowledgeRouter.post('/:id/approve', authRequired, requireAdmin, requireSuperAdmin, async (req, res) => {
-    const item = await prisma.knowledgeItem.update({
-      where: { id: req.params.id }, data: { status: 'APPROVED', conflictNote: null, approvedAt: new Date() },
-    }).catch(() => null);
-    if (!item) return res.status(404).json({ error: '知识不存在' });
+    // v2.583：与归档同口径——P2025 才是「不存在」，数据库故障必须 500 可归因，
+    // 旧实现 catch 后一律 404，管理员会误以为知识被删了，实际仍在待审。
+    try {
+      await prisma.knowledgeItem.update({
+        where: { id: req.params.id }, data: { status: 'APPROVED', conflictNote: null, approvedAt: new Date() },
+      });
+    } catch (e: any) {
+      if (e?.code === 'P2025') return res.status(404).json({ error: '知识不存在' });
+      logInternal(e, 'knowledge.approve');
+      return res.status(500).json({ error: '生效失败，请重试' });
+    }
     res.json({ ok: true, message: '已吸收并同步到创作技能' });
   });
 
   /** 驳回（相悖/质量差），不生效 */
   knowledgeRouter.post('/:id/reject', authRequired, requireAdmin, requireSuperAdmin, async (req, res) => {
-    await prisma.knowledgeItem.update({
-      where: { id: req.params.id },
-      data: { status: 'REJECTED', conflictNote: String(req.body?.reason ?? '人工驳回') },
-    }).catch(() => null);
+    // v2.583：旧实现写库失败被 catch 吞掉仍回 200「已驳回」——条目实际留在待审队列。
+    try {
+      await prisma.knowledgeItem.update({
+        where: { id: req.params.id },
+        data: { status: 'REJECTED', conflictNote: String(req.body?.reason ?? '人工驳回') },
+      });
+    } catch (e: any) {
+      if (e?.code === 'P2025') return res.status(404).json({ error: '知识不存在' });
+      logInternal(e, 'knowledge.reject');
+      return res.status(500).json({ error: '驳回失败，请重试' });
+    }
     res.json({ ok: true });
   });
 
