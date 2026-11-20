@@ -156,8 +156,11 @@ export function createAuthRouter(prisma: PrismaLike | any) {
     const maskPhone = u.phone ? u.phone.replace(/^(\d{3})\d{4}(\d{4})$/, '$1****$2') : null;
     // v2.576 本月赠送集剩余：与生成计费同一惰性周期口径（跨周期先重置再展示），
     // 否则会员页只能写「每月赠 N 集」，用户看不到本月还剩多少、也无法判断是否续费
+    // v2.579 必须按当前等级取会员行：升级不会删除旧等级会员（同用户可同时持有 BASIC/ADVANCED 两行，
+    // 且低档可能因续期叠加而更晚到期）。不过滤 level 会展示旧档额度，而生成计费用的是「当前等级」那行——
+    // 页面显示「本月还剩 300 集」、实际经济档却全价扣积分。
     const activeMembership = u.level === MemberLevel.FREE ? null
-      : await prisma.membership.findFirst({ where: { userId: u.id, expireAt: { gt: new Date() } }, orderBy: { expireAt: 'desc' } });
+      : await prisma.membership.findFirst({ where: { userId: u.id, level: u.level, expireAt: { gt: new Date() } }, orderBy: { expireAt: 'desc' } });
     const quotaRow = activeMembership ? await ensureQuotaCycle(prisma, activeMembership) : null;
     res.json({
       id: u.id, phone: maskPhone, nickname: u.nickname, penName: u.penName ?? null, bio: u.bio ?? null,

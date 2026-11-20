@@ -111,4 +111,20 @@ describe('GET /api/auth/me 下发本月剩余并顺带完成重置', { concurren
     const j = await r.json();
     assert.strictEqual(j.quota, null);
   });
+
+  it('同一用户多档会员并存时，/me 只取当前等级那行（与生成计费同口径）', async () => {
+    // 升级不删旧行：BASIC 因续期叠加更晚到期、ADVANCED 更早到期——旧实现会展示 BASIC 的 500 集额度
+    mem._seedUser({ id: 'q3', level: 'ADVANCED' });
+    await mem.membership.create({
+      data: { userId: 'q3', level: 'BASIC', expireAt: new Date(Date.now() + 300 * DAY), quotaTotal: 500, quotaUsed: 0, quotaCycleStart: new Date() },
+    });
+    await mem.membership.create({
+      data: { userId: 'q3', level: 'ADVANCED', expireAt: new Date(Date.now() + 100 * DAY), quotaTotal: 300, quotaUsed: 10, quotaCycleStart: new Date() },
+    });
+    const r = await fetch(base + '/api/auth/me', { headers: { Authorization: `Bearer ${signAccess({ sub: 'q3', level: 'ADVANCED' })}` } });
+    const j = await r.json();
+    assert.strictEqual(j.quota.total, 300, '必须取 ADVANCED 行，而不是更晚到期的 BASIC 行');
+    assert.strictEqual(j.quota.used, 10);
+    assert.strictEqual(j.quota.remain, 290);
+  });
 });

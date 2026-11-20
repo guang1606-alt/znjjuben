@@ -4264,6 +4264,12 @@
     } catch (e) { xnSay(e.message); }
   }
   $('storageBuyBtn').onclick = openStoragePacks;
+  // v2.579 配额已满时 413 话术让用户「扩容后重试」，但此前只弹一句提示、扩容入口还藏在个人资料里——
+  // 海报生成当场就能撞满配额，用户却要自己去找入口。这里直接拉起扩容弹窗，把承诺接到动作上。
+  function maybeOfferStorageUpgrade(e) {
+    if (e && e.error === 'STORAGE_QUOTA_EXCEEDED') { openStoragePacks(); return true; }
+    return false;
+  }
   $('saveProfileBtn').onclick = async () => {
     try {
       const res = await Api.request('/api/auth/profile', { method: 'PATCH', body: JSON.stringify({
@@ -4367,6 +4373,13 @@
       const perks = [];
       if (p.freeEpsPerDay) perks.push(lang==='en'?`${p.freeEpsPerDay} free eps/day`:`每日免费 ${p.freeEpsPerDay} 集`);
       if (p.quotaMonthly) perks.push((lang==='en'?'Monthly gift ':'每月赠 ')+p.quotaMonthly+(lang==='en'?' eps (economy)':' 集（经济档）'));
+      // v2.579 当前档补「本月已用/剩余」：只写「每月赠 N」用户无法判断权益是否真实到账（v2.576 才真正按月重置）
+      // 额度来自 /api/auth/me（meCache），登录响应本身不含 quota；按账号隔离取用，切换账号不会串数据
+      const meNow = (typeof meCache !== 'undefined' && meCache) ? meCache : null;
+      const q = (meNow && meNow.id === Api.getUser()?.id) ? meNow.quota : null;
+      if (q && p.level === cur && q.total > 0) {
+        perks.push(lang === 'en' ? `This cycle left: ${q.remain}/${q.total} eps` : `本周期剩余 ${q.remain}/${q.total} 集`);
+      }
       if (p.overagePerEp) perks.push(`${t('perEp')} ${(p.overagePerEp / 10).toFixed(1)}`);
       // 引擎档/模式/项目数等显性权益，拉开档位差距、诱导升级
     // @module profile
@@ -5155,7 +5168,7 @@
           xnSay(j.staff
             ? (lang === 'en' ? 'Done — free for staff. Tap a poster to view full size or download.' : '已生成，内部账户免费；点海报可看大图、下载原图')
             : (lang === 'en' ? `Done, spent ${j.points} credits. Tap a poster to view full size or download.` : `已生成，消耗${j.points}积分；点海报可看大图、下载原图`));
-        } catch (e) { xnSay(e.message); } finally { pbtn.disabled = false; pbtn.textContent = certStaff ? (lang === 'en' ? 'Certified poster · Free' : '生成认证海报（内部免费）') : (lang === 'en' ? 'Certified poster (39 pts)' : '生成认证海报（39积分）'); }
+        } catch (e) { xnSay(e.message); maybeOfferStorageUpgrade(e); } finally { pbtn.disabled = false; pbtn.textContent = certStaff ? (lang === 'en' ? 'Certified poster · Free' : '生成认证海报（内部免费）') : (lang === 'en' ? 'Certified poster (39 pts)' : '生成认证海报（39积分）'); }
       };
     // v2.256：错误源已走 Api.jsonOrThrow 脱敏层；muted 弱提示改 znErrorHtml（⚠ + role=alert）
     } catch (e) { box.innerHTML = znErrorHtml((e && e.message) || (lang === 'en' ? 'Failed to load.' : '加载失败')); }
@@ -10111,6 +10124,7 @@
       }
     } catch (e) {
       xnSay((e && e.message) ? e.message : (lang === 'en' ? 'Generation failed, points refunded.' : '生成失败，积分已退回～'));
+      maybeOfferStorageUpgrade(e);
     } finally { btn.disabled = false; btn.textContent = old; }
   };
 
