@@ -55,6 +55,8 @@
         next.points = Number.isFinite(evt.points) ? evt.points : next.points;
         next.free = !!evt.free;
         next.staff = !!evt.staff; // 内部账户（超管/副管理员）免费短路
+        // v2.576 本月赠送集余额（仅会员用赠送集时下发）：让用户看到每 30 天重置的额度真实被扣减
+        if (evt.viaQuota && Number.isFinite(evt.quotaRemainAfter)) next.quotaRemain = evt.quotaRemainAfter;
         return next;
 
       case 'context':

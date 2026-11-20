@@ -170,6 +170,7 @@ model Membership {
   expireAt   DateTime
   quotaTotal Int         // 本周期赠送集数
   quotaUsed  Int         @default(0)
+  quotaCycleStart DateTime? // v2.576 本周期起算点：每满 30 天惰性重置 quotaUsed（历史行为仅在购买/续费时清零，年卡第 2 个月起无赠送集）
   orderId    String?
   createdAt  DateTime    @default(now())
   @@index([userId, expireAt])

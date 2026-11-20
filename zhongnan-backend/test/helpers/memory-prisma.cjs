@@ -404,6 +404,9 @@ function createMemoryPrisma() {
       if (orderBy?.expireAt === 'desc') r = [...r].sort((a, b) => new Date(b.expireAt) - new Date(a.expireAt));
       return r[0] ?? null;
     },
+    async findUnique({ where } = {}) {
+      return memberships.find((m) => m.id === where.id) ?? null;
+    },
     async updateMany({ where = {}, data } = {}) {
       let n = 0;
       for (const m of memberships) {
@@ -414,6 +417,14 @@ function createMemoryPrisma() {
         if (where.expireAt && new Date(m.expireAt).getTime() !== new Date(where.expireAt).getTime()) continue;
         if (where.quotaUsed?.lt != null && !(m.quotaUsed < where.quotaUsed.lt)) continue;
         if (where.quotaUsed?.gt != null && !(m.quotaUsed > where.quotaUsed.gt)) continue;
+        if (typeof where.quotaUsed === 'number' && m.quotaUsed !== where.quotaUsed) continue;
+        // v2.576 周期起算点锚点等值（null 需显式匹配 null，与 Prisma NULL 语义一致）
+        if ('quotaCycleStart' in where) {
+          const w = where.quotaCycleStart;
+          const v = m.quotaCycleStart ?? null;
+          const same = w == null ? v == null : (v != null && new Date(v).getTime() === new Date(w).getTime());
+          if (!same) continue;
+        }
         if (data.quotaUsed?.increment) m.quotaUsed += data.quotaUsed.increment;
         else if (data.quotaUsed?.decrement) m.quotaUsed = Math.max(0, m.quotaUsed - data.quotaUsed.decrement);
         else Object.assign(m, data);

@@ -95,7 +95,7 @@ export function createDeliver(prisma: PrismaLike | any) {
             const nextExpireAt = new Date(anchorExpireAt.getTime() + addMs);
             const r = await tx.membership.updateMany({
               where: { id: anchor.id, expireAt: anchorExpireAt },
-              data: { expireAt: nextExpireAt, quotaTotal: quotaMonthly, quotaUsed: 0, orderId: o.id },
+              data: { expireAt: nextExpireAt, quotaTotal: quotaMonthly, quotaUsed: 0, quotaCycleStart: now, orderId: o.id },
             });
             if (r.count > 0) { renewed = true; finalExpireAt = nextExpireAt; break; }
             anchor = await tx.membership.findFirst({
@@ -106,7 +106,7 @@ export function createDeliver(prisma: PrismaLike | any) {
           if (!renewed) throw new Error('MEMBERSHIP_RENEW_RACE');
         } else {
           // 无在保行：部分唯一索引兜底双 create，P2002 冒泡到外层整事务重试（见 runOnce 外层）
-          await tx.membership.create({ data: { userId: o.userId, level: o.level, expireAt, quotaTotal: quotaMonthly, orderId: o.id } });
+          await tx.membership.create({ data: { userId: o.userId, level: o.level, expireAt, quotaTotal: quotaMonthly, quotaCycleStart: now, orderId: o.id } });
         }
         // 修复②付费只升不降（v2.315 加固）：等级判断不允许「读快照→裸 update」——两笔不同等级订单
         // 并发回调时双方都可能读到旧身份通过判断，后写的低档覆盖先写的高档（付费年卡权益蒸发）。

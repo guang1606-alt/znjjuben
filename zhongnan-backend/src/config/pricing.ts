@@ -217,3 +217,22 @@ export function resolveEpisodeCharge(
   const useQuota = level !== MemberLevel.FREE && tier === EngineTier.ECONOMY && memberValid;
   return { useQuota, points: useQuota ? 0 : listPoints, quotaRemainBefore: remain };
 }
+
+/** 会员「每月赠送集数」的周期长度（天）。与购买时按月叠加的 30 天口径一致。 */
+export const MEMBERSHIP_QUOTA_CYCLE_DAYS = 30;
+const QUOTA_CYCLE_MS = MEMBERSHIP_QUOTA_CYCLE_DAYS * 864e5;
+
+/**
+ * v2.576 月赠送额度周期推进（纯函数、零 IO）：
+ * 返回「当前应处的周期起点」——未满一个周期返回 null（不需要重置）。
+ * 跨多个周期时对齐到最近一个周期起点（不是 now），避免用户隔了 3 个月才来，
+ * 下次再访问又立刻重置一次；同时保留其周期节奏（每 30 天一个自然周期）。
+ */
+export function nextQuotaCycleStart(anchor: Date, now: Date = new Date()): Date | null {
+  const a = new Date(anchor).getTime();
+  const n = new Date(now).getTime();
+  if (!Number.isFinite(a) || !Number.isFinite(n) || n < a) return null;
+  const cycles = Math.floor((n - a) / QUOTA_CYCLE_MS);
+  if (cycles < 1) return null;
+  return new Date(a + cycles * QUOTA_CYCLE_MS);
+}

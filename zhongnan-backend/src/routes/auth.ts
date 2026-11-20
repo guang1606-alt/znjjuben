@@ -8,6 +8,7 @@ import { grantBonus } from '../lib/billing';
 import { withBillingTransaction } from '../lib/prisma-tx';
 import { INVITE, MEMBERSHIP, MemberLevel } from '../config/pricing';
 import { quotaBytes } from '../lib/storage';
+import { ensureQuotaCycle, quotaRemainOf } from '../lib/membership-quota';
 import { authRequired, invalidateSessionCache } from '../middleware/auth';
 import type { AuthRequest } from '../middleware/auth';
 import { isAdminUser, isSuperAdminUser, SUPER_ADMIN_PHONE } from '../middleware/admin';
@@ -153,6 +154,11 @@ export function createAuthRouter(prisma: PrismaLike | any) {
     const acct = await prisma.pointsAccount.findUnique({ where: { userId: u.id } });
     const used = await prisma.storageObject.aggregate({ where: { userId: u.id, deletedAt: null }, _sum: { bytes: true } });
     const maskPhone = u.phone ? u.phone.replace(/^(\d{3})\d{4}(\d{4})$/, '$1****$2') : null;
+    // v2.576 本月赠送集剩余：与生成计费同一惰性周期口径（跨周期先重置再展示），
+    // 否则会员页只能写「每月赠 N 集」，用户看不到本月还剩多少、也无法判断是否续费
+    const activeMembership = u.level === MemberLevel.FREE ? null
+      : await prisma.membership.findFirst({ where: { userId: u.id, expireAt: { gt: new Date() } }, orderBy: { expireAt: 'desc' } });
+    const quotaRow = activeMembership ? await ensureQuotaCycle(prisma, activeMembership) : null;
     res.json({
       id: u.id, phone: maskPhone, nickname: u.nickname, penName: u.penName ?? null, bio: u.bio ?? null,
       region: (u as any).region ?? null, ageBand: (u as any).ageBand ?? null, gender: (u as any).gender ?? null,
@@ -170,6 +176,13 @@ export function createAuthRouter(prisma: PrismaLike | any) {
       // 配额 = 等级基础额度 + 已购扩容包；前端展示「已用 / 配额」，不再把扩容额度误当用量
       storageQuotaBytes: quotaBytes(u.level as MemberLevel, u.extraStorageBytes ?? 0),
       benefits: MEMBERSHIP[u.level as MemberLevel] ?? null,
+      // 本月赠送集（仅付费且会员有效时下发）：total=本月额度, used=已用, remain=剩余, cycleStart=本周期起算
+      quota: quotaRow ? {
+        total: Number(quotaRow.quotaTotal) || 0,
+        used: Number(quotaRow.quotaUsed) || 0,
+        remain: quotaRemainOf(quotaRow),
+        cycleStart: quotaRow.quotaCycleStart ?? activeMembership?.startedAt ?? null,
+      } : null,
     });
   });
   // 修改笔名/昵称/简介（笔名会成为剧本水印；长度与字符合规校验，防注入与超长）

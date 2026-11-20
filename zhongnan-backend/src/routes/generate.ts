@@ -7,6 +7,7 @@ import { parsePageParams } from '../lib/pagination';
 import { EngineTier, MemberLevel, MEMBERSHIP, episodePoints, FEN_PER_POINT, resolveEpisodeCharge, activeProjectLimit, VALUE_ADDED, vaPointsForLevel, engineAvailable, engineMinLevel } from '../config/pricing';
 import { freeze, settle, unfreeze, consumeFlexible, refundFlexible } from '../lib/billing';
 import { withBillingTransaction } from '../lib/prisma-tx';
+import { ensureQuotaCycle } from '../lib/membership-quota';
 import { runEpisode, Bible } from '../agents/pipeline';
 import { resolveEpisodeSourceText, SOURCE_TEXT_LIMIT } from '../engine/mode-gate'; // v2.319 episodes 原文统一取数（body 优先 + bible 兜底，版权闸门不中断）
 import { latestScripts } from '../lib/latest-scripts';
@@ -2848,10 +2849,13 @@ generateRouter.post('/episodes', authRequired, async (req: AuthRequest, res) => 
   // 每月赠送集只抵【经济档】；标准/旗舰必须扣积分（不赔钱铁律，resolveEpisodeCharge 纯函数锁死）
   // 内部账户：points 恒 0、不查 Membership，赠送额度/余额/Membership 数据存在与否都不影响免费
   const listPoints = (isFree || isStaff) ? 0 : episodePoints(level, tier);
-  const activeMembership = (isFree || isStaff) ? null : await prisma.membership.findFirst({
+  let activeMembership = (isFree || isStaff) ? null : await prisma.membership.findFirst({
     where: { userId: user.id, level, expireAt: { gt: new Date() } },
     orderBy: { expireAt: 'desc' },
   });
+  // v2.576 每月赠送集数惰性重置：距周期起点满 30 天先清零 quotaUsed，再按新额度计费
+  // （此前只在购买/续费时清零一次，年卡用户第 2 个月起「每月赠 N 集」名存实亡）
+  if (activeMembership) activeMembership = await ensureQuotaCycle(prisma, activeMembership);
   const charge = resolveEpisodeCharge(level, tier, activeMembership
     ? { level: activeMembership.level as MemberLevel, quotaTotal: activeMembership.quotaTotal, quotaUsed: activeMembership.quotaUsed, expireAt: activeMembership.expireAt }
     : null);

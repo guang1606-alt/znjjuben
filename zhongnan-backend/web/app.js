@@ -4075,6 +4075,20 @@
       ? `${fmtBytes(me.storageUsedBytes)} / ${fmtBytes(me.storageQuotaBytes)}`
       : fmtBytes(me.storageUsedBytes);
     $('meInvite').textContent = me.inviteCode || '—';
+    // v2.576 本月赠送集剩余（后端按 30 天周期惰性重置后下发）：免费/无有效会员不展示，避免虚构权益
+    const qline = $('meQuotaLine');
+    if (qline) {
+      const q = me.quota;
+      if (q && q.total > 0) {
+        qline.textContent = lang === 'en'
+          ? `Economy episodes on monthly gift: ${q.remain} of ${q.total} left this cycle`
+          : `本月赠送集数剩余 ${q.remain} / ${q.total}（每 30 天重置，仅经济档）`;
+        qline.classList.remove('hidden');
+      } else {
+        qline.textContent = '';
+        qline.classList.add('hidden');
+      }
+    }
     $('inNickname').value = me.nickname || ''; $('inPen').value = me.penName || ''; $('inBio').value = me.bio || '';
     $('inChgPwUsername').value = me.phone || ''; // v2.502 改密表单隐藏用户名字段值为当前手机号
     populateProfileOptions();
@@ -5467,7 +5481,10 @@
       ? (lang === 'en' ? 'Internal account · free generation (0 pts)' : '内部账户 · 免费生成（0 积分）')
       : (lang === 'en'
         ? `Frozen ${progress.points} pts${progress.free ? ' (free quota)' : ''}`
-        : `已冻结 ${progress.points} 积分${progress.free ? '（免费额度）' : ''}`)) : '';
+        : `已冻结 ${progress.points} 积分${progress.free ? '（免费额度）' : ''}`)
+        + (progress.quotaRemain != null
+          ? (lang === 'en' ? ` · ${progress.quotaRemain} gift eps left this cycle` : ` · 本月赠送剩余 ${progress.quotaRemain} 集`)
+          : '')) : '';
     if (progress.phase === 'running' || progress.phase === 'context' || progress.phase === 'frozen') {
       if (!waitTipTimer) startWaitTips();
     } else {
