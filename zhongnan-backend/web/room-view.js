@@ -48,6 +48,8 @@
       pickedClear: '清除选择',
       pickedHint: '选择作品与分集后，点“建立围读室”即可，无需粘贴全文。',
       rereadNote: '已带入最新版分集。建立围读室免费；点“开始AI围读”才扣 30 积分。',
+      loadEarlier: '加载更早的发言',
+      earlierFail: '更早的发言加载失败，请重试',
     },
     en: {
       modes: [
@@ -92,6 +94,8 @@
       pickedClear: 'Clear',
       pickedHint: 'Pick a work and an episode, then create the room — no pasting needed.',
       rereadNote: 'Latest episode loaded. Opening a room is free; “Start AI read” costs 30 pts.',
+      loadEarlier: 'Load earlier messages',
+      earlierFail: 'Failed to load earlier messages, please retry',
     },
   };
   const T = () => (en() ? L.en : L.zh);
@@ -150,19 +154,51 @@
     $('rtab-read').classList.toggle('hidden', tab !== 'read');
   }
   // —— 消息流渲染 ——
-  function stream(elId, msgs) {
+  function msgHtml(m, t) {
+    const mine = m.speakerType === 'USER';
+    const name = esc(m.speakerName || (mine ? t.me : t.xn));
+    return `<div class="rm ${mine ? 'rm-me' : 'rm-xn'}"><div class="rm-who">${name}${m.seat && !mine ? ` · ${esc(m.seat)}` : ''}</div><div class="rm-bubble">${esc(m.content).replace(/\n/g, '<br>')}</div></div>`;
+  }
+  // v2.587：发言流只取最近 500 条；hasMore 时顶部给「加载更早」，回看时保持视口锚定（不跳到底部）
+  function stream(elId, msgs, opt) {
     const el = $(elId); const t = T();
-    el.innerHTML = msgs.map((m) => {
-      const mine = m.speakerType === 'USER';
-      const name = esc(m.speakerName || (mine ? t.me : t.xn));
-      return `<div class="rm ${mine ? 'rm-me' : 'rm-xn'}"><div class="rm-who">${name}${m.seat && !mine ? ` · ${esc(m.seat)}` : ''}</div><div class="rm-bubble">${esc(m.content).replace(/\n/g, '<br>')}</div></div>`;
-    }).join('');
+    const more = opt && opt.hasMore && msgs.length
+      ? `<div class="rm-more" style="text-align:center;margin:6px 0"><button class="btn-ghost">${t.loadEarlier}</button></div>`
+      : '';
+    el.innerHTML = more + msgs.map((m) => msgHtml(m, t)).join('');
     el.scrollTop = el.scrollHeight;
+    const btn = el.querySelector('.rm-more button');
+    if (btn) btn.addEventListener('click', () => loadEarlier(elId, opt.roomId, msgs[0].createdAt, btn));
+  }
+  async function loadEarlier(elId, roomId, before, btn) {
+    const el = $(elId); const t = T();
+    btn.disabled = true;
+    try {
+      const j = await get(`/api/room/${roomId}/messages?before=${encodeURIComponent(before)}`);
+      const keep = el.scrollHeight - el.scrollTop; // 回填前视口距底距离，回填后还原，避免跳回最新
+      const anchor = el.querySelector('.rm-more');
+      const holder = document.createElement('div');
+      holder.innerHTML = j.messages.map((m) => msgHtml(m, t)).join('');
+      const next = anchor ? anchor.nextSibling : el.firstChild;
+      while (holder.firstChild) el.insertBefore(holder.firstChild, next);
+      if (anchor) {
+        const b = anchor.querySelector('button');
+        if (j.hasMore && j.messages.length) {
+          b.disabled = false;
+          b.onclick = () => loadEarlier(elId, roomId, j.messages[0].createdAt, b);
+        } else {
+          anchor.remove();
+        }
+      }
+      el.scrollTop = el.scrollHeight - keep;
+    } catch (e) {
+      btn.disabled = false; xnErr(t.earlierFail);
+    }
   }
   async function refreshPitch() {
     if (!state.pitchRoom) return;
     const j = await get(`/api/room/${state.pitchRoom}/messages`);
-    stream('pitchStream', j.messages);
+    stream('pitchStream', j.messages, { roomId: state.pitchRoom, hasMore: j.hasMore });
   }
   function renderReadInfo(r) {
     const t = T();
@@ -173,7 +209,7 @@
   async function refreshRead() {
     if (!state.readRoom) return;
     const j = await get(`/api/room/${state.readRoom}/messages`);
-    stream('readStream', j.messages);
+    stream('readStream', j.messages, { roomId: state.readRoom, hasMore: j.hasMore });
     state.lastRoomMeta = j.room;
     renderReadInfo(j.room);
     $('readStream').classList.remove('hidden');
@@ -578,7 +614,7 @@
       if (rec.kind === 'PITCH') {
         state.pitchRoom = rec.id;
         switchTab('pitch');
-        stream('pitchStream', j.messages);
+        stream('pitchStream', j.messages, { roomId: rec.id, hasMore: j.hasMore });
         $('pitchMore').classList.remove('hidden');
         state.lastVerdict = (j.room.payload && j.room.payload.verdict) || null;
         if (state.lastVerdict) renderVerdict(state.lastVerdict);
@@ -589,7 +625,7 @@
         switchTab('read');
         renderReadModes(state.readMode);
         state.lastRoomMeta = j.room;
-        stream('readStream', j.messages);
+        stream('readStream', j.messages, { roomId: rec.id, hasMore: j.hasMore });
         renderReadInfo(j.room);
         $('readStream').classList.remove('hidden');
         $('readMore').classList.remove('hidden');

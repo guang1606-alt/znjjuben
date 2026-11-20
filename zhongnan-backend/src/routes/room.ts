@@ -515,12 +515,32 @@ export function createRoomRouter(prisma: PrismaLike | any) {
   });
 
   // 发言流
+  // v2.587：旧实现 orderBy asc + take 500 取的是「最早 500 条」——房间超过 500 条后，新发言永远落在窗口外，
+  // 前端每次发问都整页拉取，看到的仍是旧记录（直播感断裂）。现改为取最近 500 条并按时间正序返回，
+  // 附 total/hasMore；`?before=<createdAt>` 可继续回看更早（每页最多 500，不重不漏）。
   router.get('/:id/messages', authRequired, async (req: AuthRequest, res) => {
     const got = await accessibleRoom(req.params.id, req.userId!);
     if ('error' in got) return res.status(got.error as 404 | 403).json({ error: '无权访问' });
-    const msgs = await prisma.roomMessage.findMany({ where: { roomId: got.room.id }, orderBy: { createdAt: 'asc' }, take: 500 });
+    const roomId = got.room.id;
+    const PAGE = 500;
+    const beforeRaw = typeof req.query.before === 'string' ? req.query.before : '';
+    const beforeMs = beforeRaw ? Date.parse(beforeRaw) : NaN;
+    const before = Number.isNaN(beforeMs) ? null : new Date(beforeMs);
+    const where = before ? { roomId, createdAt: { lt: before } } : { roomId };
+    const [total, rows] = await Promise.all([
+      prisma.roomMessage.count({ where: { roomId } }),
+      prisma.roomMessage.findMany({ where, orderBy: { createdAt: 'desc' }, take: PAGE }),
+    ]);
+    const messages = (rows as Array<Record<string, unknown>>).reverse(); // 正序展示，前端滚动锚定最新一条
+    let hasMore: boolean;
+    if (before) {
+      const earliest = messages[0]?.createdAt as Date | undefined;
+      hasMore = earliest ? (await prisma.roomMessage.count({ where: { roomId, createdAt: { lt: earliest } } })) > 0 : false;
+    } else {
+      hasMore = total > messages.length;
+    }
     const lang = normLang((got.room.payload || {}).lang);
-    res.json({ ok: true, room: got.room, messages: msgs, seats: got.room.kind === 'READ' ? readSeats(lang) : pitchSeats(lang), readModes: readModes(lang) });
+    res.json({ ok: true, room: got.room, messages, total, hasMore, seats: got.room.kind === 'READ' ? readSeats(lang) : pitchSeats(lang), readModes: readModes(lang) });
   });
 
   return router;

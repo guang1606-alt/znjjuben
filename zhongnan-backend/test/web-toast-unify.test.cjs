@@ -48,10 +48,10 @@ describe('v2.225 app.js：znToast 重写为富版薄封装', () => {
 describe('v2.225 view js：34 处调用语义分级（error=红 / ok=绿）', () => {
   const read = (f) => fs.readFileSync(path.join(WEB, f), 'utf8');
 
-  it('room-view 15 处全部 error（校验拦截 + errMsg 失败，xnErr 别名通道）', () => {
+  it('room-view 16 处全部 error（校验拦截 + errMsg 失败 + 更早发言加载失败，xnErr 别名通道）', () => {
     const s = read('room-view.js');
     assert.match(s, /const xnErr = \(m\) => window\.Xn\.toast\(m, 'error'\)/, '应定义 error 别名通道');
-    assert.equal(count(s, /xnErr\(/g), 15, '15 个调用点应全部经 xnErr');
+    assert.equal(count(s, /xnErr\(/g), 16, '16 个调用点应全部经 xnErr');
     assert.equal(count(s, /window\.Xn\.toast\(/g), 1, 'window.Xn.toast 直调应仅剩别名定义 1 处');
   });
 
