@@ -2679,7 +2679,7 @@ generateRouter.post('/projects/:id/fix', authRequired, async (req: AuthRequest, 
       for (const n of arcNameSet) castMap[n] = '';
       freshArc = arcTrackerDigest(arcTracker(castMap, rewritten, prevArc));
     }
-  } catch { freshArc = null; }
+  } catch (e) { freshArc = null; logInternal(e, 'generate.fix.rescan.arcTrack'); }
   // c211 软收尾/展示而非叙述重算：同 cliffhanger/arcTrack 一族——改写后旧软收尾与直说情绪
   // 结论不重算就会让质检面板读到 v1 残留。两引擎均为纯函数、内部自探测语种、基本无异常路径，
   // 仍包 try/catch：任何意外退回保留旧台账（与 freshArc 同纪律），不阻断付费交付。
@@ -2688,7 +2688,7 @@ generateRouter.post('/projects/:id/fix', authRequired, async (req: AuthRequest, 
   try {
     freshSoft = sceneSoftEndingForStorage(rewritten);
     freshSdt = showDontTellForStorage(rewritten);
-  } catch { freshSoft = null; freshSdt = null; }
+  } catch (e) { freshSoft = null; freshSdt = null; logInternal(e, 'generate.fix.rescan.softEnding'); }
   // c212 结构维度 32 键重算：同 cliff/arc/soft/sdt 族——v2.113-v2.147 结构引擎无顶层 hits，
   // 旧版根本不落库；c212 批量落库补盲后，/fix 也必须按新正文重算，否则改写修好了因果/注水/
   // 连续性问题，质检卡仍挂 v1 旧分。纯函数零 LLM，逐引擎 try/catch（异常键保留旧值，非空才覆盖）；
@@ -2696,7 +2696,7 @@ generateRouter.post('/projects/:id/fix', authRequired, async (req: AuthRequest, 
   let freshStructural: Record<string, unknown> = {};
   try {
     freshStructural = structuralRescan(rewritten, castNames) as Record<string, unknown>;
-  } catch { freshStructural = {}; }
+  } catch (e) { freshStructural = {}; logInternal(e, 'generate.fix.rescan.structural'); }
   // c214 hits 形态三引擎（反派拖刀/开会式推进/假倒计时）重算：score+hits+string[] issues，
   // 不进 structuralRescan（其 shapeEntry 只收对象 issues，string[] 会被滤成 issueCount:0 假健康壳
   // 清掉真问题，且前端 extraRows 也要求对象 issues，会整体隐形）。统一复用 buildQcEngineDigest
@@ -2712,7 +2712,7 @@ generateRouter.post('/projects/:id/fix', authRequired, async (req: AuthRequest, 
       const r = engFn(rewritten);
       const dig = buildQcEngineDigest({ [engKey]: r }) as Record<string, unknown>;
       freshHitsEngines[engKey] = dig[engKey] ?? { score: r.score, hits: [], unrescuedCount: 0 };
-    } catch { /* 异常键保留旧值 */ }
+    } catch (e) { logInternal(e, `generate.fix.rescan.hits:${engKey}`); }
   }
   // c214 焊点承接重算：整集重写会改开场，旧 openingWeld 的承接结论会过期（structural-rescan 头注
   // "同集改写不改变它"对整集重写不成立）。前集结尾按生成路径同规则提取（去尾空白→末行→≤400 字）；
@@ -2731,7 +2731,7 @@ generateRouter.post('/projects/:id/fix', authRequired, async (req: AuthRequest, 
         freshWeld = (dig.openingWeld as Record<string, unknown>) ?? { score: w.score, issueCount: 0, issues: [] };
       }
     }
-  } catch { freshWeld = null; }
+  } catch (e) { freshWeld = null; logInternal(e, 'generate.fix.rescan.openingWeld'); }
   // c215 创作引擎批量重算：v2.80 对白/叙事家族 + v2.81-v2.133 阀门家族共 102 个纯函数引擎
   // 此前 /fix 后仍挂 v1 旧值——改写修好了回声对白/模糊词/阀门巧合，质检卡仍挂旧账。
   // 统一走 creative-batch-rescan（与生成落库同一 buildQcEngineDigest 形态，零 LLM、逐引擎
@@ -2740,7 +2740,7 @@ generateRouter.post('/projects/:id/fix', authRequired, async (req: AuthRequest, 
   let freshCreative: Record<string, unknown> = {};
   try {
     freshCreative = batchCreativeDigest(rewritten, castNames);
-  } catch { freshCreative = {}; }
+  } catch (e) { freshCreative = {}; logInternal(e, 'generate.fix.rescan.creativeBatch'); }
   // c216 跨集诊断台账六键 /fix 重算：整集重写后掉钩/欠账/干旱/疲劳/反派空转结论须按新正文重放，
   // 否则旧版诊断只活在 v1 内存、刷新后本就失明，修没修好都无反馈。前序行从各集 qcReport 短名摘要
   // 重建（与生成路径同一 normalize* 规则、同一 8 集读取窗），本集行规则对齐 pipeline 终稿块；
@@ -2787,7 +2787,7 @@ generateRouter.post('/projects/:id/fix', authRequired, async (req: AuthRequest, 
     });
     freshContinuity = contBundle.ledgers;
     freshContCurRows = contBundle.curRows;
-  } catch { freshLedgerDiag = {}; freshContinuity = {}; freshDiagCurRows = {}; freshContCurRows = {}; }
+  } catch (e) { freshLedgerDiag = {}; freshContinuity = {}; freshDiagCurRows = {}; freshContCurRows = {}; logInternal(e, 'generate.fix.rescan.ledgerDiag'); }
   // c218 闸门引擎四键 + 节奏/人物逻辑 /fix 重算：cliche/tongue/grounded/lengthPlan 无 score 被通用
   // digest 排除，走 gate-engine-rescan 限界形态（覆盖语义，健康壳清旧账）；rhythm/character 有 score，
   // 复用 buildQcEngineDigest 路径 B 同形态（与落库/SSE 零分叉，健康稿 digest 不出键时显式写健康壳）。
@@ -2810,7 +2810,7 @@ generateRouter.post('/projects/:id/fix', authRequired, async (req: AuthRequest, 
       antiStrength: prevProfile?.antiStrength,
       colloquialLevel: prevProfile?.colloquialLevel,
     }) as Record<string, unknown>;
-  } catch { freshGate = {}; }
+  } catch (e) { freshGate = {}; logInternal(e, 'generate.fix.rescan.gate'); }
   for (const [engKey, engFn] of [
     ['rhythm', (t: string) => rhythmScan(t)],
     ['character', (t: string) => characterLogicScan(Object.fromEntries(castNames.filter(Boolean).map((n) => [n, {}])), t)],
@@ -2819,7 +2819,7 @@ generateRouter.post('/projects/:id/fix', authRequired, async (req: AuthRequest, 
       const r = engFn(rewritten);
       const dig = buildQcEngineDigest({ [engKey]: r }) as Record<string, unknown>;
       freshGate[engKey] = dig[engKey] ?? { score: r.score, issueCount: 0, issues: [] };
-    } catch { /* 异常键保留旧值 */ }
+    } catch (e) { logInternal(e, `generate.fix.rescan.gate:${engKey}`); }
   }
   // c219 AIGC 构成仪表盘 /fix 重算：整集改写后正文变了，aigcManifest/curve/format 须按新正文重放，
   // 否则仪表盘仍挂 v1 旧稿数据。仅 AIGC 格式项目重算（LIVE 实拍本 _aigc 为 null）；
@@ -2840,7 +2840,7 @@ generateRouter.post('/projects/:id/fix', authRequired, async (req: AuthRequest, 
         format: validateScript(rewritten, fmt, dur),
       };
     }
-  } catch { freshAigc = null; }
+  } catch (e) { freshAigc = null; logInternal(e, 'generate.fix.rescan.aigc'); }
   // v2.339 顶层 format 按新正文重算：生成期 pipeline 无条件写 qcReport.format（LIVE 含 v2.337
   // 制片可行性与 score 折损），此前 /fix 只重算 _aigc.format，LIVE 改写后 QC 面板永远挂旧稿结论
   // （旧稿 9 场红字挂在新稿上，或新稿已 9 场却仍显示 ok）。异常/空稿时返回 {} 保留旧值。
@@ -2850,7 +2850,7 @@ generateRouter.post('/projects/:id/fix', authRequired, async (req: AuthRequest, 
       const prevAigcFmt = (targetScript.qcReport as Record<string, unknown> | undefined)?._aigc as Record<string, unknown> | undefined;
       const fDur = typeof prevAigcFmt?.durationMin === 'number' && prevAigcFmt.durationMin > 0 ? prevAigcFmt.durationMin : 1;
       return rescanScriptFormat(rewritten, { scriptFormat: fFmt, aigcDurationMin: fDur });
-    } catch { return {}; }
+    } catch (e) { logInternal(e, 'generate.fix.rescan.format'); return {}; }
   })();
   // c217 villainFate 同名碰撞：诊断（felled/issueCount/issues）必须与短名摘要行 rows 合流，
   // 不能整体展开覆盖。其余 23 键独立长名键直接展开。
