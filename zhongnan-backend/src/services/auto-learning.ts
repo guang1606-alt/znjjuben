@@ -111,14 +111,29 @@ export async function runDailyLearningCycle(prisma: any, deps: AutoDeps = {}, cr
   const sources: CycleSources = { boards: boardsR.status, policy: policyR.status, topScripts: topR.status };
 
   // 2) 跨轮去重：已学过的 learnKey 不再重复入库
-  const learned = await prisma.knowledgeItem.findMany({
-    where: { source: 'AUTO', NOT: { learnKey: null } }, select: { learnKey: true },
-  }).catch(() => [] as { learnKey: string | null }[]);
+  // v2.600：去重表读不出来时绝不能按"一条都没学过"继续——会把已入库信号重复落库。
+  //  → fail-closed：留痕并中止本轮；调用方 500、定时任务记失败，DB 恢复后可直接重跑（幂等）。
+  let learned: { learnKey: string | null }[];
+  try {
+    learned = await prisma.knowledgeItem.findMany({
+      where: { source: 'AUTO', NOT: { learnKey: null } }, select: { learnKey: true },
+    });
+  } catch (e) {
+    logInternal(e, 'auto-learning.learned-fetch');
+    throw Object.assign(new Error('LEARN_KNOWLEDGE_UNAVAILABLE'), { code: 'LEARN_KNOWLEDGE_UNAVAILABLE' });
+  }
   const learnedKeys = new Set(learned.map((x: { learnKey: string | null }) => x.learnKey).filter(Boolean) as string[]);
   const { fresh, skipped } = onlyNewSignals(signals, learnedKeys);
 
   // 3) 自主学习决策
-  const stored: StoredKnowledge[] = await prisma.knowledgeItem.findMany().catch(() => [] as any[]);
+  // v2.600：既有知识库读不出来时会按"库是空的"裁决 → 冲突条目可能被自动批准；同样中止本轮。
+  let stored: StoredKnowledge[];
+  try {
+    stored = await prisma.knowledgeItem.findMany();
+  } catch (e) {
+    logInternal(e, 'auto-learning.stored-fetch');
+    throw Object.assign(new Error('LEARN_KNOWLEDGE_UNAVAILABLE'), { code: 'LEARN_KNOWLEDGE_UNAVAILABLE' });
+  }
   const cycle = runSelfLearning(fresh as unknown as Parameters<typeof runSelfLearning>[0], stored);
 
   // 4) 落库（自动生效/待审，带 learnKey 与置信度）

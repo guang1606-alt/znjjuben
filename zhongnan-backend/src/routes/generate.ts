@@ -456,7 +456,14 @@ generateRouter.post('/projects', authRequired, async (req: AuthRequest, res) => 
   const castAssetsSnapshot: CastAssetSeed[] = [];
   if (d.castAssetIds?.length) {
     const uniqIds = [...new Set(d.castAssetIds)].slice(0, 10);
-    const ownedRows = await prisma.characterAsset.findMany({ where: { userId: req.userId! } }).catch(() => [] as any[]);
+    // v2.600：资产库抖动不得静默变成"没有引用"，但立项是核心写路径，不能因资产库故障阻断建项目
+    //  → 留痕 + fail-open（快照为空），DB 恢复后用户可重新引用。
+    let ownedRows: any[] = [];
+    try {
+      ownedRows = await prisma.characterAsset.findMany({ where: { userId: req.userId! } });
+    } catch (e) {
+      logInternal(e, 'generate.project.cast-assets');
+    }
     const picked = ownedRows.filter((r: any) => uniqIds.includes(r.id)).slice(0, 10);
     for (const r of picked) {
       castAssetsSnapshot.push({
@@ -470,7 +477,13 @@ generateRouter.post('/projects', authRequired, async (req: AuthRequest, res) => 
   const propAssetsSnapshot: PropAssetSeed[] = [];
   if (d.propAssetIds?.length) {
     const uniqPropIds = [...new Set(d.propAssetIds)].slice(0, 10);
-    const ownedPropRows = await prisma.propAsset.findMany({ where: { userId: req.userId! } }).catch(() => [] as any[]);
+    // v2.600：同 castAssets——留痕 + fail-open，不阻断立项
+    let ownedPropRows: any[] = [];
+    try {
+      ownedPropRows = await prisma.propAsset.findMany({ where: { userId: req.userId! } });
+    } catch (e) {
+      logInternal(e, 'generate.project.prop-assets');
+    }
     const pickedProps = ownedPropRows.filter((r: any) => uniqPropIds.includes(r.id)).slice(0, 10);
     for (const r of pickedProps) {
       propAssetsSnapshot.push({
@@ -483,7 +496,13 @@ generateRouter.post('/projects', authRequired, async (req: AuthRequest, res) => 
   const sceneAssetsSnapshot: SceneAssetSeed[] = [];
   if (d.sceneAssetIds?.length) {
     const uniqSceneIds = [...new Set(d.sceneAssetIds)].slice(0, 10);
-    const ownedSceneRows = await prisma.sceneAsset.findMany({ where: { userId: req.userId! } }).catch(() => [] as any[]);
+    // v2.600：同 castAssets——留痕 + fail-open，不阻断立项
+    let ownedSceneRows: any[] = [];
+    try {
+      ownedSceneRows = await prisma.sceneAsset.findMany({ where: { userId: req.userId! } });
+    } catch (e) {
+      logInternal(e, 'generate.project.scene-assets');
+    }
     const pickedScenes = ownedSceneRows.filter((r: any) => uniqSceneIds.includes(r.id)).slice(0, 10);
     for (const r of pickedScenes) {
       sceneAssetsSnapshot.push({

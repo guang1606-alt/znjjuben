@@ -218,6 +218,10 @@ export function createKnowledgeRouter(prisma: PrismaLike | any) {
       const result = await runDailyLearningCycle(prisma, {}, req.userId || 'admin');
       res.json({ ok: true, ...result, reportText: result.report.text });
     } catch (e) {
+      // v2.600：知识库读失败已由服务层留痕并中止（不得按空库继续产生重复/冲突条目），此处给可重试话术
+      if ((e as { code?: string })?.code === 'LEARN_KNOWLEDGE_UNAVAILABLE') {
+        return res.status(500).json({ error: '学习库加载失败，请重试' });
+      }
       failInternal(res, e, 'knowledge.self-learn-run-auto');
     }
   });
