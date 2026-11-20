@@ -4,6 +4,7 @@
  */
 import { prisma } from './prisma';
 import { encrypt, decrypt, maskKey } from './crypto';
+import { logInternal } from './http-errors';
 import type { EngineTier } from '../config/pricing';
 import { findModel } from '../config/model-catalog';
 import {
@@ -96,8 +97,11 @@ export async function loadConfig(p: any = prisma): Promise<ModelConfigData> {
         updatedAt: row.updatedAt.toISOString(),
       };
     }
-  } catch {
+  } catch (e) {
     /* 无表/无库时回退 env，保证开发与沙盘不炸 */
+    // v2.620 静默回退会掩盖两件事：后台配置读不到时整站静默切到 env 供应商/模型；
+    // spendLimit 随 EMPTY 一起缺省，消费硬限额静默关闭。失败结果同样入 60s 缓存，留痕不会刷屏。
+    logInternal(e, 'model.config');
   }
   cache = { data, exp: Date.now() + TTL_MS };
   return data;
