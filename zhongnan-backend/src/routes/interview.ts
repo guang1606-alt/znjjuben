@@ -256,8 +256,20 @@ export function createInterviewRouter(prisma: PrismaLike) {
   router.post('/sessions/:id/close', authRequired, async (req: AuthRequest, res) => {
     const got = await accessibleSession(req.params.id, req.userId!);
     if ('error' in got) return res.status(got.error as 404 | 403).json({ error: got.error === 404 ? '采访会话不存在' : '无权访问该会话' });
-    await prisma.interviewSession.update({ where: { id: got.session.id }, data: { status: 'CLOSED' } });
-    res.json({ ok: true, status: 'CLOSED' });
+    // v2.578：CONVERTED 是终态（前端据此隐藏「生成简报」并在刷新后回填简报）。
+    // 旧实现无条件 status=CLOSED，已生成简报的会话一「关闭」就退回 CLOSED（非终态）——
+    // 刷新后「生成简报」按钮复活、终态标记丢失。现只允许 ACTIVE → CLOSED，其余状态保持不变并如实回报。
+    let status = got.session.status as string;
+    if (status === 'ACTIVE') {
+      const r = await prisma.interviewSession.updateMany({ where: { id: got.session.id, status: 'ACTIVE' }, data: { status: 'CLOSED' } });
+      if (r.count > 0) status = 'CLOSED';
+      else {
+        // 并发已转 CONVERTED/CLOSED：回读真实状态，不覆盖终态
+        const fresh = await prisma.interviewSession.findUnique({ where: { id: got.session.id } });
+        status = (fresh?.status as string) ?? status;
+      }
+    }
+    res.json({ ok: true, status });
   });
 
   return router;
