@@ -15,7 +15,8 @@
  *   scope      所有改动（含未跟踪）必须落在 zhongnan-backend/ 内；仓库根仅放行 AGENTS.md/.gitignore
  *   localOnly  .trae/ 与 docs/daily-review/ 只允许本地未跟踪，一旦进入暂存区即失败
  *   artifacts  暂存区不得出现截图/日志/dump/压缩包等非交付产物
- *   version    package.json ↔ package-lock（根与 packages[""]）↔ 文档基线行，四处必须同版本
+ *   version    package.json ↔ package-lock（根与 packages[""]）↔ 文档基线行 ↔ web/data/constants.js
+ *              的 ZN_VERSION（首页更新通知直接展示），五处必须同版本
  *
  * 退出码：0 = 可以提交；1 = 有跑偏项；2 = 环境异常（不在 git 仓库内等）。
  */
@@ -56,11 +57,16 @@ function readVersionState() {
   const lock = JSON.parse(fs.readFileSync(path.join(ROOT, 'package-lock.json'), 'utf8'));
   const doc = fs.readFileSync(path.join(ROOT, 'docs', 'FRONTEND-ADAPTATION.md'), 'utf8');
   const m = doc.match(/当前基线：\*\*v([0-9.]+)\*\*/);
+  // v2.581：运行时版本也纳入校验——bump 会改它，但发布提交曾连续三版漏带该文件，
+  // 线上首页更新通知停留在旧版本号（app.js wireHomeUpdateNotice 读的就是 ZN_VERSION）。
+  const constants = fs.readFileSync(path.join(ROOT, 'web', 'data', 'constants.js'), 'utf8');
+  const cm = constants.match(/C\.ZN_VERSION = '([^']+)'/);
   return {
     pkg: pkg.version,
     lock: lock.version,
     lockRoot: lock.packages && lock.packages[''] && lock.packages[''].version,
     docs: m ? m[1] : '',
+    constants: cm ? cm[1] : '',
   };
 }
 
@@ -117,12 +123,12 @@ function main() {
     }
   }
 
-  // 3) 版本三件套
+  // 3) 版本五处一致（v2.581 起纳入运行时版本 constants.js）
   const v = readVersionState();
   info.version = v;
-  const uniq = [...new Set([v.pkg, v.lock, v.lockRoot, v.docs])];
+  const uniq = [...new Set([v.pkg, v.lock, v.lockRoot, v.docs, v.constants])];
   if (uniq.length !== 1 || !v.pkg) {
-    violations.push(`version: 四处版本不一致 → package.json=${v.pkg} lock=${v.lock} lockRoot=${v.lockRoot} 文档基线=${v.docs || '缺失'}`);
+    violations.push(`version: 五处版本不一致 → package.json=${v.pkg} lock=${v.lock} lockRoot=${v.lockRoot} 文档基线=${v.docs || '缺失'} 运行时=${v.constants || '缺失'}`);
   }
 
   info.ok = violations.length === 0;
@@ -131,7 +137,7 @@ function main() {
   if (JSON_OUT) {
     console.log(JSON.stringify(info, null, 2));
   } else if (info.ok) {
-    console.log(`✓ 未跑偏：git 根 ${path.basename(REPO)}，${changed.length} 处改动均在 ${ALLOWED_PREFIX} 内，版本 v${v.pkg} 四处一致`);
+    console.log(`✓ 未跑偏：git 根 ${path.basename(REPO)}，${changed.length} 处改动均在 ${ALLOWED_PREFIX} 内，版本 v${v.pkg} 五处一致`);
   } else {
     console.error('✗ 发现跑偏项：');
     violations.forEach((s) => console.error('  - ' + s));
@@ -139,4 +145,8 @@ function main() {
   process.exit(info.ok ? 0 : 1);
 }
 
-main();
+// v2.581：可被测试 require 读取 readVersionState，不再在 import 时执行 main（main 内含 process.exit，
+// 被 require 会直接终止测试进程，把断言失败伪装成通过）。
+if (require.main === module) main();
+
+module.exports = { readVersionState };
