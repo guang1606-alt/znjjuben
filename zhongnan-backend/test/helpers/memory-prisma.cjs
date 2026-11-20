@@ -929,7 +929,7 @@ function createMemoryPrisma() {
     },
     _users: users, _accounts: accounts, _projects: projects, _scripts: scripts, _tasks: tasks, _ledgers: ledgers,
     _orders: orders, _payments: payments, _memberships: memberships, _posts: posts, _postLikes: postLikes, _posters: posters, _pkBattles: pkBattles,
-    _knowledgeItems: knowledgeItems, _listings: listings, _purchases: purchases, _writersRooms: writersRooms, _roomMessages: roomMessages, _teardownRecords: teardownRecords, _adverts: adverts, _consents: consents, _interviewSessions: interviewSessions, _characterAssets: characterAssets, _propAssets: propAssets, _sceneAssets: sceneAssets, _announcements: announcements,
+    _knowledgeItems: knowledgeItems, _listings: listings, _purchases: purchases, _writersRooms: writersRooms, _roomMessages: roomMessages, _teardownRecords: teardownRecords, _adverts: adverts, _consents: consents, _interviewSessions: interviewSessions, _characterAssets: characterAssets, _propAssets: propAssets, _sceneAssets: sceneAssets, _announcements: announcements, _mediaAssets: mediaAssets,
     _setBanned(phone, banned) { const u = byPhone.get(phone); if (u) u.banned = banned; },
     /** 测试便捷：直接造一个指定等级/积分余额的用户 */
     _seedUser({ id, level = 'FREE', balance = 0, phone, penName = null, role = 'OP', isAdmin = false, nickname = null, avatarUrl = null, bio = null, region = null, ageBand = null, gender = null, personalized = true } = {}) {

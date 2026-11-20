@@ -231,24 +231,34 @@ export function createValueAddedRouter(prisma: PrismaLike | any) {
         ],
       }
       : baseWhere;
-    const [rows, total] = await Promise.all([
-      prisma.mediaAsset.findMany({
-        where,
-        orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
-        skip,
-        take: take + 1, // 多取一张判断 hasMore，避免 count 与列表不一致造成“有更多却取不到”
-        select: { id: true, kind: true, size: true, createdAt: true },
-      }).catch(() => []),
-      // v2.554 优化：cursor 翻页跳过 count（前端已有 fallback），省一次 DB 查询
-      cursor ? Promise.resolve(null) as Promise<number | null> : prisma.mediaAsset.count({ where: baseWhere }).catch(() => 0),
-    ]);
+    // v2.588 真实性修复：旧实现 findMany `.catch(() => [])`、count `.catch(() => 0)`——数据库抖动时
+    // 接口照常 200 返回空列表/总数 0：付费生成的海报看起来全部丢失，用户无从重试，服务端也无日志。
+    // 查询失败一律 500 + 明确提示（前端会保留错误 toast，不会渲染「还没有海报」空态）。
+    let rows: any[];
+    let total: number | null;
+    try {
+      [rows, total] = await Promise.all([
+        prisma.mediaAsset.findMany({
+          where,
+          orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+          skip,
+          take: take + 1, // 多取一张判断 hasMore，避免 count 与列表不一致造成“有更多却取不到”
+          select: { id: true, kind: true, size: true, createdAt: true },
+        }),
+        // v2.554 优化：cursor 翻页跳过 count（前端已有 fallback），省一次 DB 查询
+        cursor ? Promise.resolve(null) as Promise<number | null> : prisma.mediaAsset.count({ where: baseWhere }),
+      ]);
+    } catch (e) {
+      logInternal(e, 'va.posters.list');
+      return res.status(500).json({ error: '海报列表加载失败，请重试' });
+    }
     const list = (rows as any[]).slice(0, take);
     const last = list[list.length - 1];
     res.json({
       // 逐项回传 cursor：前端删除“加载区末端”那张后，可直接用上一张在册卡片的游标续页，无需重新从第一页扫
       items: list.map((r) => ({ id: r.id, url: `/media/${r.id}`, kind: r.kind, size: r.size, createdAt: r.createdAt, cursor: encodePosterCursor(r.createdAt, r.id) })),
       total,
-      hasMore: cursor ? rows.length > take : skip + list.length < total,
+      hasMore: cursor ? rows.length > take : skip + list.length < (total ?? 0),
       nextCursor: rows.length > take && last ? encodePosterCursor(last.createdAt, last.id) : '',
     });
   });
