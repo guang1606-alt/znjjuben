@@ -46,7 +46,12 @@ export async function persistImage(input: string, kind = 'poster', db: any = pri
   }
   try {
     const { buf, mime } = await fetchImageBytes(input);
-    if (!buf.length || buf.length > maxBytes()) return input;
+    if (!buf.length || buf.length > maxBytes()) {
+      // v2.618 与邻居 [media.fallback] 对齐：这里回退的同样是会过期的模型临时地址，
+      // 超限/空图此前完全静默，海报几天后裂图时无从判断是抓取失败还是体积超限被丢弃。
+      logInternal(new Error(`image dropped: bytes=${buf.length} limit=${maxBytes()}`), 'media.too-large');
+      return input;
+    }
     if (!db?.mediaAsset?.create) return input;
     const asset = await db.mediaAsset.create({ data: { kind, mime, size: buf.length, bytes: buf, ...(ownerId ? { userId: ownerId } : {}) } });
     if (ownerId && db?.storageObject?.create) {
