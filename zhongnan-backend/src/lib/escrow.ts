@@ -5,6 +5,7 @@
  */
 import { prisma } from './prisma';
 import { withBillingTransaction } from './prisma-tx';
+import { logInternal } from './http-errors';
 
 export const ESCROW_WINDOW_MS = 24 * 3600 * 1000;
 
@@ -68,8 +69,9 @@ export async function settleDueEscrows(nowMs = Date.now(), db: any = prisma): Pr
     try {
       if (await settlePurchase(p, db)) n++;
     } catch (e) {
-      // 单笔失败不阻断整批，等下一轮重试（幂等）
-      console.error('[escrow] settle failed', p.id, (e as Error).message);
+      // 单笔失败不阻断整批，等下一轮重试（幂等）；但放款失败=卖家回款被卡，
+      // v2.622 统一走 logInternal：保留原始堆栈/非 Error 值，scope 带订单号便于按笔排障。
+      logInternal(e, `escrow.settle:${p.id}`);
     }
   }
   return n;
