@@ -12,6 +12,7 @@ import { EngineTier } from '../config/pricing';
 import { resolveText, resolveImage, loadProviders, loadRouting } from './model-config';
 import { ProviderEntry, RoleId, routeProvider } from './model-config-policy';
 import { isSpendLimitError, reserveModelSpend, settleModelSpend, SpendReservation } from './spend-limit';
+import { logInternal } from './http-errors';
 import https from 'node:https';
 import http from 'node:http';
 import { URL } from 'node:url';
@@ -164,7 +165,8 @@ async function tryCandidate(
 ): Promise<CallResult> {
   let lastErr: Error | null = null;
   for (let i = 0; i < 3; i++) {
-    let failure: Error;
+    // v2.623 预留本身抛错时 finally 需要可读的兜底值（此前该路径下 failure 尚未赋值）
+    let failure: Error = new Error('MODEL_UNKNOWN');
     let reservation: SpendReservation | null = null;
     // 每次重试都要新建 AbortController/超时计时器，否则首试 abort 后信号已失效，后续重试无法超时
     const controller = new AbortController();
@@ -236,7 +238,12 @@ async function tryCandidate(
       clearTimeout(timer);
       if (reservation) {
         try { await settleModelSpend(reservation, 0); }
-        catch (e) { failure = e instanceof Error ? e : new Error(String(e)); }
+        catch (e) {
+          // v2.623 释放失败优先上抛（不能带残留预留重试，否则可能超限额），但会整体覆盖原调用失败；
+          // 覆盖前先把真失败留痕，否则线上只剩「结算失败」话术，无法判断当时是 5xx/超时/空响应。
+          logInternal(failure, 'model.release');
+          failure = e instanceof Error ? e : new Error(String(e));
+        }
       }
     }
     if (isSpendLimitError(failure)) throw failure;
@@ -444,7 +451,12 @@ async function tryImageCandidate(
       // 失败/取消：完整释放本次预留，避免额度被无消费占用
       if (reservation) {
         try { await settleModelSpend(reservation, 0); }
-        catch (e) { failure = e instanceof Error ? e : new Error(String(e)); }
+        catch (e) {
+          // v2.623 释放失败优先上抛（不能带残留预留重试，否则可能超限额），但会整体覆盖原调用失败；
+          // 覆盖前先把真失败留痕，否则线上只剩「结算失败」话术，无法判断当时是 5xx/超时/空响应。
+          logInternal(failure, 'model.release');
+          failure = e instanceof Error ? e : new Error(String(e));
+        }
       }
     }
     if (isSpendLimitError(failure)) throw failure;
