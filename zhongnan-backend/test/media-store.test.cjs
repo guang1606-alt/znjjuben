@@ -73,6 +73,26 @@ test('存储记账失败不影响图片永久地址返回', async () => {
   assert.match(url, /^\/media\/ma_\d+$/);
 });
 
+// v2.614 无 TOS 时抓取/落库失败会回退模型临时地址——当下图能看，几天后过期变裂图。
+// 这条降级此前完全静默，线上出现裂图时没有任何服务端线索。行为不变，只补留痕。
+test('落库失败回退原地址时必须写入 [media.fallback] 留痕', async () => {
+  const db = { mediaAsset: { create: async () => { throw new Error('MEDIA_ASSET_DOWN_V2614'); } } };
+  const logs = [];
+  const orig = console.error;
+  console.error = (...args) => { logs.push(args.map((a) => String(a)).join(' ')); };
+  let url;
+  try {
+    url = await persistImage(PNG_1PX, 'poster', db);
+  } finally {
+    console.error = orig;
+  }
+  assert.equal(url, PNG_1PX, '回退原地址的行为保持不变');
+  assert.ok(
+    logs.some((l) => l.includes('[media.fallback]') && l.includes('MEDIA_ASSET_DOWN_V2614')),
+    '回退临时地址必须可归因，否则海报过期裂图无从排查',
+  );
+});
+
 test('GET /media/:id 返回字节、类型与长缓存；未知 id 404', async () => {
   const url = await persistImage(PNG_1PX, 'poster', mem);
   const r = await fetch(base + url);

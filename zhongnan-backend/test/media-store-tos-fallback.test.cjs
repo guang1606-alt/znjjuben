@@ -62,6 +62,30 @@ test('TOS 转存失败：不得把临时地址当永久地址，必须回退落�
   assert.ok((agg._sum.bytes || 0) > 0, '回退落库同样要计入存储用量');
 });
 
+// v2.614 TOS 转存成功但元数据落库失败：图能打开（直链永久），但「我的海报」看不到、
+// 配额不计、删除无记录。与邻居 [media.accounting] 不同，这条降级此前完全静默，无从排查。
+test('TOS 成功但元数据落库失败：保留直链且写入 [media.metadata] 留痕', async () => {
+  stubFetch({ putOk: true });
+  const db = {
+    mediaAsset: { create: async () => { throw new Error('MEDIA_META_DOWN_V2614'); } },
+    storageObject: { create: async () => ({}) },
+  };
+  const logs = [];
+  const orig = console.error;
+  console.error = (...args) => { logs.push(args.map((a) => String(a)).join(' ')); };
+  let url;
+  try {
+    url = await persistImage(INPUT, 'poster', db, 'u_meta_fail');
+  } finally {
+    console.error = orig;
+  }
+  assert.match(url, /^https:\/\/znbucket\.tos-cn-test\.volces\.com\/poster\//, '元数据失败必须回退 TOS 直链，至少图打得开');
+  assert.ok(
+    logs.some((l) => l.includes('[media.metadata]') && l.includes('MEDIA_META_DOWN_V2614')),
+    '元数据落库失败必须带 scope 与原始异常留痕，否则「海报不在列表」无从归因',
+  );
+});
+
 test('降级后 /media/:id 真的能读到字节（不是只返回一个字符串）', async () => {
   const mem = createMemoryPrisma();
   stubFetch({ putOk: false });

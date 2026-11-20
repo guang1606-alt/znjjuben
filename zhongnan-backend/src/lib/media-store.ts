@@ -36,7 +36,10 @@ export async function persistImage(input: string, kind = 'poster', db: any = pri
           try { await db.storageObject.create({ data: { userId: ownerId, kind, bytes: stored.size, refId: asset.id } }); } catch (e) { logInternal(e, 'media.accounting'); }
         }
         return `/media/${asset.id}`;
-      } catch {
+      } catch (e) {
+        // v2.614 与邻居 [media.accounting] 对齐：元数据落库失败意味着海报不进「我的海报」、
+        // 配额不计、删除无记录——图虽能用直链打开，但必须可归因，不能静默降级。
+        logInternal(e, 'media.metadata');
         return stored.url; // 元数据落库失败：退回直链，至少图打得开
       }
     }
@@ -53,7 +56,9 @@ export async function persistImage(input: string, kind = 'poster', db: any = pri
       } catch (e) { logInternal(e, 'media.accounting'); }
     }
     return `/media/${asset.id}`;
-  } catch {
+  } catch (e) {
+    // v2.614 回退的是模型临时地址，几天后过期即裂图；线上出现裂图时必须有服务端线索
+    logInternal(e, 'media.fallback');
     return input;
   }
 }
