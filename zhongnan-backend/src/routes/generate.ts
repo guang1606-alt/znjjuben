@@ -566,25 +566,38 @@ generateRouter.post('/projects', authRequired, async (req: AuthRequest, res) => 
     throw e;
   }
   // v2.153 复盘修复：引用计数在项目创建成功后再 +1——create 失败不再白加计数（先加后建的时序账目漂移）
+  // v2.604：引用计数自增失败不得静默——项目已建成，但计数漂移必须留痕可追溯
   if (castAssetsSnapshot.length) {
-    await prisma.characterAsset.updateMany({
-      where: { id: { in: castAssetsSnapshot.map((a) => a.id).filter(Boolean) as string[] } },
-      data: { usedCount: { increment: 1 } },
-    }).catch(() => null);
+    try {
+      await prisma.characterAsset.updateMany({
+        where: { id: { in: castAssetsSnapshot.map((a) => a.id).filter(Boolean) as string[] } },
+        data: { usedCount: { increment: 1 } },
+      });
+    } catch (e) {
+      logInternal(e, 'generate.project.create.cast-usedCount');
+    }
   }
   // v2.159 道具资产引用计数：同上，创建成功后再 +1
   if (propAssetsSnapshot.length) {
-    await prisma.propAsset.updateMany({
-      where: { id: { in: propAssetsSnapshot.map((a) => a.id).filter(Boolean) as string[] } },
-      data: { usedCount: { increment: 1 } },
-    }).catch(() => null);
+    try {
+      await prisma.propAsset.updateMany({
+        where: { id: { in: propAssetsSnapshot.map((a) => a.id).filter(Boolean) as string[] } },
+        data: { usedCount: { increment: 1 } },
+      });
+    } catch (e) {
+      logInternal(e, 'generate.project.create.prop-usedCount');
+    }
   }
   // v2.161 场景资产引用计数：同上，创建成功后再 +1
   if (sceneAssetsSnapshot.length) {
-    await prisma.sceneAsset.updateMany({
-      where: { id: { in: sceneAssetsSnapshot.map((a) => a.id).filter(Boolean) as string[] } },
-      data: { usedCount: { increment: 1 } },
-    }).catch(() => null);
+    try {
+      await prisma.sceneAsset.updateMany({
+        where: { id: { in: sceneAssetsSnapshot.map((a) => a.id).filter(Boolean) as string[] } },
+        data: { usedCount: { increment: 1 } },
+      });
+    } catch (e) {
+      logInternal(e, 'generate.project.create.scene-usedCount');
+    }
   }
   // v2.328 自动路由结果随创建响应回传：前端据此告知「已自动识别为 X」并可提示切换备选
   res.json(autoRouted ? { ...(project as Record<string, unknown>), autoRouted } : project);
@@ -1022,7 +1035,13 @@ generateRouter.post('/character-assets/batch-complete', authRequired, async (req
       updated.push({ id: r.id, name: r.name, fields: filledFields, patch: { ...updateData } });
       continue;
     }
-    const row = await prisma.characterAsset.update({ where: { id: r.id }, data: updateData }).catch(() => null);
+    // v2.604：写失败不得静默——skipped 仍报 UPDATE_FAILED（合约不变），但服务端必须留痕可定位
+    let row: any = null;
+    try {
+      row = await prisma.characterAsset.update({ where: { id: r.id }, data: updateData });
+    } catch (e) {
+      logInternal(e, 'generate.asset.cast.batchComplete.write');
+    }
     if (row) updated.push({ id: r.id, name: r.name, filled: filledFields });
     else skipped.push({ id: r.id, name: r.name, reason: 'UPDATE_FAILED' });
   }
@@ -1271,7 +1290,13 @@ generateRouter.post('/prop-assets/batch-complete', authRequired, async (req: Aut
       updated.push({ id: r.id, name: r.name, fields: filledFields, patch: { ...updateData } });
       continue;
     }
-    const row = await prisma.propAsset.update({ where: { id: r.id }, data: updateData }).catch(() => null);
+    // v2.604：写失败留痕（与 cast 同构）
+    let row: any = null;
+    try {
+      row = await prisma.propAsset.update({ where: { id: r.id }, data: updateData });
+    } catch (e) {
+      logInternal(e, 'generate.asset.prop.batchComplete.write');
+    }
     if (row) updated.push({ id: r.id, name: r.name, filled: filledFields });
     else skipped.push({ id: r.id, name: r.name, reason: 'UPDATE_FAILED' });
   }
@@ -1622,7 +1647,13 @@ generateRouter.post('/scene-assets/batch-complete', authRequired, async (req: Au
       updated.push({ id: r.id, name: r.name, fields: filledFields, patch: { ...updateData } });
       continue;
     }
-    const row = await prisma.sceneAsset.update({ where: { id: r.id }, data: updateData }).catch(() => null);
+    // v2.604：写失败留痕（与 cast/prop 同构）
+    let row: any = null;
+    try {
+      row = await prisma.sceneAsset.update({ where: { id: r.id }, data: updateData });
+    } catch (e) {
+      logInternal(e, 'generate.asset.scene.batchComplete.write');
+    }
     if (row) updated.push({ id: r.id, name: r.name, filled: filledFields });
     else skipped.push({ id: r.id, name: r.name, reason: 'UPDATE_FAILED' });
   }
