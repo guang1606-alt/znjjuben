@@ -10,6 +10,7 @@ import { isDeepStrictEqual } from 'util';
 import { z } from 'zod';
 import { authRequired, AuthRequest } from '../middleware/auth';
 import { prisma as defaultPrisma } from '../lib/prisma';
+import { logInternal } from '../lib/http-errors';
 import { consumeFlexible, refundFlexible, safeRefund } from '../lib/billing';
 import { staffOf, staffChargeTx, staffRefundTx } from '../lib/staff-billing';
 import { withBillingTransaction } from '../lib/prisma-tx';
@@ -20,6 +21,28 @@ import { EngineTier } from '../config/pricing';
 import { teardown, buildAdaptOutline, adaptDirections, TeardownSource } from '../engine/hit-teardown';
 
 type PrismaLike = typeof defaultPrisma;
+
+/** v2.593 「我的拆解记录」键集游标：锚点取 (createdAt, id)，翻页期间新记录插入或旧记录变化都不会重复/跳过。
+ *  镜像 feedback.ts 游标范式；nextCursor 为空表示到底。 */
+function encodeTdCursor(createdAt: unknown, id: string): string {
+  try {
+    const d = new Date(createdAt as any);
+    if (Number.isNaN(d.getTime())) return '';
+    return Buffer.from(`${d.toISOString()}|${id}`, 'utf8').toString('base64url');
+  } catch { return ''; }
+}
+function decodeTdCursor(raw: unknown): { createdAt: Date; id: string } | null {
+  if (typeof raw !== 'string' || !raw.trim()) return null;
+  try {
+    const s = Buffer.from(raw.trim(), 'base64url').toString('utf8');
+    const at = s.lastIndexOf('|');
+    if (at <= 0) return null;
+    const d = new Date(s.slice(0, at));
+    const id = s.slice(at + 1);
+    if (!id || Number.isNaN(d.getTime())) return null;
+    return { createdAt: d, id };
+  } catch { return null; }
+}
 
 export function createTeardownRouter(prisma: PrismaLike | any) {
   const router = asyncRouter();
@@ -265,17 +288,44 @@ export function createTeardownRouter(prisma: PrismaLike | any) {
 
   // 我的拆解记录（c195：列表只返摘要——report/outline 是大 Json，50 条全量回包可达 MB 级；
   // 完整产物走 GET /:id 详情。state 已表达大纲是否存在：ANALYZED=无大纲，OUTLINED/TO_PROJECT=有）
+  // v2.593：旧实现固定 take:50 且回传 { list }——累计超过 50 条后较早记录在库里仍在、但界面永远不可达
+  // （不能恢复续作）。改为 (createdAt,id) 键集游标分页，回传 { items, hasMore, nextCursor }；
+  // 取 take+1 探活判断 hasMore；查询失败一律 500 + 可重试提示 + 留痕，不得裸抛成无业务文案的通用 500。
   router.get('/mine', authRequired, async (req: AuthRequest, res) => {
-    const list = await prisma.teardownRecord.findMany({
-      where: { userId: req.userId! },
-      orderBy: { createdAt: 'desc' },
-      take: 50,
-      select: {
-        id: true, sourceType: true, sourceUrl: true, title: true, wordCount: true,
-        pickedTags: true, direction: true, state: true, pointsCost: true, createdAt: true,
-      },
+    const take = Math.min(Math.max(Number(req.query.limit) || 20, 1), 50);
+    const cursor = decodeTdCursor(req.query.cursor);
+    const baseWhere = { userId: req.userId! };
+    const where: any = cursor
+      ? {
+        ...baseWhere,
+        OR: [
+          { createdAt: { lt: cursor.createdAt } },
+          { createdAt: cursor.createdAt, id: { lt: cursor.id } },
+        ],
+      }
+      : baseWhere;
+    let rows: any[];
+    try {
+      rows = await prisma.teardownRecord.findMany({
+        where,
+        orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+        take: take + 1,
+        select: {
+          id: true, sourceType: true, sourceUrl: true, title: true, wordCount: true,
+          pickedTags: true, direction: true, state: true, pointsCost: true, createdAt: true,
+        },
+      });
+    } catch (e) {
+      logInternal(e, 'teardown.mine.list');
+      return res.status(500).json({ error: '拆解记录加载失败，请重试' });
+    }
+    const list = rows.slice(0, take);
+    const last = list[list.length - 1];
+    res.json({
+      items: list,
+      hasMore: rows.length > take,
+      nextCursor: rows.length > take && last ? encodeTdCursor(last.createdAt, last.id) : '',
     });
-    res.json({ list });
   });
 
   // 拆解详情：恢复历史记录继续改编（owner 隔离；directions 与 /analyze 同源重算，保证新旧记录一致）

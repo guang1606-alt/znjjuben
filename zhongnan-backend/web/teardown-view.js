@@ -12,7 +12,7 @@
       projLimit: '项目数已达当前会员上限，请升级或清理旧项目', projFail: '创建改编项目失败', projOk: '改编草稿已保存，请确认创作简报后生成完整剧本',
       reuse: '复用',
       history: '🕘 我的拆解记录', historyHide: '收起记录', histLoading: '记录加载中…', histEmpty: '还没有拆解记录，先拆一条爆款吧',
-      histFail: '记录加载失败', histOpenFail: '打开记录失败', histResume: '点击恢复，继续改编',
+      histFail: '记录加载失败', histOpenFail: '打开记录失败', histResume: '点击恢复，继续改编', loadMore: '加载更多',
       histState: { ANALYZED: '已拆解', OUTLINED: '已出大纲', TO_PROJECT: '已转项目' },
       histPoints: (p) => `耗 ${p} 积分`, histTags: (n) => `${n} 个标签`, histFallback: (wc) => `未命名拆解 · ${wc} 字`,
       srcName: { text: '文本', drama_url: '剧集链接', video_url: '视频链接' }, restored: '已恢复这条拆解记录',
@@ -25,7 +25,7 @@
       projLimit: 'Project limit reached for your tier — upgrade or remove old projects', projFail: 'Failed to create adaptation project', projOk: 'Adaptation draft saved. Review the brief before generating.',
       reuse: 'Reuse',
       history: '🕘 My teardowns', historyHide: 'Hide', histLoading: 'Loading records…', histEmpty: 'No teardowns yet — analyze a hit script first',
-      histFail: 'Failed to load records', histOpenFail: 'Failed to open record', histResume: 'Click to resume adaptation',
+      histFail: 'Failed to load records', histOpenFail: 'Failed to open record', histResume: 'Click to resume adaptation', loadMore: 'Load more',
       histState: { ANALYZED: 'Analyzed', OUTLINED: 'Outlined', TO_PROJECT: 'To project' },
       histPoints: (p) => `${p} pts`, histTags: (n) => `${n} tags`, histFallback: (wc) => `Untitled teardown · ${wc} chars`,
       srcName: { text: 'Text', drama_url: 'Drama URL', video_url: 'Video URL' }, restored: 'Teardown record restored',
@@ -187,29 +187,51 @@
     } finally { restore(); }
   }
   /* ---------- c195 历史拆解记录：积分产物可追溯。
-     /mine 仅摘要（无大 Json）→ 点击才取 /:id 完整报告/大纲；每次展开都新鲜拉取，不做本地缓存 ---------- */
-  async function loadHistory() {
+     /mine 仅摘要（无大 Json）→ 点击才取 /:id 完整报告/大纲；每次展开都新鲜拉取，不做本地缓存 ----------
+     v2.593：后端改 { items, hasMore, nextCursor } 游标分页（旧 { list } 固定 50 条，超过后旧记录永久不可达）。
+     首屏重置游标渲染，点「加载更多」追加下一页并按 [data-td-id] 去重；翻页失败走内联提示，不覆盖已加载列表。 */
+  let tdHistCursor = '';
+  function tdHistCardHtml(x, t) {
+    const locale = en() ? 'en-GB' : 'zh-CN';
+    const title = x.title || `${t.srcName[x.sourceType] || x.sourceType || ''} · ${t.histFallback(x.wordCount || 0)}`;
+    const when = new Date(x.createdAt).toLocaleString(locale, { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' });
+    return `<button type="button" class="td-hist-card" data-id="${esc(x.id)}" data-td-id="${esc(x.id)}">
+      <span class="td-hist-main"><b>${esc(title)}</b><small>${esc(when)} · ${esc(t.histState[x.state] || x.state)} · ${esc((x.pointsCost || 0) > 0 ? t.histPoints(x.pointsCost || 0) : (isStaff() ? freeHist() : t.histPoints(0)))} · ${esc(t.histTags((x.pickedTags || []).length))}</small></span>
+      <span class="td-hist-go">${esc(t.histResume)}</span>
+    </button>`;
+  }
+  async function loadHistory(append) {
     const box = $('tdHistoryBox'); const t = T();
+    const more = $('tdHistoryMore');
     box.classList.remove('hidden');
-    znSkeleton(box);
+    if (!append) { tdHistCursor = ''; znSkeleton(box); }
+    if (more) { more.hidden = true; more.disabled = true; more.textContent = t.loadMore; }
     try {
-      const r = await raw('/api/teardown/mine');
-      if (!r.ok) { box.innerHTML = znErrorHtml(r.data.message || r.data.error || t.histFail); return; }
-      const list = r.data.list || [];
-      if (!list.length) { box.innerHTML = znEmptyHtml(t.histEmpty); return; }
-      const locale = en() ? 'en-GB' : 'zh-CN';
-      box.innerHTML = list.map((x) => {
-        const title = x.title || `${t.srcName[x.sourceType] || x.sourceType || ''} · ${t.histFallback(x.wordCount || 0)}`;
-        const when = new Date(x.createdAt).toLocaleString(locale, { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' });
-        return `<button type="button" class="td-hist-card" data-id="${esc(x.id)}">
-          <span class="td-hist-main"><b>${esc(title)}</b><small>${esc(when)} · ${esc(t.histState[x.state] || x.state)} · ${esc((x.pointsCost || 0) > 0 ? t.histPoints(x.pointsCost || 0) : (isStaff() ? freeHist() : t.histPoints(0)))} · ${esc(t.histTags((x.pickedTags || []).length))}</small></span>
-          <span class="td-hist-go">${esc(t.histResume)}</span>
-        </button>`;
-      }).join('');
-      box.querySelectorAll('.td-hist-card').forEach((c) => c.addEventListener('click', () => openRecord(c.dataset.id)));
+      const r = await raw('/api/teardown/mine' + (tdHistCursor ? '?cursor=' + encodeURIComponent(tdHistCursor) : ''));
+      if (!r.ok) {
+        const msg = r.data.message || r.data.error || t.histFail;
+        box.querySelectorAll('[data-td-hist-err]').forEach((n) => n.remove());
+        if (append) box.insertAdjacentHTML('beforeend', `<div data-td-hist-err style="margin-top:8px">${znErrorHtml(msg)}</div>`);
+        else box.innerHTML = znErrorHtml(msg);
+        if (more) more.hidden = true;
+        return;
+      }
+      const items = Array.isArray(r.data.items) ? r.data.items : [];
+      box.querySelectorAll('[data-td-hist-err]').forEach((n) => n.remove());
+      if (!append && items.length === 0) { box.innerHTML = znEmptyHtml(t.histEmpty); if (more) more.hidden = true; return; }
+      const seen = new Set([...box.querySelectorAll('[data-td-id]')].map((el) => el.getAttribute('data-td-id')));
+      const fresh = items.filter((it) => !seen.has(it.id));
+      tdHistCursor = typeof r.data.nextCursor === 'string' ? r.data.nextCursor : '';
+      const html = fresh.map((x) => tdHistCardHtml(x, t)).join('');
+      if (!append) box.innerHTML = html;
+      else box.insertAdjacentHTML('beforeend', html);
+      box.querySelectorAll('.td-hist-card').forEach((c) => { if (c.dataset.bound) return; c.dataset.bound = '1'; c.addEventListener('click', () => openRecord(c.dataset.id)); });
+      if (more) { more.hidden = !tdHistCursor; more.textContent = t.loadMore; }
     } catch (e) {
-      if (needLogin(e)) { box.classList.add('hidden'); return; }
-      box.innerHTML = znErrorHtml(t.histFail);
+      if (needLogin(e)) { box.classList.add('hidden'); if (more) more.hidden = true; return; }
+      if (!append) box.innerHTML = znErrorHtml(t.histFail);
+    } finally {
+      if (more) more.disabled = false;
     }
   }
   async function openRecord(id) {
@@ -244,6 +266,8 @@
     $('tdAnalyzeBtn')?.addEventListener('click', analyze);
     $('tdOutlineBtn')?.addEventListener('click', outline);
     $('tdHistoryBtn')?.addEventListener('click', toggleHistory);
+    const _tdMore = $('tdHistoryMore');
+    if (_tdMore) _tdMore.addEventListener('click', () => loadHistory(true));
     document.addEventListener('zn-lang', () => {
       if (state.report) renderResult();
       if (state.lastOutline) renderOutline(state.lastOutline);

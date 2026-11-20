@@ -710,6 +710,67 @@ function createMemoryPrisma() {
   const roomMessage = crud(roomMessages, 'rm', {});
   // v2.312：defaults 补 direction:null——对齐 Prisma NULL 语义（updateMany where direction:null 匹配未生成过方向的行）
   const teardownRecord = crud(teardownRecords, 'td', { pickedTags: [], report: null, outline: null, direction: null, state: 'ANALYZED', pointsCost: 0 });
+  // v2.593：给「我的拆解记录」键集游标翻页用，where 含 OR/AND 或 lt/equals 等操作符时走 Date-aware matchWhere；
+  // 旧 simple 路径（where 各字段相等）委托原 crud.findMany，零误伤既有测试。select 投影复用 projectRow。
+  // Date 等值必须按 ord 比较（顶层 matchWhere 对 Date 对象 cond 会误 return true，破坏键集游标第二子句）。
+  const _tdOrigFindMany = teardownRecord.findMany;
+  teardownRecord.findMany = async function findMany(arg = {}) {
+    const where = arg.where || {};
+    const hasComplex = (() => {
+      const _qop = (v) => typeof v === 'object' && v && !Array.isArray(v) && ('lt' in v || 'lte' in v || 'gt' in v || 'gte' in v || 'not' in v);
+      try { return !!where?.OR || !!where?.AND || Object.values(where).some(_qop); } catch { return false; }
+    })();
+    if (!hasComplex) return _tdOrigFindMany.call(this, arg);
+    const ord = (a, b) => {
+      if (a instanceof Date && b instanceof Date) return a.getTime() - b.getTime();
+      if (a == null && b == null) return 0;
+      if (a == null) return -1;
+      if (b == null) return 1;
+      return a < b ? -1 : a > b ? 1 : 0;
+    };
+    const matchLeaf = (row, key, op) => {
+      const v = row[key];
+      if (op instanceof Date) return v instanceof Date ? ord(v, op) === 0 : false;
+      if (op == null) return v == null;
+      if (typeof op === 'object' && !Array.isArray(op)) {
+        for (const [k, val] of Object.entries(op)) {
+          switch (k) {
+            case 'lt': if (!(ord(v, val) < 0)) return false; break;
+            case 'lte': if (!(ord(v, val) <= 0)) return false; break;
+            case 'gt': if (!(ord(v, val) > 0)) return false; break;
+            case 'gte': if (!(ord(v, val) >= 0)) return false; break;
+            case 'equals': if (!(ord(v, val) === 0)) return false; break;
+            case 'not': if (matchLeaf(row, key, val)) return false; break;
+            case 'in': if (!Array.isArray(val) || !val.some((x) => ord(v, x) === 0)) return false; break;
+            case 'contains': if (typeof v !== 'string' || !v.includes(val)) return false; break;
+            default: break;
+          }
+        }
+        return true;
+      }
+      return ord(v, op) === 0;
+    };
+    const matchWhere = (row, w) => {
+      if (!w || typeof w !== 'object') return true;
+      if (Array.isArray(w.AND) && w.AND.length) return w.AND.every((branch) => matchWhere(row, branch));
+      if (Array.isArray(w.OR) && w.OR.length) {
+        const orBranches = w.OR;
+        const topKeys = Object.entries(w).filter(([k]) => k !== 'OR' && k !== 'AND');
+        const topOk = topKeys.every(([k, v]) => matchLeaf(row, k, v));
+        if (topKeys.length === 0) return orBranches.some((branch) => matchWhere(row, branch));
+        return orBranches.some((branch) => matchWhere(row, branch) && topOk);
+      }
+      return Object.entries(w).every(([k, v]) => {
+        if (k === 'OR' || k === 'AND') return true;
+        return matchLeaf(row, k, v);
+      });
+    };
+    let r = teardownRecords.filter((x) => matchWhere(x, where));
+    const ob = Array.isArray(arg.orderBy) ? arg.orderBy : (arg.orderBy ? [arg.orderBy] : [{ createdAt: 'desc' }]);
+    r.sort((a, b) => { for (const o of ob) { const k = Object.keys(o)[0]; const dir = o[k] === 'asc' ? 1 : -1; const c = ord(a[k], b[k]); if (c !== 0) return c * dir; } return 0; });
+    if (typeof arg.take === 'number') r = r.slice(0, arg.take);
+    return arg.select ? r.map((x) => projectRow(x, arg.select)) : r;
+  };
   const advert = crud(adverts, 'ad', { active: true, sort: 0, clicks: 0, priceFenDay: 0 });
   // —— v2.151 角色资产库（L3"角色可资产化"）：crud 面 + delete + updatedAt 时间戳（列表按 updatedAt desc）——
   const characterAssets = [];

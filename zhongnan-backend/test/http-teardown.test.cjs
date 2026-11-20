@@ -139,16 +139,16 @@ describe('拆爆款 HTTP', () => {
     const r = await get('/mine', 'basic');
     assert.strictEqual(r.status, 200);
     const j = await r.json();
-    assert.ok(j.list.length >= 1);
-    for (const row of j.list) {
+    assert.ok(j.items.length >= 1);
+    for (const row of j.items) {
       assert.strictEqual(row.userId, undefined, '列表不泄露内部字段');
       assert.strictEqual(row.report, undefined, '列表禁止携带 report 大 Json（c195 瘦身）');
       assert.strictEqual(row.outline, undefined, '列表禁止携带 outline 大 Json（c195 瘦身）');
       assert.ok(row.id && row.state && typeof row.pointsCost === 'number');
     }
     // 仅本人：pro 的拆解不得出现在 basic 的列表中
-    assert.ok(j.list.every((x) => x.id !== undefined));
-    const times = j.list.map((x) => new Date(x.createdAt).getTime());
+    assert.ok(j.items.every((x) => x.id !== undefined));
+    const times = j.items.map((x) => new Date(x.createdAt).getTime());
     assert.deepStrictEqual(times, [...times].sort((a, b) => b - a), '必须按 createdAt 倒序');
   });
 
