@@ -7,6 +7,7 @@
  *  - 业务路由统一走 scanWithStore，保证后台改词全局即时生效，且无库/无表时回退默认规则、绝不炸。
  */
 import { prisma as defaultPrisma } from './prisma';
+import { logInternal } from './http-errors';
 import {
   ALL_RULES, EMPTY_OVERRIDES, mergeRules, scanContent, scanMany,
   type SafetyOverrides, type SafetyRule, type ScanResult,
@@ -32,8 +33,12 @@ export async function loadOverrides(p: any = defaultPrisma): Promise<SafetyOverr
   try {
     const row = await p.safetyConfig.findUnique({ where: { id: 'global' } });
     if (row?.payload) data = normalize(JSON.parse(row.payload));
-  } catch {
+  } catch (e) {
     /* 表/库缺失时回退默认规则 */
+    // v2.619 静默回退会掩盖两个方向的问题：运营新增的敏感词失效（该拦不拦）、
+    // 停用规则全部复活（误杀增多）。异常必须留痕；失败结果同样入 60s 缓存，
+    // 库持续不可用时每个 TTL 至多一条，不会随内容扫描逐次刷屏。
+    logInternal(e, 'safety.overrides');
   }
   const rules = mergeRules(data, ALL_RULES);
   cache = { data, rules, exp: Date.now() + TTL_MS };
