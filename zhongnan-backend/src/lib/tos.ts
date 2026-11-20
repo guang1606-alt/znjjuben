@@ -13,6 +13,7 @@
  *   TOS_ENDPOINT        可选，默认 tos-${TOS_REGION}.volces.com
  */
 import crypto from 'crypto';
+import { logInternal } from './http-errors';
 
 const REGION = process.env.TOS_REGION || '';
 const BUCKET = process.env.TOS_BUCKET || '';
@@ -79,7 +80,12 @@ export async function deleteTosObject(urlOrKey: string): Promise<boolean> {
   }
   if (!key) return false;
   try { await deleteObject(key); return true; }
-  catch (e) { console.error('[tos] delete failed:', (e as Error).message); return false; }
+  catch (e) {
+    // v2.628 统一留痕：旧码只打 message，丢堆栈且非 Error 时 message 为 undefined，
+    // 桶权限/签名/网络超时无法区分，云上孤儿对象长期无迹可查。返回契约不变。
+    logInternal(e, 'tos.delete');
+    return false;
+  }
 }
 
 /** SigV4 签名 DELETE 对象 */
@@ -170,7 +176,8 @@ export async function uploadImageToTos(input: string, keyPrefix = 'poster'): Pro
     const key = `${keyPrefix}/${Date.now()}-${crypto.randomBytes(6).toString('hex')}.${ext}`;
     return { url: await putObject(key, buf, mime), size: buf.length, mime };
   } catch (e) {
-    console.error('[tos] upload failed, will fallback to db persistence:', (e as Error).message);
+    // v2.628 同上：转存失败会静默回落 DB 持久化（库膨胀、列表变慢），必须带堆栈可归因。
+    logInternal(e, 'tos.upload');
     return null;
   }
 }
