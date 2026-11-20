@@ -7,6 +7,7 @@
  * 用环境变量 DISABLE_AUTO_SCHEDULER=1 可关闭（测试/本地调试）。
  */
 import { runDailyLearningCycle, runWeeklyModelAudit, runDailyModelReview, AutoDeps } from './auto-learning';
+import { logInternal } from '../lib/http-errors';
 
 export interface SchedOptions { dailyHour?: number; dailyMinute?: number; weeklyHour?: number; weeklyMinute?: number; now?: () => Date }
 /** 距下一个每日触发点的毫秒（默认 03:17） */
@@ -48,14 +49,14 @@ export function startAutoScheduler(prisma: any, deps: AutoDeps = {}, opts: Sched
       // v2.187：每日 API 选型体检——超管多久没联网核对价格/停服/新模型，落 MODEL_REVIEW 流水，后台亮灯
       const rv = await runDailyModelReview(prisma, deps, 'scheduler');
       console.log(`[model-review] ${rv.status.level} 距上次核对${rv.status.daysSinceReview}天${rv.skipped ? '(今日已记录)' : ''}`);
-    } catch (e) { console.error('[auto-learn] 每日闭环失败', (e as Error).message); }
+    } catch (e) { logInternal(e, 'scheduler.daily-learn'); }
     if (!stopped) dailyTimer = setTimeout(dailyTask, nextDailyDelay(nowFn(), opts.dailyHour ?? 3, opts.dailyMinute ?? 17));
   };
   const weeklyTask = async () => {
     try {
       const { report } = await runWeeklyModelAudit(prisma, {}, 'scheduler');
       console.log(`[model-audit] 每周盘点 healthy=${report.healthy} BLOCK=${report.summary.block} 升级建议=${report.summary.upgrade}`);
-    } catch (e) { console.error('[model-audit] 每周盘点失败', (e as Error).message); }
+    } catch (e) { logInternal(e, 'scheduler.weekly-audit'); }
     if (!stopped) weeklyTimer = setTimeout(weeklyTask, nextWeeklyDelay(nowFn(), opts.weeklyHour ?? 4, opts.weeklyMinute ?? 20));
   };
 
