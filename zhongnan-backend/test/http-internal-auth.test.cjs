@@ -47,3 +47,28 @@ test('已配置密钥时只接受匹配的内部调用', async () => {
   assert.equal(root.status, 200);
   assert.equal(calls, count + 2);
 });
+
+test('两个云端结算入口异常都返回原契约并留下可归因日志', async () => {
+  process.env.CONFIG_SECRET = 'test-cron-configured';
+  const previousSettle = escrow.settleDueEscrows;
+  const originalError = console.error;
+  const logs = [];
+  escrow.settleDueEscrows = async () => { throw new Error('ESCROW_DB_DOWN_V2613'); };
+  console.error = (...args) => { logs.push(args.map((a) => String(a)).join(' ')); };
+  let internal, internalBody, root, rootBody;
+  try {
+    internal = await fetch(base + '/api/internal/escrow/settle', { method: 'POST', headers: { Authorization: 'Bearer test-cron-configured' } });
+    internalBody = await internal.json();
+    root = await fetch(base + '/', { method: 'POST', headers: { 'Content-Type': 'text/plain' }, body: 'test-cron-configured:escrow' });
+    rootBody = await root.json();
+  } finally {
+    console.error = originalError;
+    escrow.settleDueEscrows = previousSettle;
+  }
+  assert.ok(logs.some((l) => l.includes('[escrow.internal]') && l.includes('ESCROW_DB_DOWN_V2613')), '内部结算顶层异常必须带 scope 与原始异常留痕');
+  assert.ok(logs.some((l) => l.includes('[scheduler.escrow]') && l.includes('ESCROW_DB_DOWN_V2613')), 'veFaaS 结算异常必须带任务 scope 与原始异常留痕');
+  assert.equal(internal.status, 500);
+  assert.deepEqual(internalBody, { error: 'INTERNAL_ERROR' });
+  assert.equal(root.status, 500);
+  assert.deepEqual(rootBody, { error: 'INTERNAL_ERROR', task: 'escrow' });
+});

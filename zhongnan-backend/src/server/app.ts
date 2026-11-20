@@ -35,6 +35,7 @@ import { submissionRouter as defaultSubmission } from '../routes/submission';
 import { mediaRouter as defaultMedia } from '../routes/media';
 import { bannedGuard } from '../middleware/auth';
 import { settleDueEscrows } from '../lib/escrow';
+import { logInternal } from '../lib/http-errors';
 import { prisma as defaultPrisma } from '../lib/prisma';
 
 export interface AppRouters {
@@ -130,7 +131,8 @@ export function createApp(routers: AppRouters = {}, preErrorRouter?: Router | Ro
     try {
       const n = await settleDueEscrows();
       res.json({ ok: true, settled: n });
-    } catch {
+    } catch (e) {
+      logInternal(e, 'escrow.internal');
       res.status(500).json({ error: 'INTERNAL_ERROR' });
     }
   });
@@ -161,6 +163,7 @@ export function createApp(routers: AppRouters = {}, preErrorRouter?: Router | Ro
       const n = await settleDueEscrows();
       res.json({ ok: true, task: 'escrow', settled: n });
     } catch (e) {
+      logInternal(e, `scheduler.${task || 'unknown'}`);
       res.status(500).json({ error: 'INTERNAL_ERROR', task });
     }
   });
