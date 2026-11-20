@@ -3,11 +3,11 @@ import { createHash } from 'crypto';
 import { z } from 'zod';
 import { authRequired, AuthRequest } from '../middleware/auth';
 import { prisma as defaultPrisma } from '../lib/prisma';
-import { consumeValueAdded, refundValueAdded, safeRefund } from '../lib/billing';
+import { consumeValueAdded, refundValueAdded, consumeFlexible, safeRefund, BillingError } from '../lib/billing';
 import { staffOf, staffChargeTx, staffRefundTx } from '../lib/staff-billing';
 import { withBillingTransaction } from '../lib/prisma-tx';
 import { VALUE_ADDED, ValueAddedKey, EngineTier, MemberLevel } from '../config/pricing';
-import { quotaBytes } from '../lib/storage';
+import { quotaBytes, STORAGE_PACKS } from '../lib/storage';
 import { callImage, callText, STABILITY_SUFFIX } from '../lib/model-proxy';
 import { userMessageOf, modelErrorMeta } from '../lib/model-error-message';
 import { failInternal, logInternal } from '../lib/http-errors';
@@ -111,6 +111,62 @@ export function createValueAddedRouter(prisma: PrismaLike | any) {
       quota: quotaBytes(((u as any)?.level ?? 'FREE') as MemberLevel, (u as any)?.extraStorageBytes ?? 0),
     };
   }
+
+  /**
+   * v2.575 存储扩容包购买闭环：
+   * 此前 STORAGE_PACKS 只有定价、无任何购买入口，而海报 413 话术已承诺「或扩容后重试」，
+   * User.extraStorageBytes 也永远为 0——名实不符。现在：查价 + 购买，扣积分与加配额同事务。
+   */
+  const GB = 1024 * 1024 * 1024;
+  const packView = (p: (typeof STORAGE_PACKS)[number]) => ({
+    id: p.id, gb: p.gb, bytes: p.gb * GB, points: p.points,
+  });
+  vaRouter.get('/storage/packs', authRequired, async (req: AuthRequest, res) => {
+    const usage = await storageUsage(req.userId!);
+    res.json({
+      packs: STORAGE_PACKS.map(packView),
+      usage: { used: usage.used, quota: usage.quota, free: Math.max(0, usage.quota - usage.used) },
+    });
+  });
+
+  const buyPackSchema = z.object({ packId: z.string().max(32), clientToken: z.string().max(200).optional() });
+  vaRouter.post('/storage/buy', authRequired, async (req: AuthRequest, res) => {
+    const p = buyPackSchema.safeParse(req.body);
+    if (!p.success) return res.status(400).json({ error: '参数错误' });
+    const pack = STORAGE_PACKS.find((x) => x.id === p.data.packId);
+    if (!pack) return res.status(400).json({ error: 'INVALID_PACK', message: '扩容包不存在' });
+    const addBytes = pack.gb * GB;
+    // 与海报/PK 同一幂等约定：窗口 + 客户端令牌；同令牌重试不重复扣，换令牌允许再买
+    const refId = `storage:${req.userId}:${pack.id}:${idemWindow()}:${nonceOf(req) || contentHash(pack.id)}`;
+    const staff = await staffOf(prisma, req.userId!);
+    let charged = false;
+    try {
+      const out = await withBillingTransaction(prisma, req.userId!, async (tx) => {
+        if (staff) {
+          const r = await staffChargeTx(tx, req.userId!, refId, 'staff-va');
+          if (!r.charged) return { charged: false };
+        } else {
+          const ok = await consumeFlexible(tx, req.userId!, pack.points, 0, 'STORAGE_PACK', refId, `storage:${refId}`);
+          if (!ok) return { charged: false };
+        }
+        // 扣分与加配额必须同一事务：任一失败整笔回滚，绝不出现「扣了分没加配额」或反之
+        await (tx.raw as any).user.update({
+          where: { id: req.userId! }, data: { extraStorageBytes: { increment: addBytes } },
+        });
+        return { charged: true };
+      });
+      if (!out.charged) return res.status(409).json({ error: 'IDEMPOTENT_REPLAY', message: '相同扩容请求刚已提交，请勿重复操作' });
+      charged = true;
+    } catch (e) {
+      if (e instanceof BillingError) return res.status(400).json({ error: e.message });
+      return failInternal(res, e, 'va.storage.buy');
+    }
+    const usage = await storageUsage(req.userId!);
+    res.json({
+      ok: true, packId: pack.id, gb: pack.gb, points: staff ? 0 : pack.points, staff, charged,
+      usage: { used: usage.used, quota: usage.quota, free: Math.max(0, usage.quota - usage.used) },
+    });
+  });
 
   const posterSchema = z.object({
     projectId: z.string(),

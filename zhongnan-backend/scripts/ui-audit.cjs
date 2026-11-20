@@ -120,6 +120,8 @@ const REAL_TRIGGERS = {
   myPostersModal: { view: 'works', sel: ['#myPostersBtn'], needsAuth: true },
   // v2.558 海报大图预览：先开「我的海报」，再点第一张缩略图（dev-server 种了 demo_media_1 兜底）。
   posterModal: { view: 'works', pre: ['#myPostersBtn'], sel: ['[data-poster-open]'], needsAuth: true },
+  // v2.575 存储扩容：入口在个人资料卡；包列表由 /api/va/storage/packs 按需渲染。
+  storagePacksModal: { view: 'works', sel: ['#storageBuyBtn'], needsAuth: true },
 };
 
 function log(...a) { if (!JSON_ONLY) console.log(...a); }

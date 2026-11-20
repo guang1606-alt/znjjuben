@@ -50,7 +50,16 @@ function createMemoryPrisma() {
       accounts.set(id, { userId: id, balance: 0, frozen: 0, bonusGranted: 0 });
       return u;
     },
-    async update({ where, data }) { const u = users.get(where.id); if (!u) throw new Error('USER_NOT_FOUND'); Object.assign(u, data); return u; },
+    // 支持原子 increment/decrement（v2.575 扩容包：extraStorageBytes:{increment}）
+    async update({ where, data }) {
+      const u = users.get(where.id); if (!u) throw new Error('USER_NOT_FOUND');
+      for (const [k, v] of Object.entries(data)) {
+        if (v && typeof v === 'object' && 'increment' in v) u[k] = (u[k] ?? 0) + v.increment;
+        else if (v && typeof v === 'object' && 'decrement' in v) u[k] = (u[k] ?? 0) - v.decrement;
+        else u[k] = v;
+      }
+      return u;
+    },
     // 支持会员身份条件原子写（v2.315）：OR 内识别 levelExpireAt:null/{lt} 与 level:{in:[]}
     async updateMany({ where = {}, data } = {}) {
       let n = 0;
@@ -651,7 +660,7 @@ function createMemoryPrisma() {
     async update(arg) { const row = await sceneAssetCrud.update(arg); row.updatedAt = new Date(); return row; },
     async delete({ where }) { const i = sceneAssets.findIndex((x) => x.id === where.id); if (i < 0) throw new Error('SA_NOT_FOUND'); return sceneAssets.splice(i, 1)[0]; },
   };
-  user.update = async ({ where, data }) => { const u = users.get(where.id); if (!u) throw new Error('user not found'); Object.assign(u, data); return u; };
+  // v2.575：删除此处对 user.update 的旧版覆盖（Object.assign 不支持 {increment}），统一走上方的原子算子实现。
   // —— X剧本成年分级授权（mature-gating）——
   const consents = [];
   const matureConsent = {

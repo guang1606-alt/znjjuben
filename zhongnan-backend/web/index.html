@@ -756,7 +756,8 @@
           <div><b id="meStorage">0 MB</b><span data-i="storage"></span></div>
           <div><b id="meInvite">—</b><span data-i="inviteCode"></span></div>
         </div>
-        <div style="margin-top:10px"><button class="btn-ghost" id="myPostersBtn" data-i="myPosters"></button></div>
+        <div style="margin-top:10px"><button class="btn-ghost" id="myPostersBtn" data-i="myPosters"></button>
+          <button class="btn-ghost" id="storageBuyBtn" data-i="storageBuy"></button></div>
         <div class="profile-edit hidden" id="profileEdit">
           <div class="field"><label data-i="nickname" for="inNickname"></label><input id="inNickname" autocomplete="off" maxlength="24" /></div>
           <div class="field"><label data-i="penName" for="inPen"></label><input id="inPen" autocomplete="off" maxlength="20" placeholder="中英文数字 _ · -" /></div>
@@ -991,6 +992,16 @@
           <div class="muted" id="myPostersEmpty" data-i="myPostersEmpty" hidden></div>
           <div class="poster-grid" id="myPostersList"></div>
           <button class="btn-ghost" id="myPostersMore" type="button" data-i="loadMore" hidden></button>
+        </div>
+      </div>
+      <!-- v2.575 存储扩容：海报 413 话术承诺「或扩容后重试」的兑现入口（此前 STORAGE_PACKS 只有定价、无购买路径） -->
+      <div class="modal-mask hidden" id="storagePacksModal" aria-labelledby="storagePacksTitle">
+        <div class="modal">
+          <button class="modal-x" data-close="storagePacksModal">×</button>
+          <h3 id="storagePacksTitle" data-i="storagePacksTitle"></h3>
+          <div class="muted" id="storagePacksUsage"></div>
+          <div class="muted" data-i="storagePacksHint"></div>
+          <div class="pack-grid" id="storagePacksList"></div>
         </div>
       </div>
       <!-- v2.558 海报大图预览：付费生成物此前只有缩略图，既看不了成片细节也保存不下来；点击缩略图进大图，可下载原图/删除 -->

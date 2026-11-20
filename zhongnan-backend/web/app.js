@@ -4217,6 +4217,39 @@
   }
   $('myPostersBtn').onclick = openMyPosters;
   $('myPostersMore').onclick = () => loadMyPosters(true);
+  // v2.575 存储扩容：海报 413 话术承诺「或扩容后重试」的兑现入口（此前只有后端定价、无任何购买路径）
+  const renderPackUsage = (usage) => {
+    $('storagePacksUsage').textContent = `${fmtBytes(usage.used)} / ${fmtBytes(usage.quota)}`;
+  };
+  async function buyStoragePack(pack, btn) {
+    btn.disabled = true;
+    try {
+      const clientToken = `pack-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+      const res = await Api.request('/api/va/storage/buy', { method: 'POST', body: JSON.stringify({ packId: pack.id, clientToken }) });
+      const data = await Api.jsonOrThrow(res);
+      renderPackUsage(data.usage); xnSay(t('storageBuyOk')); loadMe();
+    } catch (e) {
+      xnSay(e.httpStatus === 409 ? t('storageBuyReplay') : e.message);
+    } finally { btn.disabled = false; }
+  }
+  async function openStoragePacks() {
+    if (!Api.isAuthed()) { openAuth('login'); return; }
+    try {
+      const res = await Api.request('/api/va/storage/packs');
+      const data = await Api.jsonOrThrow(res);
+      renderPackUsage(data.usage);
+      const list = $('storagePacksList'); list.innerHTML = '';
+      data.packs.forEach((pack) => {
+        const b = document.createElement('button');
+        b.type = 'button'; b.className = 'btn-primary';
+        b.textContent = `${pack.gb}GB · ${pack.points} ${t('points')}`;
+        b.onclick = () => buyStoragePack(pack, b);
+        list.appendChild(b);
+      });
+      openModal('storagePacksModal');
+    } catch (e) { xnSay(e.message); }
+  }
+  $('storageBuyBtn').onclick = openStoragePacks;
   $('saveProfileBtn').onclick = async () => {
     try {
       const res = await Api.request('/api/auth/profile', { method: 'PATCH', body: JSON.stringify({

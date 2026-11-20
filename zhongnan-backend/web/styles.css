@@ -1619,6 +1619,10 @@ summary:hover{color:var(--accent-strong)}
 .v-bar{height:6px;background:var(--panel);border:1px solid var(--line);border-radius:3px;overflow:hidden}
 .v-bar-fill{height:100%;background:linear-gradient(90deg,var(--gold),var(--cinnabar));border-radius:3px}
 .poster-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px}
+/* v2.575 存储扩容包：三档并排，窄屏自动降为单列 */
+.pack-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:10px}
+@media (max-width:520px){.pack-grid{grid-template-columns:1fr}}
+.pack-grid .btn-primary{width:100%}
 .poster-grid img{width:100%;aspect-ratio:9/16;object-fit:cover;border-radius:8px;border:1px solid var(--line);display:block;background:var(--panel)}
 /* v2.558 缩略图可点开大图：按钮只做载体，视觉与图片一致（键盘可达，勿用裸 img 点击） */
 .poster-open{padding:0;border:0;background:none;display:block;width:100%;cursor:zoom-in;line-height:0}
