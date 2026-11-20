@@ -142,7 +142,15 @@ export function createKnowledgeRouter(prisma: PrismaLike | any) {
       const illegal = await complianceCheck(s.content, prisma);
       if (illegal) return res.status(422).json({ error: `信号「${s.title}」${illegal}` });
     }
-    const stored = await prisma.knowledgeItem.findMany().catch(() => [] as any[]);
+    // v2.599：自主学习前读知识库不得 `.catch(() => [])`——DB 抖动时空知识库跑 → 可能批准冲突条目
+    //  → fail-closed 中止自主学习，留痕可归因；超管稍后重试。
+    let stored: any[];
+    try {
+      stored = await prisma.knowledgeItem.findMany();
+    } catch (e) {
+      logInternal(e, 'knowledge.self-learn.fetch');
+      return res.status(500).json({ error: '知识库加载失败，请重试' });
+    }
     const cycle = runSelfLearning(signals, stored);
     // 落库：自动生效 / 待审
     const created: { id: string; title: string; decision: string; confidence: number }[] = [];
@@ -179,7 +187,14 @@ export function createKnowledgeRouter(prisma: PrismaLike | any) {
 
   /** 知识库快照报告（仅管理员）：来源/状态/分类分布、自主学习贡献、待审积压 */
   knowledgeRouter.get('/self-learn/report', authRequired, requireAdmin, requireSuperAdmin, async (_req, res) => {
-    const all = await prisma.knowledgeItem.findMany().catch(() => [] as any[]);
+    // v2.599：知识库快照不得 `.catch(() => [])`——DB 抖动时空快照超管看不到真实积压
+    let all: any[];
+    try {
+      all = await prisma.knowledgeItem.findMany();
+    } catch (e) {
+      logInternal(e, 'knowledge.self-learn.report');
+      return res.status(500).json({ error: '知识库快照加载失败，请重试' });
+    }
     const byStatus: Record<string, number> = {}; const byCategory: Record<string, number> = {}; const bySource: Record<string, number> = {};
     all.forEach((i: any) => {
       byStatus[i.status] = (byStatus[i.status] ?? 0) + 1;
@@ -210,9 +225,16 @@ export function createKnowledgeRouter(prisma: PrismaLike | any) {
   /** 自主学习 / API盘点 历史报告（仅管理员，kind 可选 DAILY_LEARN/WEEKLY_MODEL） */
   knowledgeRouter.get('/self-learn/reports', authRequired, requireAdmin, requireSuperAdmin, async (req, res) => {
     const kind = typeof req.query.kind === 'string' ? req.query.kind : undefined;
-    const rows = await prisma.learningReport.findMany({
-      where: kind ? { kind } : {}, orderBy: { createdAt: 'desc' }, take: 50,
-    }).catch(() => []);
+    // v2.599：历史报告不得 `.catch(() => [])`——DB 抖动时空报告超管无从回溯
+    let rows: any[];
+    try {
+      rows = await prisma.learningReport.findMany({
+        where: kind ? { kind } : {}, orderBy: { createdAt: 'desc' }, take: 50,
+      });
+    } catch (e) {
+      logInternal(e, 'knowledge.self-learn.reports');
+      return res.status(500).json({ error: '学习历史报告加载失败，请重试' });
+    }
     res.json({ reports: rows });
   });
 

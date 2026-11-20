@@ -4,7 +4,7 @@
  * 工厂化：createAdminModelRouter(prisma) 便于注入内存桩做 HTTP 测试；默认导出接全局 prisma。
  */
 import { asyncRouter } from '../lib/async-router';
-import { failInternal } from '../lib/http-errors';
+import { failInternal, logInternal } from '../lib/http-errors';
 import { authRequired, AuthRequest } from '../middleware/auth';
 import { createRequireAdmin, requireSuperAdmin } from '../middleware/admin';
 import { prisma } from '../lib/prisma';
@@ -104,9 +104,16 @@ export function createAdminModelRouter(prisma: any) {
 
   // 最近一次每周盘点报告
   adminModelRouter.get('/portfolio/audit-report', authRequired, requireAdmin, requireSuperAdmin, async (_req, res) => {
-    const rows = await prisma.learningReport.findMany({
-      where: { kind: 'WEEKLY_MODEL' }, orderBy: { createdAt: 'desc' }, take: 1,
-    }).catch(() => []);
+    // v2.599：每周盘点不得 `.catch(() => [])`——DB 抖动时 latest=null 超管看不到真实状态
+    let rows: any[];
+    try {
+      rows = await prisma.learningReport.findMany({
+        where: { kind: 'WEEKLY_MODEL' }, orderBy: { createdAt: 'desc' }, take: 1,
+      });
+    } catch (e) {
+      logInternal(e, 'admin.audit-report.list');
+      return res.status(500).json({ error: '每周盘点报告加载失败，请重试' });
+    }
     res.json({ latest: rows[0] ?? null });
   });
 
