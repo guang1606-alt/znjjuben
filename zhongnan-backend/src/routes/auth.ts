@@ -16,6 +16,7 @@ import { isAdminUser, isSuperAdminUser, SUPER_ADMIN_PHONE } from '../middleware/
 import { createLoginThrottle } from '../lib/login-throttle';
 import { consumeRefreshToken } from '../lib/refresh-rotate';
 import { AGE_BAND_IDS, GENDERS, PROFILE_REGIONS } from '../lib/profile-mapping';
+import { logInternal } from '../lib/http-errors';
 
 /** 工厂化：生产用默认 prisma 单例，测试可注入内存桩（HTTP 层端到端，不依赖真实数据库） */
 type PrismaLike = typeof defaultPrisma;
@@ -108,10 +109,15 @@ export function createAuthRouter(prisma: PrismaLike | any) {
     res.json({ accessToken: signAccess(payload), refreshToken: signRefresh(payload), user: { id: user.id, level: user.level, isAdmin: isAdminUser(user), staff: isAdminUser(user), isSuperAdmin: isSuperAdminUser(user) } });
   });
   authRouter.post('/refresh', async (req, res) => {
+    let data: any;
     try {
-      const { verifyRefresh, signRefresh } = await import('../lib/auth');
+      data = verifyRefresh(req.body?.refreshToken);
+    } catch {
+      // 过期/篡改/格式错误的令牌是用户长期未用后的常态，静默 401，避免日志噪音
+      return res.status(401).json({ error: 'REFRESH_INVALID' });
+    }
+    try {
       const { withRefreshFlight } = await import('../lib/refresh-rotate');
-      const data = verifyRefresh(req.body?.refreshToken);
       // 一次性消费（重放防护）：新格式 token 用 jti；旧格式无 jti 用 token 摘要兜底，同样只放行一次，刷完即升级为轮换 token
       // v2.291 在途单飞：同 rt 并发续期（双标签页 access 同时到期）共享首个 flight 结果，
       // 次个请求不再被判 REFRESH_REUSED 误踢全端；flight 完成后重放仍 401（重放防护不破）。
@@ -130,7 +136,10 @@ export function createAuthRouter(prisma: PrismaLike | any) {
       if (!flight.value) return res.status(401).json({ error: '无效凭证' });
       if ((flight.value as any).revoked) return res.status(401).json({ error: 'SESSION_REVOKED' });
       res.json(flight.value);
-    } catch {
+    } catch (e) {
+      // v2.617 签名校验通过后的失败均为基础设施故障（用户表读失败 / 单飞存储异常 / 签发失败），
+      // 此前静默伪装成 REFRESH_INVALID 让用户全端登出；对外契约不变，但必须可归因。
+      logInternal(e, 'auth.refresh');
       res.status(401).json({ error: 'REFRESH_INVALID' });
     }
   });
