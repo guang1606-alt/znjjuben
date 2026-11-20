@@ -2401,7 +2401,13 @@ generateRouter.get('/scripts/:id/listen', authRequired, async (req: AuthRequest,
   // c207：cast 是挂在朗读稿主交易上的观测增强，构建器虽已全容错，挂载点仍兜底 try/catch——
   // 声线表任何意外都不得拖垮整篇朗读稿（㉜ 增强自身零抛错），前端对 cast=null 有旁白声线回退
   let cast = null;
-  try { cast = buildVoiceCast(listen.speakerSet, { lang: listenLang }); } catch { cast = null; }
+  try {
+    cast = buildVoiceCast(listen.speakerSet, { lang: listenLang });
+  } catch (e) {
+    cast = null;
+    // v2.612：旁白降级不改变响应，但必须留下原始异常，避免分角色声线消失零线索。
+    logInternal(e, 'generate.listen.voice-cast');
+  }
   res.json({
     scriptId: sc.id, epNo: sc.epNo, title: sc.title || '',
     ...listen,
