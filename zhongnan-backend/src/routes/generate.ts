@@ -870,7 +870,14 @@ generateRouter.delete('/character-assets/:id', authRequired, async (req: AuthReq
 });
 // 一键沉淀：项目全局圣经 + 最近成稿 → 确定性提取草稿（零 token），同名覆盖保留 usedCount
 generateRouter.post('/character-assets/from-project/:projectId', authRequired, async (req: AuthRequest, res) => {
-  const project = await prisma.project.findFirst({ where: { id: req.params.projectId, userId: req.userId!, status: { not: 'deleted' } } }).catch(() => null as any);
+  // v2.603：读故障不得伪装成「项目不存在」——DB 抖动回 404 会让编导以为项目被删
+  let project: any;
+  try {
+    project = await prisma.project.findFirst({ where: { id: req.params.projectId, userId: req.userId!, status: { not: 'deleted' } } });
+  } catch (e) {
+    logInternal(e, 'generate.asset.cast.fromProject.project');
+    return res.status(500).json({ error: '项目加载失败，请重试' });
+  }
   if (!project) return res.status(404).json({ error: 'PROJECT_NOT_FOUND' });
   const lang = String((req.query.lang as string) || 'zh') === 'en' ? 'en' as const : 'zh' as const;
   // bible.characters 三形态归一（字符串/数组/对象）——立项解析与 pipeline 回写形态不同；
@@ -893,7 +900,13 @@ generateRouter.post('/character-assets/from-project/:projectId', authRequired, a
       for (const [k, v] of Object.entries(c)) put(k, v);
     }
   } catch { chars = {}; }
-  const latest = await prisma.script.findFirst({ where: { projectId: project.id }, orderBy: { epNo: 'desc' } }).catch(() => null as any);
+  // v2.603：最近成稿读失败不得按「没有成稿」静默降级（声纹/台词会按空重算）——留痕后 fail-open，bible 一手源仍可沉淀
+  let latest: any = null;
+  try {
+    latest = await prisma.script.findFirst({ where: { projectId: project.id }, orderBy: { epNo: 'desc' } });
+  } catch (e) {
+    logInternal(e, 'generate.asset.cast.fromProject.latest');
+  }
   const drafts = extractCastAssetDrafts(chars, latest?.content ?? null, lang);
   // v2.192 c192 P3 闭环（c191 记名）：沉淀 persona/voice 是 bible 全文快照语义，与手动建档 zod 的
   // 200 字"短摘要"口径不同，不做 200 截断；但 Json 列无库级上限，LLM 异常产出极端巨串会拖慢
@@ -1134,7 +1147,14 @@ generateRouter.delete('/prop-assets/:id', authRequired, async (req: AuthRequest,
 // 一键沉淀：全部分集成稿 × 信物词典（与信物账本/物料道具总表同词典）→ 确定性聚合草稿（零 token），
 // 同名合并：meaning 属本体语义以一手源刷新；eps/closedEps 跨项目沉淀取并集（v2.160 只增强不降级，历史不丢）；taboo/visualAnchor/tags 不触碰（手动精修不降级）
 generateRouter.post('/prop-assets/from-project/:projectId', authRequired, async (req: AuthRequest, res) => {
-  const project = await prisma.project.findFirst({ where: { id: req.params.projectId, userId: req.userId!, status: { not: 'deleted' } } }).catch(() => null as any);
+  // v2.603：读故障不得伪装成「项目不存在」（与 cast 同构）
+  let project: any;
+  try {
+    project = await prisma.project.findFirst({ where: { id: req.params.projectId, userId: req.userId!, status: { not: 'deleted' } } });
+  } catch (e) {
+    logInternal(e, 'generate.asset.prop.fromProject.project');
+    return res.status(500).json({ error: '项目加载失败，请重试' });
+  }
   if (!project) return res.status(404).json({ error: 'PROJECT_NOT_FOUND' });
   let allEps: any[];
   try {
@@ -1482,7 +1502,14 @@ generateRouter.delete('/scene-assets/:id', authRequired, async (req: AuthRequest
 // 同名合并：eps 跨项目沉淀取并集（只增强不降级，历史不丢）；meaning/mood/taboo/visualAnchor/tags 不触碰——
 // 场景无"功能"一手源（场头只有地点结构），沉淀稿不臆造语义（创建占位"功能待补"，更新不碰手动精修档）
 generateRouter.post('/scene-assets/from-project/:projectId', authRequired, async (req: AuthRequest, res) => {
-  const project = await prisma.project.findFirst({ where: { id: req.params.projectId, userId: req.userId!, status: { not: 'deleted' } } }).catch(() => null as any);
+  // v2.603：读故障不得伪装成「项目不存在」（与 cast/prop 同构）
+  let project: any;
+  try {
+    project = await prisma.project.findFirst({ where: { id: req.params.projectId, userId: req.userId!, status: { not: 'deleted' } } });
+  } catch (e) {
+    logInternal(e, 'generate.asset.scene.fromProject.project');
+    return res.status(500).json({ error: '项目加载失败，请重试' });
+  }
   if (!project) return res.status(404).json({ error: 'PROJECT_NOT_FOUND' });
   let allEps: any[];
   try {
