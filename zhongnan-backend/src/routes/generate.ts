@@ -4429,18 +4429,32 @@ generateRouter.post('/episodes', authRequired, async (req: AuthRequest, res) => 
     // 用 abortController.signal.aborted 作为权威判定（不依赖错误消息字符串匹配）
     const isCancelled = abortController.signal.aborted || (err as Error).message === 'CANCELLED';
     console.error('[generate] episode failed:', (err as Error).message, (err as Error).stack?.split('\n').slice(0, 3).join(' | '));
+    // v2.607：退款失败不得谎报「已退款」。旧实现 .catch(() => undefined) 把解冻/退赠送集的库故障
+    // 吞成静默成功，前端仍收到 failed_refunded 并展示「已退款」，用户以为钱已回到账上——服务端既无
+    // 日志、冻结额也还挂着，事后无任何线索可归因。改为留痕并把真实退款状态如实告知用户。
+    let refundFailed = false;
     if (!isStaff && !isFree) {
-      await withBillingTransaction(prisma, user.id, async (tx) => {
-        if (paidViaQuota && activeMembership) {
-          // 生成失败/取消：退还已占赠送集（条件 decrement 防减成负数）
-          await tx.returnQuota(activeMembership.id);
-        } else if (points > 0) {
-          await unfreeze(tx, user.id, points, task.id, `unfreeze:${task.id}`);
-        }
-      }).catch(() => undefined);
+      try {
+        await withBillingTransaction(prisma, user.id, async (tx) => {
+          if (paidViaQuota && activeMembership) {
+            // 生成失败/取消：退还已占赠送集（条件 decrement 防减成负数）
+            await tx.returnQuota(activeMembership.id);
+          } else if (points > 0) {
+            await unfreeze(tx, user.id, points, task.id, `unfreeze:${task.id}`);
+          }
+        });
+      } catch (e) {
+        refundFailed = true;
+        logInternal(e, 'generate.episode.refund');
+      }
     }
     await prisma.generationTask.update({ where: { id: task.id }, data: { status: isCancelled ? 'CANCELLED' : 'FAILED', errorMsg: (err as Error).message } });
-    send({ stage: isCancelled ? 'cancelled' : 'failed_refunded', error: sanitizeClientError((err as Error).message) });
+    const refundNote = refundFailed
+      ? (parsed.data.lang === 'en'
+        ? ' (Refund is pending; please check your balance later or contact support.)'
+        : '（退款处理中，请稍后在账单核对，如未到账请联系客服）')
+      : '';
+    send({ stage: isCancelled ? 'cancelled' : 'failed_refunded', error: sanitizeClientError((err as Error).message) + refundNote });
   } finally {
     deleteActiveAbort(task.id);
     clearTimeout(globalTimeout);
