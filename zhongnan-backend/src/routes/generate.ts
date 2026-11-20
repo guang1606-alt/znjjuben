@@ -321,9 +321,15 @@ generateRouter.post('/projects', authRequired, async (req: AuthRequest, res) => 
   // 命中即回既有项目——弱网「请求已发出、响应丢失」后重试不再造第二个空项目、不白占项目额度。
   const idemKey = String(req.get('idempotency-key') || '').trim().slice(0, 200);
   if (idemKey) {
-    const prior = await prisma.project
-      .findFirst({ where: { userId: req.userId!, idempotencyKey: idemKey, status: { not: 'deleted' } } })
-      .catch(() => null);
+    // v2.605：查重读失败不得按「无既有项目」继续——弱网重试正好会绕开幂等保护造第二个项目并白占额度；
+    //  → fail-closed 中止（DB 恢复后同键重试仍幂等），并留痕可归因
+    let prior: any = null;
+    try {
+      prior = await prisma.project.findFirst({ where: { userId: req.userId!, idempotencyKey: idemKey, status: { not: 'deleted' } } });
+    } catch (e) {
+      logInternal(e, 'generate.project.create.idempotency-lookup');
+      return res.status(500).json({ error: '创建项目失败，请重试' });
+    }
     if (prior) return res.json({ ...(prior as Record<string, unknown>), idempotent: true });
   }
   // 三级审核第一级：项目名+标签生成前机器拦截（硬拦截直接 422，不建项目、不计费）
@@ -3883,10 +3889,15 @@ generateRouter.post('/episodes', authRequired, async (req: AuthRequest, res) => 
     // v2.84 自主学习引用追踪：更新本轮被使用知识的 lastReferencedAt，供 pruneKnowledge 判过时
     if (knowledgeHints && knowledgeHints.length) {
       const hintTitles = knowledgeHints.map((k: { title: string; content: string; category: string }) => k.title);
-      await prisma.knowledgeItem.updateMany({
-        where: { title: { in: hintTitles }, status: 'APPROVED' },
-        data: { lastReferencedAt: new Date() },
-      }).catch(() => null);
+      // v2.605：写失败不得静默——否则 pruneKnowledge 会把仍在被引用的知识按「长期未引用」误判过时归档
+      try {
+        await prisma.knowledgeItem.updateMany({
+          where: { title: { in: hintTitles }, status: 'APPROVED' },
+          data: { lastReferencedAt: new Date() },
+        });
+      } catch (e) {
+        logInternal(e, 'generate.knowledge.lastReferenced');
+      }
     }
 
     // 付费档毛利熔断；免费档为获客补贴（单日3集封顶），只记成本不熔断；
