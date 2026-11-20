@@ -9,6 +9,7 @@ import { withBillingTransaction } from '../lib/prisma-tx';
 import { INVITE, MEMBERSHIP, MemberLevel } from '../config/pricing';
 import { quotaBytes } from '../lib/storage';
 import { ensureQuotaCycle, quotaRemainOf } from '../lib/membership-quota';
+import { freeEpisodesUsedToday } from '../lib/free-daily';
 import { authRequired, invalidateSessionCache } from '../middleware/auth';
 import type { AuthRequest } from '../middleware/auth';
 import { isAdminUser, isSuperAdminUser, SUPER_ADMIN_PHONE } from '../middleware/admin';
@@ -162,6 +163,15 @@ export function createAuthRouter(prisma: PrismaLike | any) {
     const activeMembership = u.level === MemberLevel.FREE ? null
       : await prisma.membership.findFirst({ where: { userId: u.id, level: u.level, expireAt: { gt: new Date() } }, orderBy: { expireAt: 'desc' } });
     const quotaRow = activeMembership ? await ensureQuotaCycle(prisma, activeMembership) : null;
+    // v2.580 免费档「今日 2 集」：与生成入口同一计数口径（已完成 + 在途占坑行），
+    // 让用户提前看到剩余而不是撞 402；内部账户走 0 元通道，不展示也不受该限制。
+    const freeToday = (u.level === MemberLevel.FREE && !isAdminUser(u as { phone?: string | null; isAdmin?: boolean }))
+      ? await (async () => {
+        const limit = MEMBERSHIP.FREE.freeEpsPerDay;
+        const used = await freeEpisodesUsedToday(prisma, u.id);
+        return { limit, used, remain: Math.max(0, limit - used) };
+      })()
+      : null;
     res.json({
       id: u.id, phone: maskPhone, nickname: u.nickname, penName: u.penName ?? null, bio: u.bio ?? null,
       region: (u as any).region ?? null, ageBand: (u as any).ageBand ?? null, gender: (u as any).gender ?? null,
@@ -186,6 +196,7 @@ export function createAuthRouter(prisma: PrismaLike | any) {
         remain: quotaRemainOf(quotaRow),
         cycleStart: quotaRow.quotaCycleStart ?? activeMembership?.startedAt ?? null,
       } : null,
+      freeToday,
     });
   });
   // 修改笔名/昵称/简介（笔名会成为剧本水印；长度与字符合规校验，防注入与超长）

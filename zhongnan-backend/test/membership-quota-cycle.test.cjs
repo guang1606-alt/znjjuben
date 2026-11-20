@@ -127,4 +127,31 @@ describe('GET /api/auth/me 下发本月剩余并顺带完成重置', { concurren
     assert.strictEqual(j.quota.used, 10);
     assert.strictEqual(j.quota.remain, 290);
   });
+
+  it('免费用户下发今日免费集数（与生成同一口径：已完成 + 在途占坑）', async () => {
+    mem._seedUser({ id: 'q5', level: 'FREE' });
+    const p = await mem.project.create({ data: { userId: 'q5', title: '免费测试项目' } });
+    let j = await (await fetch(base + '/api/auth/me', { headers: { Authorization: `Bearer ${signAccess({ sub: 'q5', level: 'FREE' })}` } })).json();
+    assert.deepStrictEqual(j.freeToday, { limit: 2, used: 0, remain: 2 });
+    assert.strictEqual(j.quota, null, '免费用户不应有月度赠送集');
+    await mem.script.create({ data: { projectId: p.id, content: '第1集' } });
+    await mem.generationTask.create({ data: { projectId: p.id, status: 'RUNNING' } });
+    j = await (await fetch(base + '/api/auth/me', { headers: { Authorization: `Bearer ${signAccess({ sub: 'q5', level: 'FREE' })}` } })).json();
+    assert.strictEqual(j.freeToday.used, 2, '今日已完成 1 集 + 在途 1 集');
+    assert.strictEqual(j.freeToday.remain, 0);
+    // 失败任务释放占坑，不误伤重试
+    mem._tasks.get([...mem._tasks.keys()].pop()).status = 'FAILED';
+    j = await (await fetch(base + '/api/auth/me', { headers: { Authorization: `Bearer ${signAccess({ sub: 'q5', level: 'FREE' })}` } })).json();
+    assert.strictEqual(j.freeToday.used, 1);
+    assert.strictEqual(j.freeToday.remain, 1);
+  });
+
+  it('付费会员 freeToday 为 null（不展示免费额度假象）', async () => {
+    mem._seedUser({ id: 'q6', level: 'PRO' });
+    await mem.membership.create({
+      data: { userId: 'q6', level: 'PRO', expireAt: new Date(Date.now() + 100 * DAY), quotaTotal: 1000, quotaUsed: 0, quotaCycleStart: new Date() },
+    });
+    const j = await (await fetch(base + '/api/auth/me', { headers: { Authorization: `Bearer ${signAccess({ sub: 'q6', level: 'PRO' })}` } })).json();
+    assert.strictEqual(j.freeToday, null);
+  });
 });

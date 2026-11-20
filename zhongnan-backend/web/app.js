@@ -4079,10 +4079,16 @@
     const qline = $('meQuotaLine');
     if (qline) {
       const q = me.quota;
+      const f = me.freeToday;
       if (q && q.total > 0) {
         qline.textContent = lang === 'en'
           ? `Economy episodes on monthly gift: ${q.remain} of ${q.total} left this cycle`
           : `本月赠送集数剩余 ${q.remain} / ${q.total}（每 30 天重置，仅经济档）`;
+        qline.classList.remove('hidden');
+      } else if (f && f.limit > 0) {
+        qline.textContent = lang === 'en'
+          ? `Free episodes today: ${f.remain} of ${f.limit} left (resets at midnight)`
+          : `今日免费集数剩余 ${f.remain} / ${f.limit}（每日 0 点重置）`;
         qline.classList.remove('hidden');
       } else {
         qline.textContent = '';

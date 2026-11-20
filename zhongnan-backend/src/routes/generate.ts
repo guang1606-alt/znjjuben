@@ -8,6 +8,7 @@ import { EngineTier, MemberLevel, MEMBERSHIP, episodePoints, FEN_PER_POINT, reso
 import { freeze, settle, unfreeze, consumeFlexible, refundFlexible } from '../lib/billing';
 import { withBillingTransaction } from '../lib/prisma-tx';
 import { ensureQuotaCycle } from '../lib/membership-quota';
+import { freeEpisodesUsedToday } from '../lib/free-daily';
 import { runEpisode, Bible } from '../agents/pipeline';
 import { resolveEpisodeSourceText, SOURCE_TEXT_LIMIT } from '../engine/mode-gate'; // v2.319 episodes 原文统一取数（body 优先 + bible 兜底，版权闸门不中断）
 import { latestScripts } from '../lib/latest-scripts';
@@ -2688,10 +2689,6 @@ const genSchema = z.object({
   sourceText: z.string().min(10).max(50000).optional(),
 });
 
-function startOfToday(): Date {
-  const d = new Date(); d.setHours(0, 0, 0, 0); return d;
-}
-
 /** SSE 创作一集：免费档每日2集补贴；付费档冻结→协作→结算/退款，成本落库并校验毛利 */
 generateRouter.post('/episodes', authRequired, async (req: AuthRequest, res) => {
   const parsed = genSchema.safeParse(req.body);
@@ -2898,18 +2895,9 @@ generateRouter.post('/episodes', authRequired, async (req: AuthRequest, res) => 
     try {
       await withBillingTransaction(prisma, user.id, async (tx) => {
         await tx.lockAccount(user.id);
-        const raw = tx.raw as any;
-        const doneToday = await raw.script.count({
-          where: { project: { userId: user.id }, createdAt: { gte: startOfToday() } },
-        });
-        const inFlightToday = await raw.generationTask.count({
-          where: {
-            project: { userId: user.id },
-            status: { in: ['QUEUED', 'RUNNING'] },
-            createdAt: { gte: startOfToday() },
-          },
-        });
-        if (doneToday + inFlightToday >= MEMBERSHIP.FREE.freeEpsPerDay) throw new Error(FREE_LIMIT_ERR);
+        // v2.580 与 /me 共用同一计数口径（今日已完成 + 在途占坑行）
+        const usedToday = await freeEpisodesUsedToday(tx.raw, user.id);
+        if (usedToday >= MEMBERSHIP.FREE.freeEpsPerDay) throw new Error(FREE_LIMIT_ERR);
       });
     } catch (e) {
       if ((e as Error).message === FREE_LIMIT_ERR || (e as { code?: string }).code === FREE_LIMIT_ERR) {
