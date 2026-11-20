@@ -5,6 +5,7 @@
 import { createHash } from 'node:crypto';
 import { prisma } from './prisma';
 import { loadSpendLimit } from './model-config';
+import { logInternal } from './http-errors';
 
 interface SpendControl { prisma: any; enabled: boolean; totalLimitYuan: number }
 let __controlForTest: SpendControl | null = null;
@@ -99,7 +100,10 @@ export async function settleModelSpend(r: SpendReservation | null, actualFen: nu
       await settleRow(tx, 'total', r.reserveFen, actual);
       if (r.keyId) await settleRow(tx, r.keyId, r.reserveFen, actual);
     });
-  } catch {
+  } catch (e) {
+    // v2.621 结算失败意味着资金台账没落平；直接替换异常会让 Prisma 事务失败/连接池耗尽
+    // 全部退化成同一句话术，事后对账无入口。对外错误保持不变，原始异常先留痕。
+    logInternal(e, 'spend.settle');
     throw new Error('MODEL_SPEND_LIMIT_UNAVAILABLE 消费限额结算失败');
   }
 }
