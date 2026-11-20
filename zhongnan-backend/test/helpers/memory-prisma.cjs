@@ -535,6 +535,12 @@ function createMemoryPrisma() {
   const interviewSession = {
     async create({ data }) { const row = { id: `iv_${++seq}`, title: '', lang: 'zh', status: 'ACTIVE', turnCount: 0, materials: {}, transcript: [], createdAt: new Date(), updatedAt: new Date(), ...data }; interviewSessions.push(row); return row; },
     async findUnique({ where }) { return interviewSessions.find((x) => x.id === where.id) ?? null; },
+    // v2.585：GET /sessions 并入最近 ACTIVE 会话（'最新 20 条'窗口外的未完成采访仍可达）
+    async findFirst(arg = {}) {
+      let r = interviewSessions.filter((x) => matchWhere(x, arg.where));
+      if (arg.orderBy && arg.orderBy.updatedAt) r = [...r].sort((a, b) => new Date(b.updatedAt) - new Date(a.updatedAt));
+      return r[0] ?? null;
+    },
     async findMany(arg = {}) {
       let r = interviewSessions.filter((x) => matchWhere(x, arg.where));
       if (arg.orderBy && arg.orderBy.updatedAt) r = [...r].sort((a, b) => new Date(b.updatedAt) - new Date(a.updatedAt));

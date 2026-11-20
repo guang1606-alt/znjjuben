@@ -214,7 +214,17 @@ export function createInterviewRouter(prisma: PrismaLike) {
     const list = await prisma.interviewSession.findMany({
       where: { userId: req.userId! }, orderBy: { updatedAt: 'desc' }, take: 20,
     });
-    res.json({ ok: true, sessions: (list as Record<string, unknown>[]).map(pubSession) });
+    const sessions = (list as Record<string, unknown>[]).map(pubSession);
+    // v2.585：未完成采访必须始终可达——前端恢复逻辑只在这份列表里找 ACTIVE，
+    // 当用户累计超过 20 个会话后，较早的 ACTIVE 会被挤出窗口，刷新即"丢采访"（实际还在库里）。
+    // 并入「最近一个 ACTIVE」（已在窗口内不重复），前端零改动即恢复。
+    const active = await prisma.interviewSession.findFirst({
+      where: { userId: req.userId!, status: 'ACTIVE' }, orderBy: { updatedAt: 'desc' },
+    });
+    if (active && !sessions.some((s) => s.id === (active as Record<string, unknown>).id)) {
+      sessions.unshift(pubSession(active as Record<string, unknown>));
+    }
+    res.json({ ok: true, sessions });
   });
   router.get('/sessions/:id', authRequired, async (req: AuthRequest, res) => {
     const got = await accessibleSession(req.params.id, req.userId!);
