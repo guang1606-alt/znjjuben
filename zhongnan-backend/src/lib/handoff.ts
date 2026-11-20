@@ -9,6 +9,7 @@ import pkg from '../../package.json';
 import { BRAND } from '../config/brand';
 import { prisma } from './prisma';
 import { encrypt, decrypt } from './crypto';
+import { logInternal } from './http-errors';
 import { craftEngineCount } from '../engine/craft-registry';
 import { HOOK_STRATEGIES } from '../engine/hook-strategy';
 import { PACE_STRATEGIES, DIALOGUE_STRATEGIES, EMOTION_STRATEGIES, CHARACTER_STRATEGIES } from '../engine/creation-strategy';
@@ -106,7 +107,13 @@ export async function loadHandoff(p: any = prisma): Promise<HandoffData> {
   const row = await p.modelConfig.findUnique({ where: { id: HANDOFF_ROW } });
   let data = { ...EMPTY_HANDOFF };
   if (row?.payloadEnc) {
-    try { data = { ...EMPTY_HANDOFF, ...JSON.parse(decrypt(row.payloadEnc)) }; } catch { data = { ...EMPTY_HANDOFF }; }
+    try { data = { ...EMPTY_HANDOFF, ...JSON.parse(decrypt(row.payloadEnc)) }; }
+    catch (e) {
+      // v2.625 这是全仓唯一承载跨会话上下文的地方：解析失败静默回落空态并进 60s 缓存，
+      // 后台整块变空、运营以为数据被清空，服务端却无任何线索。空态照旧返回，但必须留痕。
+      logInternal(e, 'handoff.load');
+      data = { ...EMPTY_HANDOFF };
+    }
   }
   cache = { data, exp: Date.now() + TTL_MS };
   return data;
