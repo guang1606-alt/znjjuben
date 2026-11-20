@@ -2393,7 +2393,11 @@ generateRouter.get('/scripts/:id/listen', authRequired, async (req: AuthRequest,
         epPos: pos + 1, epCount: playable.length,
       };
     }
-  } catch { /* 邻接是连播增强：失败时退化为单集模式，前端 nextScriptId=null 即不自动跨集 */ }
+  } catch (e) {
+    // 邻接是连播增强：失败时退化为单集模式，前端 nextScriptId=null 即不自动跨集。
+    // v2.611：降级不改变响应，但必须留下原始异常，避免「连播入口消失」零线索。
+    logInternal(e, 'generate.listen.neighbors');
+  }
   // c207：cast 是挂在朗读稿主交易上的观测增强，构建器虽已全容错，挂载点仍兜底 try/catch——
   // 声线表任何意外都不得拖垮整篇朗读稿（㉜ 增强自身零抛错），前端对 cast=null 有旁白声线回退
   let cast = null;
