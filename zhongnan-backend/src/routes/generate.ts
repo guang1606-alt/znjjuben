@@ -874,7 +874,14 @@ generateRouter.post('/character-assets', authRequired, async (req: AuthRequest, 
 });
 // 删除（归属校验，静默防越权探测）
 generateRouter.delete('/character-assets/:id', authRequired, async (req: AuthRequest, res) => {
-  const row = await prisma.characterAsset.findUnique({ where: { id: req.params.id } }).catch(() => null as any);
+  // v2.606：读失败不得伪装成「资产不存在」——DB 抖动回 404 会让编导以为资产已被删
+  let row: any;
+  try {
+    row = await prisma.characterAsset.findUnique({ where: { id: req.params.id } });
+  } catch (e) {
+    logInternal(e, 'generate.asset.cast.delete.lookup');
+    return res.status(500).json({ error: '资产加载失败，请重试' });
+  }
   if (!row || row.userId !== req.userId) return res.status(404).json({ error: 'CAST_ASSET_NOT_FOUND' });
   // v2.584：旧实现 `.catch(() => null)` 把任何数据库错误都当成功——前端移除卡片并提示已删除，
   // 刷新后角色又回来了（仍在参与创作注入/资产体检）。仅并发已删（P2025）按幂等成功，其余如实 500 可重试。
@@ -1157,7 +1164,14 @@ generateRouter.post('/prop-assets', authRequired, async (req: AuthRequest, res) 
 });
 // 删除（归属校验，静默防越权探测）
 generateRouter.delete('/prop-assets/:id', authRequired, async (req: AuthRequest, res) => {
-  const row = await prisma.propAsset.findUnique({ where: { id: req.params.id } }).catch(() => null as any);
+  // v2.606：读失败不得伪装成「资产不存在」（与 cast 同构）
+  let row: any;
+  try {
+    row = await prisma.propAsset.findUnique({ where: { id: req.params.id } });
+  } catch (e) {
+    logInternal(e, 'generate.asset.prop.delete.lookup');
+    return res.status(500).json({ error: '资产加载失败，请重试' });
+  }
   if (!row || row.userId !== req.userId) return res.status(404).json({ error: 'PROP_ASSET_NOT_FOUND' });
   // v2.584：同角色资产——删除失败不得回 ok（P2025 并发已删幂等）。
   try {
@@ -1517,7 +1531,14 @@ generateRouter.post('/scene-assets', authRequired, async (req: AuthRequest, res)
 });
 // 删除（归属校验，静默防越权探测）
 generateRouter.delete('/scene-assets/:id', authRequired, async (req: AuthRequest, res) => {
-  const row = await prisma.sceneAsset.findUnique({ where: { id: req.params.id } }).catch(() => null as any);
+  // v2.606：读失败不得伪装成「资产不存在」（与 cast/prop 同构）
+  let row: any;
+  try {
+    row = await prisma.sceneAsset.findUnique({ where: { id: req.params.id } });
+  } catch (e) {
+    logInternal(e, 'generate.asset.scene.delete.lookup');
+    return res.status(500).json({ error: '资产加载失败，请重试' });
+  }
   if (!row || row.userId !== req.userId) return res.status(404).json({ error: 'SCENE_ASSET_NOT_FOUND' });
   // v2.584：同角色资产——删除失败不得回 ok（P2025 并发已删幂等）。
   try {
