@@ -186,10 +186,22 @@ export async function runDailyLearningCycle(prisma: any, deps: AutoDeps = {}, cr
 export interface WeeklyAuditResult { report: ModelAuditReport; reportId?: string }
 export async function runWeeklyModelAudit(prisma: any, input: AuditInput = {}, createdById?: string): Promise<WeeklyAuditResult> {
   const report = auditPortfolio(input);
-  const row = await prisma.learningReport.create({
-    data: { kind: 'WEEKLY_MODEL', summary: report.summary as unknown as object, text: report.text, createdById: createdById ?? null },
-  }).catch(() => null);
+  // v2.601：周报落库失败不得仍返回 200——超管会以为本周盘点已留存，实际 audit-report 仍是旧/空
+  let row: { id: string } | null = null;
+  try {
+    row = await prisma.learningReport.create({
+      data: { kind: 'WEEKLY_MODEL', summary: report.summary as unknown as object, text: report.text, createdById: createdById ?? null },
+    });
+  } catch (e) {
+    logInternal(e, 'auto-learning.audit-report.create');
+    throw modelReportUnavailable();
+  }
   return { report, reportId: row?.id };
+}
+
+/** 模型体检/盘点链路的读写故障统一标记，供路由翻译为可重试业务文案 */
+export function modelReportUnavailable() {
+  return Object.assign(new Error('MODEL_REPORT_UNAVAILABLE'), { code: 'MODEL_REPORT_UNAVAILABLE' });
 }
 
 /* ===================== 每日 API 选型体检提醒（v2.187） ===================== */
@@ -200,9 +212,16 @@ export interface DailyReviewResult { status: ModelReviewStatus; reportId?: strin
 export interface AckReviewResult { status: ModelReviewStatus; ackId?: string }
 
 async function latestReport(prisma: any, kind: string): Promise<any | null> {
-  const rows = await prisma.learningReport.findMany({
-    where: { kind }, orderBy: { createdAt: 'desc' }, take: 1,
-  }).catch(() => [] as any[]);
+  // v2.601：读失败不得按"没有记录"继续——ack=null 会让基准日退回目录日且"今日已生成"判断失效（重复落流水）
+  let rows: any[];
+  try {
+    rows = await prisma.learningReport.findMany({
+      where: { kind }, orderBy: { createdAt: 'desc' }, take: 1,
+    });
+  } catch (e) {
+    logInternal(e, 'auto-learning.review.latest');
+    throw modelReportUnavailable();
+  }
   return rows[0] ?? null;
 }
 
@@ -219,24 +238,38 @@ export async function runDailyModelReview(
   if (last?.createdAt && calendarDayDiff(new Date(last.createdAt), now) === 0) {
     return { status, skipped: true };
   }
-  const row = await prisma.learningReport.create({
-    data: {
-      kind: MODEL_REVIEW_KIND, summary: reviewSummary(status) as unknown as object,
-      text: buildReviewText(status), createdById, createdAt: now,
-    },
-  }).catch(() => null);
+  // v2.601：流水写失败不得 200——否则超管以为体检已执行，实际无任何留痕
+  let row: { id: string } | null = null;
+  try {
+    row = await prisma.learningReport.create({
+      data: {
+        kind: MODEL_REVIEW_KIND, summary: reviewSummary(status) as unknown as object,
+        text: buildReviewText(status), createdById, createdAt: now,
+      },
+    });
+  } catch (e) {
+    logInternal(e, 'auto-learning.review.create');
+    throw modelReportUnavailable();
+  }
   return { status, reportId: row?.id };
 }
 
 /** 超管确认"今日已完成联网核对"：写 ACK 流水并立即返回归零后的新鲜状态 */
 export async function ackModelReview(prisma: any, createdById = 'admin', now: Date = new Date()): Promise<AckReviewResult> {
-  const row = await prisma.learningReport.create({
-    data: {
-      kind: MODEL_REVIEW_ACK_KIND,
-      summary: { ackAt: now.toISOString() } as unknown as object,
-      text: '超管确认已完成当日 API 型号/价格/停服公告人工核对，体检基准日前移至今日',
-      createdById, createdAt: now,
-    },
-  }).catch(() => null);
+  // v2.601：ACK 未落库绝不能返回"已归零"——超管以为今日已核对，刷新后提醒又出现
+  let row: { id: string } | null = null;
+  try {
+    row = await prisma.learningReport.create({
+      data: {
+        kind: MODEL_REVIEW_ACK_KIND,
+        summary: { ackAt: now.toISOString() } as unknown as object,
+        text: '超管确认已完成当日 API 型号/价格/停服公告人工核对，体检基准日前移至今日',
+        createdById, createdAt: now,
+      },
+    });
+  } catch (e) {
+    logInternal(e, 'auto-learning.review.ack-create');
+    throw modelReportUnavailable();
+  }
   return { status: modelReviewStatus(now, now), ackId: row?.id };
 }

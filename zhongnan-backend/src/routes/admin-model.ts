@@ -22,7 +22,7 @@ import { renderApiDirectoryDocx } from '../lib/api-directory-docx';
 import { orderedStages, validateOrder } from '../agents/pipeline-order';
 import { MemberLevel } from '../config/pricing';
 import { z } from 'zod';
-import { runWeeklyModelAudit, runDailyModelReview, ackModelReview, MODEL_REVIEW_KIND, MODEL_REVIEW_ACK_KIND } from '../services/auto-learning';
+import { runWeeklyModelAudit, runDailyModelReview, ackModelReview, MODEL_REVIEW_KIND, MODEL_REVIEW_ACK_KIND, modelReportUnavailable } from '../services/auto-learning';
 import { modelReviewStatus, CATALOG_PRICING_AS_OF } from '../config/model-review';
 import { AuditInput } from '../engine/model-audit';
 import { classifyAlertLevel, pickBalanceQueryStrategy, summarizeBalances, ProviderBalanceRow } from '../lib/balance-policy';
@@ -98,6 +98,9 @@ export function createAdminModelRouter(prisma: any) {
       const { report, reportId } = await runWeeklyModelAudit(prisma, input, req.userId || 'admin');
       res.json({ ok: true, reportId, report });
     } catch (e) {
+      if ((e as { code?: string })?.code === 'MODEL_REPORT_UNAVAILABLE') {
+        return res.status(500).json({ error: '每周盘点报告保存失败，请重试' });
+      }
       failInternal(res, e, 'admin-model');
     }
   });
@@ -119,9 +122,16 @@ export function createAdminModelRouter(prisma: any) {
 
   /* ---------- v2.187 每日 API 选型体检：超管多久没联网核对，后台亮灯 ---------- */
   const findLatestReport = async (kind: string) => {
-    const rows = await prisma.learningReport.findMany({
-      where: { kind }, orderBy: { createdAt: 'desc' }, take: 1,
-    }).catch(() => [] as any[]);
+    // v2.601：读失败不得伪装成"没有记录"——否则状态按目录基准日算，超管看到错误的"逾期"假状态且无留痕
+    let rows: any[];
+    try {
+      rows = await prisma.learningReport.findMany({
+        where: { kind }, orderBy: { createdAt: 'desc' }, take: 1,
+      });
+    } catch (e) {
+      logInternal(e, 'admin.review.status');
+      throw modelReportUnavailable();
+    }
     return rows[0] ?? null;
   };
 
@@ -134,6 +144,9 @@ export function createAdminModelRouter(prisma: any) {
       const status = modelReviewStatus(ack?.createdAt ? new Date(ack.createdAt) : null, new Date());
       res.json({ status, lastAckAt: ack?.createdAt ?? null, lastReviewAt: latest?.createdAt ?? null });
     } catch (e) {
+      if ((e as { code?: string })?.code === 'MODEL_REPORT_UNAVAILABLE') {
+        return res.status(500).json({ error: 'API 选型体检状态加载失败，请重试' });
+      }
       failInternal(res, e, 'admin-model');
     }
   });
@@ -144,6 +157,9 @@ export function createAdminModelRouter(prisma: any) {
       const r = await runDailyModelReview(prisma, {}, req.userId || 'admin');
       res.json({ ok: true, ...r });
     } catch (e) {
+      if ((e as { code?: string })?.code === 'MODEL_REPORT_UNAVAILABLE') {
+        return res.status(500).json({ error: 'API 选型体检执行失败，请重试' });
+      }
       failInternal(res, e, 'admin-model');
     }
   });
@@ -154,6 +170,9 @@ export function createAdminModelRouter(prisma: any) {
       const r = await ackModelReview(prisma, req.userId || 'admin');
       res.json({ ok: true, ...r });
     } catch (e) {
+      if ((e as { code?: string })?.code === 'MODEL_REPORT_UNAVAILABLE') {
+        return res.status(500).json({ error: '核对确认保存失败，请重试' });
+      }
       failInternal(res, e, 'admin-model');
     }
   });
