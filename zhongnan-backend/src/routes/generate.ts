@@ -779,11 +779,17 @@ generateRouter.get('/character-assets/health', authRequired, async (req: AuthReq
 // v2.165 引用统计：扫描当前用户项目的 bible 快照，按 asset id 聚合"当前被哪些项目引用"
 // （usedCount=历史累计立项次数，项目删除不减；usage=实时在用明细——两口径互补，不改写 usedCount）
 generateRouter.get('/character-assets/usage', authRequired, async (req: AuthRequest, res) => {
-  const projects = await prisma.project.findMany({
-    where: { userId: req.userId! },
-    select: { id: true, title: true, status: true, bible: true },
-    orderBy: { updatedAt: 'desc' }, take: 500, // 扫描上限：单人项目量级内全量，scannedProjects 供前端提示覆盖面
-  }).catch(() => [] as any[]);
+  let projects: any[];
+  try {
+    projects = await prisma.project.findMany({
+      where: { userId: req.userId! },
+      select: { id: true, title: true, status: true, bible: true },
+      orderBy: { updatedAt: 'desc' }, take: 500,
+    });
+  } catch (e) {
+    logInternal(e, 'generate.asset.cast.usage');
+    return res.status(500).json({ error: '资产引用统计加载失败，请重试' });
+  }
   res.json({ usage: buildAssetUsageMap(projects, 'castAssets'), scannedProjects: projects.length });
 });
 // 手动编辑以记录 id 为准；同名创建或改名冲突均不覆盖已有资产。
@@ -1044,11 +1050,17 @@ generateRouter.get('/prop-assets/health', authRequired, async (req: AuthRequest,
 });
 // v2.165 引用统计：与 character-assets/usage 同口径（家族同构）
 generateRouter.get('/prop-assets/usage', authRequired, async (req: AuthRequest, res) => {
-  const projects = await prisma.project.findMany({
-    where: { userId: req.userId! },
-    select: { id: true, title: true, status: true, bible: true },
-    orderBy: { updatedAt: 'desc' }, take: 500,
-  }).catch(() => [] as any[]);
+  let projects: any[];
+  try {
+    projects = await prisma.project.findMany({
+      where: { userId: req.userId! },
+      select: { id: true, title: true, status: true, bible: true },
+      orderBy: { updatedAt: 'desc' }, take: 500,
+    });
+  } catch (e) {
+    logInternal(e, 'generate.asset.prop.usage');
+    return res.status(500).json({ error: '资产引用统计加载失败，请重试' });
+  }
   res.json({ usage: buildAssetUsageMap(projects, 'propAssets'), scannedProjects: projects.length });
 });
 // 手动建/改：新建不传 id，编辑必须传原记录 id。
@@ -1261,11 +1273,17 @@ generateRouter.get('/scene-assets/health', authRequired, async (req: AuthRequest
 });
 // v2.165 引用统计：与 character-assets/usage 同口径（家族同构）
 generateRouter.get('/scene-assets/usage', authRequired, async (req: AuthRequest, res) => {
-  const projects = await prisma.project.findMany({
-    where: { userId: req.userId! },
-    select: { id: true, title: true, status: true, bible: true },
-    orderBy: { updatedAt: 'desc' }, take: 500,
-  }).catch(() => [] as any[]);
+  let projects: any[];
+  try {
+    projects = await prisma.project.findMany({
+      where: { userId: req.userId! },
+      select: { id: true, title: true, status: true, bible: true },
+      orderBy: { updatedAt: 'desc' }, take: 500,
+    });
+  } catch (e) {
+    logInternal(e, 'generate.asset.scene.usage');
+    return res.status(500).json({ error: '资产引用统计加载失败，请重试' });
+  }
   res.json({ usage: buildAssetUsageMap(projects, 'sceneAssets'), scannedProjects: projects.length });
 });
 // v2.167 资产看板：L3"资产化运营"能力的运营决策面（沉淀→引用→体检→usage→运营决策闭环最后一块）
