@@ -927,7 +927,13 @@ generateRouter.post('/character-assets/batch-complete', authRequired, async (req
   // c180 token 化：实际补全请求可带 patches（dry-run 返回的 updateData），跳过 autoFill 重算
   const patchesInput: { id: string; patch: Record<string, any> }[] | null = Array.isArray((req.body as any)?.patches) ? (req.body as any).patches.filter((x: any) => x && typeof x.id === 'string' && x.patch && typeof x.patch === 'object') : null;
   const patchesMap = patchesInput ? new Map(patchesInput.map((p) => [p.id, p.patch])) : null;
-  const rows = await prisma.characterAsset.findMany({ where: { id: { in: ids }, userId: req.userId! } }).catch(() => [] as any[]);
+  let rows: any[];
+  try {
+    rows = await prisma.characterAsset.findMany({ where: { id: { in: ids }, userId: req.userId! } });
+  } catch (e) {
+    logInternal(e, 'generate.asset.cast.batchComplete');
+    return res.status(500).json({ error: '批量补全加载失败，请重试' });
+  }
   const updated: any[] = []; const skipped: { id: string; name: string; reason: string }[] = [];
   const fieldsSet = new Set<string>(); // dry-run 并集字段
   for (const r of rows) {
@@ -1154,7 +1160,13 @@ generateRouter.post('/prop-assets/batch-complete', authRequired, async (req: Aut
   const fieldsFilter: string[] | null = Array.isArray((req.body as any)?.fields) ? (req.body as any).fields.filter((x: any) => typeof x === 'string') : null;
   const patchesInput: { id: string; patch: Record<string, any> }[] | null = Array.isArray((req.body as any)?.patches) ? (req.body as any).patches.filter((x: any) => x && typeof x.id === 'string' && x.patch && typeof x.patch === 'object') : null;
   const patchesMap = patchesInput ? new Map(patchesInput.map((p) => [p.id, p.patch])) : null;
-  const rows = await prisma.propAsset.findMany({ where: { id: { in: ids }, userId: req.userId! } }).catch(() => [] as any[]);
+  let rows: any[];
+  try {
+    rows = await prisma.propAsset.findMany({ where: { id: { in: ids }, userId: req.userId! } });
+  } catch (e) {
+    logInternal(e, 'generate.asset.prop.batchComplete');
+    return res.status(500).json({ error: '批量补全加载失败，请重试' });
+  }
   const updated: any[] = []; const skipped: { id: string; name: string; reason: string }[] = [];
   const fieldsSet = new Set<string>();
   for (const r of rows) {
@@ -1479,7 +1491,13 @@ generateRouter.post('/scene-assets/batch-complete', authRequired, async (req: Au
   const fieldsFilter: string[] | null = Array.isArray((req.body as any)?.fields) ? (req.body as any).fields.filter((x: any) => typeof x === 'string') : null;
   const patchesInput: { id: string; patch: Record<string, any> }[] | null = Array.isArray((req.body as any)?.patches) ? (req.body as any).patches.filter((x: any) => x && typeof x.id === 'string' && x.patch && typeof x.patch === 'object') : null;
   const patchesMap = patchesInput ? new Map(patchesInput.map((p) => [p.id, p.patch])) : null;
-  const rows = await prisma.sceneAsset.findMany({ where: { id: { in: ids }, userId: req.userId! } }).catch(() => [] as any[]);
+  let rows: any[];
+  try {
+    rows = await prisma.sceneAsset.findMany({ where: { id: { in: ids }, userId: req.userId! } });
+  } catch (e) {
+    logInternal(e, 'generate.asset.scene.batchComplete');
+    return res.status(500).json({ error: '批量补全加载失败，请重试' });
+  }
   const updated: any[] = []; const skipped: { id: string; name: string; reason: string }[] = [];
   const fieldsSet = new Set<string>();
   for (const r of rows) {
