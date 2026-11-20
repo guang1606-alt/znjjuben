@@ -13,6 +13,7 @@
  */
 import { voicePrint, type VoicePrint } from './voice-print';
 import { parseDialogue, type CastMap } from './character-logic';
+import { logInternal } from '../lib/http-errors';
 
 /** 角色资产种子（落库快照/管线注入共用形态） */
 export interface CastAssetSeed {
@@ -116,7 +117,7 @@ export function extractCastAssetDrafts(
     try {
       const vp = voicePrint(castMap, scriptContent, lang);
       for (const p of vp.prints) printsByName.set(p.name, p);
-    } catch { /* 指纹重算失败不阻断沉淀，声纹置空 */ }
+    } catch (e) { /* 指纹重算失败不阻断沉淀，声纹置空 */ logInternal(e, 'cast-asset.voiceprint'); }
   }
   // 标志性台词草稿：取该角色最长一句台词（截 40 字），只作气质锚不逐字照搬
   const sigByName = new Map<string, string>();
