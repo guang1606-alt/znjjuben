@@ -719,11 +719,24 @@ function normalizePatchValue(rule: PatchFieldRule, raw: unknown): string | strin
 generateRouter.get('/character-assets', authRequired, async (req: AuthRequest, res) => {
   const where = { userId: req.userId! };
   const q = assetSearchQ(req);
-  const rows = await prisma.characterAsset.findMany({
-    where, orderBy: { updatedAt: 'desc' }, take: 200,
-  }).catch(() => [] as any[]);
+  // v2.594：DB 故障不得 `.catch(() => [])` 把跨项目沉淀的付费资产库伪装成空（200 + assets=[]/total=0），
+  // 用户无从重试、服务端无日志——如实 500 + 留痕，前端已有 !res.ok 兜底。成功合约不变。
+  let rows: any[];
+  try {
+    rows = await prisma.characterAsset.findMany({ where, orderBy: { updatedAt: 'desc' }, take: 200 });
+  } catch (e) {
+    logInternal(e, 'generate.asset.character.list');
+    return res.status(500).json({ error: '角色资产库加载失败，请重试' });
+  }
   const filtered = q ? rows.filter((r: any) => matchAssetQuery(r, q.toLowerCase(), CAST_SEARCH_FIELDS)) : rows;
-  const total = q ? filtered.length : await prisma.characterAsset.count({ where }).catch(() => rows.length);
+  if (q) return res.json({ assets: filtered, total: filtered.length });
+  let total: number;
+  try {
+    total = await prisma.characterAsset.count({ where });
+  } catch (e) {
+    logInternal(e, 'generate.asset.character.list');
+    return res.status(500).json({ error: '角色资产库加载失败，请重试' });
+  }
   res.json({ assets: filtered, total });
 });
 // v2.152 资产体检：库级五维完整度 + 冲突预警（零 token 确定性，体检不耗模型）
@@ -735,11 +748,28 @@ generateRouter.get('/character-assets/health', authRequired, async (req: AuthReq
   const { limit, offset, page, pageSize } = parsePageParams(req.query, { defaultLimit: 50, maxLimit: 200 });
   const q = assetSearchQ(req);
   const where = { userId: req.userId! };
-  const rows = await prisma.characterAsset.findMany({
-    where, orderBy: { updatedAt: 'desc' }, take: 500, // 全量硬帽：冲突预警跑全量库
-  }).catch(() => [] as any[]);
+  // v2.594：同 list——故障不得回空 items/conflicts 冒充空库，如实 500 + 留痕。成功合约不变。
+  let rows: any[];
+  try {
+    rows = await prisma.characterAsset.findMany({
+      where, orderBy: { updatedAt: 'desc' }, take: 500, // 全量硬帽：冲突预警跑全量库
+    });
+  } catch (e) {
+    logInternal(e, 'generate.asset.character.health');
+    return res.status(500).json({ error: '角色资产体检加载失败，请重试' });
+  }
   const filtered = q ? rows.filter((r: any) => matchAssetQuery(r, q.toLowerCase(), CAST_SEARCH_FIELDS)) : rows;
-  const total = q ? filtered.length : await prisma.characterAsset.count({ where }).catch(() => rows.length);
+  let total: number;
+  if (q) {
+    total = filtered.length;
+  } else {
+    try {
+      total = await prisma.characterAsset.count({ where });
+    } catch (e) {
+      logInternal(e, 'generate.asset.character.health');
+      return res.status(500).json({ error: '角色资产体检加载失败，请重试' });
+    }
+  }
   res.json({
     total, limit, offset, page, pageSize,
     items: filtered.slice(offset, offset + limit).map((r: any) => ({ id: r.id, name: r.name, ...scoreCastAsset(r, lang) })),
@@ -957,11 +987,23 @@ generateRouter.post('/character-assets/batch-complete', authRequired, async (req
 generateRouter.get('/prop-assets', authRequired, async (req: AuthRequest, res) => {
   const where = { userId: req.userId! };
   const q = assetSearchQ(req);
-  const rows = await prisma.propAsset.findMany({
-    where, orderBy: { updatedAt: 'desc' }, take: 200,
-  }).catch(() => [] as any[]);
+  // v2.594：同 character-assets——故障不得回空库，如实 500 + 留痕。成功合约不变。
+  let rows: any[];
+  try {
+    rows = await prisma.propAsset.findMany({ where, orderBy: { updatedAt: 'desc' }, take: 200 });
+  } catch (e) {
+    logInternal(e, 'generate.asset.prop.list');
+    return res.status(500).json({ error: '道具资产库加载失败，请重试' });
+  }
   const filtered = q ? rows.filter((r: any) => matchAssetQuery(r, q.toLowerCase(), PROP_SEARCH_FIELDS)) : rows;
-  const total = q ? filtered.length : await prisma.propAsset.count({ where }).catch(() => rows.length);
+  if (q) return res.json({ assets: filtered, total: filtered.length });
+  let total: number;
+  try {
+    total = await prisma.propAsset.count({ where });
+  } catch (e) {
+    logInternal(e, 'generate.asset.prop.list');
+    return res.status(500).json({ error: '道具资产库加载失败，请重试' });
+  }
   res.json({ assets: filtered, total });
 });
 // 道具体检：五维完整度 + 冲突预警（零 token 确定性）；limit（1-200，默认 50）/offset 分页，conflicts 必须跑全量库（页内查重会漏跨页冲突）
@@ -972,11 +1014,28 @@ generateRouter.get('/prop-assets/health', authRequired, async (req: AuthRequest,
   const { limit, offset, page, pageSize } = parsePageParams(req.query, { defaultLimit: 50, maxLimit: 200 });
   const q = assetSearchQ(req);
   const where = { userId: req.userId! };
-  const rows = await prisma.propAsset.findMany({
-    where, orderBy: { updatedAt: 'desc' }, take: 500, // 全量硬帽：冲突预警跑全量库
-  }).catch(() => [] as any[]);
+  // v2.594：同 character-assets/health——故障不得回空 items/conflicts，如实 500 + 留痕。成功合约不变。
+  let rows: any[];
+  try {
+    rows = await prisma.propAsset.findMany({
+      where, orderBy: { updatedAt: 'desc' }, take: 500, // 全量硬帽：冲突预警跑全量库
+    });
+  } catch (e) {
+    logInternal(e, 'generate.asset.prop.health');
+    return res.status(500).json({ error: '道具资产体检加载失败，请重试' });
+  }
   const filtered = q ? rows.filter((r: any) => matchAssetQuery(r, q.toLowerCase(), PROP_SEARCH_FIELDS)) : rows;
-  const total = q ? filtered.length : await prisma.propAsset.count({ where }).catch(() => rows.length);
+  let total: number;
+  if (q) {
+    total = filtered.length;
+  } else {
+    try {
+      total = await prisma.propAsset.count({ where });
+    } catch (e) {
+      logInternal(e, 'generate.asset.prop.health');
+      return res.status(500).json({ error: '道具资产体检加载失败，请重试' });
+    }
+  }
   res.json({
     total, limit, offset, page, pageSize,
     items: filtered.slice(offset, offset + limit).map((r: any) => ({ id: r.id, name: r.name, ...scorePropAsset(r, lang) })),
@@ -1145,11 +1204,23 @@ generateRouter.post('/prop-assets/batch-complete', authRequired, async (req: Aut
 generateRouter.get('/scene-assets', authRequired, async (req: AuthRequest, res) => {
   const where = { userId: req.userId! };
   const q = assetSearchQ(req);
-  const rows = await prisma.sceneAsset.findMany({
-    where, orderBy: { updatedAt: 'desc' }, take: 200,
-  }).catch(() => [] as any[]);
+  // v2.594：同 character/prop-assets——故障不得回空库，如实 500 + 留痕。成功合约不变。
+  let rows: any[];
+  try {
+    rows = await prisma.sceneAsset.findMany({ where, orderBy: { updatedAt: 'desc' }, take: 200 });
+  } catch (e) {
+    logInternal(e, 'generate.asset.scene.list');
+    return res.status(500).json({ error: '场景资产库加载失败，请重试' });
+  }
   const filtered = q ? rows.filter((r: any) => matchAssetQuery(r, q.toLowerCase(), SCENE_SEARCH_FIELDS)) : rows;
-  const total = q ? filtered.length : await prisma.sceneAsset.count({ where }).catch(() => rows.length);
+  if (q) return res.json({ assets: filtered, total: filtered.length });
+  let total: number;
+  try {
+    total = await prisma.sceneAsset.count({ where });
+  } catch (e) {
+    logInternal(e, 'generate.asset.scene.list');
+    return res.status(500).json({ error: '场景资产库加载失败，请重试' });
+  }
   res.json({ assets: filtered, total });
 });
 // 场景体检：五维完整度 + 冲突预警（零 token 确定性）；limit（1-200，默认 50）/offset 分页，conflicts 必须跑全量库（页内查重会漏跨页冲突）
@@ -1160,11 +1231,28 @@ generateRouter.get('/scene-assets/health', authRequired, async (req: AuthRequest
   const { limit, offset, page, pageSize } = parsePageParams(req.query, { defaultLimit: 50, maxLimit: 200 });
   const q = assetSearchQ(req);
   const where = { userId: req.userId! };
-  const rows = await prisma.sceneAsset.findMany({
-    where, orderBy: { updatedAt: 'desc' }, take: 500, // 全量硬帽：冲突预警跑全量库
-  }).catch(() => [] as any[]);
+  // v2.594：同 character/prop health——故障不得回空 items/conflicts，如实 500 + 留痕。成功合约不变。
+  let rows: any[];
+  try {
+    rows = await prisma.sceneAsset.findMany({
+      where, orderBy: { updatedAt: 'desc' }, take: 500, // 全量硬帽：冲突预警跑全量库
+    });
+  } catch (e) {
+    logInternal(e, 'generate.asset.scene.health');
+    return res.status(500).json({ error: '场景资产体检加载失败，请重试' });
+  }
   const filtered = q ? rows.filter((r: any) => matchAssetQuery(r, q.toLowerCase(), SCENE_SEARCH_FIELDS)) : rows;
-  const total = q ? filtered.length : await prisma.sceneAsset.count({ where }).catch(() => rows.length);
+  let total: number;
+  if (q) {
+    total = filtered.length;
+  } else {
+    try {
+      total = await prisma.sceneAsset.count({ where });
+    } catch (e) {
+      logInternal(e, 'generate.asset.scene.health');
+      return res.status(500).json({ error: '场景资产体检加载失败，请重试' });
+    }
+  }
   res.json({
     total, limit, offset, page, pageSize,
     items: filtered.slice(offset, offset + limit).map((r: any) => ({ id: r.id, name: r.name, ...scoreSceneAsset(r, lang) })),
