@@ -238,7 +238,15 @@ export function createInterviewRouter(prisma: PrismaLike) {
     // 快照 CLOSED 只更 CLOSED 行（用户在 CLOSED 态主动点生成简报，正常转 CONVERTED）。
     let newStatus = s.status;
     if (ready && (s.status === 'ACTIVE' || s.status === 'CLOSED')) {
-      const r = await prisma.interviewSession.updateMany({ where: { id: s.id, status: s.status }, data: { status: 'CONVERTED' } }).catch(() => ({ count: 0 }));
+      // v2.577：写库失败不再静默（.catch(() => ({count:0})) 会把「状态没转成」伪装成普通并发，
+      // 服务端零日志、用户侧 status 仍 ACTIVE 无从排查）。失败仍按 count=0 走「未转换」分支，
+      // 响应如实返回原状态，但落结构化日志可直接按 sessionId 对账/重试。
+      let r = { count: 0 };
+      try {
+        r = await prisma.interviewSession.updateMany({ where: { id: s.id, status: s.status }, data: { status: 'CONVERTED' } });
+      } catch (e) {
+        logInternal({ sessionId: s.id, from: s.status, error: (e as Error)?.message ?? String(e) }, 'interview.brief');
+      }
       if (r.count > 0) newStatus = 'CONVERTED';
     }
     res.json({ ok: true, brief, ready, gaps: gapReport(m, lang), turnCount: s.turnCount, status: newStatus });
