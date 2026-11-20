@@ -3009,11 +3009,18 @@ generateRouter.post('/episodes', authRequired, async (req: AuthRequest, res) => 
     let prevEpisode: { epNo: number; title: string; summary: string; ending?: string } | null = null;
     let prevScript: { epNo: number; title: string; content: string; qcReport: any } | null = null;
     if (epIndex > 0) {
-      prevScript = await prisma.script.findFirst({
-        where: { projectId, epNo: epIndex },
-        orderBy: { version: 'desc' },
-        select: { epNo: true, title: true, content: true, qcReport: true },
-      }).catch(() => null) as any;
+      // v2.586：前集末稿是跨集焊点的必要输入，读取失败必须中止并退款；
+      // 旧实现 `.catch(() => null)` 把数据库故障吞成「没有前集」——付费成稿按第一集凭空衔接，既无提示也无日志。
+      try {
+        prevScript = await prisma.script.findFirst({
+          where: { projectId, epNo: epIndex },
+          orderBy: { version: 'desc' },
+          select: { epNo: true, title: true, content: true, qcReport: true },
+        }) as any;
+      } catch (e) {
+        logInternal(e, 'generate.prev-script');
+        throw new Error('前集剧本读取失败，请稍后重试');
+      }
       if (prevScript && prevScript.content) {
         // 取前集正文前2000字作为摘要（足够 LLM 理解角色状态和集尾钩子，不占过多 token）
         // v2.80 另取结尾段（≤400字，从段首起）作为跨集焊点：下一集开场必须从此瞬间无缝接起
@@ -3098,11 +3105,18 @@ generateRouter.post('/episodes', authRequired, async (req: AuthRequest, res) => 
     // v2.80 中毒账本：按集收集前集中毒摘要（name/poisoned/cured/healthy，升序记账在引擎内做）
     const prevPoisonRows: PoisonRow[] = [];
     if (epIndex > 0) {
-      const prevRows = await prisma.script.findMany({
-        where: { projectId, epNo: { lte: epIndex } },
-        select: { epNo: true, version: true, qcReport: true, content: true },
-        orderBy: [{ epNo: 'desc' }, { version: 'desc' }], // epNo 降序取最近，version 降序保证每集先读到最新版
-      }).catch(() => [] as { epNo: number; version: number; qcReport: any; content: string }[]);
+      // v2.586：跨集台账同属前集上下文，读取失败不得当作「没有历史」继续（见上一条注）
+      let prevRows: { epNo: number; version: number; qcReport: any; content: string }[];
+      try {
+        prevRows = await prisma.script.findMany({
+          where: { projectId, epNo: { lte: epIndex } },
+          select: { epNo: true, version: true, qcReport: true, content: true },
+          orderBy: [{ epNo: 'desc' }, { version: 'desc' }], // epNo 降序取最近，version 降序保证每集先读到最新版
+        }) as typeof prevRows;
+      } catch (e) {
+        logInternal(e, 'generate.prev-ledgers');
+        throw new Error('前集剧本读取失败，请稍后重试');
+      }
       const seenEps = new Set<number>();
       for (const s of latestScripts<any>(prevRows).slice(-8).reverse()) {
         if (seenEps.has(s.epNo) || seenEps.size >= 8) continue;
