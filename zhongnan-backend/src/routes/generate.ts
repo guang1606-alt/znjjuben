@@ -4138,7 +4138,14 @@ generateRouter.post('/episodes', authRequired, async (req: AuthRequest, res) => 
     if (!isStaff && !isFree && !paidViaQuota && points > 0) {
       await withBillingTransaction(prisma, user.id, (tx) => settle(tx, user.id, points, task.id, `settle:${task.id}`));
     }
-    await prisma.generationTask.update({ where: { id: task.id }, data: { status: 'DONE', finishedAt: new Date() } });
+    // v2.608：剧本已落库、费用已 settle，此时状态写失败只是「任务列表状态」这一附属信息缺失，
+    // 不能把它当成生成失败——旧实现让它抛进外层 catch：对外谎报 failed_refunded，还会去解冻一笔
+    // 已结算的钱（必然 NO_LOSS），用户作品库里明明有这一集却被告知失败。改为留痕后照常发 done。
+    try {
+      await prisma.generationTask.update({ where: { id: task.id }, data: { status: 'DONE', finishedAt: new Date() } });
+    } catch (e) {
+      logInternal(e, 'generate.episode.done-status');
+    }
     // 立项机会评估（红蓝海/稀缺/激励/系列化），随完成事件给用户“剧本值不值钱”的判断
     const opportunity = opportunityRadar({
       tags: ((p.tags as string[]) ?? (p.preferredTags as string[])) ?? [],
@@ -4448,7 +4455,14 @@ generateRouter.post('/episodes', authRequired, async (req: AuthRequest, res) => 
         logInternal(e, 'generate.episode.refund');
       }
     }
-    await prisma.generationTask.update({ where: { id: task.id }, data: { status: isCancelled ? 'CANCELLED' : 'FAILED', errorMsg: (err as Error).message } });
+    // v2.608：终态写失败不得吞掉终态事件。旧实现 update 在 catch 块里未包 try/catch，库抖动时
+    // 异常从 catch 再次抛出，SSE 收尾一个终态事件都发不出——前端永远停在「生成中」，而退款可能
+    // 已成功，用户既不知道钱回来了也无法重试。这里留痕后继续发终态事件。
+    try {
+      await prisma.generationTask.update({ where: { id: task.id }, data: { status: isCancelled ? 'CANCELLED' : 'FAILED', errorMsg: (err as Error).message } });
+    } catch (e) {
+      logInternal(e, 'generate.episode.status');
+    }
     const refundNote = refundFailed
       ? (parsed.data.lang === 'en'
         ? ' (Refund is pending; please check your balance later or contact support.)'
