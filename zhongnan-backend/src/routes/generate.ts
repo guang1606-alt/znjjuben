@@ -1792,8 +1792,6 @@ generateRouter.get('/projects', authRequired, async (req: AuthRequest, res) => {
   const mode = req.query.mode as string | undefined;
   if (mode) baseWhere.mode = mode;
   const cursor = decodeProjectCursor(req.query.cursor);
-  // v2.553 优化：cursor 翻页路径跳过 count（前端 fallback 到 list.length），省一次 DB 查询
-  const total = cursor ? null : await prisma.project.count({ where: baseWhere }).catch(() => 0);
 
   const limitRaw = Number(req.query.limit || req.query.take || 60);
   const take = Math.max(1, Math.min(120, limitRaw));
@@ -1809,10 +1807,22 @@ generateRouter.get('/projects', authRequired, async (req: AuthRequest, res) => {
       }
     : baseWhere;
 
-  const rows = await prisma.project.findMany({
-    where, orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
-    take: take + 1, skip,
-  });
+  // v2.553 cursor 翻页路径跳过 count（前端 fallback 到 list.length），省一次 DB 查询。
+  // v2.589 count / findMany 任一失败都必须 500 + 留痕：旧实现 count 用 .catch(()=>0)、findMany 裸抛，
+  //      两者口径不一致——count 抖动但 findMany 成功时会照常 200，返回真实 items 却带 total=0，
+  //      前端分页与「共 N 部」自相矛盾且服务端无日志。统一收口到同一 try/catch。
+  let total: number | null = null;
+  let rows: any[] = [];
+  try {
+    if (!cursor) total = await prisma.project.count({ where: baseWhere });
+    rows = await prisma.project.findMany({
+      where, orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+      take: take + 1, skip,
+    });
+  } catch (e) {
+    logInternal(e, 'generate.projects.list');
+    return res.status(500).json({ error: '作品列表加载失败，请重试' });
+  }
   const hasMore = rows.length > take;
   const items = rows.slice(0, take).map(toProjectListItem);
   const last = items[items.length - 1];
