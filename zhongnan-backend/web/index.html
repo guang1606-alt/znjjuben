@@ -1050,6 +1050,12 @@
           <div class="listen-meta" id="listenCastSheet"></div>
           <div class="notice" id="listenNote"></div>
           <div class="notice hidden" id="listenTtsTip"></div>
+          <!-- v2.635 云端真人语音：仅在后台配置了可用语音供应商时出现；未配置时保持隐藏，浏览器朗读照常可用 -->
+          <div class="listen-cloud hidden" id="listenCloudBar">
+            <button class="btn-ghost" id="listenCloudBtn" type="button">☁ 云端语音</button>
+            <span class="muted" id="listenCloudTip"></span>
+            <audio id="listenCloudAudio" controls hidden preload="none"></audio>
+          </div>
           <!-- c208 整剧连播：集导航 + 自动连播开关（单集时整条隐藏）；续听进度条按记录动态出现 -->
           <div class="listen-series hidden" id="listenSeriesBar">
             <button class="btn-ghost listen-ep-step" id="listenEpPrev" type="button" data-i="listenEpPrev">⏮ 上一集</button>
@@ -1287,9 +1293,10 @@
           <div class="subpanel">
             <form id="pvForm" novalidate>
             <div class="field"><label for="pvName">供应商名称</label><input id="pvName" autocomplete="off" maxlength="60" placeholder="如：火山-成稿主力" /></div>
-            <div class="field"><label for="pvModality">模态</label><select id="pvModality" class="mini-select"><option value="text">文本 text</option><option value="image">图片 image</option><option value="video">视频 video</option></select></div>
+            <div class="field"><label for="pvModality">模态</label><select id="pvModality" class="mini-select"><option value="text">文本 text</option><option value="image">图片 image</option><option value="video">视频 video</option><option value="audio">语音 audio</option></select></div>
             <div class="field"><label for="pvCatalog">目录型号（选中自动带端点/单价，可改）</label><select id="pvCatalog" class="mini-select"></select></div>
             <div class="field"><label for="pvModel">模型名</label><input id="pvModel" autocomplete="off" placeholder="如 doubao-seed-2-pro / gpt-image-1" /></div>
+            <div class="field"><label for="pvVoice">音色（语音供应商，如 alloy / nova）</label><input id="pvVoice" autocomplete="off" maxlength="60" placeholder="留空使用默认 alloy" /></div>
             <div class="field"><label for="pvBase">BaseUrl（目录型号可留空，自建/中转必填）</label><input id="pvBase" autocomplete="off" placeholder="https://…/v1" /></div>
             <div class="field"><label for="pvKey">API Key（加密落库，回显脱敏）</label><input id="pvKey" type="password" autocomplete="new-password" /></div>
             <div class="adm-toolbar">

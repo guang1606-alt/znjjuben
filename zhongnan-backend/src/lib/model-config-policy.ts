@@ -4,7 +4,7 @@
  * 未绑定则回退“引擎档位 → 环境变量”。Key 只在服务端加密落库，回显一律脱敏，C端不可见。
  */
 
-export type Modality = 'text' | 'image' | 'video';
+export type Modality = 'text' | 'image' | 'video' | 'audio';
 export interface ProviderEntry {
   id: string;
   name: string;                 // 管理员自识别，如“火山-旗舰文本”“OpenAI GPT-image”
@@ -12,6 +12,7 @@ export interface ProviderEntry {
   baseUrl: string;
   apiKey: string;
   model: string;
+  voice?: string;               // v2.635 语音供应商音色（如 alloy/nova），未填时合成走默认音色
   inYuanPerMTok: number;        // 文本输入单价（元/百万token）
   outYuanPerMTok: number;       // 文本输出单价
   spendLimitYuan: number;       // 测试期该 Key 消费限额（元）；0=不单独限 Key，仍受总阀约束
@@ -31,7 +32,7 @@ export const ROLE_LABEL_ZH: Record<RoleId, string> = {
 };
 
 export function emptyProvider(modality: Modality): ProviderEntry {
-  return { id: '', name: '', modality, baseUrl: '', apiKey: '', model: '', inYuanPerMTok: 0, outYuanPerMTok: 0, spendLimitYuan: 0, enabled: true };
+  return { id: '', name: '', modality, baseUrl: '', apiKey: '', model: '', voice: '', inYuanPerMTok: 0, outYuanPerMTok: 0, spendLimitYuan: 0, enabled: true };
 }
 
 /**
@@ -54,6 +55,7 @@ export function validateProvider(p: Partial<ProviderEntry>, catalogDefault?: str
   if (!base || !/^https?:\/\/.+/i.test(base)) problems.push('BaseUrl 需为 http(s) 地址（选用目录型号可留空自动补默认端点，自建/中转必填）');
   if (p.modality === 'text' && !p.model) problems.push('文本模型需填写模型名');
   if (p.modality === 'image' && !p.model) problems.push('图片模型需填写模型名');
+  if (p.modality === 'audio' && !p.model) problems.push('语音模型需填写模型名');
   if ((p.inYuanPerMTok ?? 0) < 0 || (p.outYuanPerMTok ?? 0) < 0) problems.push('单价不能为负');
   if (!Number.isFinite(p.spendLimitYuan ?? 0) || (p.spendLimitYuan ?? 0) < 0) problems.push('消费限额必须是非负数字');
   if (p.enabled && !p.apiKey) problems.push('启用前必须粘贴 API Key');

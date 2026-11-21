@@ -189,7 +189,7 @@ export async function loadProviders(p: any = prisma): Promise<ProviderEntry[]> {
   });
 }
 function emptySafe(): ProviderEntry {
-  return { id: '', name: '', modality: 'text', baseUrl: '', apiKey: '', model: '', inYuanPerMTok: 0, outYuanPerMTok: 0, spendLimitYuan: 0, enabled: true };
+  return { id: '', name: '', modality: 'text', baseUrl: '', apiKey: '', model: '', voice: '', inYuanPerMTok: 0, outYuanPerMTok: 0, spendLimitYuan: 0, enabled: true };
 }
 /** 读取岗位路由 */
 export async function loadRouting(p: any = prisma): Promise<Partial<Record<RoleId, string>>> {

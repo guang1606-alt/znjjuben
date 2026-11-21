@@ -182,10 +182,11 @@ export function createAdminModelRouter(prisma: any) {
   const providerSchema = z.object({
     id: z.string().max(60).optional().or(z.literal('')),
     name: z.string().min(1, '供应商名称必填').max(60),
-    modality: z.enum(['text', 'image', 'video']),
+    modality: z.enum(['text', 'image', 'video', 'audio']),
     baseUrl: z.string().max(300).default(''),
     apiKey: z.string().max(400).default(''),
     model: z.string().max(120).default(''),
+    voice: z.string().max(60).default(''),
     inYuanPerMTok: z.number().min(0).max(100000).default(0),
     outYuanPerMTok: z.number().min(0).max(100000).default(0),
     spendLimitYuan: z.number().finite().min(0).max(1_000_000_000).default(0),
@@ -219,6 +220,7 @@ export function createAdminModelRouter(prisma: any) {
     const raw: ProviderEntry = {
       id: d.id || '', name: d.name.trim(), modality: d.modality,
       baseUrl: d.baseUrl.trim(), apiKey: d.apiKey.trim(), model: d.model.trim(),
+      voice: d.voice.trim() || undefined,
       inYuanPerMTok: d.inYuanPerMTok, outYuanPerMTok: d.outYuanPerMTok,
       spendLimitYuan: d.spendLimitYuan,
       catalogId: d.catalogId || undefined, enabled: d.enabled,

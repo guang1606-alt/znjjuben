@@ -8670,6 +8670,45 @@
     listenTts.playing = false; listenTts.paused = false; listenTts.idx = -1;
     listenClearActive(); listenSyncUI();
   }
+  /* ---------- v2.635 云端真人语音（后台 TTS 供应商） ----------
+     只在 /listen 回传 ttsReady 时出现；点按才请求。未配置/超额/过长一律用双语提示，
+     并始终保留浏览器朗读兜底，不让云端故障阻塞用户。 */
+  let listenCloudUrl = '';
+  async function listenPlayCloud(scriptId) {
+    const btn = $('listenCloudBtn'); const tip = $('listenCloudTip'); const audio = $('listenCloudAudio');
+    if (!btn || !audio || btn.disabled) return;
+    btn.disabled = true;
+    const oldText = btn.textContent;
+    btn.textContent = lang === 'en' ? 'Synthesizing…' : '云端合成中…';
+    if (tip) tip.textContent = '';
+    try {
+      const r = await Api.request(`/api/generate/scripts/${scriptId}/listen/tts?lang=${strategyLocale() === 'en' ? 'en' : 'zh'}`, {
+        method: 'POST', body: JSON.stringify({ format: 'mp3' }),
+      });
+      const d = await Api.jsonOrThrow(r);
+      if (!d || !d.audioBase64) throw new Error('TTS_NO_AUDIO');
+      const bin = atob(d.audioBase64);
+      const bytes = new Uint8Array(bin.length);
+      for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+      if (listenCloudUrl) { try { URL.revokeObjectURL(listenCloudUrl); } catch { /* 忽略 */ } }
+      listenCloudUrl = URL.createObjectURL(new Blob([bytes], { type: d.format === 'wav' ? 'audio/wav' : 'audio/mpeg' }));
+      listenFinish(); // 掐断浏览器朗读，避免双声叠放
+      audio.src = listenCloudUrl; audio.hidden = false;
+      try { await audio.play(); } catch { /* 自动播放被拒时保留控件，由用户点播放 */ }
+      if (tip) tip.textContent = d.cached ? (lang === 'en' ? 'Cached audio' : '已命中缓存，不重复计费') : '';
+    } catch (e) {
+      const code = e && e.error; const status = e && e.httpStatus;
+      if (tip) tip.textContent = code === 'TTS_NOT_CONFIGURED' || status === 503
+        ? (lang === 'en' ? 'Cloud voice is not configured; browser voice still works.' : '云端语音尚未配置，浏览器朗读仍可用。')
+        : code === 'TTS_DAILY_LIMIT' || status === 429
+          ? (lang === 'en' ? 'Daily cloud voice limit reached; browser voice still works.' : '今日云端语音次数已用完，浏览器朗读仍可用。')
+          : code === 'TTS_TEXT_TOO_LONG' || status === 400
+            ? (lang === 'en' ? 'Episode too long for one cloud request; browser voice still works.' : '本集过长，暂不支持整集云端合成，浏览器朗读仍可用。')
+            : (lang === 'en' ? 'Cloud voice failed; browser voice still works.' : '云端语音失败，浏览器朗读仍可用。');
+    } finally {
+      btn.disabled = false; btn.textContent = oldText;
+    }
+  }
   // how='natural'：onend 自然走到集尾，受自动连播开关约束；'manual'：手动 ⏭ 越过末段，总是尝试跨集
   function speakListenIdx(i, how = 'natural') {
     const ss = listenSs(); const d = listenTts.data;
@@ -8837,6 +8876,19 @@
       bar.classList.remove('hidden');
       // 云端真人 TTS 未配置的旧提示不再展示：浏览器内置合成已可即时分角色朗读
       tts.classList.add('hidden');
+    }
+    // v2.635 云端真人语音入口：仅后端确认有可用语音供应商时才出现；换集先停旧云端音频
+    const cloudBar = $('listenCloudBar');
+    const cloudAudio = $('listenCloudAudio');
+    if (cloudAudio) { try { cloudAudio.pause(); } catch { /* 忽略 */ } cloudAudio.hidden = true; }
+    if (cloudBar) {
+      if (d.ttsReady) {
+        cloudBar.classList.remove('hidden');
+        if ($('listenCloudTip')) $('listenCloudTip').textContent = '';
+        if ($('listenCloudBtn')) $('listenCloudBtn').onclick = () => listenPlayCloud(d.scriptId);
+      } else {
+        cloudBar.classList.add('hidden');
+      }
     }
     const kindLabel = { scene: lang === 'en' ? 'Scene' : '场标', action: lang === 'en' ? 'Narration' : '旁白', dialogue: lang === 'en' ? 'Line' : '台词' };
     $('listenSegments').innerHTML = d.segments.map((s) =>
@@ -11584,6 +11636,7 @@
       const p = pvCache.providers.find((x) => x.id === b.getAttribute('data-pvedit'));
       editingPvId = p.id; $('pvName').value = p.name; $('pvModality').value = p.modality;
       $('pvModel').value = p.model; $('pvBase').value = p.baseUrl || '';
+      $('pvVoice').value = p.voice || '';
       $('pvIn').value = p.inYuanPerMTok; $('pvOut').value = p.outYuanPerMTok; $('pvEnabled').checked = p.enabled;
       $('pvSpend').value = Number(p.spendLimitYuan) || 0;
       $('pvCatalog').value = p.catalogId || ''; $('pvKey').placeholder = '留空保留原密钥'; window.scrollTo({ top: $('pvName').offsetTop - 80 });
@@ -11601,6 +11654,7 @@
     const body = {
       id: editingPvId || '', name: $('pvName').value.trim(), modality: $('pvModality').value,
       catalogId: $('pvCatalog').value, baseUrl: $('pvBase').value.trim(), model: $('pvModel').value.trim(),
+      voice: $('pvVoice').value.trim(),
       apiKey: $('pvKey').value.trim(), inYuanPerMTok: Number($('pvIn').value) || 0, outYuanPerMTok: Number($('pvOut').value) || 0,
       spendLimitYuan: Math.max(0, Number($('pvSpend').value) || 0),
       enabled: $('pvEnabled').checked,
@@ -11609,7 +11663,7 @@
     try {
       await admApi('/model/providers', { method: 'PUT', body: JSON.stringify(body) });
       xnSay(editingPvId ? '已更新（密钥加密）' : '已新增（密钥加密）');
-      editingPvId = ''; ['pvName', 'pvModel', 'pvBase', 'pvKey'].forEach((id) => $(id).value = '');
+      editingPvId = ''; ['pvName', 'pvModel', 'pvBase', 'pvKey', 'pvVoice'].forEach((id) => $(id).value = '');
       $('pvSpend').value = 0;
       await loadProviders(); await loadAdmPortfolio();
     } catch (e) { xnSay(e.message); }

@@ -123,6 +123,8 @@ import { sanitizeClientError } from '../lib/blackbox';
 import { userMessageOf, modelErrorMeta } from '../lib/model-error-message';
 import { buildListenScript, listenEntitleNote } from '../engine/listen-script';
 import { buildVoiceCast } from '../engine/listen-voice-cast';
+import { loadProviders } from '../lib/model-config';
+import { pickAudioProvider, synthesizeSpeech, ttsCacheKey, TTS_FORMATS, TTS_DEFAULT_FORMAT, TTS_MAX_CHARS } from '../lib/tts';
 import { buildShotManifest, planAigcVolume, analyzeAigcSceneCurve } from '../engine/aigc-screenplay'; // c219 AIGC 构成仪表盘数据落库：生成期/fix 期持久化到 qcReport._aigc，刷新后可重渲染
 import { validateScript } from '../engine/script-format'; // c219 _aigc.format 复用 pipeline 同口径 validateScript（非 validateAigcScreenplay）
 import { buildScriptDoc, normalizeBibleDoc } from '../lib/script-doc';
@@ -2414,6 +2416,14 @@ generateRouter.get('/scripts/:id/listen', authRequired, async (req: AuthRequest,
     // v2.612：旁白降级不改变响应，但必须留下原始异常，避免分角色声线消失零线索。
     logInternal(e, 'generate.listen.voice-cast');
   }
+  // c206：播放改由前端浏览器内置 speechSynthesis 完成；v2.635 起 ttsReady 按供应商池真实能力回传，
+  // 不再硬编码 false——配置了可用 audio 供应商时前端可直接播云端真人声线。
+  let ttsReady = false;
+  try {
+    ttsReady = !!pickAudioProvider(await loadProviders(prisma));
+  } catch (e) {
+    logInternal(e, 'generate.listen.tts-provider');
+  }
   res.json({
     scriptId: sc.id, epNo: sc.epNo, title: sc.title || '',
     ...listen,
@@ -2422,9 +2432,67 @@ generateRouter.get('/scripts/:id/listen', authRequired, async (req: AuthRequest,
     note: listenEntitleNote(listenLang),
     // c208：整剧连播所需的项目归属与片单邻接
     projectId: project.id, neighbors,
-    // c206：播放改由前端浏览器内置 speechSynthesis 完成（是否可用以浏览器特性检测为准）；
-    // 云端真人 TTS 仍未配置，ttsReady 语义不变（false），保留给旧前端展示提示
-    ttsReady: false,
+    ttsReady,
+  });
+});
+
+// v2.635 云端语音合成：权益/归属/正文闸门与 /listen 同口径；只读剧本，不扣积分。
+// 未配置 audio 供应商时如实 503 TTS_NOT_CONFIGURED，绝不伪造音频；同参命中缓存不重复计费。
+generateRouter.post('/scripts/:id/listen/tts', authRequired, async (req: AuthRequest, res) => {
+  const me = await prisma.user.findUnique({ where: { id: req.userId! }, select: { level: true } });
+  const level = ((me?.level ?? MemberLevel.FREE) as MemberLevel);
+  const gate = assistantGate(level, 'listen_script');
+  if (!gate.allowed) return res.status(403).json({ error: 'ASSISTANT_LEVEL_REQUIRED', needLevel: gate.needLevel, upsell: gate.upsell });
+  const sc = await prisma.script.findUnique({ where: { id: req.params.id } });
+  if (!sc) return res.status(404).json({ error: '剧本不存在' });
+  const project = await prisma.project.findFirst({ where: { id: sc.projectId, userId: req.userId!, status: { not: 'deleted' } } });
+  if (!project) return res.status(403).json({ error: '无权查看该剧本' });
+  const outLang = normalizeUiLang(typeof req.body?.lang === 'string' ? req.body.lang : typeof req.query.lang === 'string' ? req.query.lang : 'zh');
+  const listenLang = outLang === 'en' ? 'en' : 'zh';
+  const listen = buildListenScript(sc.content || '', { lang: listenLang });
+  if (!listen.segments.length) return res.status(400).json({ error: '该集暂无可朗读正文' });
+
+  const rawFormat = typeof req.body?.format === 'string' ? req.body.format.trim().toLowerCase() : '';
+  const format = rawFormat || TTS_DEFAULT_FORMAT;
+  if (!(TTS_FORMATS as string[]).includes(format)) {
+    return res.status(400).json({ error: 'TTS_FORMAT_INVALID', formats: TTS_FORMATS });
+  }
+  if (listen.narration.length > TTS_MAX_CHARS) {
+    return res.status(400).json({ error: 'TTS_TEXT_TOO_LONG', limit: TTS_MAX_CHARS, chars: listen.narration.length });
+  }
+
+  let provider = null;
+  try {
+    provider = pickAudioProvider(await loadProviders(prisma));
+  } catch (e) {
+    logInternal(e, 'generate.listen.tts-provider');
+  }
+  if (!provider) {
+    return res.status(503).json({
+      error: 'TTS_NOT_CONFIGURED',
+      message: '后台尚未配置云端语音供应商，可继续使用浏览器朗读',
+    });
+  }
+
+  const out = await synthesizeSpeech({
+    provider,
+    text: listen.narration,
+    format,
+    cacheKey: ttsCacheKey({ scriptId: sc.id, version: sc.version, text: listen.narration, lang: listenLang }),
+    userId: req.userId!,
+  });
+  if (!out.ok) {
+    if (out.code === 'TTS_DAILY_LIMIT') return res.status(429).json({ error: out.code, message: out.message });
+    if (out.code === 'TTS_EMPTY' || out.code === 'TTS_TEXT_TOO_LONG') {
+      return res.status(400).json({ error: out.code, message: out.message });
+    }
+    return res.status(502).json({ error: 'TTS_FAILED', message: out.message });
+  }
+  res.json({
+    scriptId: sc.id, epNo: sc.epNo, lang: listenLang,
+    audioBase64: out.audioBase64, format: out.format, voice: out.voice,
+    chars: out.chars, cached: !!out.cached,
+    note: listenEntitleNote(listenLang),
   });
 });
 
