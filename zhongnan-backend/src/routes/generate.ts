@@ -124,7 +124,7 @@ import { userMessageOf, modelErrorMeta } from '../lib/model-error-message';
 import { buildListenScript, listenEntitleNote } from '../engine/listen-script';
 import { buildVoiceCast } from '../engine/listen-voice-cast';
 import { loadProviders } from '../lib/model-config';
-import { pickAudioProvider, synthesizeSpeech, ttsCacheKey, TTS_FORMATS, TTS_DEFAULT_FORMAT, TTS_MAX_CHARS } from '../lib/tts';
+import { pickAudioProvider, listAudioProviders, synthesizeSpeech, ttsCacheKey, TTS_FORMATS, TTS_DEFAULT_FORMAT, TTS_MAX_CHARS } from '../lib/tts';
 import { buildShotManifest, planAigcVolume, analyzeAigcSceneCurve } from '../engine/aigc-screenplay'; // c219 AIGC 构成仪表盘数据落库：生成期/fix 期持久化到 qcReport._aigc，刷新后可重渲染
 import { validateScript } from '../engine/script-format'; // c219 _aigc.format 复用 pipeline 同口径 validateScript（非 validateAigcScreenplay）
 import { buildScriptDoc, normalizeBibleDoc } from '../lib/script-doc';
@@ -2461,13 +2461,13 @@ generateRouter.post('/scripts/:id/listen/tts', authRequired, async (req: AuthReq
     return res.status(400).json({ error: 'TTS_TEXT_TOO_LONG', limit: TTS_MAX_CHARS, chars: listen.narration.length });
   }
 
-  let provider = null;
+  let candidates = [] as ReturnType<typeof listAudioProviders>;
   try {
-    provider = pickAudioProvider(await loadProviders(prisma));
+    candidates = listAudioProviders(await loadProviders(prisma)).slice(0, 3); // Top3 故障转移，与文本链路同语义
   } catch (e) {
     logInternal(e, 'generate.listen.tts-provider');
   }
-  if (!provider) {
+  if (!candidates.length) {
     return res.status(503).json({
       error: 'TTS_NOT_CONFIGURED',
       message: '后台尚未配置云端语音供应商，可继续使用浏览器朗读',
@@ -2475,7 +2475,7 @@ generateRouter.post('/scripts/:id/listen/tts', authRequired, async (req: AuthReq
   }
 
   const out = await synthesizeSpeech({
-    provider,
+    providers: candidates,
     text: listen.narration,
     format,
     cacheKey: ttsCacheKey({ scriptId: sc.id, version: sc.version, text: listen.narration, lang: listenLang }),

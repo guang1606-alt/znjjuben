@@ -43,12 +43,16 @@ export interface TtsResult {
   cached?: boolean;
 }
 
-/** 选中一个可用语音供应商：启用 + 有 Key + 有模型 + http(s) 端点 */
-export function pickAudioProvider(list: ProviderEntry[]): ProviderEntry | null {
-  const p = list.find((x) => x.modality === 'audio' && x.enabled
+/** 可用语音供应商：启用 + 有 Key + 有模型 + http(s) 端点，按池顺序返回 */
+export function listAudioProviders(list: ProviderEntry[]): ProviderEntry[] {
+  return list.filter((x) => x.modality === 'audio' && x.enabled
     && !!(x.apiKey || '').trim() && !!(x.model || '').trim()
     && /^https?:\/\/.+/i.test(x.baseUrl || ''));
-  return p || null;
+}
+
+/** 选中第一个可用语音供应商（展示用，如 /listen 的 ttsReady） */
+export function pickAudioProvider(list: ProviderEntry[]): ProviderEntry | null {
+  return listAudioProviders(list)[0] || null;
 }
 
 /** 缓存键的脚本维度：脚本 id + 版本 + 正文哈希 + 语言；供应商/模型/音色/格式在合成时再拼一层 */
@@ -224,7 +228,8 @@ function redact(text: string, key: string): string {
 
 /* ---------------- 合成 ---------------- */
 export interface SynthesizeInput {
-  provider: ProviderEntry;
+  /** 按优先级排列的候选语音供应商（路由层按池顺序最多取 3 家） */
+  providers: ProviderEntry[];
   text: string;
   format?: string;
   /** 由调用方提供的脚本维度缓存键；缺省按文本哈希 */
@@ -233,30 +238,14 @@ export interface SynthesizeInput {
   userId?: string;
 }
 
-export async function synthesizeSpeech(input: SynthesizeInput): Promise<TtsResult> {
-  const text = String(input.text || '').trim();
-  const format = (TTS_FORMATS as string[]).includes(String(input.format)) ? String(input.format) as TtsFormat : TTS_DEFAULT_FORMAT;
-  const voice = (input.provider.voice || '').trim() || TTS_DEFAULT_VOICE;
-  const chars = text.length;
+/** 请求级错误（如 400 音色/参数不合法）换供应商同样会失败，不重试 */
+function isRequestLevelError(status?: number): boolean {
+  return status === 400;
+}
 
-  if (!text) return { ok: false, code: 'TTS_EMPTY', message: '没有可合成的朗读文本' };
-  if (chars > TTS_MAX_CHARS) {
-    return { ok: false, code: 'TTS_TEXT_TOO_LONG', message: `单次合成上限 ${TTS_MAX_CHARS} 字，请分集播放` };
-  }
-
-  const p = input.provider;
+async function tryProvider(p: ProviderEntry, text: string, format: TtsFormat): Promise<TtsResult> {
+  const voice = (p.voice || '').trim() || TTS_DEFAULT_VOICE;
   const base = (p.baseUrl || '').trim().replace(/\/+$/, '');
-  const key = createHash('sha256')
-    .update([p.id, p.model, voice, format, input.cacheKey || createHash('sha256').update(text).digest('hex')].join('\u0000'))
-    .digest('hex');
-
-  const hit = cacheGet(key);
-  if (hit) return { ok: true, audioBase64: hit.b64, format: hit.format, voice: hit.voice, chars: hit.chars, cached: true };
-
-  if (!consumeQuota(input.userId)) {
-    return { ok: false, code: 'TTS_DAILY_LIMIT', message: '今日云端语音次数已用完，可改用浏览器朗读或明日再试' };
-  }
-
   const transport = __transport ?? defaultTransport;
   try {
     const resp = await transport(`${base}/audio/speech`, {
@@ -279,12 +268,48 @@ export async function synthesizeSpeech(input: SynthesizeInput): Promise<TtsResul
       b64 = buf.toString('base64');
     }
     if (!b64) return { ok: false, code: 'TTS_FAILED', status: resp.status, message: '语音服务未返回音频数据' };
-
-    cachePut(key, { b64, format, voice, chars });
-    return { ok: true, audioBase64: b64, format, voice, chars, cached: false };
+    return { ok: true, audioBase64: b64, format, voice, chars: text.length, cached: false };
   } catch (e) {
     logInternal(e, 'tts.synthesize');
     const raw = redact((e as { message?: string })?.message ?? String(e), p.apiKey);
     return { ok: false, code: 'TTS_FAILED', message: `语音服务不可用${raw ? '：' + raw : ''}` };
   }
+}
+
+export async function synthesizeSpeech(input: SynthesizeInput): Promise<TtsResult> {
+  const text = String(input.text || '').trim();
+  const format = (TTS_FORMATS as string[]).includes(String(input.format)) ? String(input.format) as TtsFormat : TTS_DEFAULT_FORMAT;
+  const chars = text.length;
+
+  if (!text) return { ok: false, code: 'TTS_EMPTY', message: '没有可合成的朗读文本' };
+  if (chars > TTS_MAX_CHARS) {
+    return { ok: false, code: 'TTS_TEXT_TOO_LONG', message: `单次合成上限 ${TTS_MAX_CHARS} 字，请分集播放` };
+  }
+
+  const candidates = listAudioProviders(input.providers || []).slice(0, 3);
+  if (!candidates.length) return { ok: false, code: 'TTS_FAILED', message: '没有可用的语音供应商' };
+
+  // 缓存键与供应商无关：故障转移后产出的音频同样可复用，避免换家后重复计费
+  const key = createHash('sha256')
+    .update([format, input.cacheKey || createHash('sha256').update(text).digest('hex')].join('\u0000'))
+    .digest('hex');
+
+  const hit = cacheGet(key);
+  if (hit) return { ok: true, audioBase64: hit.b64, format: hit.format, voice: hit.voice, chars: hit.chars, cached: true };
+
+  if (!consumeQuota(input.userId)) {
+    return { ok: false, code: 'TTS_DAILY_LIMIT', message: '今日云端语音次数已用完，可改用浏览器朗读或明日再试' };
+  }
+
+  let last: TtsResult = { ok: false, code: 'TTS_FAILED', message: '语音服务不可用' };
+  for (const p of candidates) {
+    const r = await tryProvider(p, text, format);
+    if (r.ok) {
+      cachePut(key, { b64: r.audioBase64!, format, voice: r.voice!, chars });
+      return r;
+    }
+    last = r;
+    if (isRequestLevelError(r.status)) break;
+  }
+  return last;
 }
