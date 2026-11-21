@@ -126,6 +126,55 @@ function httpPost(url: string, init: { method: string; headers: Record<string, s
   });
 }
 
+/**
+ * 供应商连通性自检（v2.634）：保存成功 ≠ 密钥可用。
+ * 只发一次 1 token 的 OpenAI 兼容探测，回传可归因结论；不写 ModelCallLog、不计费、不回显密钥。
+ * 图像/语音供应商协议各异，如实返回 UNSUPPORTED_MODALITY，不假装探测过。
+ */
+export interface PingResult {
+  ok: boolean;
+  code?: 'NO_KEY' | 'UNSUPPORTED_MODALITY' | 'PING_FAILED';
+  status?: number;
+  latencyMs?: number;
+  model?: string;
+  message: string;
+}
+
+function redactPingDetail(text: string, key: string): string {
+  let s = String(text || '').replace(/\s+/g, ' ').trim();
+  if (key) s = s.split(key).join('***');
+  return s.slice(0, 160);
+}
+
+export async function pingProvider(input: { baseUrl: string; model: string; apiKey: string; modality: string }): Promise<PingResult> {
+  const key = (input.apiKey || '').trim();
+  if (!key) return { ok: false, code: 'NO_KEY', message: '该供应商尚未保存密钥，请先填写并保存后再测试' };
+  if (input.modality !== 'text') return { ok: false, code: 'UNSUPPORTED_MODALITY', message: '图像/语音供应商协议各异，暂不支持连通性自检' };
+  const base = (input.baseUrl || '').trim().replace(/\/+$/, '');
+  if (!base) return { ok: false, code: 'PING_FAILED', message: '供应商未配置接口地址（baseUrl）' };
+  const started = Date.now();
+  try {
+    const transport = __injectedTransport ?? httpPost;
+    const resp = await transport(`${base}/chat/completions`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${key}` },
+      body: JSON.stringify({ model: input.model, messages: [{ role: 'user', content: 'ping' }], max_tokens: 1, temperature: 0 }),
+      timeoutMs: 8000,
+    });
+    const latencyMs = Date.now() - started;
+    if (!resp.ok) {
+      const detail = redactPingDetail(await resp.text().catch(() => ''), key);
+      return { ok: false, code: 'PING_FAILED', status: resp.status, latencyMs, message: `接口返回 ${resp.status}${detail ? '：' + detail : ''}` };
+    }
+    return { ok: true, status: resp.status, latencyMs, model: input.model, message: '连接正常' };
+  } catch (e) {
+    const name = (e as { name?: string })?.name;
+    const raw = (e as { message?: string })?.message ?? String(e);
+    const msg = name === 'AbortError' || /MODEL_TIMEOUT|ETIMEDOUT|timeout/i.test(raw) ? '请求超时（8 秒未响应）' : `连接失败：${redactPingDetail(raw, key)}`;
+    return { ok: false, code: 'PING_FAILED', latencyMs: Date.now() - started, message: msg };
+  }
+}
+
 /** 文本候选端点：档位配置、九岗路由指定或供应商池替补，单价随实际端点核算 */
 interface Candidate { baseUrl: string; model: string; key: string; inY: number; outY: number; keyLimitYuan: number }
 

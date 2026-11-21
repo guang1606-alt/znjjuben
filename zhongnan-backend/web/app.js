@@ -11559,10 +11559,19 @@
       <div class="model-row" style="margin-bottom:6px">
         <div class="model-tier">${escapeHtml(p.name)} <span class="badge">${p.modality}</span> ${p.enabled ? '' : '<span class="badge">停用</span>'} ${spendNote ? `<span class="badge">${escapeHtml(spendNote)}</span>` : ''} <span class="muted">${escapeHtml(p.keyMask || p.apiKey || '')}</span></div>
         <div class="row-actions">
+          <button class="btn-ghost" data-pvping="${p.id}">测试连接</button>
           <button class="btn-ghost" data-pvedit="${p.id}">编辑</button>
           <button class="btn-ghost" data-pvdel="${p.id}">删除</button>
         </div></div>`;
     }).join('') : znEmptyHtml('暂无自定义供应商', '岗位全部走三档引擎组合');
+    $('pvList').querySelectorAll('[data-pvping]').forEach((b) => b.onclick = async () => {
+      b.disabled = true; const old = b.textContent; b.textContent = '测试中…';
+      try {
+        const r = await admApi('/model/providers/' + b.getAttribute('data-pvping') + '/ping', { method: 'POST' });
+        xnSay(r.ok ? `连接正常 · ${r.latencyMs}ms · ${r.model || ''}`.trim() : (r.message || '连接失败'));
+      } catch { xnSay('测试失败，请稍后重试'); }
+      b.disabled = false; b.textContent = old;
+    });
     $('pvList').querySelectorAll('[data-pvdel]').forEach((b) => b.onclick = async () => {
       if (!(await uiConfirm({ body: '删除该供应商？相关岗位路由将自动解绑回退。', danger: true, okText: '删除' }))) return;
       // v2.285 admApi 经 jsonOrThrow 把网络层与 HTTP 非 ok 都 throw：catch 给失败结论并阻断乐观成功

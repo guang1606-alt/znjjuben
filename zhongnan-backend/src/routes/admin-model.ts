@@ -27,6 +27,7 @@ import { modelReviewStatus, CATALOG_PRICING_AS_OF } from '../config/model-review
 import { AuditInput } from '../engine/model-audit';
 import { classifyAlertLevel, pickBalanceQueryStrategy, summarizeBalances, ProviderBalanceRow } from '../lib/balance-policy';
 import { probeDeepseekBalance, probeMoonshotBalance } from '../lib/balance-probe';
+import { pingProvider } from '../lib/model-proxy';
 
 export function createAdminModelRouter(prisma: any) {
   const adminModelRouter = asyncRouter();
@@ -235,6 +236,18 @@ export function createAdminModelRouter(prisma: any) {
   adminModelRouter.delete('/providers/:id', authRequired, requireAdmin, requireSuperAdmin, async (req: AuthRequest, res) => {
     await deleteProvider(String(req.params.id), req.userId || 'admin', prisma);
     res.json({ ok: true, masked: await providersPayload() });
+  });
+
+  // 连通性自检（v2.634）：只诊断、不改配置；图像供应商如实返回 UNSUPPORTED_MODALITY
+  adminModelRouter.post('/providers/:id/ping', authRequired, requireAdmin, requireSuperAdmin, async (req: AuthRequest, res) => {
+    try {
+      const pid = String(req.params.id);
+      const p = (await loadProviders(prisma)).find((x) => x.id === pid);
+      if (!p) return res.status(404).json({ error: '供应商不存在' });
+      res.json(await pingProvider({ baseUrl: p.baseUrl, model: p.model, apiKey: p.apiKey, modality: p.modality }));
+    } catch (e) {
+      failInternal(res, e, 'admin-model.providers.ping');
+    }
   });
 
   // 九岗路由（悬空 id 服务端自动丢弃）
