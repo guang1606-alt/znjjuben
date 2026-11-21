@@ -105,6 +105,60 @@ function defaultTransport(url: string, init: { method: string; headers: Record<s
   });
 }
 
+/* ---------------- 供应商连通性自检（管理后台「测试连接」） ---------------- */
+const PING_TIMEOUT_MS = 15_000;
+export interface TtsPingResult {
+  ok: boolean;
+  code?: 'NO_KEY' | 'PING_FAILED';
+  status?: number;
+  latencyMs?: number;
+  model?: string;
+  message: string;
+}
+
+export async function pingTtsProvider(input: { baseUrl: string; apiKey: string; model: string; voice?: string }): Promise<TtsPingResult> {
+  const key = (input.apiKey || '').trim();
+  if (!key) return { ok: false, code: 'NO_KEY', message: '该语音供应商尚未保存密钥，请先填写并保存后再测试' };
+  const base = (input.baseUrl || '').trim().replace(/\/+$/, '');
+  if (!base) return { ok: false, code: 'PING_FAILED', message: '供应商未配置接口地址（baseUrl）' };
+  const model = (input.model || '').trim();
+  if (!model) return { ok: false, code: 'PING_FAILED', message: '语音供应商未配置模型名' };
+  const voice = (input.voice || '').trim() || TTS_DEFAULT_VOICE;
+  const started = Date.now();
+  try {
+    const transport = __transport ?? defaultTransport;
+    const resp = await transport(`${base}/audio/speech`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${key}` },
+      body: JSON.stringify({ model, voice, input: '测试', response_format: 'mp3' }),
+      timeoutMs: PING_TIMEOUT_MS,
+    });
+    const buf = await resp.buffer();
+    const latencyMs = Date.now() - started;
+    if (!resp.ok) {
+      const detail = redact(buf.toString('utf8'), key);
+      return { ok: false, code: 'PING_FAILED', status: resp.status, latencyMs, message: `接口返回 ${resp.status}${detail ? '：' + detail : ''}` };
+    }
+    const ctype = (resp.headers['content-type'] || '').toLowerCase();
+    let hasAudio = buf.length > 0;
+    if (ctype.includes('json')) {
+      try {
+        const j = JSON.parse(buf.toString('utf8')) as { audio?: string; data?: string; audio_base64?: string };
+        hasAudio = !!(j.audio || j.data || j.audio_base64);
+      } catch { hasAudio = false; }
+    }
+    if (!hasAudio) return { ok: false, code: 'PING_FAILED', status: resp.status, latencyMs, message: '接口连通但未返回音频数据' };
+    return { ok: true, status: resp.status, latencyMs, model, message: '连接正常，已返回音频' };
+  } catch (e) {
+    const name = (e as { name?: string })?.name;
+    const raw = redact((e as { message?: string })?.message ?? String(e), key);
+    const msg = name === 'AbortError' || /MODEL_TIMEOUT|TTS_TIMEOUT|ETIMEDOUT|timeout/i.test(raw)
+      ? `请求超时（${Math.round(PING_TIMEOUT_MS / 1000)} 秒未响应）`
+      : `连接失败${raw ? '：' + raw : ''}`;
+    return { ok: false, code: 'PING_FAILED', latencyMs: Date.now() - started, message: msg };
+  }
+}
+
 /* ---------------- 进程内缓存 + 每日额度 ---------------- */
 interface CacheEntry { b64: string; format: string; voice: string; chars: number }
 const cache = new Map<string, CacheEntry>();

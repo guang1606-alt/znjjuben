@@ -28,6 +28,7 @@ import { AuditInput } from '../engine/model-audit';
 import { classifyAlertLevel, pickBalanceQueryStrategy, summarizeBalances, ProviderBalanceRow } from '../lib/balance-policy';
 import { probeDeepseekBalance, probeMoonshotBalance } from '../lib/balance-probe';
 import { pingProvider } from '../lib/model-proxy';
+import { pingTtsProvider } from '../lib/tts';
 
 export function createAdminModelRouter(prisma: any) {
   const adminModelRouter = asyncRouter();
@@ -240,12 +241,16 @@ export function createAdminModelRouter(prisma: any) {
     res.json({ ok: true, masked: await providersPayload() });
   });
 
-  // 连通性自检（v2.634）：只诊断、不改配置；图像供应商如实返回 UNSUPPORTED_MODALITY
+  // 连通性自检（v2.634）：只诊断、不改配置；图像/视频供应商如实返回 UNSUPPORTED_MODALITY。
+  // v2.636：语音供应商改走一次极短合成探测（/audio/speech），不再被文本探测误判为不支持。
   adminModelRouter.post('/providers/:id/ping', authRequired, requireAdmin, requireSuperAdmin, async (req: AuthRequest, res) => {
     try {
       const pid = String(req.params.id);
       const p = (await loadProviders(prisma)).find((x) => x.id === pid);
       if (!p) return res.status(404).json({ error: '供应商不存在' });
+      if (p.modality === 'audio') {
+        return res.json(await pingTtsProvider({ baseUrl: p.baseUrl, apiKey: p.apiKey, model: p.model, voice: p.voice }));
+      }
       res.json(await pingProvider({ baseUrl: p.baseUrl, model: p.model, apiKey: p.apiKey, modality: p.modality }));
     } catch (e) {
       failInternal(res, e, 'admin-model.providers.ping');
