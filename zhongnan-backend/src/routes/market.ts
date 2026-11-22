@@ -378,53 +378,64 @@ export function createMarketRouter(prisma: PrismaLike | any) {
   });
 
   // v2.75 卖家工作台：我的上架+销量+收入统计，让卖家直观看到"剧本值多少钱"
+  // v2.649 统计口径修正：总数/在售/已成交改走全库 count——旧实现从 take:50 窗口里数数，
+  // 卖家累计上架超过 50 个后统计卡会静默失真（最老的在售/已成交被窗口挤掉）。
+  // items 仍只取最近 50 条，但回传 itemsHasMore 让前端诚实标注，而不是假装列表就是全部。
   marketRouter.get('/seller-dashboard', authRequired, async (req: AuthRequest, res) => {
     const uid = req.userId!;
-    const listings = await prisma.listing.findMany({ where: { sellerId: uid }, orderBy: { createdAt: 'desc' }, take: 50 });
-    const purchases = await prisma.purchase.findMany({ where: { sellerId: uid } });
-    const settled = purchases.filter((p: any) => p.status === 'SETTLED');
-    const escrow = purchases.filter((p: any) => p.status === 'ESCROW');
-    const totalRevenue = settled.reduce((s: number, p: any) => s + p.sellerGainPoints, 0);
-    const pendingRevenue = escrow.reduce((s: number, p: any) => s + p.sellerGainPoints, 0);
-    const onShelf = listings.filter((l: any) => l.status === 'ON_SHELF').length;
-    const sold = listings.filter((l: any) => l.status === 'SOLD').length;
-    const stats = {
-      totalListings: listings.length, onShelf, sold, inEscrow: escrow.length,
-      totalRevenuePoints: totalRevenue, pendingPoints: pendingRevenue,
-      commissionPoints: settled.reduce((s: number, p: any) => s + p.commissionPoints, 0),
-      avgSalePoints: settled.length ? Math.round(totalRevenue / settled.length) : 0,
-    };
-    // v2.78 上榜荣誉检测：好评榜（在售按valueIndex降序前10）、热销榜（已成交按时间降序前10）
-    const allRatedOnShelf = (await prisma.listing.findMany({ where: { status: 'ON_SHELF', valueIndex: { not: null } }, orderBy: { valueIndex: 'desc' }, take: 50 })) as any[];
-    const ratingRank = new Map<string, number>();
-    allRatedOnShelf.forEach((l, i) => ratingRank.set(l.id, i + 1));
-    const allSettledPurchases = (await prisma.purchase.findMany({ where: { status: 'SETTLED' }, orderBy: { createdAt: 'desc' }, take: 50 })) as any[];
-    const hotRank = new Map<string, number>();
-    allSettledPurchases.forEach((p, i) => { if (!hotRank.has(p.listingId)) hotRank.set(p.listingId, i + 1); });
-    const honors: any[] = [];
-    // 每个上架剧本附带成交信息（若已售）
-    const purchaseByListing = new Map<string, any>();
-    purchases.forEach((p: any) => purchaseByListing.set(p.listingId, p));
-    const items = listings.map((l: any) => {
-      const p = purchaseByListing.get(l.id);
-      const boards: string[] = [];
-      if (l.status === 'ON_SHELF') {
-        const rr = ratingRank.get(l.id);
-        if (rr && rr <= 10) boards.push('rating');
-      }
-      const hr = hotRank.get(l.id);
-      if (hr && hr <= 10) boards.push('hot');
-      if (boards.length) honors.push({ id: l.id, title: l.title, boards, ratingRank: ratingRank.get(l.id) || null, hotRank: hr || null });
-      return {
-        id: l.id, title: l.title, pricePoints: l.priceFen / FEN_PER_POINT,
-        status: l.status, valueGrade: l.valueGrade, valueIndex: l.valueIndex, valueEpisodes: l.valueEpisodes,
-        createdAt: l.createdAt,
-        soldAt: p && p.status === 'SETTLED' ? p.createdAt : null,
-        sellerGainPoints: p && p.status === 'SETTLED' ? p.sellerGainPoints : null,
-        onBoard: boards.length ? boards : null,
+    try {
+      const [listings, purchases, totalListings, onShelf, sold] = await Promise.all([
+        prisma.listing.findMany({ where: { sellerId: uid }, orderBy: { createdAt: 'desc' }, take: 50 }),
+        prisma.purchase.findMany({ where: { sellerId: uid } }),
+        prisma.listing.count({ where: { sellerId: uid } }),
+        prisma.listing.count({ where: { sellerId: uid, status: 'ON_SHELF' } }),
+        prisma.listing.count({ where: { sellerId: uid, status: 'SOLD' } }),
+      ]);
+      const settled = purchases.filter((p: any) => p.status === 'SETTLED');
+      const escrow = purchases.filter((p: any) => p.status === 'ESCROW');
+      const totalRevenue = settled.reduce((s: number, p: any) => s + p.sellerGainPoints, 0);
+      const pendingRevenue = escrow.reduce((s: number, p: any) => s + p.sellerGainPoints, 0);
+      const stats = {
+        totalListings, onShelf, sold, inEscrow: escrow.length,
+        totalRevenuePoints: totalRevenue, pendingPoints: pendingRevenue,
+        commissionPoints: settled.reduce((s: number, p: any) => s + p.commissionPoints, 0),
+        avgSalePoints: settled.length ? Math.round(totalRevenue / settled.length) : 0,
       };
-    });
-    res.json({ stats, items, honors });
+      // v2.78 上榜荣誉检测：好评榜（在售按valueIndex降序前10）、热销榜（已成交按时间降序前10）
+      const allRatedOnShelf = (await prisma.listing.findMany({ where: { status: 'ON_SHELF', valueIndex: { not: null } }, orderBy: { valueIndex: 'desc' }, take: 50 })) as any[];
+      const ratingRank = new Map<string, number>();
+      allRatedOnShelf.forEach((l, i) => ratingRank.set(l.id, i + 1));
+      const allSettledPurchases = (await prisma.purchase.findMany({ where: { status: 'SETTLED' }, orderBy: { createdAt: 'desc' }, take: 50 })) as any[];
+      const hotRank = new Map<string, number>();
+      allSettledPurchases.forEach((p, i) => { if (!hotRank.has(p.listingId)) hotRank.set(p.listingId, i + 1); });
+      const honors: any[] = [];
+      // 每个上架剧本附带成交信息（若已售）
+      const purchaseByListing = new Map<string, any>();
+      purchases.forEach((p: any) => purchaseByListing.set(p.listingId, p));
+      const items = listings.map((l: any) => {
+        const p = purchaseByListing.get(l.id);
+        const boards: string[] = [];
+        if (l.status === 'ON_SHELF') {
+          const rr = ratingRank.get(l.id);
+          if (rr && rr <= 10) boards.push('rating');
+        }
+        const hr = hotRank.get(l.id);
+        if (hr && hr <= 10) boards.push('hot');
+        if (boards.length) honors.push({ id: l.id, title: l.title, boards, ratingRank: ratingRank.get(l.id) || null, hotRank: hr || null });
+        return {
+          id: l.id, title: l.title, pricePoints: l.priceFen / FEN_PER_POINT,
+          status: l.status, valueGrade: l.valueGrade, valueIndex: l.valueIndex, valueEpisodes: l.valueEpisodes,
+          createdAt: l.createdAt,
+          soldAt: p && p.status === 'SETTLED' ? p.createdAt : null,
+          sellerGainPoints: p && p.status === 'SETTLED' ? p.sellerGainPoints : null,
+          onBoard: boards.length ? boards : null,
+        };
+      });
+      res.json({ stats, items, honors, itemsHasMore: totalListings > items.length });
+    } catch (e) {
+      logInternal(e, 'market.sellerDashboard');
+      res.status(500).json({ error: '工作台统计加载失败，请重试' });
+    }
   });
 
   // v2.76 卖家下架：仅本人在售中剧本可下架，下架后从广场/榜单消失，保留记录

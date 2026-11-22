@@ -5343,6 +5343,7 @@
         </div>
         <h4 style="margin:12px 0 6px">${lang === 'en' ? 'My listings' : '我的上架'}</h4>
         ${listingRows}
+        ${dash.itemsHasMore ? `<div class="muted" style="margin-top:4px">${lang === 'en' ? `Showing latest ${dash.items.length} of ${s.totalListings} listings` : `仅显示最近 ${dash.items.length} 个上架（共 ${s.totalListings} 个）`}</div>` : ''}
       </div>`;
     }
     $('mineBox').innerHTML =
