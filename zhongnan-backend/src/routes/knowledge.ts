@@ -20,6 +20,27 @@ function appVersion(): string {
 
 type PrismaLike = typeof defaultPrisma;
 const CATEGORIES = ['character', 'plot', 'payoff', 'reversal', 'scene', 'dialogue', 'av', 'compliance'] as const;
+
+/** v2.651 审核队列键集游标：(createdAt,id) 倒序；非法游标按首屏处理。 */
+function encodeKnowledgeCursor(createdAt: unknown, id: string): string {
+  try {
+    const d = new Date(createdAt as any);
+    if (Number.isNaN(d.getTime())) return '';
+    return Buffer.from(`${d.toISOString()}|${id}`, 'utf8').toString('base64url');
+  } catch { return ''; }
+}
+function decodeKnowledgeCursor(raw: unknown): { createdAt: Date; id: string } | null {
+  if (typeof raw !== 'string' || !raw.trim()) return null;
+  try {
+    const s = Buffer.from(raw.trim(), 'base64url').toString('utf8');
+    const at = s.lastIndexOf('|');
+    if (at <= 0) return null;
+    const createdAt = new Date(s.slice(0, at));
+    const id = s.slice(at + 1);
+    if (!id || Number.isNaN(createdAt.getTime())) return null;
+    return { createdAt, id };
+  } catch { return null; }
+}
 /**
  * 政策/平台规则一致性预检：统一走内容合规中台（唯一事实源，对接 9·1《微短剧发展管理办法》）。
  * 命中 BLOCK 导向即标记相悖、不予生效；语义级判断由合规审核师 Agent + 法规库补充。
@@ -80,15 +101,27 @@ export function createKnowledgeRouter(prisma: PrismaLike | any) {
     res.json({ ok: true, id: item.id, status: item.status, conflictNote: item.conflictNote, dedup: recon.status });
   });
 
-  /** 学习队列：按状态/分类筛选 */
+  /** 学习队列：状态筛选 + (createdAt,id) 键集续页，超过 50 条的待审知识仍可全部到达。 */
   knowledgeRouter.get('/', authRequired, requireAdmin, requireSuperAdmin, async (req: AuthRequest, res) => {
     const status = String(req.query.status ?? '');
-    const list = await prisma.knowledgeItem.findMany({
-      where: { ...(status ? { status } : {}) },
-      orderBy: { createdAt: 'desc' }, take: 100,
+    const limit = Math.min(Math.max(Number(req.query.limit) || 50, 1), 100);
+    const cursor = decodeKnowledgeCursor(req.query.cursor);
+    const baseWhere: any = status ? { status } : {};
+    const where = cursor ? {
+      AND: [baseWhere, { OR: [
+        { createdAt: { lt: cursor.createdAt } },
+        { createdAt: cursor.createdAt, id: { lt: cursor.id } },
+      ] }],
+    } : baseWhere;
+    const rows = await prisma.knowledgeItem.findMany({
+      where,
+      orderBy: [{ createdAt: 'desc' }, { id: 'desc' }], take: limit + 1,
       select: { id: true, kind: true, title: true, category: true, status: true, conflictNote: true, createdAt: true, approvedAt: true, skillVersion: true },
     });
-    res.json(list);
+    const hasMore = rows.length > limit;
+    const items = rows.slice(0, limit);
+    const last = items[items.length - 1];
+    res.json({ items, hasMore, nextCursor: hasMore && last ? encodeKnowledgeCursor(last.createdAt, last.id) : '' });
   });
 
   /** 审核通过 → 生效（同步到对应岗位智能体，生产发事件触发技能转化） */

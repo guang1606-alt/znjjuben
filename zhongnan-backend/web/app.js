@@ -11097,6 +11097,7 @@
     $('knSubmit').onclick = submitKnowledge;
     $('knReload').onclick = loadAdmKnowledge;
     $('knFilter').onchange = loadAdmKnowledge;
+    $('knMore').onclick = () => loadMoreAdmKnowledge();
     $('knDownload').onclick = downloadSkillPackage;
     const mdBtn = $('knDownloadMd'); if (mdBtn) mdBtn.onclick = downloadBuiltinSkillMd;
     const bundleBtn = $('knDownloadBundle'); if (bundleBtn) bundleBtn.onclick = downloadBuiltinSkillBundle;
@@ -11889,10 +11890,12 @@
       rd.readAsText(f);
     }
   });
-  async function loadAdmKnowledge() {
-    const status = $('knFilter').value;
-    let list = [];
-    try { list = await admApi('/knowledge' + (status ? '?status=' + status : '')); } catch (e) { xnSay(e.message); return; }
+  // v2.651：审核队列首屏/续页共用状态与渲染器，第 51 条起由「加载更多」继续到达。
+  let admKnowledgeItems = [];
+  let admKnowledgeCursor = '';
+  let admKnowledgeHasMore = false;
+  let admKnowledgeLoading = false;
+  function renderAdmKnowledge() {
     const stBadge = { PENDING: 'warn', APPROVED: 'ok', REJECTED: 'bad', ARCHIVED: '' };
     // v2.482 后台列表不再直接输出 PENDING/APPROVED 与 TEXT/URL 等原始枚举：
     // 与反馈工单同属「可见文案漏枚举」，中文界面读起来像调试信息，英文界面更是无从理解。
@@ -11904,7 +11907,7 @@
       TEXT: lang === 'en' ? 'Text' : '文本', URL: lang === 'en' ? 'URL' : '链接',
       VIDEO: lang === 'en' ? 'Video' : '视频', FILE: lang === 'en' ? 'File' : '文件',
     };
-    $('admKnowList').innerHTML = list.map((k) => `<div class="post-card" data-kid="${k.id}">
+    $('admKnowList').innerHTML = admKnowledgeItems.map((k) => `<div class="post-card" data-kid="${k.id}">
       <h4>[${escapeHtml(kindName[k.kind] || k.kind)}] ${escapeHtml(k.title)} <span class="badge ${stBadge[k.status] || ''}">${escapeHtml(stName[k.status] || k.status)}</span> <span class="muted">${knCatName(k.category)}</span></h4>
       ${k.conflictNote ? `<div class="warn-text">${escapeHtml(k.conflictNote)}</div>` : ''}
       <div class="pc-foot"><span class="muted">${new Date(k.createdAt).toLocaleString()}</span><span class="spacer"></span>
@@ -11913,6 +11916,8 @@
         ? '<button class="btn-ghost" data-kn="restore">' + (lang === 'en' ? 'Restore' : '恢复（转待审）') + '</button>'
         : '<button class="btn-ghost" data-kn="archive">' + (lang === 'en' ? 'Archive' : '归档') + '</button>'}
       </div></div>`).join('') || znEmptyHtml(lang === 'en' ? 'Empty.' : '暂无知识条目');
+    const more = $('knMore');
+    if (more) { more.hidden = !admKnowledgeHasMore || !admKnowledgeCursor; more.disabled = admKnowledgeLoading; }
     $('admKnowList').querySelectorAll('[data-kn]').forEach((b) => b.onclick = async () => {
       const id = b.closest('[data-kid]').getAttribute('data-kid'), act = b.getAttribute('data-kn');
       try {
@@ -11931,6 +11936,32 @@
       } catch (e) { xnSay(e.message); }
     });
   }
+  async function loadAdmKnowledgePage(append) {
+    if (admKnowledgeLoading) return;
+    if (append && !admKnowledgeCursor) return;
+    admKnowledgeLoading = true;
+    const more = $('knMore'); if (more) more.disabled = true;
+    try {
+      const status = $('knFilter').value;
+      const cursor = append ? admKnowledgeCursor : '';
+      const q = new URLSearchParams();
+      q.set('limit', '50');
+      if (status) q.set('status', status);
+      if (cursor) q.set('cursor', cursor);
+      const d = await admApi('/knowledge?' + q.toString());
+      const items = d.items || [];
+      if (append) {
+        const seen = new Set(admKnowledgeItems.map((k) => k.id));
+        admKnowledgeItems = admKnowledgeItems.concat(items.filter((k) => !seen.has(k.id)));
+      } else admKnowledgeItems = items;
+      admKnowledgeHasMore = !!d.hasMore;
+      admKnowledgeCursor = d.nextCursor || '';
+      renderAdmKnowledge();
+    } catch (e) { xnSay(e.message); }
+    finally { admKnowledgeLoading = false; if (more) more.disabled = false; }
+  }
+  async function loadAdmKnowledge() { return loadAdmKnowledgePage(false); }
+  async function loadMoreAdmKnowledge() { return loadAdmKnowledgePage(true); }
   async function downloadSkillPackage() {
     try {
       const res = await Api.request('/api/admin/knowledge/skill-package');

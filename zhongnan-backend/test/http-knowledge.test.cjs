@@ -68,7 +68,7 @@ describe('后台学习窗口 HTTP 闭环', { concurrency: 1 }, () => {
     assert.strictEqual(rj.status, 200);
     assert.strictEqual(mem._knowledgeItems.find((k) => k.id === pend.id).status, 'REJECTED');
     const approved = await (await get('/?status=APPROVED', 'admin')).json();
-    assert.ok(approved.length >= 1 && approved.every((k) => k.status === 'APPROVED'));
+    assert.ok(approved.items.length >= 1 && approved.items.every((k) => k.status === 'APPROVED'));
   });
   it('技能包打包下载：仅含已生效知识、带版本/统计/附件头', async () => {
     const r = await get('/skill-package', 'admin');
