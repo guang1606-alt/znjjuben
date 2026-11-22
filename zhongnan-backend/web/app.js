@@ -8665,7 +8665,10 @@
   // v2.638 双声源收口：云端 <audio> 与浏览器朗读共用同一套「停止/关窗/切集」出口，
   // 只在 listenFinish 里 cancel 浏览器朗读会让云端音频在后台继续响（关窗后仍有人念稿），
   // 再点段朗读又会双声叠放。统一由这里暂停并收起播放条，重新点按钮可再合成（命中服务端缓存不重复计费）。
+  // v2.641 停止即作废：只 pause 不 ++ 的话，浏览器朗读开声时会停掉音频，
+  // 但已发出的合成请求返回后仍会建 blob 开播（speakListenIdx 不走 listenFinish）——双声叠放。
   function listenStopCloud() {
+    listenCloudSeq++;
     const a = $('listenCloudAudio');
     if (!a) return;
     try { a.pause(); } catch { /* 元素已被卸载时忽略 */ }
@@ -8673,7 +8676,6 @@
   }
   function listenFinish() {
     listenTts.seq++;
-    listenCloudSeq++; // v2.639 作废在途云端合成：停止/关窗/切集后旧响应不得再开播
     clearTimeout(listenTts.pending); listenTts.pending = 0;
     listenStopKeepAlive();
     listenStopCloud();

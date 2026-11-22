@@ -70,3 +70,9 @@ test('L6 云端音频播放失败要给提示并复位控件', () => {
   assert.ok(/audio\.onerror\s*=\s*(\(|function)|addEventListener\(\s*'error'/.test(body),
     'listenPlayCloud 没有给 audio 绑定播放失败处理函数');
 });
+
+test('L7 停云端必须同时作废在途合成：只 pause 不作废，响应回来仍会开播', () => {
+  const body = fnBody('function listenStopCloud()', 'function listenFinish()');
+  assert.ok(/listenCloudSeq\s*\+\+/.test(body),
+    'listenStopCloud 只暂停音频、没有作废在途合成：浏览器朗读开声后云端请求回来会再次播放，双声叠放');
+});

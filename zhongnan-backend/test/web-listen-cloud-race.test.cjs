@@ -44,7 +44,9 @@ test('R2 响应回来后、建 blob 播放之前必须校验序号，已作废�
 });
 
 test('R3 listenFinish 必须作废在途云端请求（停止/关窗/切集共用这一出口）', () => {
-  assert.ok(/listenCloudSeq\s*\+\+|\+\+listenCloudSeq/.test(finish),
+  // v2.641 作废职责下沉到 listenStopCloud（浏览器朗读路径也要失效），
+  // 这里接受「直接自增」或「经统一收口」两种写法；收口内部的 ++ 由 close 套件 L7 守卫。
+  assert.ok(/listenCloudSeq\s*\+\+|\+\+listenCloudSeq|listenStopCloud\s*\(/.test(finish),
     'listenFinish 没有作废在途云端请求，v2.638 的收口会被在途竞态绕过');
 });
 
