@@ -8662,10 +8662,20 @@
       } catch { /* 保活失败不抛错，下一拍再试 */ }
     }, LISTEN_KEEPALIVE_MS);
   }
+  // v2.638 双声源收口：云端 <audio> 与浏览器朗读共用同一套「停止/关窗/切集」出口，
+  // 只在 listenFinish 里 cancel 浏览器朗读会让云端音频在后台继续响（关窗后仍有人念稿），
+  // 再点段朗读又会双声叠放。统一由这里暂停并收起播放条，重新点按钮可再合成（命中服务端缓存不重复计费）。
+  function listenStopCloud() {
+    const a = $('listenCloudAudio');
+    if (!a) return;
+    try { a.pause(); } catch { /* 元素已被卸载时忽略 */ }
+    a.hidden = true;
+  }
   function listenFinish() {
     listenTts.seq++;
     clearTimeout(listenTts.pending); listenTts.pending = 0;
     listenStopKeepAlive();
+    listenStopCloud();
     const ss = listenSs(); if (ss) { try { ss.cancel(); } catch { /* 无语音引擎时忽略 */ } }
     listenTts.playing = false; listenTts.paused = false; listenTts.idx = -1;
     listenClearActive(); listenSyncUI();
@@ -8693,6 +8703,15 @@
       if (listenCloudUrl) { try { URL.revokeObjectURL(listenCloudUrl); } catch { /* 忽略 */ } }
       listenCloudUrl = URL.createObjectURL(new Blob([bytes], { type: d.format === 'wav' ? 'audio/wav' : 'audio/mpeg' }));
       listenFinish(); // 掐断浏览器朗读，避免双声叠放
+      // v2.638 播放结束/失败都收起播放条：结束即这一集云端语音已交付完；
+      // 失败时给双语提示并保留浏览器朗读兜底，不留一个「看似在播其实已停」的死控件。
+      audio.onended = () => { audio.hidden = true; };
+      audio.onerror = () => {
+        audio.hidden = true;
+        if (tip) tip.textContent = lang === 'en'
+          ? 'Audio playback failed; browser voice still works.'
+          : '云端音频播放失败，浏览器朗读仍可用。';
+      };
       audio.src = listenCloudUrl; audio.hidden = false;
       try { await audio.play(); } catch { /* 自动播放被拒时保留控件，由用户点播放 */ }
       if (tip) tip.textContent = d.cached ? (lang === 'en' ? 'Cached audio' : '已命中缓存，不重复计费') : '';
@@ -8728,6 +8747,7 @@
     }
     const mySeq = ++listenTts.seq; // 作废前一段的所有回调与在途延迟
     clearTimeout(listenTts.pending); listenTts.pending = 0;
+    listenStopCloud(); // v2.638 浏览器朗读开声前先停云端音频，避免两路同时出声
     try { ss.cancel(); } catch { /* ignore */ }
     listenTts.idx = i; listenTts.playing = true; listenTts.paused = false;
     listenSavePos(d.scriptId, i, segs.length); // c208：每段开声即落续听点（停止/关窗/崩溃回来都能接）
