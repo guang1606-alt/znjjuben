@@ -324,4 +324,23 @@ describe('v2.635 听剧本云端语音 TTS', { concurrency: 1 }, () => {
     } finally { t.restore(); }
     assert.strictEqual(t.calls.length, 0);
   });
+
+  it('17) v2.643 合成整体失败不消耗每日额度：502 之后仍能正常合成', async () => {
+    const saved = await putProvider({});
+    assert.strictEqual(saved.s, 200, JSON.stringify(saved.j));
+    const TTS = require('../dist/lib/tts.js');
+    TTS.__setTtsDailyLimit(1);
+    // 第一次：供应商整体不可用 → 502。用户没听到任何声音，不该扣掉当天唯一一次额度
+    let t = withTransport(() => audioResp('upstream down', 500, { 'content-type': 'text/plain' }));
+    let fail;
+    try { fail = await ttsPost('s_full', 'u_basic', 'BASIC', { format: 'mp3' }); } finally { t.restore(); }
+    assert.strictEqual(fail.s, 502, JSON.stringify(fail.j));
+    assert.strictEqual(fail.j.error, 'TTS_FAILED');
+    // 第二次：换一集（配额键不同）真实合成；若失败那次已占额度，这里会 429
+    const okT = withTransport(() => audioResp('ID3-after-failure'));
+    let ok;
+    try { ok = await ttsPost('s_long', 'u_basic', 'BASIC', { format: 'mp3', part: 0 }); } finally { okT.restore(); }
+    assert.strictEqual(ok.s, 200, `失败请求不应扣额度：${JSON.stringify(ok.j)}`);
+    assert.ok(ok.j.audioBase64, '成功后必须拿到音频');
+  });
 });

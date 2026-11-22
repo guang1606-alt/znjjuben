@@ -213,8 +213,8 @@ function dayKey(): string {
 }
 
 /** 消耗一次真实合成额度；同一 quotaKey 的后续分段不重复计次（缓存命中不调用本函数） */
-function consumeQuota(userId?: string, quotaKey?: string): boolean {
-  if (!userId || dailyLimit <= 0) return true;
+function consumeQuota(userId?: string, quotaKey?: string): { ok: boolean; charged: boolean } {
+  if (!userId || dailyLimit <= 0) return { ok: true, charged: false };
   const day = dayKey();
   let cur = quota.get(userId);
   if (!cur || cur.day !== day) {
@@ -222,11 +222,26 @@ function consumeQuota(userId?: string, quotaKey?: string): boolean {
     quota.set(userId, cur);
   }
   const key = String(quotaKey || '');
-  if (key && cur.keys.has(key)) return true;
-  if (cur.n >= dailyLimit) return false;
+  if (key && cur.keys.has(key)) return { ok: true, charged: false };
+  if (cur.n >= dailyLimit) return { ok: false, charged: false };
   cur.n += 1;
   if (key) cur.keys.add(key);
-  return true;
+  return { ok: true, charged: true };
+}
+
+/**
+ * v2.643 失败退还：预扣的额度在整轮合成彻底失败时还回去。
+ * 否则「供应商 502/断网、用户没听到任何声音」也会白白消耗当天次数，
+ * 与「只有真正命中供应商并产出音频才计次」的承诺名实不符。
+ * 只退本次真正扣过的那一笔（charged），已被同 quotaKey 去重放行的请求不受影响。
+ */
+function refundQuota(userId?: string, quotaKey?: string) {
+  if (!userId || dailyLimit <= 0) return;
+  const cur = quota.get(userId);
+  if (!cur || cur.day !== dayKey()) return;
+  if (cur.n > 0) cur.n -= 1;
+  const key = String(quotaKey || '');
+  if (key) cur.keys.delete(key);
 }
 
 function cacheGet(key: string): CacheEntry | null {
@@ -332,7 +347,8 @@ export async function synthesizeSpeech(input: SynthesizeInput): Promise<TtsResul
   const hit = cacheGet(key);
   if (hit) return { ok: true, audioBase64: hit.b64, format: hit.format, voice: hit.voice, chars: hit.chars, cached: true };
 
-  if (!consumeQuota(input.userId, input.quotaKey)) {
+  const q = consumeQuota(input.userId, input.quotaKey);
+  if (!q.ok) {
     return { ok: false, code: 'TTS_DAILY_LIMIT', message: '今日云端语音次数已用完，可改用浏览器朗读或明日再试' };
   }
 
@@ -346,5 +362,6 @@ export async function synthesizeSpeech(input: SynthesizeInput): Promise<TtsResul
     last = r;
     if (isRequestLevelError(r.status)) break;
   }
+  if (q.charged) refundQuota(input.userId, input.quotaKey);
   return last;
 }
