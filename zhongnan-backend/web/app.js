@@ -8673,6 +8673,7 @@
   }
   function listenFinish() {
     listenTts.seq++;
+    listenCloudSeq++; // v2.639 作废在途云端合成：停止/关窗/切集后旧响应不得再开播
     clearTimeout(listenTts.pending); listenTts.pending = 0;
     listenStopKeepAlive();
     listenStopCloud();
@@ -8684,9 +8685,14 @@
      只在 /listen 回传 ttsReady 时出现；点按才请求。未配置/超额/过长一律用双语提示，
      并始终保留浏览器朗读兜底，不让云端故障阻塞用户。 */
   let listenCloudUrl = '';
+  // v2.639 云端合成在途令牌：与浏览器朗读的 listenReqSeq 同口径。
+  // 发起请求自增认领；listenFinish（停止/关窗/切集）自增作废；响应回来先比对再播放，
+  // 否则「关窗后旧音频照样开播、切集后新集里播旧集」会绕过 v2.638 的停止收口。
+  let listenCloudSeq = 0;
   async function listenPlayCloud(scriptId) {
     const btn = $('listenCloudBtn'); const tip = $('listenCloudTip'); const audio = $('listenCloudAudio');
     if (!btn || !audio || btn.disabled) return;
+    const mySeq = ++listenCloudSeq;
     btn.disabled = true;
     const oldText = btn.textContent;
     btn.textContent = lang === 'en' ? 'Synthesizing…' : '云端合成中…';
@@ -8696,6 +8702,7 @@
         method: 'POST', body: JSON.stringify({ format: 'mp3' }),
       });
       const d = await Api.jsonOrThrow(r);
+      if (mySeq !== listenCloudSeq) return; // 在途被停止/关窗/切集/新请求作废：不建 blob、不开播
       if (!d || !d.audioBase64) throw new Error('TTS_NO_AUDIO');
       const bin = atob(d.audioBase64);
       const bytes = new Uint8Array(bin.length);
@@ -8716,6 +8723,7 @@
       try { await audio.play(); } catch { /* 自动播放被拒时保留控件，由用户点播放 */ }
       if (tip) tip.textContent = d.cached ? (lang === 'en' ? 'Cached audio' : '已命中缓存，不重复计费') : '';
     } catch (e) {
+      if (mySeq !== listenCloudSeq) return; // 已关窗/切集：过期错误提示不写进新弹窗
       const code = e && e.error; const status = e && e.httpStatus;
       if (tip) tip.textContent = code === 'TTS_NOT_CONFIGURED' || status === 503
         ? (lang === 'en' ? 'Cloud voice is not configured; browser voice still works.' : '云端语音尚未配置，浏览器朗读仍可用。')
