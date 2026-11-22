@@ -31,7 +31,9 @@ function fnBody(s, startMarker, endMarker) {
 
 const listW = fnBody(src, "$('mkListBtn').onclick = async () => {", 'async function previewListingValue');
 const delistW = fnBody(src, "querySelectorAll('[data-delist]').forEach((b) => b.onclick = async () => {", "querySelectorAll('[data-relist]')");
-const relistW = fnBody(src, "querySelectorAll('[data-relist]').forEach((b) => b.onclick = async () => {", "openModal('mineModal')");
+// v2.648 起「我的」面板处理器收进唯一 renderMkMine()，relist 处理器之后紧跟 onclick 赋值；
+// 窗口终点随之调整，断言仍只检查 relist 自己的语句级 catch 是否静默。
+const relistW = fnBody(src, "querySelectorAll('[data-relist]').forEach((b) => b.onclick = async () => {", "$('mkMineBtn').onclick = async () => {");
 
 test('A1 mkListBtn：try 起点早于 GET projects，且带语句级 catch', () => {
   const iTry = listW.indexOf('try {');

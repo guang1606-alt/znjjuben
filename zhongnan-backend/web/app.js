@@ -5270,24 +5270,47 @@
     catch (e) { xnSay(e.message); }
     finally { _dealBusy = false; }
   }
-  $('mkMineBtn').onclick = async () => {
-    if (!Api.isAuthed()) { openAuth('login'); return; }
-    const account = capturePrivateSession();
-    let d, dash;
+  // v2.648 「我的交易」分页状态：首屏与「加载更多」续页共用同一个渲染器，避免按钮/卡片漂移；
+  // 旧后端或无元信息时 hasMore 恒 false，行为与旧版一致（只有首屏 50 条）。
+  let mkMineState = null;
+  // 续页：单侧追加，按 id 去重（翻页期间新成交会让榜单整体下移一位，去重避免重复卡）
+  async function loadMoreMkMine(kind) {
+    const st = mkMineState;
+    if (!st || st.loading) return;
+    const cursor = kind === 'buys' ? st.buysCursor : st.salesCursor;
+    if (!cursor) return;
+    st.loading = true;
+    const btn = $('mineBox').querySelector(`[data-mine-more="${kind}"]`);
+    if (btn) btn.disabled = true;
     try {
-      const [resMy, resDash] = await Promise.all([
-        Api.request('/api/market/my'),
-        Api.request('/api/market/seller-dashboard'),
-      ]);
-      d = await Api.jsonOrThrow(resMy);
-      dash = resDash.ok ? await Api.jsonOrThrow(resDash) : null;
-    } catch (e) { if (e.code !== 'SESSION_CHANGED' && isPrivateSessionCurrent(account)) xnSay(e.message); return; }
-    if (!isPrivateSessionCurrent(account)) return;
+      const res = await Api.request(`/api/market/my?kind=${kind}&limit=50&cursor=${encodeURIComponent(cursor)}`);
+      const d = await Api.jsonOrThrow(res);
+      if (!isPrivateSessionCurrent(st.account)) return;
+      const seen = new Set(st[kind].map((x) => x.id));
+      (d.items || []).forEach((x) => { if (!seen.has(x.id)) { seen.add(x.id); st[kind].push(x); } });
+      st[`${kind}HasMore`] = !!d.hasMore;
+      st[`${kind}Cursor`] = d.nextCursor || '';
+      st.loading = false;
+      renderMkMine();
+    } catch (e) {
+      st.loading = false;
+      if (!isPrivateSessionCurrent(st.account)) return;
+      if (btn) btn.disabled = false;
+      // 业务错误（jsonOrThrow 带 httpStatus）本地提示；网络层 reject 已由全局 toast 提示，静默避免双弹
+      if (e.code !== 'SESSION_CHANGED' && e.httpStatus) xnSay(e.message);
+    }
+  }
+  function renderMkMine() {
+    const st = mkMineState;
+    if (!st) return;
     // @module market
     const row = (x, isBuy) => `<div class="deal-row"><span>#${x.id.slice(-5)} · ${x.pricePoints} ${t('points')} · ${t(x.status === 'ESCROW' ? 'escrow' : x.status === 'REFUNDED' ? 'refunded' : 'settled')}</span>
       ${isBuy && (x.status === 'ESCROW' || x.status === 'SETTLED') ? `<span><button class="btn-ghost" data-view-purchase="${x.id}">${lang === 'en' ? 'View script' : '查看剧本'}</button> ${x.status === 'ESCROW' ? `<button class="btn-ghost" data-confirm="${x.id}">${t('confirmReceive')}</button> <button class="btn-ghost" data-refund="${x.id}">${t('refund24')}</button>` : ''}</span>` : ''}</div>`;
+    const moreBtn = (kind) => st[`${kind}HasMore`] && st[`${kind}Cursor`]
+      ? `<div class="deal-more"><button class="btn-ghost" data-mine-more="${kind}">${t('loadMore')}</button></div>` : '';
     // v2.75 卖家工作台：统计卡 + 我的上架列表
     let dashHtml = '';
+    const dash = st.dash;
     if (dash && dash.stats) {
       const s = dash.stats;
     // @module market
@@ -5324,8 +5347,9 @@
     }
     $('mineBox').innerHTML =
       `${dashHtml}
-       <h4 style="margin-top:14px">${t('myBuys')}</h4>${d.buys.length ? d.buys.map((x) => row(x, true)).join('') : `<div class="muted">${t('noDeal')}</div>`}
-       <h4 style="margin-top:14px">${t('mySales')}</h4>${d.sales.length ? d.sales.map((x) => row(x, false)).join('') : `<div class="muted">${t('noDeal')}</div>`}`;
+       <h4 style="margin-top:14px">${t('myBuys')}</h4>${st.buys.length ? st.buys.map((x) => row(x, true)).join('') : `<div class="muted">${t('noDeal')}</div>`}${moreBtn('buys')}
+       <h4 style="margin-top:14px">${t('mySales')}</h4>${st.sales.length ? st.sales.map((x) => row(x, false)).join('') : `<div class="muted">${t('noDeal')}</div>`}${moreBtn('sales')}`;
+    $('mineBox').querySelectorAll('[data-mine-more]').forEach((b) => b.onclick = () => loadMoreMkMine(b.getAttribute('data-mine-more')));
     $('mineBox').querySelectorAll('[data-confirm]').forEach((b) => b.onclick = async () => { await dealAction(`/api/market/purchases/${b.getAttribute('data-confirm')}/confirm`); $('mkMineBtn').click(); });
     $('mineBox').querySelectorAll('[data-refund]').forEach((b) => b.onclick = async () => { await dealAction(`/api/market/purchases/${b.getAttribute('data-refund')}/refund`); $('mkMineBtn').click(); });
     $('mineBox').querySelectorAll('[data-view-purchase]').forEach((b) => b.onclick = () => viewPurchasedScript(b.getAttribute('data-view-purchase')));
@@ -5352,6 +5376,28 @@
       if (r.ok) { xnSay(lang === 'en' ? 'Relisted' : '已重新上架'); $('mkMineBtn').click(); } else { xnSay(znSanitizeErr((await r.json()).error, r.status) || '失败'); }
       } catch { /* v2.284 全局网络 toast 已提示， catch 静默防 unhandledrejection */ }
     });
+  }
+  $('mkMineBtn').onclick = async () => {
+    if (!Api.isAuthed()) { openAuth('login'); return; }
+    const account = capturePrivateSession();
+    let d, dash;
+    try {
+      const [resMy, resDash] = await Promise.all([
+        Api.request('/api/market/my'),
+        Api.request('/api/market/seller-dashboard'),
+      ]);
+      d = await Api.jsonOrThrow(resMy);
+      dash = resDash.ok ? await Api.jsonOrThrow(resDash) : null;
+    } catch (e) { if (e.code !== 'SESSION_CHANGED' && isPrivateSessionCurrent(account)) xnSay(e.message); return; }
+    if (!isPrivateSessionCurrent(account)) return;
+    mkMineState = {
+      account, dash,
+      buys: d.buys || [], sales: d.sales || [],
+      buysHasMore: !!d.buysHasMore, salesHasMore: !!d.salesHasMore,
+      buysCursor: d.buysNextCursor || '', salesCursor: d.salesNextCursor || '',
+      loading: false,
+    };
+    renderMkMine();
     openModal('mineModal');
   };
 

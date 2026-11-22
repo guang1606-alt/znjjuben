@@ -338,7 +338,9 @@ function createMemoryPrisma() {
     if (a === b) return 0;
     const av = a instanceof Date ? a.getTime() : (a === true ? 1 : a === false ? 0 : a);
     const bv = b instanceof Date ? b.getTime() : (b === true ? 1 : b === false ? 0 : b);
-    return av > bv ? 1 : -1;
+    // v2.648：相等值必须返回 0——旧的「非大于即 -1」会让同刻行永远判为 a<b，
+    // 多键 orderBy 的第二键（id）因此失效，键集游标续页会漏掉同刻剩余行。
+    return av > bv ? 1 : av < bv ? -1 : 0;
   };
   const feedback = {
     async create({ data }) {
@@ -620,11 +622,16 @@ function createMemoryPrisma() {
     },
   };
 
-  // 通用 where 匹配（支持 OR/in/has/contains/lt/not 与等值）、排序、select 投影（含一层关联）
+  // 通用 where 匹配（支持 AND/OR/in/has/contains/lt/not 与等值）、排序、select 投影（含一层关联）
   const matchWhere = (row, where = {}) => Object.entries(where).every(([k, cond]) => {
     if (k === 'OR') return Array.isArray(cond) && cond.some((sub) => matchWhere(row, sub));
+    // v2.648：AND 组合（键集游标 = 归属过滤 AND 时间/id 边界），对齐 Prisma 语义
+    if (k === 'AND') return Array.isArray(cond) ? cond.every((sub) => matchWhere(row, sub)) : matchWhere(row, cond);
     // v2.309：NOT 支持对象/数组（数组=NOT(任一命中)），供 writersRoom 条件追加 NOT has 判定
     if (k === 'NOT') return Array.isArray(cond) ? !cond.some((sub) => matchWhere(row, sub)) : !matchWhere(row, cond);
+    // v2.648：Date 等值必须按时间戳比较——旧实现落进下面的对象分支误 return true，
+    // 会让键集游标第二子句（createdAt 等值 + id 边界）匹配全部行。
+    if (cond instanceof Date) return row[k] instanceof Date && row[k].getTime() === cond.getTime();
     if (cond && typeof cond === 'object') {
       if ('in' in cond) return cond.in.includes(row[k]);
       if ('has' in cond) return Array.isArray(row[k]) && row[k].includes(cond.has);

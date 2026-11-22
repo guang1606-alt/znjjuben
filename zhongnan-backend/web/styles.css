@@ -841,6 +841,7 @@ textarea { box-sizing: border-box; max-width: 100%; resize: vertical; background
 .modal-wide{max-width:760px;width:92vw;max-height:86vh;overflow:auto}
 .full-text{white-space:pre-wrap;font-family:var(--serif);line-height:1.9;font-size:14px;background:var(--panel-2);border:1px solid var(--line);border-radius:10px;padding:16px;max-height:52vh;overflow:auto;letter-spacing:.02em}
 .deal-row{border:1px solid var(--line);border-radius:10px;padding:10px 12px;margin-bottom:8px;font-size:13px;display:flex;justify-content:space-between;gap:10px;align-items:center}
+.deal-more{display:flex;justify-content:flex-end;margin:2px 0 10px}
 @media(max-width:900px){.listings-grid{grid-template-columns:repeat(2,1fr)}}
 @media(max-width:560px){.listings-grid{grid-template-columns:1fr}}
 

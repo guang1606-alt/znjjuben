@@ -30,6 +30,27 @@ export function splitTrade(pricePoints: number, commissionPct: number) {
   return { commission, sellerGain: pricePoints - commission };
 }
 
+/** v2.648 「我的交易」键集游标：锚点 (createdAt,id)，与 feedback/teardown 同范式；空串表示到底。 */
+function encodePurchaseCursor(createdAt: unknown, id: string): string {
+  try {
+    const d = new Date(createdAt as any);
+    if (Number.isNaN(d.getTime())) return '';
+    return Buffer.from(`${d.toISOString()}|${id}`, 'utf8').toString('base64url');
+  } catch { return ''; }
+}
+function decodePurchaseCursor(raw: unknown): { createdAt: Date; id: string } | null {
+  if (typeof raw !== 'string' || !raw.trim()) return null;
+  try {
+    const s = Buffer.from(raw.trim(), 'base64url').toString('utf8');
+    const at = s.lastIndexOf('|');
+    if (at <= 0) return null;
+    const d = new Date(s.slice(0, at));
+    const id = s.slice(at + 1);
+    if (!id || Number.isNaN(d.getTime())) return null;
+    return { createdAt: d, id };
+  } catch { return null; }
+}
+
 export function createMarketRouter(prisma: PrismaLike | any) {
   const marketRouter = asyncRouter();
   // 资方视角评估：纯本地确定性分析、零token成本，免费只读开放（让用户知道剧本值不值钱、怎么才好卖）
@@ -437,13 +458,75 @@ export function createMarketRouter(prisma: PrismaLike | any) {
   });
 
   // 我的销售/购买
+  // v2.648：旧实现两侧各固定 take:50 且不回传「还有更多」——交易超过 50 笔后较早记录永久不可达。
+  // 首屏保留 sales/buys 旧字段（老缓存前端兼容）+ hasMore/nextCursor 元信息；
+  // ?kind=sales|buys&cursor= 走单侧键集游标翻页 { items, hasMore, nextCursor }（镜像 feedback/teardown 范式）。
   marketRouter.get('/my', authRequired, async (req: AuthRequest, res) => {
     const select = { id: true, listingId: true, pricePoints: true, status: true, createdAt: true };
-    const [sales, buys] = await Promise.all([
-      prisma.purchase.findMany({ where: { sellerId: req.userId! }, orderBy: { createdAt: 'desc' }, take: 50, select }),
-      prisma.purchase.findMany({ where: { buyerId: req.userId! }, orderBy: { createdAt: 'desc' }, take: 50, select }),
-    ]);
-    res.json({ sales, buys });
+    const limit = Math.min(Math.max(Number(req.query.limit) || 50, 1), 100);
+    const kind = typeof req.query.kind === 'string' ? req.query.kind.trim() : '';
+    if (kind && kind !== 'sales' && kind !== 'buys') {
+      return res.status(400).json({ error: 'kind 仅支持 sales 或 buys' });
+    }
+    const cursor = decodePurchaseCursor(req.query.cursor);
+    const sideWhere = (side: 'sales' | 'buys') => {
+      const base = side === 'sales' ? { sellerId: req.userId! } : { buyerId: req.userId! };
+      if (!cursor) return base;
+      // 键集游标：同一 createdAt 的多笔交易按 id 倒序继续，不能整组漏掉
+      return {
+        AND: [
+          base,
+          { OR: [
+            { createdAt: { lt: cursor.createdAt } },
+            { createdAt: cursor.createdAt, id: { lt: cursor.id } },
+          ] },
+        ],
+      };
+    };
+    const fetchSide = (side: 'sales' | 'buys', take: number) => prisma.purchase.findMany({
+      where: sideWhere(side),
+      orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+      take: take + 1,
+      select,
+    });
+    try {
+      if (kind) {
+        const rows = await fetchSide(kind as 'sales' | 'buys', limit);
+        const items = rows.slice(0, limit);
+        const last = items[items.length - 1];
+        return res.json({
+          items,
+          hasMore: rows.length > limit,
+          nextCursor: rows.length > limit && last ? encodePurchaseCursor(last.createdAt, last.id) : '',
+        });
+      }
+      const [salesRows, buysRows] = await Promise.all([
+        fetchSide('sales', limit),
+        fetchSide('buys', limit),
+      ]);
+      const cut = (rows: any[]) => {
+        const items = rows.slice(0, limit);
+        const last = items[items.length - 1];
+        return {
+          items,
+          hasMore: rows.length > limit,
+          nextCursor: rows.length > limit && last ? encodePurchaseCursor(last.createdAt, last.id) : '',
+        };
+      };
+      const sales = cut(salesRows);
+      const buys = cut(buysRows);
+      res.json({
+        sales: sales.items,
+        buys: buys.items,
+        salesHasMore: sales.hasMore,
+        buysHasMore: buys.hasMore,
+        salesNextCursor: sales.nextCursor,
+        buysNextCursor: buys.nextCursor,
+      });
+    } catch (e) {
+      logInternal(e, 'market.my.list');
+      res.status(500).json({ error: '交易记录加载失败，请重试' });
+    }
   });
 
   return marketRouter;
