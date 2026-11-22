@@ -239,8 +239,13 @@
     }
     ensureActive();
 
-    // 401 → 单飞 refresh（并发共享一次），成功后用 store 最新 token 重试一次
-    if (res.status === 401) {
+    // 401 → 单飞 refresh（并发共享一次），成功后用 store 最新 token 重试一次。
+    // v2.645：GET 的 5xx 重试也可能返回 401，因此 5xx 前后共用同一入口；
+    // refreshAttempted 保证每次请求最多续期一次，不会在「401 → 重放 5xx → 重试 401」中循环续期。
+    let refreshAttempted = false;
+    async function refreshOn401() {
+      if (res.status !== 401 || refreshAttempted) return;
+      refreshAttempted = true;
       const d = await refreshSession(session, opts);
       ensureActive();
       if (d) {
@@ -248,6 +253,7 @@
         ensureActive();
       }
     }
+    await refreshOn401();
     ensureActive();
 
     // 5xx 服务器忙：触发钩子（不重试 POST，避免双扣费）
@@ -261,6 +267,7 @@
         try { hooks.onServerBusy(res, path); } catch {}
       }
     }
+    await refreshOn401();
 
     if (res.status === 401) {
       ensureActive();

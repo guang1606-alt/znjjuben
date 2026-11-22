@@ -197,6 +197,29 @@ describe('API requests stay bound to the initiating login session', () => {
     assert.equal(env.Api.isAuthed(), false); assert.equal(env.Api.getUser(), null);
     assert.equal(env.hooks.auth, 1);
   });
+
+  it('GET 在 5xx 重试后遇到 401，仍会刷新并重放原请求', async () => {
+    const env = environment((url, opts, call) => Promise.resolve(url === '/api/auth/refresh'
+      ? response(200, { accessToken: 'new-access-a' })
+      : response(call === 1 ? 503 : call === 2 ? 401 : 200)));
+    const pending = env.Api.request('/private');
+    await flush(); env.fireTimer(220);
+    assert.equal((await pending).status, 200);
+    assert.equal(env.calls.length, 4);
+    assert.equal(env.calls[3].opts.headers.Authorization, 'Bearer new-access-a');
+    assert.equal(env.Api.getToken(), 'new-access-a');
+    assert.deepEqual(env.hooks, { auth: 0, network: 0, busy: 0 });
+  });
+
+  it('GET 在 5xx 重试后遇到 401 且刷新失败，统一清会话并提示重新登录', async () => {
+    const env = environment(() => Promise.resolve(response(env.calls.length === 1 ? 503 : 401)));
+    const pending = env.Api.request('/private');
+    await flush(); env.fireTimer(220);
+    await assert.rejects(pending, { code: 'AUTH_REQUIRED' });
+    assert.equal(env.calls.length, 3);
+    assert.equal(env.Api.isAuthed(), false); assert.equal(env.Api.getUser(), null);
+    assert.deepEqual(env.hooks, { auth: 1, network: 0, busy: 0 });
+  });
 });
 
 describe('authentication attempts cannot overwrite a newer user choice', () => {
