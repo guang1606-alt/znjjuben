@@ -5300,6 +5300,33 @@
       if (e.code !== 'SESSION_CHANGED' && e.httpStatus) xnSay(e.message);
     }
   }
+  // v2.650 卖家工作台上架列表续页：与「我的交易」同范式——按 id 去重追加、游标推进、账号切换守卫
+  async function loadMoreDashList() {
+    const st = mkMineState;
+    const dash = st && st.dash;
+    if (!st || !dash || st.dashLoading) return;
+    if (!dash.itemsHasMore || !dash.itemsNextCursor) return;
+    st.dashLoading = true;
+    const btn = $('mineBox').querySelector('[data-dash-more]');
+    if (btn) btn.disabled = true;
+    try {
+      const res = await Api.request(`/api/market/seller-dashboard?limit=50&cursor=${encodeURIComponent(dash.itemsNextCursor)}`);
+      const d = await Api.jsonOrThrow(res);
+      if (!isPrivateSessionCurrent(st.account)) return;
+      const seen = new Set((dash.items || []).map((x) => x.id));
+      (d.items || []).forEach((x) => { if (!seen.has(x.id)) { seen.add(x.id); dash.items.push(x); } });
+      dash.itemsHasMore = !!d.itemsHasMore;
+      dash.itemsNextCursor = d.itemsNextCursor || '';
+      if (d.stats) dash.stats = d.stats; // 统计恒为全库口径，续页返回同口径，覆盖不改变数字
+      st.dashLoading = false;
+      renderMkMine();
+    } catch (e) {
+      st.dashLoading = false;
+      if (!isPrivateSessionCurrent(st.account)) return;
+      if (btn) btn.disabled = false;
+      if (e.code !== 'SESSION_CHANGED' && e.httpStatus) xnSay(e.message);
+    }
+  }
   function renderMkMine() {
     const st = mkMineState;
     if (!st) return;
@@ -5344,6 +5371,7 @@
         <h4 style="margin:12px 0 6px">${lang === 'en' ? 'My listings' : '我的上架'}</h4>
         ${listingRows}
         ${dash.itemsHasMore ? `<div class="muted" style="margin-top:4px">${lang === 'en' ? `Showing latest ${dash.items.length} of ${s.totalListings} listings` : `仅显示最近 ${dash.items.length} 个上架（共 ${s.totalListings} 个）`}</div>` : ''}
+        ${dash.itemsHasMore && dash.itemsNextCursor ? `<div class="deal-more"><button class="btn-ghost" data-dash-more="1">${t('loadMore')}</button></div>` : ''}
       </div>`;
     }
     $('mineBox').innerHTML =
@@ -5351,6 +5379,8 @@
        <h4 style="margin-top:14px">${t('myBuys')}</h4>${st.buys.length ? st.buys.map((x) => row(x, true)).join('') : `<div class="muted">${t('noDeal')}</div>`}${moreBtn('buys')}
        <h4 style="margin-top:14px">${t('mySales')}</h4>${st.sales.length ? st.sales.map((x) => row(x, false)).join('') : `<div class="muted">${t('noDeal')}</div>`}${moreBtn('sales')}`;
     $('mineBox').querySelectorAll('[data-mine-more]').forEach((b) => b.onclick = () => loadMoreMkMine(b.getAttribute('data-mine-more')));
+    const dashMore = $('mineBox').querySelector('[data-dash-more]');
+    if (dashMore) dashMore.onclick = () => loadMoreDashList();
     $('mineBox').querySelectorAll('[data-confirm]').forEach((b) => b.onclick = async () => { await dealAction(`/api/market/purchases/${b.getAttribute('data-confirm')}/confirm`); $('mkMineBtn').click(); });
     $('mineBox').querySelectorAll('[data-refund]').forEach((b) => b.onclick = async () => { await dealAction(`/api/market/purchases/${b.getAttribute('data-refund')}/refund`); $('mkMineBtn').click(); });
     $('mineBox').querySelectorAll('[data-view-purchase]').forEach((b) => b.onclick = () => viewPurchasedScript(b.getAttribute('data-view-purchase')));

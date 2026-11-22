@@ -30,15 +30,15 @@ export function splitTrade(pricePoints: number, commissionPct: number) {
   return { commission, sellerGain: pricePoints - commission };
 }
 
-/** v2.648 「我的交易」键集游标：锚点 (createdAt,id)，与 feedback/teardown 同范式；空串表示到底。 */
-function encodePurchaseCursor(createdAt: unknown, id: string): string {
+/** v2.648 键集游标（我的交易 / v2.650 卖家工作台上架列表共用）：锚点 (createdAt,id)，与 feedback/teardown 同范式；空串表示到底。 */
+function encodeKeysetCursor(createdAt: unknown, id: string): string {
   try {
     const d = new Date(createdAt as any);
     if (Number.isNaN(d.getTime())) return '';
     return Buffer.from(`${d.toISOString()}|${id}`, 'utf8').toString('base64url');
   } catch { return ''; }
 }
-function decodePurchaseCursor(raw: unknown): { createdAt: Date; id: string } | null {
+function decodeKeysetCursor(raw: unknown): { createdAt: Date; id: string } | null {
   if (typeof raw !== 'string' || !raw.trim()) return null;
   try {
     const s = Buffer.from(raw.trim(), 'base64url').toString('utf8');
@@ -381,11 +381,25 @@ export function createMarketRouter(prisma: PrismaLike | any) {
   // v2.649 统计口径修正：总数/在售/已成交改走全库 count——旧实现从 take:50 窗口里数数，
   // 卖家累计上架超过 50 个后统计卡会静默失真（最老的在售/已成交被窗口挤掉）。
   // items 仍只取最近 50 条，但回传 itemsHasMore 让前端诚实标注，而不是假装列表就是全部。
+  // v2.650 补齐 items 续页：?cursor=&limit= 键集游标（(createdAt,id) 倒序），前端可继续翻到全部上架。
   marketRouter.get('/seller-dashboard', authRequired, async (req: AuthRequest, res) => {
     const uid = req.userId!;
+    const limit = Math.min(Math.max(Number(req.query.limit) || 50, 1), 100);
+    const cursor = decodeKeysetCursor(req.query.cursor);
+    const itemWhere: any = cursor
+      ? {
+          AND: [
+            { sellerId: uid },
+            { OR: [
+              { createdAt: { lt: cursor.createdAt } },
+              { createdAt: cursor.createdAt, id: { lt: cursor.id } },
+            ] },
+          ],
+        }
+      : { sellerId: uid };
     try {
-      const [listings, purchases, totalListings, onShelf, sold] = await Promise.all([
-        prisma.listing.findMany({ where: { sellerId: uid }, orderBy: { createdAt: 'desc' }, take: 50 }),
+      const [listingRows, purchases, totalListings, onShelf, sold] = await Promise.all([
+        prisma.listing.findMany({ where: itemWhere, orderBy: [{ createdAt: 'desc' }, { id: 'desc' }], take: limit + 1 }),
         prisma.purchase.findMany({ where: { sellerId: uid } }),
         prisma.listing.count({ where: { sellerId: uid } }),
         prisma.listing.count({ where: { sellerId: uid, status: 'ON_SHELF' } }),
@@ -412,7 +426,8 @@ export function createMarketRouter(prisma: PrismaLike | any) {
       // 每个上架剧本附带成交信息（若已售）
       const purchaseByListing = new Map<string, any>();
       purchases.forEach((p: any) => purchaseByListing.set(p.listingId, p));
-      const items = listings.map((l: any) => {
+      const pageRows = listingRows.slice(0, limit);
+      const items = pageRows.map((l: any) => {
         const p = purchaseByListing.get(l.id);
         const boards: string[] = [];
         if (l.status === 'ON_SHELF') {
@@ -431,7 +446,13 @@ export function createMarketRouter(prisma: PrismaLike | any) {
           onBoard: boards.length ? boards : null,
         };
       });
-      res.json({ stats, items, honors, itemsHasMore: totalListings > items.length });
+      const hasMore = listingRows.length > limit;
+      const last = items[items.length - 1];
+      res.json({
+        stats, items, honors,
+        itemsHasMore: hasMore,
+        itemsNextCursor: hasMore && last ? encodeKeysetCursor(last.createdAt, last.id) : '',
+      });
     } catch (e) {
       logInternal(e, 'market.sellerDashboard');
       res.status(500).json({ error: '工作台统计加载失败，请重试' });
@@ -479,7 +500,7 @@ export function createMarketRouter(prisma: PrismaLike | any) {
     if (kind && kind !== 'sales' && kind !== 'buys') {
       return res.status(400).json({ error: 'kind 仅支持 sales 或 buys' });
     }
-    const cursor = decodePurchaseCursor(req.query.cursor);
+    const cursor = decodeKeysetCursor(req.query.cursor);
     const sideWhere = (side: 'sales' | 'buys') => {
       const base = side === 'sales' ? { sellerId: req.userId! } : { buyerId: req.userId! };
       if (!cursor) return base;
@@ -508,7 +529,7 @@ export function createMarketRouter(prisma: PrismaLike | any) {
         return res.json({
           items,
           hasMore: rows.length > limit,
-          nextCursor: rows.length > limit && last ? encodePurchaseCursor(last.createdAt, last.id) : '',
+          nextCursor: rows.length > limit && last ? encodeKeysetCursor(last.createdAt, last.id) : '',
         });
       }
       const [salesRows, buysRows] = await Promise.all([
@@ -521,7 +542,7 @@ export function createMarketRouter(prisma: PrismaLike | any) {
         return {
           items,
           hasMore: rows.length > limit,
-          nextCursor: rows.length > limit && last ? encodePurchaseCursor(last.createdAt, last.id) : '',
+          nextCursor: rows.length > limit && last ? encodeKeysetCursor(last.createdAt, last.id) : '',
         };
       };
       const sales = cut(salesRows);
