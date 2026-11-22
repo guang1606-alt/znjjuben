@@ -63,9 +63,12 @@ export function createUpdatesRouter(prisma: PrismaLike | any) {
   /** 公开读最新公告 + 当前版本号 */
   r.get('/updates/latest', async (_req, res) => {
     try {
-      const all = await prisma.announcement.findMany({ orderBy: { createdAt: 'desc' }, take: 50 });
-      const pinned = all.find((a: any) => a.pinned);
-      const latest = pinned ?? all[0] ?? null;
+      // v2.653：置顶优先级不能被「最新 50 条」窗口截断；置顶与普通最新各自只取一条，响应契约不变。
+      const [latestRows, pinnedRows] = await Promise.all([
+        prisma.announcement.findMany({ orderBy: { createdAt: 'desc' }, take: 1 }),
+        prisma.announcement.findMany({ where: { pinned: true }, orderBy: { createdAt: 'desc' }, take: 1 }),
+      ]);
+      const latest = pinnedRows[0] ?? latestRows[0] ?? null;
       const version = latest?.version ?? FALLBACK_VERSION;
       res.json({ announcement: publicAnnouncement(latest), version });
     } catch (e) {

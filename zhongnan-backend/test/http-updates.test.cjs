@@ -107,6 +107,37 @@ test('工具更新公告：完整闭环', async (t) => {
   server.close();
 });
 
+test('GET /api/updates/latest 窗口外置顶仍优先，多条置顶取最新', async () => {
+  const mem = createMemoryPrisma();
+  const baseTime = Date.UTC(2026, 0, 1);
+  await mem.announcement.create({ data: {
+    version: '2.100.0', titleZh: '旧置顶', bodyZh: '旧置顶正文', pinned: true,
+    createdAt: new Date(baseTime),
+  } });
+  await mem.announcement.create({ data: {
+    version: '2.101.0', titleZh: '新置顶', bodyZh: '新置顶正文', pinned: true,
+    createdAt: new Date(baseTime + 1000),
+  } });
+  for (let i = 0; i < 50; i++) {
+    await mem.announcement.create({ data: {
+      version: `2.${200 + i}.0`, titleZh: `普通公告 ${i}`, bodyZh: '普通公告正文',
+      createdAt: new Date(baseTime + 2000 + i * 1000),
+    } });
+  }
+  const server = appWith(mem).listen(0);
+  await new Promise((r) => server.once('listening', r));
+  try {
+    const res = await fetch(`http://127.0.0.1:${server.address().port}/api/updates/latest`);
+    const json = await res.json();
+    assert.strictEqual(res.status, 200);
+    assert.strictEqual(json.announcement?.version, '2.101.0', '最新置顶不应被最近 50 条普通公告挤出窗口');
+    assert.strictEqual(json.announcement?.pinned, true);
+    assert.strictEqual(json.version, '2.101.0');
+  } finally {
+    await new Promise((resolve) => server.close(resolve));
+  }
+});
+
 // v2.503 announcement 表不可访问时降级到 package.json 版本，不抛 500 污染首页
 test('GET /api/updates/latest 公告表查询失败时降级返回 200 + FALLBACK_VERSION', async () => {
   const throwingPrisma = {
