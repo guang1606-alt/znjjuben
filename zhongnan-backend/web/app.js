@@ -2206,7 +2206,8 @@
     switchView('works');
     try {
       const res = await Api.request('/api/generate/projects');
-      const list = await Api.jsonOrThrow(res);
+      const raw = await Api.jsonOrThrow(res);
+      const list = Array.isArray(raw) ? raw : (raw.items || []);
       const p = list.find((x) => x.id === d.projectId);
       if (!p) { xnSay(lang === 'en' ? 'The linked project no longer exists.' : '关联的项目已不存在。'); return; }
       await openProject(p);
@@ -5116,7 +5117,8 @@
     try {
     const res = await Api.request('/api/generate/projects');
     if (!res.ok) { xnSay(znSanitizeErr((await res.json().catch(() => ({}))).error, res.status) || 'error'); return; }
-    const projects = await res.json();
+    const projectsRaw = await res.json();
+    const projects = Array.isArray(projectsRaw) ? projectsRaw : (projectsRaw.items || []);
     if (!projects.length) { xnSay(lang === 'en' ? 'Create a script first.' : '请先创作一部剧本再上架'); return; }
     $('listScript').innerHTML = projects.map((p) => `<option value="${p.id}">${escapeHtml(p.title)}${lang === 'en' ? ` (${p.totalEps || 0} eps)` : `（${p.totalEps || 0} eps）`}</option>`).join('');
     $('listValue').classList.add('hidden'); $('listValue').innerHTML = '';
@@ -10071,7 +10073,8 @@
     bench.onclick = () => { pkOpponentId = null; document.querySelectorAll('.pk-opp').forEach((o) => o.classList.remove('selected')); bench.classList.add('selected'); };
     box.appendChild(bench);
     try {
-      const projects = await Api.jsonOrThrow(await Api.request('/api/generate/projects'));
+      const projectsRaw = await Api.jsonOrThrow(await Api.request('/api/generate/projects'));
+      const projects = Array.isArray(projectsRaw) ? projectsRaw : (projectsRaw.items || []);
       (projects || []).filter((p) => p.id !== currentProjectId && (p.totalEps || 0) > 0).slice(0, 8).forEach((p) => {
         const el = document.createElement('div');
         el.className = 'pk-opp';

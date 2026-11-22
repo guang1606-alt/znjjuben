@@ -335,8 +335,9 @@
     const hint = $('readPickHint');
     projSel.innerHTML = `<option value="">${esc(t.pickLoading)}</option>`;
     try {
-      const list = await get('/api/generate/projects');
-      state.pickProjects = Array.isArray(list) ? list : [];
+      const raw = await get('/api/generate/projects');
+      const list = Array.isArray(raw) ? raw : (raw.items || []);
+      state.pickProjects = list;
       state.pickLoaded = true;
       if (!state.pickProjects.length) {
         projSel.innerHTML = `<option value="">${esc(t.pickEmptyWorks)}</option>`;
