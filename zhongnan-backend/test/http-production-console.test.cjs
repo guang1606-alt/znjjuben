@@ -22,6 +22,16 @@ function makeStub() {
   const tasks = new Map();
   const callLogs = [];
   const withProj = (t) => ({ ...t, project: projects.get(t.projectId) ?? null });
+  const matches = (t, where = {}) => {
+    if (where.status?.in ? !where.status.in.includes(t.status) : where.status && t.status !== where.status) return false;
+    if (where.OR && !where.OR.some((cond) => {
+      if (cond.createdAt?.lt && !(new Date(t.createdAt) < new Date(cond.createdAt.lt))) return false;
+      if (cond.createdAt instanceof Date && new Date(t.createdAt).getTime() !== cond.createdAt.getTime()) return false;
+      if (cond.id?.lt && !(t.id < cond.id.lt)) return false;
+      return true;
+    })) return false;
+    return true;
+  };
   return {
     users, projects, tasks, callLogs,
     prisma: {
@@ -34,13 +44,22 @@ function makeStub() {
       },
       generationTask: {
         async findMany({ where = {}, orderBy, take } = {}) {
-          let r = [...tasks.values()];
-          if (where.status?.in) r = r.filter((t) => where.status.in.includes(t.status));
-          else if (where.status) r = r.filter((t) => t.status === where.status);
-          if (orderBy?.createdAt === 'desc') r.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+          let r = [...tasks.values()].filter((t) => matches(t, where));
+          const orders = (Array.isArray(orderBy) ? orderBy : [orderBy]).filter(Boolean);
+          r.sort((a, b) => {
+            for (const order of orders) {
+              const key = Object.keys(order)[0];
+              const dir = order[key] === 'desc' ? -1 : 1;
+              const av = a[key] instanceof Date ? a[key].getTime() : a[key];
+              const bv = b[key] instanceof Date ? b[key].getTime() : b[key];
+              if (av !== bv) return (av > bv ? 1 : -1) * dir;
+            }
+            return 0;
+          });
           if (take != null) r = r.slice(0, take);
           return r.map(withProj);
         },
+        async count({ where = {} } = {}) { return [...tasks.values()].filter((t) => matches(t, where)).length; },
         async findUnique({ where } = {}) { const t = tasks.get(where?.id); return t ? withProj(t) : null; },
         async update({ where, data } = {}) {
           const t = tasks.get(where?.id);
@@ -145,6 +164,62 @@ describe('制作中管理台·查看', { concurrency: 1 }, () => {
     assert.strictEqual(j.tasks.length, 6);
     const times = j.tasks.map((t) => new Date(t.createdAt).getTime());
     for (let i = 1; i < times.length; i++) assert.ok(times[i - 1] >= times[i], 'createdAt 倒序');
+  });
+
+  it('v2.652 列表返回真总数与游标，连续续页后六条全部可达且不重复', async () => {
+    const first = await get('/api/admin/production/tasks?scope=all&limit=2', 'admin1');
+    assert.strictEqual(first.s, 200);
+    assert.strictEqual(first.j.total, 6, 'total 必须是当前 scope 的全库数，不是本页条数');
+    assert.strictEqual(first.j.tasks.length, 2);
+    assert.strictEqual(first.j.hasMore, true);
+    assert.ok(first.j.nextCursor, '有后续任务时必须返回 nextCursor');
+
+    const ids = first.j.tasks.map((t) => t.id);
+    let cursor = first.j.nextCursor;
+    let last = first.j;
+    for (let page = 1; page < 10 && cursor; page++) {
+      last = await get(`/api/admin/production/tasks?scope=all&limit=2&cursor=${encodeURIComponent(cursor)}`, 'admin1');
+      assert.strictEqual(last.s, 200);
+      assert.strictEqual(last.j.total, 6, '续页仍须回显同口径真总数');
+      ids.push(...last.j.tasks.map((t) => t.id));
+      cursor = last.j.nextCursor;
+    }
+    assert.strictEqual(new Set(ids).size, ids.length, '续页不得重复任务');
+    assert.strictEqual(ids.length, 6, '超过单页窗口的历史任务必须全部可达');
+    assert.strictEqual(last.j.hasMore, false);
+    assert.strictEqual(last.j.nextCursor, '');
+  });
+
+  it('v2.652 同一 createdAt 按 id 续页不漏，非法游标退化为首屏', async () => {
+    const sameAt = new Date('2026-11-22T08:00:00.000Z');
+    const ids = ['pc_same_a', 'pc_same_b', 'pc_same_c'];
+    try {
+      for (const id of ids) mem.tasks.set(id, {
+        id, projectId: 'p1', stage: 'draft', engineTier: 'ECONOMY', status: 'FAILED',
+        pointsCost: 0, errorMsg: null, createdAt: sameAt, finishedAt: sameAt,
+      });
+      const seen = [];
+      let cursor = '';
+      let last;
+      for (let page = 0; page < 10; page++) {
+        const q = `scope=failed&limit=1${cursor ? `&cursor=${encodeURIComponent(cursor)}` : ''}`;
+        last = await get(`/api/admin/production/tasks?${q}`, 'admin1');
+        assert.strictEqual(last.s, 200);
+        assert.strictEqual(last.j.total, 4);
+        seen.push(...last.j.tasks.map((t) => t.id));
+        if (!last.j.hasMore) break;
+        cursor = last.j.nextCursor;
+      }
+      assert.strictEqual(new Set(seen).size, seen.length, '同刻任务不得因游标缺 id 锚点而重复');
+      assert.deepStrictEqual(seen.sort(), ['pc_same_a', 'pc_same_b', 'pc_same_c', 't_failed'].sort());
+
+      const normal = await get('/api/admin/production/tasks?scope=all&limit=2', 'admin1');
+      const invalid = await get('/api/admin/production/tasks?scope=all&limit=2&cursor=not-a-cursor', 'admin1');
+      assert.deepStrictEqual(invalid.j.tasks.map((t) => t.id), normal.j.tasks.map((t) => t.id));
+      assert.strictEqual(invalid.j.total, 9);
+    } finally {
+      for (const id of ids) mem.tasks.delete(id);
+    }
   });
 
   it('详情：任务全字段 + owner + 岗位级调用日志倒序', async () => {

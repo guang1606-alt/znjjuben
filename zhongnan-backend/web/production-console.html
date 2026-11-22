@@ -53,6 +53,8 @@
   .pc-title-cell b { display: block; }
   .pc-title-cell small { color: var(--text-2); }
   .pc-empty { padding: 42px 0; text-align: center; color: var(--text-2); font-size: 14px; }
+  .pc-pager { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px; padding: 12px 14px; border-top: 1px solid var(--line); color: var(--text-2); font-size: 12px; }
+  .pc-pager-actions { display: flex; gap: 8px; }
   .pc-guard { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); box-shadow: var(--shadow);
     padding: 42px 24px; text-align: center; margin-top: 8vh; }
   .pc-guard h2 { font-family: var(--serif); margin: 0 0 8px; }
@@ -121,6 +123,13 @@
         <tbody id="taskBody"></tbody>
       </table>
       <div class="pc-empty hidden" id="empty">当前范围暂无任务</div>
+      <div class="pc-pager" id="pager" aria-label="任务分页">
+        <span id="pageMeta" aria-live="polite"></span>
+        <div class="pc-pager-actions">
+          <button type="button" class="pc-btn" id="prevPage" disabled>上一页</button>
+          <button type="button" class="pc-btn" id="nextPage" disabled>下一页</button>
+        </div>
+      </div>
     </div>
     <p class="pc-hint">说明：管线为流式内联执行，进度以详情中的「岗位调用时间线」呈现；无暂停/恢复；重跑请回主站项目页重新发起。「孤儿」= 服务重启后悬挂、已无活跃执行句柄的任务。</p>
   </main>

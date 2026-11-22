@@ -16,7 +16,10 @@
   var TIER_ZH = { economy: '经济', standard: '标准', flagship: '旗舰' };
   var REFRESH_MS = 10000;
 
-  var state = { scope: 'active', list: [], detailId: null, timer: null };
+  var state = {
+    scope: 'active', list: [], total: 0, hasMore: false,
+    cursor: '', nextCursor: '', cursorStack: [], detailId: null, timer: null,
+  };
 
   function esc(s) {
     return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
@@ -67,8 +70,13 @@
   }
 
   function load() {
-    return request(prod('/tasks?scope=' + state.scope + '&limit=200')).then(function (j) {
+    var query = '/tasks?scope=' + state.scope + '&limit=200';
+    if (state.cursor) query += '&cursor=' + encodeURIComponent(state.cursor);
+    return request(prod(query)).then(function (j) {
       state.list = j.tasks || [];
+      state.total = j.total || 0;
+      state.hasMore = !!j.hasMore;
+      state.nextCursor = j.nextCursor || '';
       $('guard').classList.add('hidden');
       $('main').classList.remove('hidden');
       render();
@@ -89,11 +97,14 @@
     var orphan = list.filter(function (t) { return !t.live && (t.status === 'RUNNING' || t.status === 'QUEUED'); }).length;
     var failed = list.filter(function (t) { return t.status === 'FAILED' || t.status === 'CANCELED'; }).length;
     $('summary').innerHTML =
-      '<span class="pc-chip ok"><b>' + live + '</b>实时执行</span>' +
-      '<span class="pc-chip"><b>' + (list.filter(function (t) { return t.status === 'QUEUED'; }).length) + '</b>排队中</span>' +
-      '<span class="pc-chip bad"><b>' + orphan + '</b>疑似孤儿</span>' +
-      (state.scope !== 'active' ? '<span class="pc-chip warn"><b>' + failed + '</b>失败/取消</span>' : '') +
-      '<span class="pc-chip"><b>' + list.length + '</b>任务总数</span>';
+      '<span class="pc-chip ok"><b>' + live + '</b>本页实时执行</span>' +
+      '<span class="pc-chip"><b>' + (list.filter(function (t) { return t.status === 'QUEUED'; }).length) + '</b>本页排队中</span>' +
+      '<span class="pc-chip bad"><b>' + orphan + '</b>本页疑似孤儿</span>' +
+      (state.scope !== 'active' ? '<span class="pc-chip warn"><b>' + failed + '</b>本页失败/取消</span>' : '') +
+      '<span class="pc-chip"><b>' + state.total + '</b>任务总数</span>';
+    $('pageMeta').textContent = '第 ' + (state.cursorStack.length + 1) + ' 页 · 本页 ' + list.length + ' 条 / 共 ' + state.total + ' 条';
+    $('prevPage').disabled = state.cursorStack.length === 0;
+    $('nextPage').disabled = !state.hasMore || !state.nextCursor;
 
     var body = $('taskBody');
     body.innerHTML = list.map(function (t) {
@@ -207,13 +218,29 @@
     });
   }
 
+  $('prevPage').onclick = function () {
+    if (!state.cursorStack.length) return;
+    state.cursor = state.cursorStack.pop();
+    return load();
+  };
+  $('nextPage').onclick = function () {
+    if (!state.hasMore || !state.nextCursor) return;
+    state.cursorStack.push(state.cursor);
+    state.cursor = state.nextCursor;
+    return load();
+  };
+
   // scope tabs
   Array.prototype.forEach.call($('scopeTabs').querySelectorAll('button'), function (b) {
     b.onclick = function () {
       Array.prototype.forEach.call($('scopeTabs').querySelectorAll('button'), function (x) { x.classList.remove('on'); });
       b.classList.add('on');
       state.scope = b.getAttribute('data-scope');
-      load();
+      state.cursor = '';
+      state.nextCursor = '';
+      state.hasMore = false;
+      state.cursorStack = [];
+      return load();
     };
   });
   $('refreshBtn').onclick = load;

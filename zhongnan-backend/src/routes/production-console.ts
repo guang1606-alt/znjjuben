@@ -36,6 +36,27 @@ function taskRow(t: any) {
   };
 }
 
+/** v2.652 任务列表键集游标：以 (createdAt,id) 为稳定锚点，非法游标静默回到首屏。 */
+function encodeTaskCursor(createdAt: unknown, id: string): string {
+  try {
+    const d = new Date(createdAt as any);
+    if (Number.isNaN(d.getTime())) return '';
+    return Buffer.from(`${d.toISOString()}|${id}`, 'utf8').toString('base64url');
+  } catch { return ''; }
+}
+function decodeTaskCursor(raw: unknown): { createdAt: Date; id: string } | null {
+  if (typeof raw !== 'string' || !raw.trim()) return null;
+  try {
+    const s = Buffer.from(raw.trim(), 'base64url').toString('utf8');
+    const at = s.lastIndexOf('|');
+    if (at <= 0) return null;
+    const createdAt = new Date(s.slice(0, at));
+    const id = s.slice(at + 1);
+    if (!id || Number.isNaN(createdAt.getTime())) return null;
+    return { createdAt, id };
+  } catch { return null; }
+}
+
 /** 生产默认解冻：幂等键与生成失败路径完全一致；免费单/已结算单 NO_LOSS/NO_CHARGE 静默通过 */
 async function defaultRefundTask(prisma: any, task: { id: string; pointsCost: number; project: { userId: string } | null }) {
   const userId = task.project?.userId;
@@ -69,13 +90,31 @@ export function createProductionConsoleRouter(prisma: any, opts: ProductionConso
         : scope === 'all' ? ['QUEUED', 'RUNNING', 'DONE', 'FAILED', 'CANCELED']
         : ['QUEUED', 'RUNNING'];
       const lim = Math.min(Math.max(Number((req.query as any).limit) || 100, 1), 200);
-      const rows = await prisma.generationTask.findMany({
-        where: { status: { in: statusIn } },
-        orderBy: { createdAt: 'desc' },
-        take: lim,
-        include: { project: PROJECT_SELECT },
+      const cursor = decodeTaskCursor((req.query as any).cursor);
+      const baseWhere = { status: { in: statusIn } };
+      const where: any = cursor ? {
+        ...baseWhere,
+        OR: [
+          { createdAt: { lt: cursor.createdAt } },
+          { createdAt: cursor.createdAt, id: { lt: cursor.id } },
+        ],
+      } : baseWhere;
+      const [rows, total] = await Promise.all([
+        prisma.generationTask.findMany({
+          where,
+          orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+          take: lim + 1,
+          include: { project: PROJECT_SELECT },
+        }),
+        prisma.generationTask.count({ where: baseWhere }),
+      ]);
+      const hasMore = rows.length > lim;
+      const list = rows.slice(0, lim);
+      const last = list[list.length - 1];
+      res.json({
+        ok: true, scope, total, tasks: list.map(taskRow), hasMore,
+        nextCursor: hasMore && last ? encodeTaskCursor(last.createdAt, last.id) : '',
       });
-      res.json({ ok: true, scope, tasks: rows.map(taskRow) });
     } catch (e) {
       failInternal(res, e, 'production-list');
     }
