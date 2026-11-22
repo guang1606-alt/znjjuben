@@ -1424,6 +1424,12 @@ summary:hover{color:var(--accent-strong)}
 .listen-rate select{padding:3px 6px;border-radius:8px;border:1px solid var(--border);background:var(--panel);color:var(--text);font-size:13px}
 .listen-progress{font-size:12px;color:var(--text-2);font-variant-numeric:tabular-nums}
 /* c208 整剧连播：集导航条 + 续听提示条 */
+/* v2.644 云端播放条：此前没有任何样式，按钮/提示/播放器是一条散乱的 inline 流；
+   失败恢复新增两个按钮后，窄屏会挤成一团。补齐与续听条同族的容器样式。 */
+.listen-cloud{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin:8px 0 2px;padding:8px 12px;border-radius:10px;background:var(--panel-2);border:1px solid var(--border)}
+.listen-cloud .muted{display:inline-flex;align-items:center;gap:8px;flex-wrap:wrap}
+.listen-cloud button{padding:5px 10px;font-size:13px}
+.listen-cloud audio{max-width:100%;height:36px}
 .listen-series{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin:8px 0 2px;padding:8px 12px;border-radius:10px;background:var(--panel-2);border:1px solid var(--border)}
 .listen-series select{padding:4px 8px;border-radius:8px;border:1px solid var(--border);background:var(--panel);color:var(--text);font-size:13px;max-width:260px}
 .listen-series .listen-ep-step{padding:5px 10px;font-size:13px;white-space:nowrap}

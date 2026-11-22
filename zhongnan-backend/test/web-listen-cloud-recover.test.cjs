@@ -41,19 +41,20 @@ test('F1 失败分支必须记住失败段号（同集），供重试/续播使�
 });
 
 test('F2 失败提示区给出「重试本段 / 跳过本段」两个真实按钮', () => {
+  // v2.644 起按钮构造收口到共用提示出口，断言随之指向该出口（合成/播放失败共用）
+  const helper = fnBody('function listenCloudFailTip(', 'async function listenPlayCloud');
+  assert.ok(/id = 'listenCloudRetry'/.test(helper), '失败提示里缺少「重试本段」按钮');
+  assert.ok(/id = 'listenCloudSkip'/.test(helper), '失败提示里缺少「跳过本段」按钮');
+  assert.ok(/createElement\('button'\)/.test(helper), '按钮必须是真实 button，不能是纯文本');
   const catchAt = cloud.indexOf('} catch (e) {');
-  const after = cloud.slice(catchAt);
-  assert.ok(/id = 'listenCloudRetry'/.test(after), '失败提示里缺少「重试本段」按钮');
-  assert.ok(/id = 'listenCloudSkip'/.test(after), '失败提示里缺少「跳过本段」按钮');
-  assert.ok(/createElement\('button'\)/.test(after), '按钮必须是真实 button，不能是纯文本');
+  assert.ok(/listenCloudFailTip\(/.test(cloud.slice(catchAt)), '合成失败没有使用共用提示出口');
 });
 
 test('F3 重试请求同一段，跳过请求下一段（不是回到第一段）', () => {
-  const catchAt = cloud.indexOf('} catch (e) {');
-  const after = cloud.slice(catchAt);
-  assert.ok(/listenPlayCloud\(scriptId, part, 0, null\)/.test(after),
+  const helper = fnBody('function listenCloudFailTip(', 'async function listenPlayCloud');
+  assert.ok(/listenPlayCloud\(scriptId, part, 0, null\)/.test(helper),
     '「重试本段」没有以同一 part 重新请求');
-  assert.ok(/listenPlayCloud\(scriptId, part \+ 1, 0, null\)/.test(after),
+  assert.ok(/listenPlayCloud\(scriptId, part \+ 1, 0, null\)/.test(helper),
     '「跳过本段」没有请求 part + 1');
 });
 

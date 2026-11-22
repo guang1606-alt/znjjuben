@@ -8701,6 +8701,31 @@
     if (status === 400 || status === 503) return false;
     return true;
   }
+  // v2.644 失败提示共用出口：合成失败与音频播放失败都要「说清原因 + 给出路」。
+  // v2.642 只在合成失败分支加了重试/跳过，播放失败仍然只写一行字——
+  // 两条路径各写一套按钮必然漂移，这里收成唯一构造点。
+  function listenCloudFailTip(scriptId, part, total, msg, showRetry) {
+    const tip = $('listenCloudTip');
+    if (!tip) return;
+    tip.textContent = '';
+    const line = document.createElement('span');
+    line.textContent = msg;
+    tip.appendChild(line);
+    if (showRetry) {
+      const retry = document.createElement('button');
+      retry.type = 'button'; retry.id = 'listenCloudRetry'; retry.className = 'btn-ghost';
+      retry.textContent = lang === 'en' ? 'Retry this part' : '重试本段';
+      retry.onclick = () => listenPlayCloud(scriptId, part, 0, null);
+      tip.appendChild(retry);
+    }
+    if (total > part + 1) {
+      const skip = document.createElement('button');
+      skip.type = 'button'; skip.id = 'listenCloudSkip'; skip.className = 'btn-ghost';
+      skip.textContent = lang === 'en' ? 'Skip this part' : '跳过本段';
+      skip.onclick = () => listenPlayCloud(scriptId, part + 1, 0, null);
+      tip.appendChild(skip);
+    }
+  }
   async function listenPlayCloud(scriptId, part = 0, token = 0, state = null) {
     const btn = $('listenCloudBtn'); const tip = $('listenCloudTip'); const audio = $('listenCloudAudio');
     if (!btn || !audio || btn.disabled) return;
@@ -8748,9 +8773,12 @@
       audio.onerror = () => {
         audio.hidden = true;
         if (mySeq !== listenCloudSeq) return;
-        if (tip) tip.textContent = lang === 'en'
-          ? 'Audio playback failed; browser voice still works.'
-          : '云端音频播放失败，浏览器朗读仍可用。';
+        // v2.644 播放失败退回本段：续播点在上方 src 赋值时就推进到了下一段，
+        // 但解码失败意味着用户没听到这一段的任何声音——不回退的话再点云端会直接跳段，静默吞内容。
+        listenCloudResume = { scriptId, part, total };
+        listenCloudFailTip(scriptId, part, total,
+          lang === 'en' ? 'Audio playback failed; browser voice still works.' : '云端音频播放失败，浏览器朗读仍可用。',
+          true);
       };
       audio.src = listenCloudUrl; audio.hidden = false;
       // v2.642 进度保持：本段已开播，续播点推进到下一段；末段开播即清空，下次点播从头开始。
@@ -8775,24 +8803,7 @@
             : code === 'TTS_TEXT_TOO_LONG' || status === 400
               ? (lang === 'en' ? 'Episode too long for one cloud request; browser voice still works.' : '本集过长，暂不支持整集云端合成，浏览器朗读仍可用。')
               : (lang === 'en' ? 'Cloud voice failed; browser voice still works.' : '云端语音失败，浏览器朗读仍可用。');
-        tip.textContent = '';
-        const line = document.createElement('span');
-        line.textContent = msg;
-        tip.appendChild(line);
-        if (listenCloudRetryable(code, status)) {
-          const retry = document.createElement('button');
-          retry.type = 'button'; retry.id = 'listenCloudRetry'; retry.className = 'btn-ghost';
-          retry.textContent = lang === 'en' ? 'Retry this part' : '重试本段';
-          retry.onclick = () => listenPlayCloud(scriptId, part, 0, null);
-          tip.appendChild(retry);
-        }
-        if (total > part + 1) {
-          const skip = document.createElement('button');
-          skip.type = 'button'; skip.id = 'listenCloudSkip'; skip.className = 'btn-ghost';
-          skip.textContent = lang === 'en' ? 'Skip this part' : '跳过本段';
-          skip.onclick = () => listenPlayCloud(scriptId, part + 1, 0, null);
-          tip.appendChild(skip);
-        }
+        listenCloudFailTip(scriptId, part, total, msg, listenCloudRetryable(code, status));
       }
     } finally {
       if (mySeq === listenCloudSeq) { btn.disabled = false; btn.textContent = ctx.oldText; }
