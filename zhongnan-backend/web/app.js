@@ -8691,13 +8691,31 @@
   // 发起请求自增认领；listenFinish（停止/关窗/切集）自增作废；响应回来先比对再播放，
   // 否则「关窗后旧音频照样开播、切集后新集里播旧集」会绕过 v2.638 的停止收口。
   let listenCloudSeq = 0;
+  // v2.642 失败续点：记录「哪一集、哪一段」出了问题，供提示区的重试/跳过与再次点播续段使用。
+  // 只在内存里（关窗即清），不落 localStorage——云端语音进度以用户当下操作为准，不做跨会话记忆。
+  let listenCloudResume = null;
+  // 永久失败（未配置/内容过长/参数不合法）重试必然复现，不给「重试」按钮；
+  // 429 可能是供应商每分钟限速、5xx/网络中断都是瞬时的，重试有意义。
+  function listenCloudRetryable(code, status) {
+    if (code === 'TTS_NOT_CONFIGURED' || code === 'TTS_TEXT_TOO_LONG' || code === 'TTS_EMPTY') return false;
+    if (status === 400 || status === 503) return false;
+    return true;
+  }
   async function listenPlayCloud(scriptId, part = 0, token = 0, state = null) {
     const btn = $('listenCloudBtn'); const tip = $('listenCloudTip'); const audio = $('listenCloudAudio');
     if (!btn || !audio || btn.disabled) return;
     const first = !state;
+    // v2.642 续段：仅「默认点击」（part 0）且同集失败过才接管段号；
+    // 重试/跳过显式传 part 不受影响；换集后旧续点 scriptId 失配自然落空。
+    if (first && part === 0 && listenCloudResume && listenCloudResume.scriptId === scriptId && listenCloudResume.part > 0) {
+      part = listenCloudResume.part;
+    }
     if (first) listenFinish(); // 点击云端即掐断浏览器朗读与上一段云端音频，避免双声叠放
     const mySeq = token || ++listenCloudSeq;
-    const ctx = state || { oldText: btn.textContent };
+    const ctx = state || {
+      oldText: btn.textContent,
+      total: listenCloudResume && listenCloudResume.scriptId === scriptId ? (Number(listenCloudResume.total) || 0) : 0,
+    };
     btn.disabled = true;
     btn.textContent = lang === 'en' ? 'Synthesizing…' : '云端合成中…';
     if (first && tip) tip.textContent = '';
@@ -8710,6 +8728,7 @@
       if (!d || !d.audioBase64) throw new Error('TTS_NO_AUDIO');
       const total = Math.max(1, Number(d.parts) || 1);
       const hasMore = d.hasMore === true && part + 1 < total;
+      ctx.total = total;
       const bin = atob(d.audioBase64);
       const bytes = new Uint8Array(bin.length);
       for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
@@ -8734,6 +8753,8 @@
           : '云端音频播放失败，浏览器朗读仍可用。';
       };
       audio.src = listenCloudUrl; audio.hidden = false;
+      // v2.642 进度保持：本段已开播，续播点推进到下一段；末段开播即清空，下次点播从头开始。
+      listenCloudResume = hasMore ? { scriptId, part: part + 1, total } : null;
       try { await audio.play(); } catch { /* 自动播放被拒时保留控件，由用户点播放 */ }
       if (tip) {
         const progress = total > 1 ? (lang === 'en' ? `Part ${part + 1}/${total}` : `第 ${part + 1}/${total} 段`) : '';
@@ -8743,13 +8764,36 @@
     } catch (e) {
       if (mySeq !== listenCloudSeq) return; // 已关窗/切集：过期错误提示不写进新弹窗
       const code = e && e.error; const status = e && e.httpStatus;
-      if (tip) tip.textContent = code === 'TTS_NOT_CONFIGURED' || status === 503
-        ? (lang === 'en' ? 'Cloud voice is not configured; browser voice still works.' : '云端语音尚未配置，浏览器朗读仍可用。')
-        : code === 'TTS_DAILY_LIMIT' || status === 429
-          ? (lang === 'en' ? 'Daily cloud voice limit reached; browser voice still works.' : '今日云端语音次数已用完，浏览器朗读仍可用。')
-          : code === 'TTS_TEXT_TOO_LONG' || status === 400
-            ? (lang === 'en' ? 'Episode too long for one cloud request; browser voice still works.' : '本集过长，暂不支持整集云端合成，浏览器朗读仍可用。')
-            : (lang === 'en' ? 'Cloud voice failed; browser voice still works.' : '云端语音失败，浏览器朗读仍可用。');
+      // v2.642 记住失败段：同集再次点播续到这里；重试/跳过按钮也以它为准。
+      const total = Math.max(0, Number(ctx.total) || 0);
+      listenCloudResume = { scriptId, part, total };
+      if (tip) {
+        const msg = code === 'TTS_NOT_CONFIGURED' || status === 503
+          ? (lang === 'en' ? 'Cloud voice is not configured; browser voice still works.' : '云端语音尚未配置，浏览器朗读仍可用。')
+          : code === 'TTS_DAILY_LIMIT' || status === 429
+            ? (lang === 'en' ? 'Daily cloud voice limit reached; browser voice still works.' : '今日云端语音次数已用完，浏览器朗读仍可用。')
+            : code === 'TTS_TEXT_TOO_LONG' || status === 400
+              ? (lang === 'en' ? 'Episode too long for one cloud request; browser voice still works.' : '本集过长，暂不支持整集云端合成，浏览器朗读仍可用。')
+              : (lang === 'en' ? 'Cloud voice failed; browser voice still works.' : '云端语音失败，浏览器朗读仍可用。');
+        tip.textContent = '';
+        const line = document.createElement('span');
+        line.textContent = msg;
+        tip.appendChild(line);
+        if (listenCloudRetryable(code, status)) {
+          const retry = document.createElement('button');
+          retry.type = 'button'; retry.id = 'listenCloudRetry'; retry.className = 'btn-ghost';
+          retry.textContent = lang === 'en' ? 'Retry this part' : '重试本段';
+          retry.onclick = () => listenPlayCloud(scriptId, part, 0, null);
+          tip.appendChild(retry);
+        }
+        if (total > part + 1) {
+          const skip = document.createElement('button');
+          skip.type = 'button'; skip.id = 'listenCloudSkip'; skip.className = 'btn-ghost';
+          skip.textContent = lang === 'en' ? 'Skip this part' : '跳过本段';
+          skip.onclick = () => listenPlayCloud(scriptId, part + 1, 0, null);
+          tip.appendChild(skip);
+        }
+      }
     } finally {
       if (mySeq === listenCloudSeq) { btn.disabled = false; btn.textContent = ctx.oldText; }
     }
@@ -8876,7 +8920,7 @@
       if (listenTts.playing && !listenTts.paused && listenTts.idx >= 0) speakListenIdx(listenTts.idx);
     };
     // v2.220 关闭收口：X/关闭按钮/遮罩/Esc 统一走 closeModalEl，清理经钩子触发（listenFinish 只停播清态，不负责 hidden）
-    setModalCloseHook('listenModal', listenFinish);
+    setModalCloseHook('listenModal', () => { listenCloudResume = null; listenFinish(); });
     window.addEventListener('beforeunload', listenFinish);
   }
   // opts.autostart：连播/选集/片单入口自动开口；startAt: first|last|idx（配 startIdx）

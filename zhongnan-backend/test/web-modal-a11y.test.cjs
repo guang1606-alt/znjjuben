@@ -74,7 +74,9 @@ describe('v2.220 周边让位与钩子接线', () => {
   });
 
   it('listenModal 清理经钩子接线，旧双轨监听已删除', () => {
-    assert.ok(src.includes("setModalCloseHook('listenModal', listenFinish)"), 'listenModal 应注册 listenFinish 清理钩子');
+    // v2.642 起钩子额外清空云端续播点，允许包一层；断言收敛为「钩子必须调用 listenFinish()」
+    assert.ok(/setModalCloseHook\('listenModal',[\s\S]{0,80}listenFinish\(\)/.test(src),
+      'listenModal 应注册 listenFinish 清理钩子');
     assert.doesNotMatch(src, /e\.target\.id === 'listenModal'/, '不应再有 listenModal 专属点击关闭监听（统一走 closeModalEl）');
     // beforeunload 兜底保留：页面卸载时仍要停播
     assert.ok(/window\.addEventListener\('beforeunload', listenFinish\)/.test(src), 'beforeunload 停播兜底应保留');
