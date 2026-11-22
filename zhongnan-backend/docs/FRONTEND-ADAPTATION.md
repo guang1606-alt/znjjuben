@@ -2,7 +2,7 @@
 
 > 面向前端（`web/` 原生 JS 站点及后续独立前端/移动端）的后端 API 契约与适配说明。
 > 后端每次破坏性契约变更都会在此登记：变更内容 → 迁移对照 → 前端已同步点。
-> 版本对齐 `package.json`，当前基线：**v2.651.0**。
+> 版本对齐 `package.json`，当前基线：**v2.652.0**。
 
 ---
 
@@ -100,6 +100,13 @@
 | 全量投稿渠道      | 投稿面板「查看全部投稿渠道」展开（含未核验计数，二次点击收起）            | `GET /api/submission/channels` → `{ channels, unverified }`                                                                                                                         |
 | 副管理员授予/回收 | 用户管理行操作「授予副管理员 / 摘管理员帽」按钮                           | `POST /api/admin/users/:id/admin-flag`（body `{ isAdmin }`；仅主账号可授）                                                                                                          |
 | 知识条目归档/恢复 | 学习窗口行操作「归档（可填原因）/ 恢复（转待审）」按钮                    | `POST /api/admin/knowledge/:id/archive`（body `{ reason? }` → ARCHIVED）、`/:id/restore` → PENDING                                                                                  |
+
+### 制作中管理台任务分页（`GET /api/admin/production/tasks`，v2.652）
+
+- 请求：`?scope=active|failed|all&limit=100&cursor=<nextCursor>`；`scope` 缺省为 `active`，`limit` 默认 100、最小 1、封顶 200
+- **兼容扩展**：保留 `{ ok, scope, tasks }`，新增 `{ total, hasMore, nextCursor }`；`total` 是当前 scope 的全库真总数，不是本页 `tasks.length`；空结果返回 `tasks: []`、`hasMore: false`、`nextCursor: ''`
+- 续页：携带上一页 `nextCursor`；游标为 `ISO_CREATED_AT|id` 的 base64url，按 `(createdAt,id)` 双键倒序进行键集分页，同一时刻多条任务以 id 续页不漏不重；非法/空游标静默退化为首屏，`hasMore=false` 或 `nextCursor=''` 表示到底
+- 前端消费：`web/production-console.js` 使用上一页/下一页替换当前页，游标栈支持返回；10 秒自动刷新与手动刷新保留当前 cursor；切换 scope 清空游标及页栈。只有 `total` 显示为「任务总数」，实时、排队、孤儿、失败统计均明确标注「本页」
 
 ### 超管知识审核分页（`GET /api/admin/knowledge`，v2.651）
 
