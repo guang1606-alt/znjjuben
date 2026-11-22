@@ -61,3 +61,20 @@ test('R5 浏览器朗读既有在途令牌不许回退（邻居对照组）', ()
   const open = fnBody('async function openListen(', 'async function openListenSeries(');
   assert.ok(/token !== listenReqSeq/.test(open), 'openListen 的在途响应作废被移除');
 });
+
+test('R6 长集云端朗读按 part 请求，当前段播完自动接下一段', () => {
+  assert.ok(/body:\s*JSON\.stringify\(\{[^}]*\bpart\b/.test(cloud),
+    '云端合成请求没有携带 part，长集永远只能拿到第一段');
+  const ended = cloud.indexOf('audio.onended');
+  assert.ok(ended > 0, '缺少分段播完回调');
+  const after = cloud.slice(ended);
+  assert.ok(/if \(hasMore\) \{[\s\S]*?listenPlayCloud\(scriptId,\s*part \+ 1,\s*mySeq/.test(after),
+    '当前段播完没有在 hasMore 时顺序请求 part + 1，长集会在第一段后停住');
+});
+
+test('R7 分段续播复用同一在途令牌，不得把旧集响应带进新集', () => {
+  assert.ok(/async function listenPlayCloud\(scriptId,\s*part\s*=\s*0,\s*token\s*=/.test(cloud),
+    'listenPlayCloud 缺少 part/token 参数，续播无法复用本轮令牌');
+  assert.ok(/listenPlayCloud\(scriptId,\s*part\s*\+\s*1,\s*mySeq/.test(cloud),
+    '续播没有透传 mySeq，旧请求作废语义会在第二段失效');
+});

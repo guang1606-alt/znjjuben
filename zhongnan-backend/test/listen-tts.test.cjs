@@ -48,6 +48,8 @@ const CONTENT = ['第1集 雨夜', '内景 咖啡馆 夜', '林晚：你终于�
 mem._scripts.push({ id: 's_full', projectId: 'p_basic', epNo: 1, version: 1, title: '雨夜', content: CONTENT });
 mem._scripts.push({ id: 's_empty', projectId: 'p_basic', epNo: 2, version: 1, title: '空集', content: '' });
 mem._scripts.push({ id: 's_other', projectId: 'p_other', epNo: 1, version: 1, title: '他人集', content: CONTENT });
+const LONG_CONTENT = Array.from({ length: 260 }, (_, i) => `△ 雨夜第${i + 1}段，林晚沿着旧街向前走，听见身后传来急促脚步。`).join('\n');
+mem._scripts.push({ id: 's_long', projectId: 'p_basic', epNo: 3, version: 1, title: '长集', content: LONG_CONTENT });
 
 const H = (uid, level) => ({ Authorization: `Bearer ${signAccess({ sub: uid, level })}`, 'Content-Type': 'application/json' });
 const ttsPost = async (sid, uid, level, body = {}) => {
@@ -247,5 +249,79 @@ describe('v2.635 听剧本云端语音 TTS', { concurrency: 1 }, () => {
     assert.strictEqual(p.modality, 'audio');
     assert.strictEqual(p.voice, 'nova');
     assert.ok(p.apiKey.includes('•'), '回显必须脱敏');
+  });
+
+  it('13) v2.640 分段器按句边界控制上限，超长句硬切且不丢正文', () => {
+    const TTS = require('../dist/lib/tts.js');
+    const text = '第一句。第二句！第三句？第四句；第五句。\n第六句。';
+    const parts = TTS.splitTtsText(text, 10);
+    assert.ok(parts.length > 1);
+    assert.ok(parts.every((x) => x.length <= 10), JSON.stringify(parts));
+    assert.strictEqual(parts.join('').replace(/\s/g, ''), text.replace(/\s/g, ''), '分段不得丢字或改字');
+    const hard = TTS.splitTtsText('长'.repeat(25), 10);
+    assert.deepStrictEqual(hard.map((x) => x.length), [10, 10, 5]);
+    assert.strictEqual(hard.join(''), '长'.repeat(25));
+  });
+
+  it('14) v2.640 长集不再 400：逐段返回 part/parts/hasMore，供应商输入均不超限', async () => {
+    const saved = await putProvider({});
+    assert.strictEqual(saved.s, 200, JSON.stringify(saved.j));
+    const t = withTransport(() => audioResp('ID3-long-part'));
+    const responses = [];
+    try {
+      const first = await ttsPost('s_long', 'u_basic', 'BASIC', { format: 'mp3', part: 0 });
+      assert.strictEqual(first.s, 200, JSON.stringify(first.j));
+      assert.strictEqual(first.j.part, 0);
+      assert.ok(first.j.parts >= 2, JSON.stringify(first.j));
+      assert.strictEqual(first.j.hasMore, true);
+      responses.push(first);
+      for (let part = 1; part < first.j.parts; part++) {
+        const r = await ttsPost('s_long', 'u_basic', 'BASIC', { format: 'mp3', part });
+        assert.strictEqual(r.s, 200, JSON.stringify(r.j));
+        assert.strictEqual(r.j.part, part);
+        assert.strictEqual(r.j.parts, first.j.parts);
+        assert.strictEqual(r.j.hasMore, part + 1 < first.j.parts);
+        responses.push(r);
+      }
+    } finally { t.restore(); }
+    assert.strictEqual(t.calls.length, responses[0].j.parts);
+    for (const call of t.calls) {
+      const body = JSON.parse(call.init.body);
+      assert.ok(body.input.length > 0 && body.input.length <= 4000, `分段长度越界：${body.input.length}`);
+    }
+    assert.ok(responses.every((r) => r.j.totalChars > 4000));
+  });
+
+  it('15) v2.640 同一集同一格式的全部分段只消耗一次每日额度', async () => {
+    const saved = await putProvider({});
+    assert.strictEqual(saved.s, 200, JSON.stringify(saved.j));
+    const TTS = require('../dist/lib/tts.js');
+    TTS.__setTtsDailyLimit(1);
+    const t = withTransport(() => audioResp('ID3-long-quota'));
+    try {
+      const first = await ttsPost('s_long', 'u_basic', 'BASIC', { format: 'mp3', part: 0 });
+      assert.strictEqual(first.s, 200, JSON.stringify(first.j));
+      for (let part = 1; part < first.j.parts; part++) {
+        const r = await ttsPost('s_long', 'u_basic', 'BASIC', { format: 'mp3', part });
+        assert.strictEqual(r.s, 200, `第 ${part} 段不应重复计额度：${JSON.stringify(r.j)}`);
+      }
+      const other = await ttsPost('s_full', 'u_basic', 'BASIC', { format: 'mp3' });
+      assert.strictEqual(other.s, 429, '另一集仍应受每日一次上限约束');
+      assert.strictEqual(other.j.error, 'TTS_DAILY_LIMIT');
+    } finally { t.restore(); }
+  });
+
+  it('16) v2.640 非法 part（负数/小数/越界）→ 400 TTS_PART_INVALID，不触网', async () => {
+    const saved = await putProvider({});
+    assert.strictEqual(saved.s, 200, JSON.stringify(saved.j));
+    const t = withTransport(() => { throw new Error('不得触网'); });
+    try {
+      for (const part of [-1, 0.5, 999]) {
+        const r = await ttsPost('s_long', 'u_basic', 'BASIC', { format: 'mp3', part });
+        assert.strictEqual(r.s, 400, JSON.stringify(r.j));
+        assert.strictEqual(r.j.error, 'TTS_PART_INVALID');
+      }
+    } finally { t.restore(); }
+    assert.strictEqual(t.calls.length, 0);
   });
 });

@@ -124,7 +124,7 @@ import { userMessageOf, modelErrorMeta } from '../lib/model-error-message';
 import { buildListenScript, listenEntitleNote } from '../engine/listen-script';
 import { buildVoiceCast } from '../engine/listen-voice-cast';
 import { loadProviders } from '../lib/model-config';
-import { pickAudioProvider, listAudioProviders, synthesizeSpeech, ttsCacheKey, TTS_FORMATS, TTS_DEFAULT_FORMAT, TTS_MAX_CHARS } from '../lib/tts';
+import { pickAudioProvider, listAudioProviders, synthesizeSpeech, splitTtsText, ttsCacheKey, TTS_FORMATS, TTS_DEFAULT_FORMAT } from '../lib/tts';
 import { buildShotManifest, planAigcVolume, analyzeAigcSceneCurve } from '../engine/aigc-screenplay'; // c219 AIGC 构成仪表盘数据落库：生成期/fix 期持久化到 qcReport._aigc，刷新后可重渲染
 import { validateScript } from '../engine/script-format'; // c219 _aigc.format 复用 pipeline 同口径 validateScript（非 validateAigcScreenplay）
 import { buildScriptDoc, normalizeBibleDoc } from '../lib/script-doc';
@@ -2457,8 +2457,14 @@ generateRouter.post('/scripts/:id/listen/tts', authRequired, async (req: AuthReq
   if (!(TTS_FORMATS as string[]).includes(format)) {
     return res.status(400).json({ error: 'TTS_FORMAT_INVALID', formats: TTS_FORMATS });
   }
-  if (listen.narration.length > TTS_MAX_CHARS) {
-    return res.status(400).json({ error: 'TTS_TEXT_TOO_LONG', limit: TTS_MAX_CHARS, chars: listen.narration.length });
+  // v2.640 长集按句边界分段：每次只合成一段，前端按 part 顺序播放；
+  // 缓存按段命中，额度键不含段号，同一集同一格式整条播放链只计一次。
+  const textParts = splitTtsText(listen.narration);
+  if (!textParts.length) return res.status(400).json({ error: '该集暂无可朗读正文' });
+  const rawPart = req.body?.part ?? req.query?.part ?? 0;
+  const part = typeof rawPart === 'number' ? rawPart : Number(String(rawPart).trim() || 0);
+  if (!Number.isInteger(part) || part < 0 || part >= textParts.length) {
+    return res.status(400).json({ error: 'TTS_PART_INVALID', part: rawPart, parts: textParts.length });
   }
 
   let candidates = [] as ReturnType<typeof listAudioProviders>;
@@ -2474,11 +2480,13 @@ generateRouter.post('/scripts/:id/listen/tts', authRequired, async (req: AuthReq
     });
   }
 
+  const baseCacheKey = ttsCacheKey({ scriptId: sc.id, version: sc.version, text: listen.narration, lang: listenLang });
   const out = await synthesizeSpeech({
     providers: candidates,
-    text: listen.narration,
+    text: textParts[part],
     format,
-    cacheKey: ttsCacheKey({ scriptId: sc.id, version: sc.version, text: listen.narration, lang: listenLang }),
+    cacheKey: `${baseCacheKey}|part:${part}`,
+    quotaKey: `${baseCacheKey}|format:${format}`,
     userId: req.userId!,
   });
   if (!out.ok) {
@@ -2492,6 +2500,7 @@ generateRouter.post('/scripts/:id/listen/tts', authRequired, async (req: AuthReq
     scriptId: sc.id, epNo: sc.epNo, lang: listenLang,
     audioBase64: out.audioBase64, format: out.format, voice: out.voice,
     chars: out.chars, cached: !!out.cached,
+    part, parts: textParts.length, hasMore: part + 1 < textParts.length, totalChars: listen.narration.length,
     note: listenEntitleNote(listenLang),
   });
 });

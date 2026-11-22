@@ -21,8 +21,35 @@ export type TtsFormat = 'mp3' | 'wav' | 'opus' | 'aac' | 'flac' | 'pcm';
 export const TTS_FORMATS: TtsFormat[] = ['mp3', 'wav', 'opus', 'aac', 'flac', 'pcm'];
 export const TTS_DEFAULT_FORMAT: TtsFormat = 'mp3';
 export const TTS_DEFAULT_VOICE = 'alloy';
-/** 单次合成文本上限：约一集中文朗读稿，超限如实拒绝而不是静默截断 */
+/** 单段合成文本上限；长集由路由按句边界拆成多段顺序播放 */
 export const TTS_MAX_CHARS = 4000;
+
+/**
+ * 将长朗读稿拆成供应商可接收的分段。
+ * 优先在句末/换行处收段；单个句子本身超限时才硬切，绝不静默丢字。
+ */
+export function splitTtsText(input: string, maxChars = TTS_MAX_CHARS): string[] {
+  const text = String(input || '').trim();
+  if (!text) return [];
+  const max = Number.isFinite(maxChars) && maxChars > 0 ? Math.floor(maxChars) : TTS_MAX_CHARS;
+  const sentences = text.split(/(?<=[。！？!?；;\n])/).map((x) => x.trim()).filter(Boolean);
+  const parts: string[] = [];
+  let current = '';
+  for (const sentence of sentences) {
+    let rest = sentence;
+    while (rest.length > max) {
+      if (current) { parts.push(current); current = ''; }
+      parts.push(rest.slice(0, max));
+      rest = rest.slice(max).trimStart();
+    }
+    if (!rest) continue;
+    if (!current) current = rest;
+    else if (current.length + 1 + rest.length <= max) current += `\n${rest}`;
+    else { parts.push(current); current = rest; }
+  }
+  if (current) parts.push(current);
+  return parts;
+}
 
 const CACHE_MAX_ENTRIES = 20;
 const CACHE_MAX_BYTES = 32 * 1024 * 1024;
@@ -167,7 +194,7 @@ export async function pingTtsProvider(input: { baseUrl: string; apiKey: string; 
 interface CacheEntry { b64: string; format: string; voice: string; chars: number }
 const cache = new Map<string, CacheEntry>();
 let cacheBytes = 0;
-const quota = new Map<string, { day: string; n: number }>();
+const quota = new Map<string, { day: string; n: number; keys: Set<string> }>();
 let dailyLimit = QUOTA_DEFAULT_LIMIT;
 
 /** 测试钩子：清空缓存/额度并恢复默认每日上限 */
@@ -185,14 +212,20 @@ function dayKey(): string {
   return new Date(Date.now() + 8 * 3600_000).toISOString().slice(0, 10);
 }
 
-/** 消耗一次真实合成额度；返回 false 表示已超额（缓存命中不调用本函数） */
-function consumeQuota(userId?: string): boolean {
+/** 消耗一次真实合成额度；同一 quotaKey 的后续分段不重复计次（缓存命中不调用本函数） */
+function consumeQuota(userId?: string, quotaKey?: string): boolean {
   if (!userId || dailyLimit <= 0) return true;
   const day = dayKey();
-  const cur = quota.get(userId);
-  if (!cur || cur.day !== day) { quota.set(userId, { day, n: 1 }); return true; }
+  let cur = quota.get(userId);
+  if (!cur || cur.day !== day) {
+    cur = { day, n: 0, keys: new Set<string>() };
+    quota.set(userId, cur);
+  }
+  const key = String(quotaKey || '');
+  if (key && cur.keys.has(key)) return true;
   if (cur.n >= dailyLimit) return false;
   cur.n += 1;
+  if (key) cur.keys.add(key);
   return true;
 }
 
@@ -236,6 +269,8 @@ export interface SynthesizeInput {
   cacheKey?: string;
   /** 传入则启用每日额度（C 端调用必须传） */
   userId?: string;
+  /** 同一次整集播放链路的额度键：各分段只计一次；缺省保持逐次合成计额 */
+  quotaKey?: string;
 }
 
 /** 请求级错误（如 400 音色/参数不合法）换供应商同样会失败，不重试 */
@@ -297,7 +332,7 @@ export async function synthesizeSpeech(input: SynthesizeInput): Promise<TtsResul
   const hit = cacheGet(key);
   if (hit) return { ok: true, audioBase64: hit.b64, format: hit.format, voice: hit.voice, chars: hit.chars, cached: true };
 
-  if (!consumeQuota(input.userId)) {
+  if (!consumeQuota(input.userId, input.quotaKey)) {
     return { ok: false, code: 'TTS_DAILY_LIMIT', message: '今日云端语音次数已用完，可改用浏览器朗读或明日再试' };
   }
 

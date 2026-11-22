@@ -8689,39 +8689,55 @@
   // 发起请求自增认领；listenFinish（停止/关窗/切集）自增作废；响应回来先比对再播放，
   // 否则「关窗后旧音频照样开播、切集后新集里播旧集」会绕过 v2.638 的停止收口。
   let listenCloudSeq = 0;
-  async function listenPlayCloud(scriptId) {
+  async function listenPlayCloud(scriptId, part = 0, token = 0, state = null) {
     const btn = $('listenCloudBtn'); const tip = $('listenCloudTip'); const audio = $('listenCloudAudio');
     if (!btn || !audio || btn.disabled) return;
-    const mySeq = ++listenCloudSeq;
+    const first = !state;
+    if (first) listenFinish(); // 点击云端即掐断浏览器朗读与上一段云端音频，避免双声叠放
+    const mySeq = token || ++listenCloudSeq;
+    const ctx = state || { oldText: btn.textContent };
     btn.disabled = true;
-    const oldText = btn.textContent;
     btn.textContent = lang === 'en' ? 'Synthesizing…' : '云端合成中…';
-    if (tip) tip.textContent = '';
+    if (first && tip) tip.textContent = '';
     try {
       const r = await Api.request(`/api/generate/scripts/${scriptId}/listen/tts?lang=${strategyLocale() === 'en' ? 'en' : 'zh'}`, {
-        method: 'POST', body: JSON.stringify({ format: 'mp3' }),
+        method: 'POST', body: JSON.stringify({ format: 'mp3', part }),
       });
       const d = await Api.jsonOrThrow(r);
       if (mySeq !== listenCloudSeq) return; // 在途被停止/关窗/切集/新请求作废：不建 blob、不开播
       if (!d || !d.audioBase64) throw new Error('TTS_NO_AUDIO');
+      const total = Math.max(1, Number(d.parts) || 1);
+      const hasMore = d.hasMore === true && part + 1 < total;
       const bin = atob(d.audioBase64);
       const bytes = new Uint8Array(bin.length);
       for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
       if (listenCloudUrl) { try { URL.revokeObjectURL(listenCloudUrl); } catch { /* 忽略 */ } }
       listenCloudUrl = URL.createObjectURL(new Blob([bytes], { type: d.format === 'wav' ? 'audio/wav' : 'audio/mpeg' }));
-      listenFinish(); // 掐断浏览器朗读，避免双声叠放
-      // v2.638 播放结束/失败都收起播放条：结束即这一集云端语音已交付完；
-      // 失败时给双语提示并保留浏览器朗读兜底，不留一个「看似在播其实已停」的死控件。
-      audio.onended = () => { audio.hidden = true; };
+      // v2.640 长集逐段顺序播放：只预取下一段，不把整集音频塞进一次响应/内存。
+      audio.onended = () => {
+        audio.hidden = true;
+        if (mySeq !== listenCloudSeq) return;
+        if (hasMore) {
+          if (tip) tip.textContent = lang === 'en' ? 'Loading the next part…' : '正在接下一段…';
+          listenPlayCloud(scriptId, part + 1, mySeq, ctx);
+        } else if (tip) {
+          tip.textContent = lang === 'en' ? 'Cloud playback completed.' : '本集云端朗读完成。';
+        }
+      };
       audio.onerror = () => {
         audio.hidden = true;
+        if (mySeq !== listenCloudSeq) return;
         if (tip) tip.textContent = lang === 'en'
           ? 'Audio playback failed; browser voice still works.'
           : '云端音频播放失败，浏览器朗读仍可用。';
       };
       audio.src = listenCloudUrl; audio.hidden = false;
       try { await audio.play(); } catch { /* 自动播放被拒时保留控件，由用户点播放 */ }
-      if (tip) tip.textContent = d.cached ? (lang === 'en' ? 'Cached audio' : '已命中缓存，不重复计费') : '';
+      if (tip) {
+        const progress = total > 1 ? (lang === 'en' ? `Part ${part + 1}/${total}` : `第 ${part + 1}/${total} 段`) : '';
+        const cached = d.cached ? (lang === 'en' ? 'Cached audio' : '已命中缓存，不重复计费') : '';
+        tip.textContent = [progress, cached].filter(Boolean).join(lang === 'en' ? ' · ' : '，');
+      }
     } catch (e) {
       if (mySeq !== listenCloudSeq) return; // 已关窗/切集：过期错误提示不写进新弹窗
       const code = e && e.error; const status = e && e.httpStatus;
@@ -8733,7 +8749,7 @@
             ? (lang === 'en' ? 'Episode too long for one cloud request; browser voice still works.' : '本集过长，暂不支持整集云端合成，浏览器朗读仍可用。')
             : (lang === 'en' ? 'Cloud voice failed; browser voice still works.' : '云端语音失败，浏览器朗读仍可用。');
     } finally {
-      btn.disabled = false; btn.textContent = oldText;
+      if (mySeq === listenCloudSeq) { btn.disabled = false; btn.textContent = ctx.oldText; }
     }
   }
   // how='natural'：onend 自然走到集尾，受自动连播开关约束；'manual'：手动 ⏭ 越过末段，总是尝试跨集
