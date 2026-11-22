@@ -27,8 +27,8 @@ function fnWindow(startMarker, maxLen) {
 }
 
 describe('v2.278 [R1] loadWorks 加载骨架屏（三态补全）', () => {
-  // v2.550 作品卡新增目标平台徽章一行，窗口相应放宽，保证 catch 分支完整落在窗口内
-  const w = fnWindow('async function loadWorks() {', 7000);
+  // v2.647 首续页共用卡片渲染器；窗口覆盖完整渲染器与 loadWorks 外层 catch，不做半截源码断言。
+  const w = fnWindow('async function loadWorks() {', 10000);
 
   it('B1 loadWorks 窗口可定位', () => {
     assert.ok(w.length > 0, 'loadWorks 未定位到');
@@ -62,13 +62,13 @@ describe('v2.278 [R1] loadWorks 加载骨架屏（三态补全）', () => {
   });
 
   it('B6 catch 分支：seq 校验后清骨架再置错误态（不得残留骨架与错误态并存）', () => {
-    const iCatch = w.indexOf('catch');
-    assert.ok(iCatch > 0, '应有 catch 分支');
-    const tail = w.slice(iCatch);
-    const iGuard = tail.indexOf('seq !== worksReqSeq');
-    const iClear = tail.indexOf("grid.innerHTML = ''");
-    const iErr = tail.indexOf('znErrorHtml');
-    assert.ok(iGuard >= 0, 'catch 分支应有 seq 校验（v2.274 A6 语义）');
+    // v2.647：卡片写操作自身也有 catch；从 loadWorks 的 znErrorHtml 反向锚定外层 catch，避免窗口漂移误取。
+    const iErr = w.indexOf('znErrorHtml');
+    const iCatch = w.lastIndexOf('catch', iErr);
+    assert.ok(iErr > 0 && iCatch > 0, '应有 loadWorks 外层 catch 与错误态');
+    const iGuard = w.indexOf('seq !== worksReqSeq', iCatch);
+    const iClear = w.indexOf("grid.innerHTML = ''", iGuard);
+    assert.ok(iGuard > iCatch, 'catch 分支应有 seq 校验（v2.274 A6 语义）');
     assert.ok(iClear > iGuard, '清骨架必须在 catch 的 seq 校验之后');
     assert.ok(iErr > iClear, '错误态必须在清骨架之后写入');
   });

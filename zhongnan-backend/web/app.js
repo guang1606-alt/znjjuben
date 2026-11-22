@@ -3616,7 +3616,8 @@
     $('worksCount').textContent = t('worksCount', { n: myProjectsTotal || list.length });
     empty.classList.toggle('hidden', list.length > 0);
     if (!list.length) empty.innerHTML = znEmptyHtml(t('worksEmpty'));
-    list.forEach((p) => {
+    // v2.647：首页与游标续页共用同一卡片渲染器；续页只追加结果，不再复制一套易漂移的卡片逻辑。
+    const renderWorkCard = (p) => {
       const c = document.createElement('div'); c.className = 'work-card';
       // v2.489 作品卡此前直接渲染后端 mode 原始枚举（tag / hit_lab…），中文界面里等于把内部 id 给用户看
       const modeText = (((I18N.DICT[lang] || I18N.DICT.zh).mode) || {})[p.mode] || (lang === 'en' ? 'Script' : '剧本');
@@ -3683,8 +3684,9 @@
           }
         };
       });
-      grid.appendChild(c);
-    });
+      return c;
+    };
+    list.forEach((p) => grid.appendChild(renderWorkCard(p)));
     // v2.553：翻页追加按钮（只在 hasMore 时显示，避免用户以为点不动）
     let more = $('worksLoadMore');
     if (!more) {
@@ -3694,7 +3696,7 @@
     }
     more.textContent = lang === 'en' ? 'Load more' : '加载更多';
     more.hidden = !myProjectsHasMore || !myProjectsCursor;
-    more.onclick = () => loadMoreWorks(account, seq, more).catch(() => {});
+    more.onclick = () => loadMoreWorks(account, seq, more, renderWorkCard).catch(() => {});
     } catch {
       if (!isPrivateSessionCurrent(account) || seq !== worksReqSeq) return; // v2.274：旧查询失败晚回也不得冲掉新查询的正确态
       grid.innerHTML = ''; // v2.278：清骨架后写错误态
@@ -3704,7 +3706,7 @@
     }
   }
   // v2.553：翻页追加（带游标请求，追加到现有 grid 末尾，不重置已有卡片）
-  async function loadMoreWorks(account, seq, btn) {
+  async function loadMoreWorks(account, seq, btn, renderWorkCard) {
     if (!myProjectsCursor || btn.disabled) return;
     btn.disabled = true; const oldTxt = btn.textContent; btn.textContent = lang === 'en' ? 'Loading…' : '加载中…';
     try {
@@ -3717,16 +3719,7 @@
       myProjectsHasMore = !!raw.hasMore;
       myProjectsCursor = raw.nextCursor || '';
       const grid = $('worksGrid');
-      items.forEach((p) => {
-        const c = document.createElement('div'); c.className = 'work-card';
-        const modeText = (((I18N.DICT[lang] || I18N.DICT.zh).mode) || {})[p.mode] || (lang === 'en' ? 'Script' : '剧本');
-        const platLabel = platformLabel(p.platform || p.bible?.platform);
-        c.innerHTML = `<h3>${escapeHtml(p.title)}</h3>
-          <div class="muted">${escapeHtml(modeText)} · ${p.totalEps || 0} eps · ${PV().formatDateTime(p.createdAt, lang)}</div>
-          <div class="work-badges"><span class="badge">${escapeHtml(engineLabel(p.engineTier, true) || (lang === 'en' ? 'Standard' : '标准'))}</span><span class="badge">${p.format === 'AIGC' ? 'Z-AIGC' : (lang === 'en' ? 'Live action' : '真人实拍')}</span>${platLabel ? `<span class="badge">${escapeHtml(platLabel)}</span>` : ''}</div>`;
-        c.onclick = () => { if (isPrivateSessionCurrent(account)) openProject(p); };
-        grid.appendChild(c);
-      });
+      items.forEach((p) => grid.appendChild(renderWorkCard(p)));
       btn.hidden = !myProjectsHasMore || !myProjectsCursor;
     } catch (e) {
       toastInfo((e && e.message) || (lang === 'en' ? 'Load more failed.' : '加载更多失败'));

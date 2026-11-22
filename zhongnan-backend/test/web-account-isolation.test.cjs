@@ -40,15 +40,32 @@ function setup(handler = async () => response([])) {
   let user = { id: 'alice', level: 'FREE' }, token = 'alice-token';
   function element(id = '') {
     const classes = new Set();
-    let html = '', text = '';
+    let html = '', text = '', actionButtons = null;
+    function workActionButtons() {
+      if (actionButtons) return actionButtons;
+      actionButtons = [];
+      const pattern = /<button\b([^>]*)>([\s\S]*?)<\/button>/g;
+      let match;
+      while ((match = pattern.exec(html))) {
+        if (!/\bclass\s*=\s*["'][^"']*\bwork-action-btn\b/.test(match[1])) continue;
+        const btn = element();
+        btn.textContent = match[2].replace(/<[^>]*>/g, '');
+        const act = match[1].match(/\bdata-act\s*=\s*["']([^"']+)["']/);
+        if (act) btn.getAttribute = name => name === 'data-act' ? act[1] : null;
+        actionButtons.push(btn);
+      }
+      return actionButtons;
+    }
     const node = {
       id, value: '', style: {}, dataset: {}, children: [], disabled: false, checked: false,
       get innerHTML() { return html; },
-      set innerHTML(value) { html = String(value); text = ''; this.children = []; },
+      set innerHTML(value) { html = String(value); text = ''; actionButtons = null; this.children = []; },
       get textContent() { return text || this.children.map(child => child.textContent).join(''); },
       set textContent(value) { text = String(value); html = ''; this.children = []; },
       appendChild(child) { child.parentElement = this; this.children.push(child); },
-      querySelector: () => null, querySelectorAll: () => [], listeners: new Map(), focus() {},
+      querySelector: () => null,
+      querySelectorAll: selector => selector === '.work-action-btn' ? workActionButtons() : [],
+      listeners: new Map(), focus() {},
       addEventListener(name, fn) { this.listeners.set(name, fn); },
       contains: () => true, click() { return this.onclick?.(); },
       remove() { nodes.delete(id); }, setAttribute() {}, getAttribute: () => null,
@@ -77,6 +94,7 @@ function setup(handler = async () => response([])) {
     curPurchase: null, purchaseViewSeq: 0,
     // v2.274：loadWorks 同会话搜索请求序号（产品侧模块级 let，harness 逐函数 vm 求值需在此预置，同 purchaseViewSeq）
     worksReqSeq: 0,
+    myProjectsCursor: '', myProjectsHasMore: false, myProjectsTotal: 0,
     // v2.275：作品卡片写操作在途锁（模块级 let），runWorkAction 内读写，需在 context 预置
     _workActionBusy: false,
     // v2.276/v2.277 startGenerate 模块级 let（逐函数 vm 求值需在 context 预置，否则入口 ReferenceError）
@@ -154,7 +172,7 @@ function setup(handler = async () => response([])) {
   vm.createContext(c);
   for (const name of [
     'privateAccountId', 'syncPrivateAccount', 'capturePrivateSession', 'isPrivateSessionCurrent',
-    'resetPrivateAccountState', 'clearDraftProject', 'renderAuthButton', 'loadWorks', 'openProject',
+    'resetPrivateAccountState', 'clearDraftProject', 'renderAuthButton', 'loadWorks', 'loadMoreWorks', 'openProject',
     // v2.275：loadWorks 的卡片操作经 runWorkAction（在途锁+按钮态），注入真实实现以解析引用
     'runWorkAction',
     'viewPurchasedScript',
@@ -342,6 +360,41 @@ test('signing in again reloads saved Works and scripts from the server', async (
   assert.equal(h.$('worksDetailTitle').textContent, 'Saved title');
   assert.equal(h.requests.filter(item => item.url.startsWith('/api/generate/projects?')).length, 2);
   assert.ok(h.requests.every(item => !item.options.method || item.options.method === 'GET'));
+});
+
+test('cursor-paginated Works cards keep rename, clone, archive and delete wired', async () => {
+  const cases = [
+    ['rename', 'PUT', '/api/generate/projects/page-2'],
+    ['clone', 'POST', '/api/generate/projects/page-2/clone'],
+    ['archive', 'POST', '/api/generate/projects/page-2/archive'],
+    ['delete', 'DELETE', '/api/generate/projects/page-2'],
+  ];
+  for (const [act, method, url] of cases) {
+    const first = project('page-1', 'First page');
+    const second = project('page-2', 'Second page');
+    const h = setup(async requestUrl => {
+      if (requestUrl.startsWith('/api/generate/projects?')) {
+        return response(requestUrl.includes('cursor=cursor-1')
+          ? { items: [second], hasMore: false, nextCursor: '', total: null }
+          : { items: [first], hasMore: true, nextCursor: 'cursor-1', total: 2 });
+      }
+      return response({});
+    });
+    await h.c.loadWorks();
+    await h.$('worksLoadMore').onclick();
+    assert.equal(h.$('worksGrid').children.length, 2, `${act}: 续页项目应追加到作品库`);
+    const card = h.$('worksGrid').children[1];
+    const buttons = card.querySelectorAll('.work-action-btn');
+    assert.deepEqual(buttons.map(btn => btn.getAttribute('data-act')), ['rename', 'clone', 'archive', 'delete'],
+      '第 51 个起的项目应与首页卡片一样保留全部管理动作');
+    const btn = buttons.find(item => item.getAttribute('data-act') === act);
+    let stopped = false;
+    await btn.onclick({ stopPropagation() { stopped = true; } });
+    assert.equal(stopped, true, `${act}: 点击管理动作不得触发打开项目`);
+    assert.ok(h.requests.some(req => req.url === url && (req.options.method || 'GET') === method && req.owner === 'alice'),
+      `${act}: 续页卡片应发出与首页一致的 ${method} ${url}`);
+    assert.equal(h.c._workActionBusy, false, `${act}: 写操作结束后应释放在途锁`);
+  }
 });
 
 test('old project scripts cannot repopulate the page after logout while JSON is pending', async () => {
