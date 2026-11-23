@@ -714,6 +714,9 @@ function createMemoryPrisma() {
     },
   };
   const listing = crud(listings, 'ls', { status: 'ON_SHELF', sample: '' });
+  // v2.657 找回密码申请：手机号 + 可选备注，状态 PENDING/RESOLVED/DISMISSED
+  const passwordResetRequests = [];
+  const passwordResetRequest = crud(passwordResetRequests, 'prq', { status: 'PENDING', userId: null, note: null, handledById: null, handledAt: null });
   const purchase = crud(purchases, 'pu', { status: 'ESCROW' });
   const roomMessage = crud(roomMessages, 'rm', {});
   // v2.312：defaults 补 direction:null——对齐 Prisma NULL 语义（updateMany where direction:null 匹配未生成过方向的行）
@@ -968,6 +971,7 @@ function createMemoryPrisma() {
       ['matureConsent', matureConsent], ['interviewSession', interviewSession], ['providerBalance', providerBalance],
       ['modelSpendBudget', modelSpendBudget],
       ['mediaAsset', mediaAsset],
+      ['passwordResetRequest', passwordResetRequest],
     ].map(([k, m]) => [k, __guard(m)])),
     $queryRaw,
   };
@@ -980,7 +984,7 @@ function createMemoryPrisma() {
     storageObjects, feedbacks, orders, payments, memberships, posts, postLikes, posters, pkBattles,
     writersRooms, roomMessages, teardownRecords, adverts, interviewSessions, knowledgeItems, listings,
     purchases, learningReports, modelConfigRows, announcements, characterAssets, propAssets, sceneAssets,
-    consents, providerBalances, modelSpendBudgets, mediaAssets,
+    consents, providerBalances, modelSpendBudgets, mediaAssets, passwordResetRequests,
   };
   const __snapshotTx = () => {
     const snap = {};
@@ -1034,7 +1038,7 @@ function createMemoryPrisma() {
   let __txCommittedDeltas = []; // 已提交嵌套事务的写入增量
   return {
     user, invitation, pointsAccount, ledgerEntry, project, script, generationTask, modelCallLog, feedback,
-    order, payment, membership, post, postLike, poster, pkBattle, knowledgeItem, learningReport, announcement, modelConfig, safetyConfig, listing, purchase, storageObject, writersRoom, roomMessage, teardownRecord, advert, characterAsset, propAsset, sceneAsset, matureConsent, interviewSession, providerBalance, modelSpendBudget, mediaAsset,
+    order, payment, membership, post, postLike, poster, pkBattle, knowledgeItem, learningReport, announcement, modelConfig, safetyConfig, listing, purchase, storageObject, writersRoom, roomMessage, teardownRecord, advert, characterAsset, propAsset, sceneAsset, matureConsent, interviewSession, providerBalance, modelSpendBudget, mediaAsset, passwordResetRequest,
     async $transaction(fn) {
       const isTop = __txDepth === 0;
       if (isTop) { __txBase = __snapshotTx(); __txCommittedDeltas = []; __txAborted = false; }
@@ -1059,7 +1063,7 @@ function createMemoryPrisma() {
     },
     _users: users, _accounts: accounts, _projects: projects, _scripts: scripts, _tasks: tasks, _ledgers: ledgers,
     _orders: orders, _payments: payments, _memberships: memberships, _posts: posts, _postLikes: postLikes, _posters: posters, _pkBattles: pkBattles,
-    _knowledgeItems: knowledgeItems, _listings: listings, _purchases: purchases, _writersRooms: writersRooms, _roomMessages: roomMessages, _teardownRecords: teardownRecords, _adverts: adverts, _consents: consents, _interviewSessions: interviewSessions, _characterAssets: characterAssets, _propAssets: propAssets, _sceneAssets: sceneAssets, _announcements: announcements, _mediaAssets: mediaAssets,
+    _knowledgeItems: knowledgeItems, _listings: listings, _purchases: purchases, _writersRooms: writersRooms, _roomMessages: roomMessages, _teardownRecords: teardownRecords, _adverts: adverts, _consents: consents, _interviewSessions: interviewSessions, _characterAssets: characterAssets, _propAssets: propAssets, _sceneAssets: sceneAssets, _announcements: announcements, _mediaAssets: mediaAssets, _passwordResetRequests: passwordResetRequests,
     _setBanned(phone, banned) { const u = byPhone.get(phone); if (u) u.banned = banned; },
     /** 测试便捷：直接造一个指定等级/积分余额的用户 */
     _seedUser({ id, level = 'FREE', balance = 0, phone, penName = null, role = 'OP', isAdmin = false, nickname = null, avatarUrl = null, bio = null, region = null, ageBand = null, gender = null, personalized = true } = {}) {

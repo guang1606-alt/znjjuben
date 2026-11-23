@@ -222,6 +222,11 @@
         <div class="tag-chosen" id="tagChosen"></div>
         <div class="field"><label data-i="tagIdeaLabel" for="tagIdea">补充一句话创意（选填，让方向更具体）</label>
           <input id="tagIdea" autocomplete="off" type="text" maxlength="80" data-ph="tagIdeaPh" placeholder="例：被顶替名额的女医生回乡逆袭" /></div>
+        <!-- v2.657 下一步显式入口：此前标签选完只能靠工作台头部/二级界面按钮，原地无 CTA -->
+        <div class="tag-bench-foot">
+          <span class="muted" id="tagFootHint"></span>
+          <button class="btn-primary" id="tagGoBtn" data-i="tagNext"></button>
+        </div>
         <div class="tag-why hidden" id="tagWhy"></div>
         <div class="tag-report" id="tagReport"></div>
         <div class="tag-board-status muted" id="tagBoardStatus"></div>
@@ -1488,6 +1493,18 @@
           <div class="muted zn-pager" id="admUpdPager"></div>
         </div>
       </section>
+      <!-- v2.657 找回密码申请：用户登录页提交 → 超管在此核验重置/忽略 -->
+      <section class="panel hidden" id="admResetReqPane">
+        <div class="adm-toolbar" style="flex-wrap:wrap;gap:8px">
+          <b>找回密码申请</b>
+          <span class="muted" id="admRrSummary"></span>
+          <span class="spacer"></span>
+          <button class="btn-ghost" id="admRrReload">刷新</button>
+        </div>
+        <div class="notice" style="margin:8px 0">用户忘记密码时可自助提交申请；请核验手机号归属后重置。提交人只会在登录页看到工单号，新密码需线下/站内告知。</div>
+        <div id="admRrList" class="feed"></div>
+        <div class="muted zn-pager" id="admRrPager"></div>
+      </section>
       <!-- v2.612 供应商余额监控（仅超管）：deepseek/moonshot 自动查；volcengine/aliyun/minimax 手动填值 -->
       <section class="panel hidden" id="admBalancesPane">
         <div class="adm-toolbar" style="flex-wrap:wrap;gap:8px">
@@ -1531,10 +1548,26 @@
       <form id="authForm" novalidate>
         <div class="field"><label for="authPhone">手机号</label><input id="authPhone" type="tel" inputmode="numeric" autocomplete="tel" placeholder="11 位手机号" maxlength="11" aria-required="true" aria-describedby="authErr" /></div>
         <div class="field"><label for="authPwd">密码</label><div class="pwd-wrap"><input id="authPwd" type="password" autocomplete="current-password" placeholder="至少 8 位，需含字母和数字" maxlength="64" aria-required="true" aria-describedby="authErr" /><button type="button" class="pwd-toggle" data-target="authPwd" aria-label="显示密码">👁</button></div></div>
+        <!-- v2.657 找回密码入口：提交申请后由超管后台核验重置（本站未接短信/邮件自动发码） -->
+        <button type="button" id="authForgot" data-i="forgotPassword" style="margin-top:-6px;padding:0;background:none;border:0;color:var(--muted,#8a8a8a);cursor:pointer;font-size:13px;text-decoration:underline;align-self:flex-end"></button>
         <div class="field hidden" id="inviteWrap"><label for="authInvite">邀请码（选填）</label><input id="authInvite" maxlength="20" autocomplete="off" /></div>
         <div class="notice err hidden" id="authErr" role="alert"></div>
         <button class="btn-primary" id="authSubmit" type="submit" style="width:100%;margin-top:12px"></button>
       </form>
+    </div>
+  </div>
+
+  <!-- v2.657 找回密码申请：登录页「忘记密码？」打开；提交后由超管后台处理 -->
+  <div class="modal-mask hidden" id="pwdResetModal" aria-label="找回密码">
+    <div class="modal">
+      <button class="modal-x" data-close="pwdResetModal">×</button>
+      <h3 style="margin:0 0 8px">找回密码</h3>
+      <p class="muted" style="margin:0 0 10px;line-height:1.6">提交申请后，管理员会在后台看到并为你重置密码。<b>本站不通过短信/邮件自动发码</b>，处理完成后请用管理员告知的新密码登录。</p>
+      <div class="field"><label for="prPhone">注册手机号</label><input id="prPhone" type="tel" inputmode="numeric" autocomplete="tel" maxlength="11" placeholder="11 位手机号" /></div>
+      <div class="field"><label for="prNote">备注（选填）</label><input id="prNote" autocomplete="off" maxlength="200" placeholder="例如：注册时用的昵称、大致注册时间" /></div>
+      <div class="notice err hidden" id="prErr" role="alert"></div>
+      <div class="notice hidden" id="prOk" role="status"></div>
+      <button class="btn-primary" id="prSubmit" type="button" style="width:100%;margin-top:12px">提交找回申请</button>
     </div>
   </div>
 

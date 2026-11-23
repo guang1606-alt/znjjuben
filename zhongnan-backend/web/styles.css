@@ -1057,6 +1057,8 @@ textarea { box-sizing: border-box; max-width: 100%; resize: vertical; background
 .tag-pick:hover{border-color:var(--accent);color:var(--accent-strong)}
 .tag-pick.picked{background:var(--accent-weak);border-color:var(--accent);color:var(--accent-strong);font-weight:600}
 .tag-chosen-head{display:flex;justify-content:space-between;align-items:center;font-size:.82rem;color:var(--text-2);margin-bottom:6px}
+.tag-bench-foot{display:flex;justify-content:flex-end;align-items:center;gap:12px;margin:12px 0 4px;flex-wrap:wrap}
+.tag-bench-foot .muted{font-size:.8rem}
 #tagCount{font-weight:600;color:var(--accent-strong)}
 .tag-chosen{display:flex;flex-wrap:wrap;gap:8px;min-height:40px;margin-bottom:10px}
 .tag-empty{color:var(--text-2);font-size:.84rem}

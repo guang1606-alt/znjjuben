@@ -454,6 +454,23 @@ model Feedback {
   @@index([type, status])
 }
 
+// v2.657 找回密码：用户侧提交申请 → 超管后台处理（本站无短信/邮件自动发码通道）。
+// 不建 User 关系：申请可来自未注册手机号（防枚举），userId 仅在能匹配到账号时写入。
+model PasswordResetRequest {
+  id          String    @id @default(cuid())
+  ticketNo    String    @unique
+  phone       String
+  userId      String?
+  note        String?
+  status      String    @default("PENDING") // PENDING / RESOLVED / DISMISSED
+  handledById String?
+  handledAt   DateTime?
+  createdAt   DateTime  @default(now())
+  @@index([status, createdAt])
+  @@index([phone, status])
+}
+
+
 model Post {
   id        String   @id @default(cuid())
   userId    String

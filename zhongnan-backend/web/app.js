@@ -1646,6 +1646,11 @@
     const box = $('tagChosen'); if (!box) return;
     box.innerHTML = '';
     $('tagCount').textContent = tagChosen.length ? `${tagChosen.length}/${TAG_MAX}` : '';
+    // v2.657 原地给出下一步指引：有标签即可出本；没标签时明确可随机或写一句话创意
+    const footHint = $('tagFootHint');
+    if (footHint) footHint.textContent = tagChosen.length
+      ? (lang === 'en' ? `${tagChosen.length} tags selected · ready to generate` : `已选 ${tagChosen.length} 个标签 · 可直接出本`)
+      : (lang === 'en' ? 'No tags yet: hit Smart random or write a one-line idea' : '还没选标签：可点「智能随机一组」，或写一句话创意');
     if (!tagChosen.length) { box.innerHTML = `<span class="tag-empty">${t('tagEmpty')}</span>`; return; }
     tagChosen.forEach((name) => {
       const c = document.createElement('span'); c.className = 'tag-chip';
@@ -2722,6 +2727,9 @@
     // v2.189 工作台内"生成剧本"按钮（生成类工作台共用，调 startGenerate）
     const genBtn = $('workbenchGenBtn');
     if (genBtn) genBtn.onclick = genClickGuard(() => { if (typeof startGenerate === 'function') startGenerate(); });
+    // v2.657 标签工作台原地「下一步」：用户选完标签无需再找头部/二级界面按钮
+    const tagGoBtn = $('tagGoBtn');
+    if (tagGoBtn) tagGoBtn.onclick = genClickGuard(() => { if (typeof startGenerate === 'function') startGenerate(); });
     // Observer：panel.classList 中 hidden 状态变化时自动开/关 layer（其他类变化如 view-in 不触发，避免死循环）
     const mo = new MutationObserver((muts) => {
       for (const m of muts) {
@@ -3435,6 +3443,35 @@
   $('tabLogin').onclick = () => { authMode = 'login'; syncAuthTabs(); };
   $('tabRegister').onclick = () => { authMode = 'register'; syncAuthTabs(); };
   $('authClose').onclick = closeAuth;
+  // v2.657 找回密码入口：带上已填手机号；申请只落库给超管，不做自动重置也绝不回显账号是否存在
+  $('authForgot').onclick = () => {
+    const p = ($('authPhone')?.value || '').trim();
+    $('prPhone').value = /^1[3-9]\d{9}$/.test(p) ? p : '';
+    $('prNote').value = '';
+    $('prErr').classList.add('hidden'); $('prErr').textContent = '';
+    $('prOk').classList.add('hidden'); $('prOk').textContent = '';
+    $('prSubmit').disabled = false; $('prSubmit').textContent = '提交找回申请';
+    openModal('pwdResetModal');
+  };
+  $('prSubmit').onclick = async () => {
+    const phone = ($('prPhone').value || '').trim();
+    const note = ($('prNote').value || '').trim();
+    const err = $('prErr'), ok = $('prOk');
+    err.classList.add('hidden'); ok.classList.add('hidden');
+    if (!/^1[3-9]\d{9}$/.test(phone)) { err.textContent = '请输入正确的 11 位手机号'; err.classList.remove('hidden'); return; }
+    const btn = $('prSubmit'); btn.disabled = true; btn.textContent = '提交中…';
+    try {
+      const res = await Api.request('/api/auth/password-reset-requests', { method: 'POST', body: JSON.stringify({ phone, note }) });
+      const j = await Api.jsonOrThrow(res);
+      ok.textContent = `已受理，工单号 ${j.ticketNo}。管理员处理后请用新密码登录。`;
+      ok.classList.remove('hidden');
+      btn.textContent = '已提交';
+    } catch (e) {
+      err.textContent = (e && e.message) || '提交失败，请稍后重试';
+      err.classList.remove('hidden');
+      btn.disabled = false; btn.textContent = '提交找回申请';
+    }
+  };
   $('authModal').onclick = (e) => { if (e.target.id === 'authModal') closeAuth(); };
   // v2.498 密码可见性切换：事件委托覆盖登录/注册/改密所有 .pwd-toggle，点击切 type 并换图标与 aria-label
   document.addEventListener('click', (e) => {
@@ -11016,7 +11053,7 @@
 
   // ═══ MODULE: admin (1096行, 22fn) ═══ 超级管理员后台
   /* ---------- 超级管理员后台 ---------- */
-  const ADM_TABS = ['users', 'stats', 'finance', 'posts', 'models', 'knowledge', 'feedback', 'safety', 'handoff', 'updates', 'balances', 'ads'];
+  const ADM_TABS = ['users', 'stats', 'finance', 'posts', 'models', 'knowledge', 'feedback', 'safety', 'handoff', 'updates', 'resetreq', 'balances', 'ads'];
   let admTab = 'users', admPage = 1, admInited = false;
   const lvName = (lv) => (lang === 'en' ? LEVEL_EN : LEVEL_ZH)[lv] || lv;
   async function admApi(path, opts) {
@@ -11056,8 +11093,8 @@
     znBindTablist($('admTabs'), { selector: '[data-atab]' }); // v2.270 键盘方向键导航 + ARIA 语义（12 个后台 tab 不再靠 Tab 键逐个穿越）
   }
   function loadAdmTab() {
-    ['Users', 'Stats', 'Finance', 'Posts', 'Models', 'Knowledge', 'Feedback', 'Safety', 'Handoff', 'Updates', 'Balances', 'Ads'].forEach((n) => $('adm' + n + 'Pane').classList.add('hidden'));
-    const map = { users: 'Users', stats: 'Stats', finance: 'Finance', posts: 'Posts', models: 'Models', knowledge: 'Knowledge', feedback: 'Feedback', safety: 'Safety', handoff: 'Handoff', updates: 'Updates', balances: 'Balances', ads: 'Ads' };
+    ['Users', 'Stats', 'Finance', 'Posts', 'Models', 'Knowledge', 'Feedback', 'Safety', 'Handoff', 'Updates', 'ResetReq', 'Balances', 'Ads'].forEach((n) => $('adm' + n + 'Pane').classList.add('hidden'));
+    const map = { users: 'Users', stats: 'Stats', finance: 'Finance', posts: 'Posts', models: 'Models', knowledge: 'Knowledge', feedback: 'Feedback', safety: 'Safety', handoff: 'Handoff', updates: 'Updates', resetreq: 'ResetReq', balances: 'Balances', ads: 'Ads' };
     $('adm' + map[admTab] + 'Pane').classList.remove('hidden');
     if (admTab === 'users') loadAdmUsers();
     if (admTab === 'stats') loadAdmStats();
@@ -11069,6 +11106,7 @@
     if (admTab === 'safety') loadAdmSafety();
     if (admTab === 'handoff') loadAdmHandoff();
     if (admTab === 'updates') loadAdmUpdates();
+    if (admTab === 'resetreq') loadAdmResetReq();
     if (admTab === 'balances') loadAdmBalances();
     if (admTab === 'ads') loadAdmAds();
   }
@@ -11107,6 +11145,8 @@
     toggleKnKind();
     // 反馈处置
     $('fbReload').onclick = loadAdmFeedback;
+    // v2.657 找回密码申请
+    const rrReload = $('admRrReload'); if (rrReload) rrReload.onclick = () => { admRrPage = 1; loadAdmResetReq(); };
     // v2.189 导出反馈总表：带当前筛选条件，触发浏览器下载 JSON（含附图 base64，可投喂 TRAE）
     $('fbExportBtn').onclick = async () => {
       const status = $('fbStatus').value, type = $('fbType').value;
@@ -11268,6 +11308,77 @@
       + ` <button class="btn-ghost" id="admUpdNextPage"${hasNext ? '' : ' disabled'}>${lang === 'en' ? 'Next' : '下一页'} ›</button>`;
     $('admUpdPrevPage').onclick = () => { if (admUpdPage > 1) { admUpdPage--; loadAdmUpdates(); } };
     $('admUpdNextPage').onclick = () => { admUpdPage++; loadAdmUpdates(); };
+  }
+  // ── v2.657 找回密码申请：用户自助提交 → 超管核验后重置/忽略 ──
+  const ADM_RR_PAGE_SIZE = 20;
+  let admRrPage = 1;
+  async function loadAdmResetReq() {
+    const listEl = $('admRrList');
+    const pagerEl = $('admRrPager');
+    const sumEl = $('admRrSummary');
+    if (listEl) znSkeleton(listEl);
+    if (pagerEl) pagerEl.innerHTML = '';
+    try {
+      const d = await admApi(`/password-reset-requests?status=PENDING&page=${admRrPage}&pageSize=${ADM_RR_PAGE_SIZE}`);
+      const items = Array.isArray(d?.items) ? d.items : [];
+      if (sumEl) sumEl.textContent = lang === 'en' ? `${d.total} pending` : `待处理 ${d.total} 条`;
+      if (items.length === 0) { if (listEl) znEmpty(listEl, lang === 'en' ? 'No pending requests.' : '暂无待处理的找回申请。'); return; }
+      if (listEl) listEl.innerHTML = items.map((x) => {
+        const when = x.createdAt ? new Date(x.createdAt).toLocaleString(lang === 'en' ? 'en-US' : 'zh-CN') : '';
+        const who = x.registered
+          ? `${escapeHtml(x.nickname || '—')} · ${escapeHtml(lvName(x.level || ''))}`
+          : (lang === 'en' ? 'Unregistered phone' : '未注册手机号');
+        const note = x.note ? `<div class="muted" style="margin-top:4px">${lang === 'en' ? 'Note' : '备注'}：${escapeHtml(x.note)}</div>` : '';
+        const pwdPh = lang === 'en' ? 'New password (8+ chars, letters and digits)' : '新密码（至少 8 位，含字母和数字）';
+        return `<div class="card row-card" data-rr="${escapeHtml(x.id)}">
+          <div><b>${escapeHtml(x.phone)}</b> <span class="muted">${who}</span> <span class="muted">${escapeHtml(x.ticketNo)}</span> <span class="muted">${when}</span></div>
+          ${note}
+          <div style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap">
+            <input class="mini-input" id="admRrPwd_${escapeHtml(x.id)}" name="admRrPwd_${escapeHtml(x.id)}" aria-label="${lang === 'en' ? 'New password' : '新密码'}" data-rr-pwd maxlength="64" type="password" autocomplete="new-password" placeholder="${pwdPh}" style="flex:1;min-width:200px" />
+            <button class="btn-primary" data-rr-act="resolve">${lang === 'en' ? 'Reset password' : '重置密码'}</button>
+            <button class="btn-ghost" data-rr-act="dismiss">${lang === 'en' ? 'Dismiss' : '忽略'}</button>
+          </div>
+        </div>`;
+      }).join('');
+      listEl.querySelectorAll('[data-rr-act]').forEach((b) => {
+        b.onclick = () => {
+          const card = b.closest('[data-rr]');
+          handleAdmResetReq(card.getAttribute('data-rr'), b.getAttribute('data-rr-act'), (card.querySelector('[data-rr-pwd]')?.value || '').trim(), b);
+        };
+      });
+      renderAdmRrPager(d);
+    } catch (e) { if (listEl) listEl.innerHTML = znErrorHtml((e && e.message) || (lang === 'en' ? 'Failed to load.' : '加载失败')); }
+  }
+  function renderAdmRrPager(d) {
+    const pagerEl = $('admRrPager');
+    if (!pagerEl) return;
+    const { pages, hasPrev, hasNext } = znPagerState(d.total, d.page, ADM_RR_PAGE_SIZE);
+    pagerEl.innerHTML = `<span>${t('admTotal')} ${d.total} · ${t('admPage')} ${d.page}/${pages}</span>`
+      + ` <button class="btn-ghost" id="admRrPrevPage"${hasPrev ? '' : ' disabled'}>‹ ${lang === 'en' ? 'Prev' : '上一页'}</button>`
+      + ` <button class="btn-ghost" id="admRrNextPage"${hasNext ? '' : ' disabled'}>${lang === 'en' ? 'Next' : '下一页'} ›</button>`;
+    $('admRrPrevPage').onclick = () => { if (admRrPage > 1) { admRrPage--; loadAdmResetReq(); } };
+    $('admRrNextPage').onclick = () => { admRrPage++; loadAdmResetReq(); };
+  }
+  async function handleAdmResetReq(id, action, newPassword, btn) {
+    if (action === 'resolve' && !newPassword) { xnSay(lang === 'en' ? 'Enter a new password first' : '请先填写新密码'); return; }
+    if (action === 'resolve' && newPassword.length < 8) { xnSay(lang === 'en' ? 'Password must be at least 8 characters' : '新密码至少 8 位'); return; }
+    if (action === 'dismiss') {
+      const ok = await uiConfirm({ body: lang === 'en' ? 'Dismiss this password-reset request?' : '确认忽略这条找回密码申请？' });
+      if (!ok) return;
+    }
+    if (btn) { btn.disabled = true; btn.textContent = lang === 'en' ? 'Processing…' : '处理中…'; }
+    try {
+      const res = await Api.request(`/api/admin/password-reset-requests/${encodeURIComponent(id)}/handle`, {
+        method: 'POST',
+        body: JSON.stringify(action === 'resolve' ? { action, newPassword } : { action }),
+      });
+      await Api.jsonOrThrow(res);
+      xnSay(action === 'resolve' ? (lang === 'en' ? 'Password reset. Tell the user the new password.' : '已重置，请把新密码告知用户。') : (lang === 'en' ? 'Dismissed' : '已忽略'));
+      await loadAdmResetReq();
+    } catch (e) {
+      xnSay((e && e.message) || (lang === 'en' ? 'Failed' : '处理失败'));
+      if (btn) { btn.disabled = false; btn.textContent = action === 'resolve' ? (lang === 'en' ? 'Reset password' : '重置密码') : (lang === 'en' ? 'Dismiss' : '忽略'); }
+    }
   }
   async function submitAdmUpdate() {
     const version = $('admUpdVer').value.trim();

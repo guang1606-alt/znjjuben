@@ -1,5 +1,5 @@
 import { asyncRouter } from '../lib/async-router';
-import { createHash } from 'crypto';
+import { createHash, randomBytes } from 'crypto';
 import { z } from 'zod';
 import { prisma as defaultPrisma } from '../lib/prisma';
 import { hashPassword, verifyPassword, signAccess, signRefresh, verifyRefresh, genInviteCode, passwordVersion } from '../lib/auth';
@@ -30,6 +30,9 @@ export function createAuthRouter(prisma: PrismaLike | any) {
   // v2.217 改密节流（防持有 access token 的攻击者暴力猜当前密码）：同用户 15 分钟内
   // 当前密码验证失败 5 次即锁定；成功改密清零。语义与登录限流一致。
   const pwThrottle = createLoginThrottle();
+  // v2.657 找回密码申请限流：同 IP 15 分钟内最多受理 3 次，防批量刷申请占满超管后台。
+  // 复用 login-throttle 的滑动窗口与 Retry-After 出口，语义与注册/登录/改密一致。
+  const resetReqThrottle = createLoginThrottle({ maxFailures: 3 });
   // v2.453 限流响应的统一出口：三处限流（注册/登录/改密）共用同一套 login-throttle，
   // 429 的文案与头必须同口径——给真实解锁时长 + 标准 Retry-After，而不是固定「稍后再试」。
   function sendThrottled(res: any, throttle: ReturnType<typeof createLoginThrottle>, key: string, label: string) {
@@ -108,8 +111,44 @@ export function createAuthRouter(prisma: PrismaLike | any) {
     const payload = { sub: user.id, level: user.level, pv: passwordVersion((user as any).passwordHash) };
     res.json({ accessToken: signAccess(payload), refreshToken: signRefresh(payload), user: { id: user.id, level: user.level, isAdmin: isAdminUser(user), staff: isAdminUser(user), isSuperAdmin: isSuperAdminUser(user) } });
   });
-  authRouter.post('/refresh', async (req, res) => {
-    let data: any;
+  /**
+   * v2.657 找回密码申请（公开）：本站未接入短信/邮件发码通道，因此不做「自动重置」，
+   * 而是把申请落到超管后台，由超管核验后重置（管理员重置入口 v2.219 已存在）。
+   * 防枚举：已注册与未注册手机号返回完全相同的 200 + ticketNo，不泄露账号是否存在。
+   * 幂等：同手机号已有 PENDING 申请时复用原工单，避免重复制造后台噪音。
+   */
+  const resetReqSchema = z.object({
+    phone: z.string().regex(/^1[3-9]\d{9}$/, '手机号格式不正确'),
+    note: z.string().max(200).optional(),
+  });
+  authRouter.post('/password-reset-requests', async (req, res) => {
+    const p = resetReqSchema.safeParse(req.body);
+    if (!p.success) return res.status(400).json({ error: p.error.issues[0].message });
+    const ipKey = `pr:${req.ip ?? 'unknown'}`;
+    if (resetReqThrottle.isLocked(ipKey)) return sendThrottled(res, resetReqThrottle, ipKey, '提交过于频繁');
+    const phone = p.data.phone;
+    try {
+      // 先计数再落库：无论账号是否存在都消耗配额，避免用限流差反推注册状态
+      resetReqThrottle.recordFailure(ipKey);
+      const user = await prisma.user.findUnique({ where: { phone } });
+      let row = await prisma.passwordResetRequest.findFirst({ where: { phone, status: 'PENDING' } });
+      if (!row) {
+        row = await prisma.passwordResetRequest.create({
+          data: {
+            phone,
+            userId: user?.id ?? null,
+            note: (p.data.note || '').trim() || null,
+            ticketNo: `PR-${randomBytes(4).toString('hex').toUpperCase()}`,
+          },
+        });
+      }
+      res.json({ ok: true, ticketNo: row.ticketNo });
+    } catch (e) {
+      logInternal(e, 'auth.passwordResetRequest');
+      res.status(500).json({ error: 'INTERNAL_ERROR' });
+    }
+  });
+  authRouter.post('/refresh', async (req, res) => {    let data: any;
     try {
       data = verifyRefresh(req.body?.refreshToken);
     } catch {

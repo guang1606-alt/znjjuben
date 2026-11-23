@@ -252,6 +252,68 @@ export function createAdminRouter(prisma: PrismaLike | any) {
     res.json({ ok: true });
   });
 
+  /* ---------- v2.657 找回密码申请：列表 + 处理（重置/忽略） ---------- */
+  // 用户侧只能提交申请（公开端点 auth/password-reset-requests），真正改密必须由超管核验后执行，
+  // 与 v2.219「超管重置密码」共用同一条密码策略，避免两套口径。
+  r.get('/password-reset-requests', ...admin, async (req: AuthRequest, res) => {
+    const { page, pageSize, limit, offset } = parsePageParams(req.query as any, { defaultLimit: 20, maxLimit: 100 });
+    const raw = String((req.query as any).status || 'PENDING').toUpperCase();
+    const status = ['PENDING', 'RESOLVED', 'DISMISSED'].includes(raw) ? raw : 'PENDING';
+    try {
+      const [rows, total] = await Promise.all([
+        prisma.passwordResetRequest.findMany({ where: { status }, orderBy: { createdAt: 'desc' }, skip: offset, take: pageSize }),
+        prisma.passwordResetRequest.count({ where: { status } }),
+      ]);
+      const users = await Promise.all(rows.map((x: any) => (x.userId ? prisma.user.findUnique({ where: { id: x.userId } }) : null)));
+      res.json({
+        items: rows.map((x: any, i: number) => ({
+          id: x.id, ticketNo: x.ticketNo, phone: x.phone, note: x.note ?? null, status: x.status,
+          createdAt: x.createdAt, handledAt: x.handledAt ?? null,
+          registered: !!users[i], nickname: users[i]?.nickname ?? null, level: users[i]?.level ?? null,
+        })),
+        total, page, pageSize, limit, offset,
+      });
+    } catch (e) {
+      logInternal(e, 'admin.passwordResetList');
+      res.status(500).json({ error: 'INTERNAL_ERROR' });
+    }
+  });
+
+  r.post('/password-reset-requests/:id/handle', ...admin, async (req: AuthRequest, res) => {
+    const action = String(req.body?.action || '');
+    if (!['resolve', 'dismiss'].includes(action)) return res.status(400).json({ error: 'action 需为 resolve 或 dismiss' });
+    try {
+      const row = await prisma.passwordResetRequest.findUnique({ where: { id: req.params.id } });
+      if (!row) return res.status(404).json({ error: 'NOT_FOUND' });
+      if (row.status !== 'PENDING') return res.status(409).json({ error: '该申请已处理', status: row.status });
+      if (action === 'dismiss') {
+        await prisma.passwordResetRequest.update({
+          where: { id: row.id },
+          data: { status: 'DISMISSED', handledAt: new Date(), handledById: req.userId ?? null },
+        });
+        return res.json({ ok: true, status: 'DISMISSED' });
+      }
+      const p = pwSchema.safeParse(req.body);
+      if (!p.success) return res.status(400).json({ error: '新密码长度需 8-64 位' });
+      const pw = passwordStrength(p.data.newPassword);
+      if (!pw.ok) return res.status(400).json({ error: `新密码${pw.problems[0]}` });
+      const u = row.userId
+        ? await prisma.user.findUnique({ where: { id: row.userId } })
+        : await prisma.user.findUnique({ where: { phone: row.phone } });
+      if (!u) return res.status(400).json({ error: '该手机号尚未注册，无法重置' });
+      const hash = await hashPassword(p.data.newPassword);
+      await prisma.user.update({ where: { id: u.id }, data: { passwordHash: hash } });
+      await prisma.passwordResetRequest.update({
+        where: { id: row.id },
+        data: { status: 'RESOLVED', handledAt: new Date(), handledById: req.userId ?? null, userId: u.id },
+      });
+      res.json({ ok: true, status: 'RESOLVED' });
+    } catch (e) {
+      logInternal(e, 'admin.passwordResetHandle');
+      res.status(500).json({ error: 'INTERNAL_ERROR' });
+    }
+  });
+
   /* ---------- 数据运营总览 ---------- */
   r.get('/stats/overview', ...admin, async (_req, res) => {
     const [users, projects, scripts, posts, listings, orders]: any[][] = await Promise.all([
