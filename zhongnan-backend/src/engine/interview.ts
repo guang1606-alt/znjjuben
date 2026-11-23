@@ -49,12 +49,17 @@ export function mergeMaterials(prev: InterviewMaterials, inc: Partial<InterviewM
   return out;
 }
 
-/** 确定性句级归档（AI 兜底）：把用户表达按句切进 rawNotes，短句（<8字）丢弃防噪声 */
+/**
+ * 确定性句级归档（AI 兜底）：把用户表达按句切进 rawNotes。
+ * v2.658：阈值从 <8 字降到 <4 字。旧阈值把「证明自己」「主角杨光」这类
+ * 关键短事实当噪声丢弃，导致欲望/冲突信号永不到齐、追问原地复读（用户实录）。
+ * 仍保留 1-3 字碎片过滤（「好」「嗯」「然后呢」），防提示词被噪声污染。
+ */
 export function captureRawNotes(text: string, prev: InterviewMaterials): InterviewMaterials {
   const parts = text
     .split(/[。！？!?\n；;，,]/)
     .map((s) => s.trim())
-    .filter((s) => s.length >= 8);
+    .filter((s) => s.length >= 4);
   return mergeMaterials(prev, { rawNotes: parts });
 }
 
@@ -121,6 +126,31 @@ export function ruleGapQuestion(m: InterviewMaterials, turnCount: number, lang: 
   return Q.detail;
 }
 
+/** 问题归一化：只比较语义骨架，忽略标点/空白差异 */
+const normQ = (s: string): string => (s || '').replace(/[\s，。！？?!、：:；;“”"'‘’（）()《》【】\-—…·]/g, '');
+
+/**
+ * v2.658 复读守卫：采访一轮只前进一步，绝不把同一问题再问一遍。
+ * 候选顺序 = AI 追问 → 规则缺口问 → 换角度要细节；任一候选与「上一问 + 本轮会话已问」
+ * 归一化后相同即跳过。修复用户实录：回答「主角杨光，证明自己」后小南原样重发欲望问，
+ * 每复读一次还要再扣 5 积分。
+ */
+export function guardQuestion(
+  candidate: string, lastQuestion: string, transcript: { q: string }[], fallback: string, lang: Lang,
+): string {
+  const asked = new Set(
+    [lastQuestion, ...transcript.map((t) => t.q)].map(normQ).filter(Boolean),
+  );
+  const pick = (s: string): string => (s || '').trim();
+  const c = pick(candidate);
+  if (c && !asked.has(normQ(c))) return c;
+  const f = pick(fallback);
+  if (f && !asked.has(normQ(f))) return f;
+  return lang === 'en'
+    ? 'Let us switch angle: give me one concrete scene, or one line you remember verbatim.'
+    : '换个角度：给我一个具体场景，或一句你印象最深的原话。';
+}
+
 /* ---------------- AI 提炼与 AI 追问（失败走上面确定性兜底） ---------------- */
 
 const EXTRACT_PROMPT: Record<Lang, (q: string, a: string) => string> = {
@@ -136,15 +166,15 @@ Previous question: ${q || '(opening)'}
 User answer: ${a}`,
 };
 
-const QUESTION_PROMPT: Record<Lang, (m: string, tr: string) => string> = {
-  zh: (m, tr) => `你是编剧采访主持人。这是用户的创作素材与对话记录：
+const QUESTION_PROMPT: Record<Lang, (m: string, tr: string, asked: string) => string> = {
+  zh: (m, tr, asked) => `你是编剧采访主持人。这是用户的创作素材与对话记录：
 ${m}
 ${tr}
-规则：一轮只问最关键的一个缺口（先问决定冲突走向的）；像采访不像问卷，不打断、不连珠炮；用户表达完毕再生成。输出仅一行问题本身，不要编号不要解释。`,
-  en: (m, tr) => `You are a screenwriting interview host. Material and transcript so far:
+${asked ? `已问过的问题（禁止原样重复，也不要换个说法重复同一件事）：${asked}\n` : ''}规则：一轮只问最关键的一个缺口（先问决定冲突走向的）；像采访不像问卷，不打断、不连珠炮；用户表达完毕再生成。输出仅一行问题本身，不要编号不要解释。`,
+  en: (m, tr, asked) => `You are a screenwriting interview host. Material and transcript so far:
 ${m}
 ${tr}
-Rules: ask only the single most decisive missing thing per round (conflict-steering first); interview, don't interrogate; no rapid-fire lists. Output exactly one question, nothing else.`,
+${asked ? `Already asked (do not repeat verbatim or rephrase the same thing): ${asked}\n` : ''}Rules: ask only the single most decisive missing thing per round (conflict-steering first); interview, don't interrogate; no rapid-fire lists. Output exactly one question, nothing else.`,
 };
 
 export interface TurnOutcome {
@@ -182,16 +212,21 @@ export async function interviewTurn(
     }
   } catch (e) { logInternal(e, 'interview.extract'); /* 兜底已归档 rawNotes */ }
 
-  // 2) AI 下一问（失败→规则问）
-  let question = ruleGapQuestion(materials, transcript.length, lang);
+  // 2) 下一问：先由规则缺口给出底线候选，AI 追问若与已问重复则被守卫退回
+  const ruleQ = ruleGapQuestion(materials, transcript.length, lang);
+  let question = guardQuestion(ruleQ, lastQuestion, transcript, RULE_QUESTIONS[lang].detail, lang);
   try {
     const matLines = (Object.keys(materials) as (keyof InterviewMaterials)[])
       .map((k) => `${k}: ${materials[k].join(' / ') || '—'}`).join('\n');
     const trLines = transcript.slice(-4).map((t) => `Q: ${t.q}\nA: ${t.a}`).join('\n');
-    const r = await callText(tier, 'designer', QUESTION_PROMPT[lang](matLines, trLines), { maxTokens: 200 });
+    const askedLines = [lastQuestion, ...transcript.map((t) => t.q)].filter(Boolean).slice(-8).join(' | ');
+    const r = await callText(tier, 'designer', QUESTION_PROMPT[lang](matLines, trLines, askedLines), { maxTokens: 200 });
     costFen += r.costFen;
     const q = r.text.trim().split('\n').filter(Boolean).pop() ?? '';
-    if (q.length >= 6 && q.length <= 120 && !/^[0-9１-９]/.test(q)) { question = q; aiQuestion = true; }
+    if (q.length >= 6 && q.length <= 120 && !/^[0-9１-９]/.test(q)) {
+      question = guardQuestion(q, lastQuestion, transcript, ruleQ, lang);
+      aiQuestion = question === q.trim();
+    }
   } catch (e) { logInternal(e, 'interview.question'); /* 规则问兜底 */ }
 
   // 3) transcript 追加本轮（调用方持久化）

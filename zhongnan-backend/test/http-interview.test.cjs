@@ -20,6 +20,7 @@ before(() => new Promise((res) => server.once('listening', () => { base = `http:
 after(async () => { server.closeAllConnections?.(); await new Promise((r) => server.close(r)); });
 
 mem._seedUser({ id: 'rich', balance: 500 });
+mem._seedUser({ id: 'rich2', balance: 100 });
 mem._seedUser({ id: 'poor', balance: 3 });
 mem._seedUser({ id: 'other', balance: 200 });
 const H = (uid) => ({ 'Content-Type': 'application/json', Authorization: `Bearer ${signAccess({ sub: uid, level: 'BASIC' })}` });
@@ -29,9 +30,21 @@ const bal = (uid) => mem._accounts.get(uid).balance;
 
 /* ---------------- 引擎确定性单元 ---------------- */
 describe('采访引擎·确定性机制', { concurrency: 1 }, () => {
-  it('captureRawNotes：按句归档，短句(<8字)丢弃防噪声', () => {
+  it('captureRawNotes：丢弃<4字噪声，但保留「证明自己」这类关键短事实', () => {
     const out = ENG.captureRawNotes('好。今天他离开了老家，去城里找活干。', ENG.emptyMaterials());
-    assert.deepStrictEqual(out.rawNotes, ['今天他离开了老家']);
+    assert.deepStrictEqual(out.rawNotes, ['今天他离开了老家', '去城里找活干']);
+    const key = ENG.captureRawNotes('主角杨光，证明自己', ENG.emptyMaterials());
+    assert.deepStrictEqual(key.rawNotes, ['主角杨光', '证明自己']);
+    assert.deepStrictEqual(ENG.captureRawNotes('嗯。好的。', ENG.emptyMaterials()).rawNotes, []);
+  });
+  it('guardQuestion：复读上一问时回退规则问，规则问也重复则换角度', () => {
+    const last = '先聊最关键的：主角是谁？他/她最想要什么？（一句话即可，我在记录）';
+    const tr = [{ q: last, a: '主角杨光，证明自己' }];
+    const conflict = '收到。那挡着他/她的最大阻力是什么？谁在跟主角作对？';
+    assert.strictEqual(ENG.guardQuestion(last, last, tr, conflict, 'zh'), conflict);
+    const tr2 = [{ q: last, a: '主角杨光，证明自己' }, { q: conflict, a: '师父处处打压他' }];
+    assert.strictEqual(ENG.guardQuestion(conflict, conflict, tr2, conflict, 'zh'), '换个角度：给我一个具体场景，或一句你印象最深的原话。');
+    assert.strictEqual(ENG.guardQuestion('如果主角失败，会失去什么？', last, tr, conflict, 'zh'), '如果主角失败，会失去什么？');
   });
   it('mergeMaterials：去重且先到先得（保留用户原表达）', () => {
     const prev = ENG.emptyMaterials(); prev.quotes = ['巧了，这店租约写的我名'];
@@ -106,6 +119,18 @@ describe('采访式创作·HTTP 闭环', { concurrency: 1 }, () => {
     assert.strictEqual(j.transcript.length, 2);
     assert.strictEqual(j.ready, true);
     assert.strictEqual(bal('rich'), before - 5);
+  });
+  it('短回答不被当噪声：主角+欲望后必须换题（复现用户「不断重复」）', async () => {
+    const r = await post('/api/interview/sessions', { idea: '主角杨光，证明自己', title: '杨光', clientToken: 'short-1' }, 'rich2');
+    const j = await r.json();
+    assert.strictEqual(r.status, 200);
+    assert.ok(j.gaps.desire, '「证明自己」必须归档并触发欲望信号');
+    assert.ok(!j.question.includes('主角是谁'), `首问不得重复欲望：${j.question}`);
+    assert.ok(j.question.includes('阻力') || j.question.includes('作对'), `应转向冲突：${j.question}`);
+    const r2 = await post(`/api/interview/sessions/${j.sessionId}/turn`, { text: '对手是他师父，处处打压他，还想抢走他的名字' }, 'rich2');
+    const j2 = await r2.json();
+    assert.strictEqual(r2.status, 200);
+    assert.notStrictEqual(j2.question, j.question, '回答后不得重复上一问');
   });
   it('幂等重放：相同 clientToken 同窗返回 409 且不重复扣费', async () => {
     const before = bal('rich');
