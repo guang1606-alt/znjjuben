@@ -4337,7 +4337,7 @@
     // v2.517 作品库单集 → 体检：把成稿正文带进体检面板，用户不必手动复制（免费只读，不耗积分）
     const epTextMap = new Map();
     [...groups.entries()].forEach(([epNo, vs]) => epTextMap.set(Number(epNo), vs[vs.length - 1].content || ''));
-    const epBlocks = [...groups.entries()].map(([epNo, vs]) => {
+    const epBlocks = [...groups.entries()].map(([epNo, vs], i) => {
       const latest = vs[vs.length - 1];
       const oldVers = vs.slice(0, -1);
     // @module works
@@ -4346,7 +4346,7 @@
         ? `<details class="ep-history"><summary>${lang === 'en' ? `Past versions (${oldVers.length})` : `历史版本（${oldVers.length}）`}</summary>${oldVers.map((v) =>
             `<div class="ep-oldver"><span>${PV().formatVersion(v.version)} · ${v.wordCount || 0} ${lang === 'en' ? 'chars' : '字'}</span>${cmpBtn(v.version, latest.version)}</div>`).join('')}</details>`
         : '';
-      return `<div class="ep-item" data-ep="${epNo}"><h4>EP${epNo} · ${escapeHtml(latest.title || '')} <span class="muted">(${PV().formatVersion(latest.version)} · ${latest.wordCount || 0} ${lang === 'en' ? 'chars' : '字'})</span>${oldVers.length ? cmpBtn(oldVers[oldVers.length - 1].version, latest.version) : ''}<button class="btn-ghost ep-listen-btn" type="button" data-listen-id="${latest.id}">🎧 ${lang === 'en' ? 'Listen' : '听剧本'}</button><button class="btn-ghost ep-lint-btn" type="button" data-lint-ep="${epNo}">${t('tbCardLint')}</button><button class="btn-ghost ep-copy-btn" type="button" data-copy-ep="${epNo}">${t('worksDetailCopyEp')}</button></h4>
+      return `<div class="ep-item" data-ep="${epNo}" style="--ep-i:${Math.min(i, 8)}"><h4>EP${epNo} · ${escapeHtml(latest.title || '')} <span class="muted">(${PV().formatVersion(latest.version)} · ${latest.wordCount || 0} ${lang === 'en' ? 'chars' : '字'})</span>${oldVers.length ? cmpBtn(oldVers[oldVers.length - 1].version, latest.version) : ''}<button class="btn-ghost ep-listen-btn" type="button" data-listen-id="${latest.id}">🎧 ${lang === 'en' ? 'Listen' : '听剧本'}</button><button class="btn-ghost ep-lint-btn" type="button" data-lint-ep="${epNo}">${t('tbCardLint')}</button><button class="btn-ghost ep-copy-btn" type="button" data-copy-ep="${epNo}">${t('worksDetailCopyEp')}</button></h4>
         <div class="muted">${escapeHtml(latest.synopsis || '')}</div><pre>${escapeHtml(latest.content || '')}</pre>${hist}
         <div class="ep-diff hidden" data-diff-box="ep${epNo}"></div></div>`;
     }).join('');
@@ -4383,7 +4383,7 @@
         const epNo = Number(b.getAttribute('data-copy-ep'));
         const text = epTextMap.get(epNo) || '';
         if (!text.trim()) return;
-        copy(text, t('worksDetailCopied', { n: epNo }), t('worksDetailCopyFail'));
+        copy(text, t('worksDetailCopied', { n: epNo }), t('worksDetailCopyFail')).then((ok) => flashCopied(b, ok)).catch(() => flashCopied(b, false));
       };
     });
     // c208：整剧连播入口（片单+续听定位+自动开播）；权益不足由 openListenSeries 的 403 分支统一引导
@@ -8679,7 +8679,7 @@
       [lang === 'en' ? 'Market fit' : '市场匹配', mk.overall ?? mk.score ?? mk.fit],
       [lang === 'en' ? 'Audience' : '受众精准', done.audience?.cravingScore ?? (typeof done.audience === 'number' ? done.audience : '-')],
     ];
-    $('scoreGrid').innerHTML = rows.map(([k, v]) => `<div class="score-cell"><b>${escapeHtml(PV().formatDisplayValue(v))}</b><span>${k}</span></div>`).join('');
+    $('scoreGrid').innerHTML = rows.map(([k, v], i) => `<div class="score-cell" style="--score-i:${i}"><b>${escapeHtml(PV().formatDisplayValue(v))}</b><span>${k}</span></div>`).join('');
     $('sandboxTip').classList.toggle('hidden', !done.sandbox);
     if (done.sandbox) $('sandboxTip').textContent = t('sandboxTip');
     // 受限题材改写法建议（9·1《微短剧发展管理办法》对接，WARN 级不阻断创作）
@@ -11513,14 +11513,38 @@
 
   /* ---------- 工具 ---------- */
   function copy(text, okMsg, failMsg) {
-    if (!text) return;
-    navigator.clipboard.writeText(text).then(() => xnSay(okMsg || (lang === 'en' ? 'Copied' : '已复制'))).catch(() => {
+    if (!text) return Promise.resolve(false);
+    return navigator.clipboard.writeText(text).then(() => {
+      xnSay(okMsg || (lang === 'en' ? 'Copied' : '已复制'));
+      return true;
+    }).catch(() => {
       const ta = document.createElement('textarea'); ta.value = text; document.body.appendChild(ta); ta.select();
       let ok = false;
       try { ok = document.execCommand('copy'); } catch (e) { ok = false; }
       ta.remove();
       if (!ok && failMsg) xnSay(failMsg);
+      return ok;
     });
+  }
+  // v2.669 复制按钮就地反馈：成功切「✓ 已复制」并短暂高亮，失败抖动；1.4s 后还原原始文案。
+  // 就地反馈补的是「按钮本身零状态」的缺口——全局 toast 会被工作台遮罩或滚动挡住。
+  function flashCopied(btn, ok) {
+    if (!btn) return;
+    if (!btn.dataset.copyLabel) btn.dataset.copyLabel = btn.textContent || '';
+    clearTimeout(btn._copyTimer);
+    btn.classList.remove('ep-shake');
+    btn.classList.toggle('is-copied', !!ok);
+    if (ok) {
+      btn.textContent = '✓ ' + t('copiedShort');
+    } else {
+      btn.textContent = t('copyFailShort');
+      void btn.offsetWidth; // 强制回流，重放抖动动画
+      btn.classList.add('ep-shake');
+    }
+    btn._copyTimer = setTimeout(() => {
+      btn.classList.remove('is-copied', 'ep-shake');
+      btn.textContent = btn.dataset.copyLabel || '';
+    }, 1400);
   }
   function escapeHtml(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])); }
   // v2.270 Roving tabindex 键盘导航：Tab 键只需按一次进入 tab 组，方向键在组内移动，Home/End 跳首尾
