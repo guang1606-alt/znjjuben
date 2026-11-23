@@ -3849,7 +3849,7 @@
       let t;
       ws.addEventListener('input', () => { clearTimeout(t); t = setTimeout(loadWorks, 250); });
     }
-    if (!Api.isAuthed()) { empty.innerHTML = znEmptyHtml(t('needLogin')); empty.classList.remove('hidden'); $('worksCount').textContent = ''; return; }
+    if (!Api.isAuthed()) { setWorksBulkMode(false); $('worksBulkBtn')?.classList.add('hidden'); empty.innerHTML = znEmptyHtml(t('needLogin')); empty.classList.remove('hidden'); $('worksCount').textContent = ''; return; }
     // v2.278 三态补全：作品列表此前缺骨架态——进入/搜索触发后 grid 已清空、弱网下全白零反馈；
     // 与资产库三面板同范式，取数前先铺卡片网格骨架
     znSkeleton(grid, 'grid');
