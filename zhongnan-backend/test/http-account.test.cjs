@@ -98,5 +98,16 @@ describe('商品目录 /order/catalog（价格只认服务端）', () => {
     assert.strictEqual(pro.quotaMonthly, 1000);
     assert.ok(d.xScript && d.xScript.gating);                 // X剧本分级说明
     assert.strictEqual(d.pointsPerYuan, 10);
+    // v2.663 单集价随目录下发（创作端「生成前预计扣费」唯一真源）：四档与 EP_PRICE 逐项一致，
+    // 前端不再手抄价格——调价当天估算与结算必然同源，不会出现「页面说 10、冻结时扣 15」。
+    const EXPECT_EP_PRICE = {
+      FREE: { ECONOMY: 12 },
+      BASIC: { ECONOMY: 10, STANDARD: 15 },
+      ADVANCED: { ECONOMY: 8, STANDARD: 12, FLAGSHIP: 28 },
+      PRO: { ECONOMY: 5, STANDARD: 9, FLAGSHIP: 24 },
+    };
+    for (const p of d.plans) {
+      assert.deepStrictEqual(p.epPrice, EXPECT_EP_PRICE[p.level], `${p.level} 档单集价应与定价矩阵一致`);
+    }
   });
 });

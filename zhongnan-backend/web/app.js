@@ -307,6 +307,8 @@
     staffCostPatch();
     // v2.232 subAllBtn 展开/收起态文案自愈（按钮已去 data-i，展开态切语言由此复原）
     syncSubAllLabel();
+    // v2.663 成本提示随语言切换重排（金额来自目录，文案是前端拼的）
+    syncEpisodeCostHint();
   }
 
   /* ---------- v2.329 八模式（模式 × 剧本类型 × 输出语言 三维） ---------- */
@@ -3046,10 +3048,11 @@
     if (hookC) { hookC.classList.remove('hidden'); side.appendChild(hookC); }
     _applyModeConfigFilter(modeId);
 
-    // 8. 注入标题 / 描述 / 成本
+    // 8. 注入标题 / 描述 / 成本（v2.663 成本行改为按服务端目录 + 当前档位实时估算）
     $('modeDetailName').textContent = D.mode?.[modeId] || mode.name || modeId;
     $('modeDetailDesc').textContent = D.modeDesc?.[modeId] || '';
-    $('modeDetailCost').textContent = mode.cost || '';
+    // v2.663 成本提示：vm 提取型测试只求值 showModeDetail，函数不存在时按旧行为跳过
+    if (typeof primeEpisodeCostHint === 'function') primeEpisodeCostHint();
 
     detail.classList.remove('hidden', 'view-out');
     detail.setAttribute('data-mode', modeId);
@@ -4440,6 +4443,87 @@
   }
 
   /* ---------- 会员充值（目录只认服务端） ---------- */
+  // ═══ v2.663 生成前预计扣费（创作端） ═══
+  // 二级界面原本有一行 #modeDetailCost，但读的是 mode.cost——模式表里根本没有该字段，
+  // 于是这一栏永远空白：用户点「生成剧本」前看不到本轮预计扣多少，只能等 SSE 冻结阶段才第一次见到数字。
+  // 价格只认服务端目录（order.ts epPrice 由 EP_PRICE 派生），前端手抄价格会在调价日对用户承诺错数字。
+  let _plansCache = null;
+  let _plansFetch = null;
+  function ensurePlans() {
+    if (_plansCache) return Promise.resolve(_plansCache);
+    if (_plansFetch) return _plansFetch;
+    _plansFetch = fetch('/api/order/catalog')
+      .then((r) => (r.ok ? r.json() : null))
+      .then((cat) => { _plansCache = cat && Array.isArray(cat.plans) ? cat.plans : null; return _plansCache; })
+      .catch(() => null) // 目录拿不到就退回「以结算为准」，不阻断创作
+      .finally(() => { _plansFetch = null; });
+    return _plansFetch;
+  }
+  function myPlan() {
+    const lv = (Api.getUser() && Api.getUser().level) || 'FREE';
+    return _plansCache ? (_plansCache.find((p) => p.level === lv) || null) : null;
+  }
+  function tierZh(tier) { return tier === 'FLAGSHIP' ? '旗舰' : tier === 'STANDARD' ? '标准' : '经济'; }
+  function tierEn(tier) { return tier === 'FLAGSHIP' ? 'Flagship' : tier === 'STANDARD' ? 'Standard' : 'Economy'; }
+  // 纯函数：只做读数与排版；单集价、每日免费集、赠送额度全部由参数注入，便于按真实档位逐条验证
+  function episodeCostHint(p) {
+    const en = !!p.en;
+    const eps = Math.max(1, parseInt(p.episodes, 10) || 0);
+    const plan = p.plan, tier = p.tier || 'ECONOMY';
+    const per = plan && plan.epPrice ? plan.epPrice[tier] : 0;
+    if (!p.authed) return en ? 'Sign in to see the per-episode estimate.' : '登录后可查看预计扣费';
+    if (!plan || !per) return en
+      ? 'Cost is settled by the selected engine and your plan; nothing is charged until you start.'
+      : '按所选引擎与会员档位结算，生成前不扣费';
+    const total = per * eps;
+    if (plan.level === 'FREE' && plan.freeEpsPerDay > 0) return en
+      ? `First ${plan.freeEpsPerDay} eps/day are free; beyond that ${per} pts/ep — this run ${eps} eps ≈ ${total} pts (final at settlement).`
+      : `每日前 ${plan.freeEpsPerDay} 集免积分；超出按 ${per} 积分/集；本单 ${eps} 集约 ${total} 积分（以结算为准）`;
+    const remain = Math.max(0, parseInt(p.quotaRemain, 10) || 0);
+    if (tier === 'ECONOMY' && remain > 0) return en
+      ? `Gift episodes are used first (${remain} left); overage ${per} pts/ep.`
+      : `优先抵扣本月赠送集（剩 ${remain} 集），超出按 ${per} 积分/集`;
+    return en
+      ? `${tierEn(tier)} engine ${per} pts/ep × ${eps} eps ≈ ${total} pts (final at settlement).`
+      : `${tierZh(tier)}引擎 ${per} 积分/集 × ${eps} 集 ≈ ${total} 积分（以结算为准）`;
+  }
+  // 标题行只放一句短版，避免与按钮上方完整提示在视觉上重复
+  function episodeCostShort(p) {
+    const en = !!p.en;
+    if (!p.authed) return en ? 'Sign in for estimate' : '登录后可见';
+    const plan = p.plan, tier = p.tier || 'ECONOMY';
+    const per = plan && plan.epPrice ? plan.epPrice[tier] : 0;
+    if (!plan || !per) return en ? 'Final at settlement' : '以结算为准';
+    if (plan.level === 'FREE' && plan.freeEpsPerDay > 0) return en
+      ? `${plan.freeEpsPerDay} free eps/day · then ${per} pts/ep`
+      : `每日 ${plan.freeEpsPerDay} 集免费 · 超出 ${per} 积分/集`;
+    const remain = Math.max(0, parseInt(p.quotaRemain, 10) || 0);
+    if (tier === 'ECONOMY' && remain > 0) return en ? `Gift eps first · then ${per} pts/ep` : `赠送集优先 · 超出 ${per} 积分/集`;
+    return en ? `${per} pts/ep` : `${per} 积分/集`;
+  }
+  function _costParams() {
+    const me = (typeof meCache !== 'undefined') ? meCache : null;
+    const u = Api.getUser && Api.getUser();
+    const sameAcct = !!(me && u && me.id === u.id); // 账号隔离：换号后旧额度不得串进新账号的估算
+    return {
+      episodes: ($('episodes') || {}).value,
+      tier: ($('engine') || {}).value || 'ECONOMY',
+      plan: myPlan(), en: lang === 'en',
+      authed: !!(Api.isAuthed && Api.isAuthed()),
+      quotaRemain: sameAcct && me.quota ? me.quota.remain : 0,
+    };
+  }
+  function syncEpisodeCostHint() {
+    const p = _costParams();
+    const head = $('modeDetailCost'); if (head) head.textContent = episodeCostShort(p);
+    const bar = $('genCostHint'); if (bar) bar.textContent = episodeCostHint(p);
+  }
+  // 目录首次到达前先给「登录可见 / 以结算为准」，到达后重算一次，不让成本栏留白
+  function primeEpisodeCostHint() {
+    syncEpisodeCostHint();
+    // v2.307 裸链设卡：目录到达后重算必须自带 catch（目录不可用不影响创作，静默保持兜底文案）
+    ensurePlans().then(() => { if (typeof _modeDetailOpen !== 'undefined' && _modeDetailOpen) syncEpisodeCostHint(); }).catch(() => {});
+  }
   async function loadCatalog() {
     // v2.287 裸 fetch 不经 Api 层（无全局网络 hook toast）：断网 reject 既冒泡又零反馈，
     // catch 与既有非 ok 分支同走 plansGrid 就地错误态
@@ -4450,6 +4534,7 @@
     if (!res.ok) { znError('plansGrid', t('loadFail')); return; }
     const cat = await res.json().catch(() => null);
     if (!cat || !Array.isArray(cat.plans)) { znError('plansGrid', t('loadFail')); return; }
+    _plansCache = cat.plans; // v2.663 创作端成本估算复用同一份目录，避免重复请求与两处数据源
     const paymentUnavailable = cat.paymentAvailable === false;
     const disabled = paymentUnavailable ? ' disabled' : '';
     const purchaseLabel = paymentUnavailable ? (lang === 'en' ? 'Online payment unavailable' : '在线支付暂未开通') : t('subscribe');
@@ -12077,7 +12162,10 @@
     } catch (e) { xnSay(e.message); }
   }
   // 选择本地文本文件时读取为文本填入内容框（视频需先转写，这里只支持文本类文件直读）
+  // v2.663 集数/引擎变化即时重算预计扣费：delegated 监听避免与 renderSelects 每次重建 select 时抢 onchange
+  document.addEventListener('input', (e) => { if (e.target && e.target.id === 'episodes') syncEpisodeCostHint(); });
   document.addEventListener('change', (e) => {
+    if (e.target && (e.target.id === 'engine' || e.target.id === 'episodes')) { syncEpisodeCostHint(); return; }
     if (e.target && e.target.id === 'knFile') {
       const f = e.target.files[0]; if (!f) return;
       if (f.size > 4_000_000) { xnSay(lang === 'en' ? 'File too large (>4MB).' : '文件过大（>4MB），请粘贴关键文本'); return; }
