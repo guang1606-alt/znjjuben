@@ -66,10 +66,17 @@ const demoUsers = [
   { id: 'demo_admin', phone: '18891995171', level: 'PRO', balance: 99999, isAdmin: false },
   { id: 'local_admin_15209291219', phone: '15209291219', level: 'PRO', balance: 99999, isAdmin: true },
 ];
-demoUsers.forEach(async (u) => {
-  const seeded = mem._seedUser(u);
-  seeded.passwordHash = await hashPassword('demo123456');
-});
+// v2.655：必须先补齐密码哈希再监听。此前这里是 forEach(async) 先入库、后异步写
+// passwordHash，而 app.listen 立即接客——健康检查已通过的那几百毫秒里演示账号登录全是
+// 401，连续重试还会把登录限流打成 429（全量用例偶发失真的根因）。
+async function seedDemoUsers(): Promise<void> {
+  await Promise.all(
+    demoUsers.map(async (u) => {
+      const seeded = mem._seedUser(u);
+      seeded.passwordHash = await hashPassword('demo123456');
+    }),
+  );
+}
 
 // v2.492 演示内容种子：让「需要数据才能点开」的弹窗在 DEMO 下拥有真实入口。
 // 覆盖九类此前巡检盲区：PK/价值证书/导演交付包/物料（需项目+成稿）、听剧本（需成稿）、
@@ -137,8 +144,13 @@ void (async function seedDemoContent() {
 })();
 
 const port = Number(process.env.PORT) || 8099;
-app.listen(port, () => {
-  console.log(`🎬 终南集 DEMO 模式: http://127.0.0.1:${port}（内存数据，重启清空）`);
-  console.log('演示账号：FREE 13900000001 / BASIC 13900000002 / ADVANCED 13900000003 / PRO 13900000004 / 超管 18891995171，密码均 demo123456');
-  console.log('本地管理员：15209291219，密码 demo123456');
-});
+
+// v2.655：种子就绪后才监听，保证「健康检查通过」等价于「演示账号可登录」。
+void (async function main(): Promise<void> {
+  await seedDemoUsers();
+  app.listen(port, () => {
+    console.log(`🎬 终南集 DEMO 模式: http://127.0.0.1:${port}（内存数据，重启清空）`);
+    console.log('演示账号：FREE 13900000001 / BASIC 13900000002 / ADVANCED 13900000003 / PRO 13900000004 / 超管 18891995171，密码均 demo123456');
+    console.log('本地管理员：15209291219，密码 demo123456');
+  });
+})();
