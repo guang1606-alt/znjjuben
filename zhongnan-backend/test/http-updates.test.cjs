@@ -132,7 +132,33 @@ test('GET /api/updates/latest 窗口外置顶仍优先，多条置顶取最新',
     assert.strictEqual(res.status, 200);
     assert.strictEqual(json.announcement?.version, '2.101.0', '最新置顶不应被最近 50 条普通公告挤出窗口');
     assert.strictEqual(json.announcement?.pinned, true);
-    assert.strictEqual(json.version, '2.101.0');
+    // v2.654：顶层 version 是「当前后端版本号」权威源，取全库最新公告 2.249.0；置顶只决定展示哪一条
+    assert.strictEqual(json.version, '2.249.0');
+  } finally {
+    await new Promise((resolve) => server.close(resolve));
+  }
+});
+
+// v2.654 置顶只影响「展示哪条公告」，不改写顶层 version 的权威源（全库最新公告）
+test('GET /api/updates/latest 置顶公告不改写顶层版本号', async () => {
+  const mem = createMemoryPrisma();
+  const baseTime = Date.UTC(2026, 1, 1);
+  await mem.announcement.create({ data: {
+    version: '2.300.0', titleZh: '旧置顶', bodyZh: '旧置顶正文', pinned: true,
+    createdAt: new Date(baseTime),
+  } });
+  await mem.announcement.create({ data: {
+    version: '2.301.0', titleZh: '普通新公告', bodyZh: '普通新公告正文',
+    createdAt: new Date(baseTime + 1000),
+  } });
+  const server = appWith(mem).listen(0);
+  await new Promise((r) => server.once('listening', r));
+  try {
+    const res = await fetch(`http://127.0.0.1:${server.address().port}/api/updates/latest`);
+    const json = await res.json();
+    assert.strictEqual(res.status, 200);
+    assert.strictEqual(json.announcement?.version, '2.300.0', '置顶公告仍应优先展示');
+    assert.strictEqual(json.version, '2.301.0', '顶层 version 必须是全库最新公告，不能被旧置顶改写');
   } finally {
     await new Promise((resolve) => server.close(resolve));
   }
