@@ -253,7 +253,8 @@
     if (typeof renderCraftHooks === 'function' && (craftTaxonomy || craftRecCards.length)) {
       const _langChanged = !!craftTaxonomyLang && craftTaxonomyLang !== lang;
       if (_langChanged) { craftTaxonomy = null; craftRecCards = []; }
-      const _after = () => { renderCraftHooks(); renderCraftCards(); renderCraftPicked(); };
+      // v2.662 renderStaticText 会把块头洗回静态兜底，语言切换后需按库内总量重刷一次
+      const _after = () => { renderCraftHooks(); renderCraftCards(); renderCraftPicked(); syncCraftFreeCount(); };
       if (_langChanged) loadCraftTaxonomy().then(_after).catch(_after); else _after();
     }
     // v2.267 [P2-2a] 钩子编排摘要按钮（🎣 钩子编排：[系统智能]…）按界面语言重渲染；
@@ -1774,6 +1775,9 @@
   let craftSelHooks = [];   // [{id,name}]
   let craftSelCards = [];   // [{id,title}]
   let craftRecCards = [];   // 推荐方法卡（含 formula/steps）
+  // v2.662 方法卡搜索：43 张卡展开后是 4 组长栅格，找「反转 / 冷开场」只能肉眼扫；
+  // 关键词只活在内存里（不落盘），刷新回到全量浏览，不制造「上次搜过什么」的隐形状态。
+  let craftCardQuery = '';
   // v2.661 递招选择持久化：与标签偏好（zn_pref_tags）同思路——用户亲手挑的手法不该因刷新/切页丢失。
   // 恢复时以分类库为准过滤：库内已删的钩子/卡片不得作为幽灵项复活，名称/标题一律取当前语言库内值。
   const CRAFT_PICK_KEY = 'zn:craftPick';
@@ -1802,6 +1806,7 @@
     const l = lang === 'en' ? '?lang=en' : '';
     craftTaxonomy = await (await Api.request('/api/craft/taxonomy' + l)).json();
     craftTaxonomyLang = lang;
+    syncCraftFreeCount();
     if (sel) {
       craftTaxonomy.hooks.forEach((h) => {
         const o = document.createElement('option'); o.value = h.id; o.textContent = h.name; sel.appendChild(o);
@@ -1846,8 +1851,16 @@
   };
     // @module xiaonan
   const craftHookEn = (id, zh) => CRAFT_HOOK_EN[id] || zh;
+  // v2.662 搜索匹配范围＝标题 + 公式：用户记得住「反转」「倒叙」这种词，未必记得卡名。
+  // 大小写不敏感，仅两个字段，避免 definition 类长文本里偶然命中造成噪声。
+  function craftCardMatches(c, q) {
+    const needle = String(q || '').trim().toLowerCase();
+    if (!needle) return true;
+    return String(c.title || '').toLowerCase().includes(needle) || String(c.formula || '').toLowerCase().includes(needle);
+  }
   function renderCraftCards() {
     const box = $('craftCards'); if (!box) return;
+    const q = String(craftCardQuery || '').trim();
     const recIds = new Set(craftRecCards.map((c) => c.id));
     // @module xiaonan
     const cardHtml = (c, rec) => {
@@ -1859,13 +1872,26 @@
         <div class="craft-card-h"><b>${escapeHtml(c.title)}</b><span>${on ? (lang === 'en' ? 'selected ✓' : '已选 ✓') : (lang === 'en' ? 'tap to use' : '点选')}</span></div>${steps}</div>`;
     };
     let html = '';
-    if (craftRecCards.length) html += `<div class="craft-group-label">${lang === 'en' ? 'Best matches for your idea' : '最贴你创意的方法'}</div><div class="craft-grid">` + craftRecCards.map((c) => cardHtml(c, true)).join('') + '</div>';
+    // v2.662 搜索时隐藏推荐区：结果只来自过滤后的全量卡，避免同一张卡出现两遍、也避免无关推荐混进结果。
+    if (!q && craftRecCards.length) html += `<div class="craft-group-label">${lang === 'en' ? 'Best matches for your idea' : '最贴你创意的方法'}</div><div class="craft-grid">` + craftRecCards.map((c) => cardHtml(c, true)).join('') + '</div>';
     if (craftTaxonomy) {
-      // v2.525 张数取分类库总量：写死 43 会在库增删后失真
-      const totalCards = (craftTaxonomy.totals && craftTaxonomy.totals.cards) || craftTaxonomy.cardGroups.reduce((n, g) => n + g.cards.length, 0);
-      html += `<details class="craft-all"><summary>${lang === 'en' ? `Browse all ${totalCards} craft cards` : `浏览全部 ${totalCards} 张方法卡`}</summary>` +
-        craftTaxonomy.cardGroups.map((g) => `<div class="craft-group-label">${escapeHtml(g.name)}${lang === 'en' ? ` (${g.count})` : `（${g.count}）`}</div><div class="craft-grid">` +
-          g.cards.filter((c) => !recIds.has(c.id)).map((c) => cardHtml(c, false)).join('') + '</div>').join('') + '</details>';
+      const groups = craftTaxonomy.cardGroups
+        .map((g) => ({ g, cards: g.cards.filter((c) => (q ? craftCardMatches(c, q) : !recIds.has(c.id))) }))
+        .filter((x) => x.cards.length);
+      if (q) {
+        const hits = groups.reduce((n, x) => n + x.cards.length, 0);
+        html = hits
+          ? `<details class="craft-all" open><summary>${lang === 'en' ? `Search results (${hits})` : `搜索结果（${hits} 张）`}</summary>` +
+            groups.map(({ g, cards }) => `<div class="craft-group-label">${escapeHtml(g.name)}${lang === 'en' ? ` (${cards.length})` : `（${cards.length}）`}</div><div class="craft-grid">` +
+              cards.map((c) => cardHtml(c, false)).join('') + '</div>').join('') + '</details>'
+          : `<span class="tag-empty">${lang === 'en' ? `No cards match “${escapeHtml(q)}”. Try another keyword.` : `没有匹配「${escapeHtml(q)}」的方法卡，换个关键词试试`}</span>`;
+      } else {
+        // v2.525 张数取分类库总量：写死 43 会在库增删后失真
+        const totalCards = (craftTaxonomy.totals && craftTaxonomy.totals.cards) || craftTaxonomy.cardGroups.reduce((n, g) => n + g.cards.length, 0);
+        html += `<details class="craft-all"><summary>${lang === 'en' ? `Browse all ${totalCards} craft cards` : `浏览全部 ${totalCards} 张方法卡`}</summary>` +
+          groups.map(({ g, cards }) => `<div class="craft-group-label">${escapeHtml(g.name)}${lang === 'en' ? ` (${g.count})` : `（${g.count}）`}</div><div class="craft-grid">` +
+            cards.map((c) => cardHtml(c, false)).join('') + '</div>').join('') + '</details>';
+      }
     }
     box.innerHTML = html || `<span class="tag-empty">${lang === 'en' ? 'Free local toolkit — hit Suggest.' : '免费本地工艺库，点「按当前创意递招」开始'}</span>`;
     box.querySelectorAll('.craft-card').forEach((el) => {
@@ -1876,6 +1902,16 @@
         if (c) toggleCraftCard(c);
       };
     });
+  }
+  // v2.662 块头「43张方法卡 / 10类钩子」与 details 同源：此前只有 summary 动态、头部写死，
+  // 同一面板两个真源，库一增删就自相矛盾。库未加载时保留 index.html 的静态兜底（不写入空值）。
+  function syncCraftFreeCount() {
+    const el = $('craftFree');
+    if (!el || !craftTaxonomy) return;
+    const cardN = (craftTaxonomy.totals && craftTaxonomy.totals.cards) || 0;
+    const hookN = (craftTaxonomy.totals && craftTaxonomy.totals.hooks) || (craftTaxonomy.hooks || []).length;
+    if (!cardN && !hookN) return;
+    el.textContent = t('craftFreeCount', { cards: cardN, hooks: hookN });
   }
   function renderCraftPicked() {
     const el = $('craftPicked'); if (!el) return;
@@ -1925,6 +1961,9 @@
   const craftGoBtn = $('craftGoBtn'); if (craftGoBtn) craftGoBtn.onclick = craftGo;
   const craftCopyBtn = $('craftCopyBtn');
   if (craftCopyBtn) craftCopyBtn.onclick = () => { const t = craftBriefLine(); if (t) copy(t, lang === 'en' ? 'Craft copied' : '手法已复制，可粘贴进创意'); else xnSay(lang === 'en' ? 'Nothing selected.' : '还没选用钩子或方法卡'); };
+  // v2.662 方法卡搜索接线：type=search 的清除按钮同样触发 input，清空即回到全量浏览。
+  const craftCardSearch = $('craftCardSearch');
+  if (craftCardSearch) craftCardSearch.oninput = () => { craftCardQuery = craftCardSearch.value || ''; renderCraftCards(); };
   loadCraftTaxonomy().then(() => { restoreCraftPick(); renderCraftHooks(); renderCraftCards(); renderCraftPicked(); }).catch(() => {});
 
   // ═══ MODULE: misc (88行, 1fn) ═══ 免费合法小说素材库（多语言，只读外链）

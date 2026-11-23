@@ -1117,6 +1117,7 @@ textarea { box-sizing: border-box; max-width: 100%; resize: vertical; background
 .craft-block-head{display:flex;align-items:center;gap:10px;margin-bottom:6px}
 .craft-block-head b{font-size:.9rem}
 .craft-block-head select{margin-left:auto;padding:5px 9px;border-radius:8px;border:1px solid var(--line);background:var(--panel);color:var(--text);max-width:240px}
+.craft-block-head input[type=search]{margin-left:auto;padding:6px 10px;border-radius:8px;border:1px solid var(--line);background:var(--panel);color:var(--text);min-width:200px}
 .craft-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:9px;margin:6px 0}
 .craft-group-label{font-size:.78rem;color:var(--text-2);margin:8px 0 2px}
 .craft-card{border:1px solid var(--line);border-radius:10px;padding:10px 12px;background:var(--panel);cursor:default;transition:border-color .15s,box-shadow .15s}
@@ -1134,7 +1135,7 @@ textarea { box-sizing: border-box; max-width: 100%; resize: vertical; background
 .craft-all>summary{cursor:pointer;font-weight:600;color:var(--accent-strong)}
 .craft-foot{display:flex;align-items:center;gap:12px;margin-top:8px;font-size:.82rem;color:var(--text-2)}
 .craft-foot .chip{margin-left:auto}
-@media (max-width:640px){.craft-head{flex-wrap:wrap}.craft-grid{grid-template-columns:1fr}.craft-block-head select{max-width:160px}}
+@media (max-width:640px){.craft-head{flex-wrap:wrap}.craft-grid{grid-template-columns:1fr}.craft-block-head{flex-wrap:wrap}.craft-block-head select{max-width:160px}.craft-block-head input[type=search]{min-width:0;width:100%}}
 
 /* 榜单接入状态 */
 .tag-board-status{margin-top:8px;font-size:12.5px;line-height:1.5;opacity:.78}

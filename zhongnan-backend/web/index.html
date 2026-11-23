@@ -235,7 +235,7 @@
       <section class="panel craft-bench hidden" id="craftBench" role="region" aria-labelledby="craftBenchTitle">
         <div class="craft-head">
           <h3 data-i="craftTitle" id="craftBenchTitle">小南递招 · 方法卡与钩子</h3>
-          <span class="muted" data-i="craftFree">免费 · 43张方法卡 / 10类钩子</span>
+          <span class="muted" data-i="craftFree" id="craftFree">免费 · 43张方法卡 / 10类钩子</span>
           <span class="spacer"></span>
           <button class="btn-primary" id="craftGoBtn" data-i="craftGo">按当前创意递招</button>
         </div>
@@ -247,7 +247,8 @@
           <div class="tag-chosen" id="craftHooks"></div>
         </div>
         <div class="craft-block">
-          <div class="craft-block-head"><b data-i="craftCards">推荐方法卡（点卡片选用/取消，展开看公式与步骤）</b></div>
+          <div class="craft-block-head"><b data-i="craftCards">推荐方法卡（点卡片选用/取消，展开看公式与步骤）</b>
+            <input id="craftCardSearch" type="search" autocomplete="off" class="craft-card-search" data-ph="craftCardSearchPh" placeholder="搜方法卡，如 反转 / 冷开场" /></div>
           <div class="craft-cards" id="craftCards"></div>
         </div>
         <div class="craft-foot">

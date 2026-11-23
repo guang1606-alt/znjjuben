@@ -141,6 +141,8 @@
       novelSrcSub: '只收录公版书、作者CC授权、平台正版免费区三类干净来源；绿色「可改编」标签的公版作品可直接用于改编，其余仅可阅读、改编须另行取得授权。本工具不托管任何书籍内容，点击跳转原站。',
       novelAdaptOnly: '只看可直接改编（公版）',
       craftHooks: '选用钩子', craftAddHook: '＋ 从全部钩子添加', craftCards: '推荐方法卡（点卡片选用/取消，展开看公式与步骤）', craftCopy: '复制手法',
+      craftCardSearchPh: '搜方法卡，如 反转 / 冷开场',
+      craftFreeCount: '免费 · {cards}张方法卡 / {hooks}类钩子',
       
       tbCardPitch: '选题会', tbCardPitchP: '和小南开创作会：市场/故事/制作/观众四席位评估“人物关系·冲突空间·拍摄难度”，给立项/缓议/否决决议', tbCostPitch: '20 积分/轮',
       tbCardRead: '剧本围读', tbCardReadP: '责编/导演/制片/观众逐立场挑问题，形成修改清单；支持我+小南、用户+用户、我+别人的小南、小南+小南自动围读', tbCostRead: '30 积分/次围读',
@@ -343,6 +345,8 @@
       novelSrcSub: 'Only three clean source types: public-domain books, author CC-licensed works, and official platform free sections. Green "adaptable" public-domain works can be adapted directly; others are read-only and require separate rights for adaptation. This tool hosts no books — links open the original sites.',
       novelAdaptOnly: 'Adaptable (public domain) only',
       craftHooks: 'Selected hooks', craftAddHook: '+ Add from all hooks', craftCards: 'Recommended cards (tap header to toggle, expand for formula & steps)', craftCopy: 'Copy craft',
+      craftCardSearchPh: 'Search cards, e.g. reversal / cold open',
+      craftFreeCount: 'Free · {cards} cards / {hooks} hook types',
       
       tbCardPitch: 'Pitch meeting', tbCardPitchP: 'A four-seat review (market/story/production/audience) of relation, conflict space and shoot difficulty → GO / hold / pass', tbCostPitch: '20 pts / round',
       tbCardRead: 'Table read', tbCardReadP: 'Editor/director/producer/audience raise issues by stance into a fix list; supports me+Xiaonan, user+user, me+their Xiaonan, Xiaonan+Xiaonan', tbCostRead: '30 pts / read',
