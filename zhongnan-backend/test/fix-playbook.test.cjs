@@ -82,6 +82,33 @@ test('c220 buildFixPrompt：已收录规则注入兵法块，未收录规则干�
   assert.match(without, /必须解决的问题：随便改改/, '通用 advice 仍保留');
 });
 
+test('c222 兵法库闭环覆盖：前端会挂 data-qcfix 的 chip 键不得走通用提示', () => {
+  // 审计结论：前端 buildQcReportHtml 四类 chip（创作卡/结构卡/同族兜底/闸门卡）实际会渲染
+  // 成带 data-qcfix 的键全集里，以下 22 键此前未收录兵法 → 用户点击"一键修复"走通用提示，
+  // 124 条兵法库在生产链路里 82% 覆盖。本测试锁死这 22 键必须双语命中且三要素完整。
+  const blind22 = [
+    'antagonistQuality', 'character', 'characterBalance', 'cheatRule', 'coolMoment',
+    'dialogueFunction', 'dialogueLength', 'dialogueNameCall', 'informationDensity',
+    'memoryFakeout', 'propMotifRhythm', 'punchlineDensity', 'relationship', 'rhythm',
+    'sceneDensity', 'sceneHeader', 'styleCheck', 'subtext', 'supporting', 'supportingArc',
+    'twistDensity', 'voicePrint',
+  ];
+  blind22.forEach((r) => {
+    const zh = P.getFixPlaybook(r, 'zh');
+    const en = P.getFixPlaybook(r, 'en');
+    assert.ok(zh, `${r} 缺中文兵法（前端 chip 点击会走通用提示）`);
+    assert.ok(en, `${r} 缺英文兵法`);
+    assert.ok(zh.cliche.length >= 5, `${r} zh.cliche 过短`);
+    assert.ok(Array.isArray(zh.moves) && zh.moves.length >= 2, `${r} zh.moves 至少 2 条`);
+    zh.moves.forEach((m) => assert.ok(m.length >= 8, `${r} zh.move 过短：${m}`));
+    assert.ok(zh.win.length >= 5, `${r} zh.win 过短`);
+    assert.ok(en.cliche.length >= 5, `${r} en.cliche 过短`);
+    assert.ok(Array.isArray(en.moves) && en.moves.length >= 2, `${r} en.moves 至少 2 条`);
+    en.moves.forEach((m) => assert.ok(m.length >= 8, `${r} en.move 过短`));
+  });
+  assert.ok(P.PLAYBOOK_RULE_COUNT >= 146, `补完 22 键后总数应 ≥146，实际 ${P.PLAYBOOK_RULE_COUNT}`);
+});
+
 test('c220 兵法块 token 纪律：单块注入内容控制在合理体量', () => {
   // 付费润色链路：兵法块是额外 token，单条 ≤ 220 字，防止喧宾夺主
   const keys = ['dialogueAiTaste', 'scenePadding', 'villainStall', 'lengthPlan'];
