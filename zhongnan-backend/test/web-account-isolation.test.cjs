@@ -190,6 +190,8 @@ function setup(handler = async () => response([])) {
     // v2.550 作品卡目标平台回显（platformLabel 依赖 SELECT_OPTS）
     'platformLabel',
     'refreshResultScripts', 'handleEvent', 'startGenerate', 'openDirectorPack', 'openMaterials',
+    // v2.668 集数口径单一真源（startGenerate 读取 #episodes 时依赖）
+    'normalizeEpisodeCount',
     // v2.665：作品库批量管理依赖（列表 URL / 选择集 / 空态分流 / 批量栏同步），逐函数求值需注入真实实现
     'worksListUrl', 'clearWorksSelection', 'pruneWorksSelection', 'syncWorksBulkBar', 'worksEmptyCopy',
     'toggleWorksSelected', 'paintWorkCard', 'worksBulkActionKind',

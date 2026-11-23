@@ -637,6 +637,29 @@ details.home-updates[open] > summary.home-section-head .home-updates-caret { tra
 }
 textarea { box-sizing: border-box; max-width: 100%; resize: vertical; background: var(--panel); color: var(--text); border: 1px solid var(--line); border-radius: var(--radius-sm); font: inherit; }
 
+/* v2.668 集数控制：常用预设 chips + 纠偏提示（出本配置里唯一的高频数字项） */
+.ep-control { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.ep-control input { width: 92px; min-width: 84px; }
+.ep-presets { display: flex; gap: 4px; flex-wrap: wrap; }
+.ep-preset {
+  border: 1px solid var(--line); background: transparent; color: var(--text-2);
+  font: inherit; font-size: .68rem; line-height: 1; padding: 6px 8px; border-radius: 999px; cursor: pointer;
+  transition: color .18s var(--ease-out), border-color .18s var(--ease-out), background .18s var(--ease-out), transform .18s var(--ease-out);
+}
+.ep-preset:hover:not(:disabled) { color: var(--text); border-color: color-mix(in srgb, var(--gold, #c9a227) 42%, var(--line)); transform: translateY(-1px); }
+.ep-preset[aria-pressed='true'] {
+  color: var(--gold, #c9a227); font-weight: 600;
+  border-color: color-mix(in srgb, var(--gold, #c9a227) 55%, var(--line));
+  background: color-mix(in srgb, var(--gold-soft, #fdf6e3) 45%, transparent);
+}
+.ep-preset:disabled { opacity: .45; cursor: not-allowed; transform: none; }
+.ep-hint { font-size: .68rem; line-height: 1.4; color: var(--gold, #c9a227); }
+.ep-hint.hidden { display: none; }
+.ep-hint.zn-fade-in { animation: zn-rise .24s var(--ease-out); }
+.ep-shake { animation: ep-shake .3s var(--ease-out); }
+@keyframes ep-shake { 0%, 100% { transform: none; } 25% { transform: translateX(-3px); } 55% { transform: translateX(2px); } 80% { transform: translateX(-1px); } }
+@media (prefers-reduced-motion: reduce) { .ep-hint.zn-fade-in, .ep-shake { animation: none; } }
+
 /* ================= 面板 / 进度 ================= */
 .panel {
   background: var(--panel);

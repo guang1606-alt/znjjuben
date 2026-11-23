@@ -73,6 +73,8 @@ function setup(names, extra = {}) {
   vm.createContext(context);
   // v2.221 加载/空态统一：被抽取函数（openProject/switchSession 等）依赖 znSkeleton/znEmpty*，先注入真实实现
   for (const name of ['_znEsc', 'znSkeletonHtml', 'znSkeleton', 'znEmptyHtml', 'znEmpty', 'clampEngineTier', 'acctRank', 'engineLabel',
+    // v2.668 集数口径单一真源
+    'normalizeEpisodeCount',
     // v2.667 作品详情头概况/续写入口
     'platformLabel', 'workModeLabel', 'nextEpisodeNo', 'worksDetailMetaHtml', 'renderWorksDetailHead', 'projectContinuationMode', 'draftProjectMatchesMode', 'resumeProjectForContinuation']) if (functions.has(name)) vm.runInContext(functions.get(name), context);
   for (const name of names) if (functions.has(name)) vm.runInContext(functions.get(name), context);
@@ -207,7 +209,7 @@ test('opening an adaptation draft offers a resume action with the saved brief an
   assert.equal($('modeBrief').value, '保存的改编人物和主线');
   assert.equal($('sourceText').value, '承接时持久化的爆款原文内容，足够十个字', '恢复改编草稿必须回填原文，续写版权闸门不中断');
   assert.equal(c.draftProject.id, 'draft1');
-  assert.equal($('episodes').value, 20);
+  assert.equal($('episodes').value, '20', 'v2.668 input.value 统一为字符串（与真实 DOM 一致）');
   assert.equal($('episodes').disabled, true);
 });
 
@@ -225,7 +227,7 @@ test('v2.322 opening a novel project offers a resume action with the saved sourc
   assert.equal(c.draftProject.id, 'novel1', 'draftProject 必须复用已立项项目，不再造孤儿');
   assert.equal($('sourceText').value, project.bible.sourceText, '持久化的小说原文必须回填，续写版权闸门不中断');
   assert.equal($('modeBrief').value, '', '小说模式无改编大纲，modeBrief 留空让用户写本集方向');
-  assert.equal($('episodes').value, 20);
+  assert.equal($('episodes').value, '20');
   assert.equal($('episodes').disabled, true);
 });
 

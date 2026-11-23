@@ -570,7 +570,20 @@
 
       <!-- v2.344 出本配置（剧集/平台/语言/引擎/制式/资产/生成按钮）：仅二级界面显示，由 showModeDetail 挂载 -->
       <section class="configbar hidden" id="genConfigBar">
-        <div class="field"><label data-i="episodes" for="episodes"></label><input id="episodes" autocomplete="off" type="number" min="1" max="300" value="20" /></div>
+        <div class="field ep-field">
+          <label data-i="episodes" for="episodes"></label>
+          <div class="ep-control">
+            <input id="episodes" autocomplete="off" type="number" min="1" max="300" value="20" />
+            <div class="ep-presets" id="epPresets" role="group" data-i-aria="epPresetAria">
+              <button type="button" class="ep-preset" data-ep="10">10</button>
+              <button type="button" class="ep-preset" data-ep="20">20</button>
+              <button type="button" class="ep-preset" data-ep="40">40</button>
+              <button type="button" class="ep-preset" data-ep="60">60</button>
+              <button type="button" class="ep-preset" data-ep="100">100</button>
+            </div>
+          </div>
+          <div class="ep-hint hidden" id="episodesHint" role="status" aria-live="polite"></div>
+        </div>
         <div class="field"><label data-i="scenesPerEp" for="scenesPerEp"></label><select id="scenesPerEp"><option value="" data-i="scenesAuto"></option><option value="2">2</option><option value="3">3</option><option value="4">4</option><option value="5">5</option><option value="6">6</option><option value="7">7</option><option value="8">8</option></select></div>
         <div class="field"><label data-i="platform" for="platform"></label><select id="platform"></select></div>
         <div class="field"><label data-i="outLang" for="outLang"></label><select id="outLang"></select></div>

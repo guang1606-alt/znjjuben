@@ -242,6 +242,9 @@
       qsInputEl.setAttribute('placeholder', t('qsPh'));
     }
     renderStaticText(); renderModes(); renderHome(); renderSelects(); renderScriptTypes(); renderAuthButton();
+    // v2.668 集数预设高亮与纠偏提示随语言重刷（提示文案已 i18n，避免 EN 界面残留中文）
+    if (typeof syncEpisodePresets === 'function') syncEpisodePresets();
+    if (typeof renderEpisodeHint === 'function') renderEpisodeHint();
     _applyToolboxHints(); // A3 工具箱卡片分层：静态卡注入方法论一句话提示行（随语言刷新）
     // v2.188 初始化同步守卫：applyLang 期间 syncTagBench/syncModeBrief 不主动调 openWorkbench（避免 layer 自动展开覆盖模式主页）
     _initSyncing = true;
@@ -2260,7 +2263,11 @@
     const ideaEl = $('tagIdea');
     if (ideaEl && d.logline) ideaEl.value = String(d.logline).slice(0, 80);
     const epEl = $('episodes');
-    if (epEl) epEl.value = Math.max(1, Math.min(120, parseInt(d.episodes, 10) || 20));
+    if (epEl) {
+      // v2.668 决议带来的建议集数同样走统一口径（旧实现静默截到 120，与生成上限 300 不一致）
+      epEl.value = String(normalizeEpisodeCount(d.episodes));
+      if (typeof syncEpisodePresets === 'function') syncEpisodePresets();
+    }
     if (ideaEl) { try { ideaEl.focus(); ideaEl.scrollIntoView({ behavior: 'smooth', block: 'center' }); } catch { /* 无滚动环境忽略 */ } }
     xnSay(lang === 'en'
       ? 'Verdict carried into Tag mode: logline and episodes prefilled. Confirm the tags, then generate — no points charged yet.'
@@ -3057,6 +3064,8 @@
     $('modeDetailDesc').textContent = D.modeDesc?.[modeId] || '';
     // v2.663 成本提示：vm 提取型测试只求值 showModeDetail，函数不存在时按旧行为跳过
     if (typeof primeEpisodeCostHint === 'function') primeEpisodeCostHint();
+    // v2.668 集数预设高亮：进入二级界面时按当前值点亮对应 chip（续写恢复后的值也能正确显示）
+    if (typeof syncEpisodePresets === 'function') syncEpisodePresets();
 
     detail.classList.remove('hidden', 'view-out');
     detail.setAttribute('data-mode', modeId);
@@ -3708,7 +3717,8 @@
     if ($('platform')) $('platform').value = project.bible?.platform || project.platform || '';
     switchView('studio'); renderModes(); renderScriptTypes(); syncTagBench(); syncModeBrief();
     $('modeBrief').value = nextEp > 1 ? '' : (draft?.brief || '');
-    $('episodes').value = project.totalEps || 20;
+    $('episodes').value = String(normalizeEpisodeCount(project.totalEps));
+    if (typeof syncEpisodePresets === 'function') syncEpisodePresets();
     $('engine').value = clampEngineTier(project.engineTier || 'STANDARD');
     if ($('scriptFormatSel')) {
       $('scriptFormatSel').value = project.format || 'LIVE_ACTION';
@@ -4816,10 +4826,57 @@
   }
   function tierZh(tier) { return tier === 'FLAGSHIP' ? '旗舰' : tier === 'STANDARD' ? '标准' : '经济'; }
   function tierEn(tier) { return tier === 'FLAGSHIP' ? 'Flagship' : tier === 'STANDARD' ? 'Standard' : 'Economy'; }
+  // ═══ v2.668 集数单一真源 ═══
+  // 同一个 #episodes 输入原本有 4 套口径：费用提示完全不设上限、三处预演硬编码 120、实际生成 300。
+  // 输入 500 时会按 500 集报价却只生成 300 集（报价虚高），空值/非法值各口径结果也不一致。
+  // 统一成 1–300；空值与非法值回落默认 20（与旧生成口径的 `|| 20` 对齐）。
+  // 上限写在函数内：逐函数 vm 求值的测试拿不到模块级 const，曾因此整组用例 ReferenceError。
+  let _epFixedTo = null;
+  function normalizeEpisodeCount(raw, fallback) {
+    const EPISODE_MAX = 300;
+    const def = fallback === undefined ? 20 : fallback;
+    const text = String(raw === null || raw === undefined ? '' : raw).trim();
+    if (text === '') return def;
+    const n = Math.floor(Number(text));
+    if (!Number.isFinite(n)) return def;
+    return Math.min(EPISODE_MAX, Math.max(1, n));
+  }
+  // 预设 chips 高亮 + 草稿只读态同步禁用；元素尚未挂载时静默跳过（供首屏/切语言/续写恢复复用）
+  function syncEpisodePresets() {
+    const input = $('episodes');
+    const value = normalizeEpisodeCount(input ? input.value : 20);
+    const doc = typeof document !== 'undefined' ? document : null;
+    if (!doc || !doc.querySelectorAll) return;
+    doc.querySelectorAll('.ep-preset').forEach((btn) => {
+      btn.setAttribute('aria-pressed', Number(btn.getAttribute('data-ep')) === value ? 'true' : 'false');
+      btn.disabled = !!(input && input.disabled);
+    });
+  }
+  // 纠偏提示：传值=显示「已调整为 N 集」，传 null=收起；restart 动画用一次读布局强制回流
+  function renderEpisodeHint(fixed) {
+    _epFixedTo = fixed === undefined ? _epFixedTo : fixed;
+    const el = $('episodesHint'); if (!el) return;
+    if (_epFixedTo === null || _epFixedTo === undefined) {
+      el.classList.add('hidden');
+      el.textContent = '';
+      return;
+    }
+    el.textContent = t('episodesAutoFixed', { n: _epFixedTo });
+    el.classList.remove('hidden', 'zn-fade-in');
+    void el.offsetWidth;
+    el.classList.add('zn-fade-in');
+  }
+  function applyEpisodePreset(value) {
+    const input = $('episodes'); if (!input) return;
+    input.value = String(normalizeEpisodeCount(value));
+    renderEpisodeHint(null);
+    syncEpisodePresets();
+    syncEpisodeCostHint();
+  }
   // 纯函数：只做读数与排版；单集价、每日免费集、赠送额度全部由参数注入，便于按真实档位逐条验证
   function episodeCostHint(p) {
     const en = !!p.en;
-    const eps = Math.max(1, parseInt(p.episodes, 10) || 0);
+    const eps = normalizeEpisodeCount(p.episodes);
     const plan = p.plan, tier = p.tier || 'ECONOMY';
     const per = plan && plan.epPrice ? plan.epPrice[tier] : 0;
     if (!p.authed) return en ? 'Sign in to see the per-episode estimate.' : '登录后可查看预计扣费';
@@ -6591,7 +6648,7 @@
     genBtn.onclick = async () => {
       try {
         genBtn.disabled = true;
-        const epCount = Math.max(1, Math.min(120, parseInt(($('episodes') || {}).value || '20', 10) || 20));
+        const epCount = Math.min(120, normalizeEpisodeCount(($('episodes') || {}).value));
         const tagBrief = (typeof buildTagBrief === 'function') ? buildTagBrief() : '';
         const tags = Array.isArray(tagChosen) ? tagChosen.slice(0, 40) : [];
         // v2.547 与生成请求同源：用户没显式选场数时，调色板按 4 场示意（生成侧仍走节奏策略默认）
@@ -6678,7 +6735,7 @@
     genBtn.onclick = async () => {
       try {
         genBtn.disabled = true;
-        const epCount = Math.max(1, Math.min(120, parseInt(($('episodes') || {}).value || '20', 10) || 20));
+        const epCount = Math.min(120, normalizeEpisodeCount(($('episodes') || {}).value));
         const tags = Array.isArray(tagChosen) ? tagChosen.slice(0, 40) : [];
         const payload = {
           episodeCount: epCount, strength: hookPref.strength, tags, lang: lang === 'en' ? 'en' : 'zh',
@@ -6745,7 +6802,7 @@
 
     let selectedIntent = '';
     // @module generate
-    const epCount = () => Math.max(1, Math.min(120, parseInt(($('episodes') || {}).value || '20', 10) || 20));
+    const epCount = () => Math.min(120, normalizeEpisodeCount(($('episodes') || {}).value));
     // @module generate
     const basePayload = (extra) => ({
       episodeCount: epCount(), strength: hookPref.strength, lang: lang === 'en' ? 'en' : 'zh',
@@ -8372,7 +8429,7 @@
     genSessions.unshift(session); activeSessionId = session.id; renderTaskQueue();
     resetPanels(); $('progressPanel').classList.remove('hidden');
     try {
-      const totalEps = Math.max(1, Math.min(300, parseInt($('episodes').value, 10) || 20));
+      const totalEps = normalizeEpisodeCount($('episodes').value);
       const investRaw = parseInt($('investWan').value, 10);
       const investWan = Number.isFinite(investRaw) && investRaw >= 0 ? investRaw : undefined;
       const specialTopic = $('specialTopic').checked;
@@ -12519,9 +12576,29 @@
   }
   // 选择本地文本文件时读取为文本填入内容框（视频需先转写，这里只支持文本类文件直读）
   // v2.663 集数/引擎变化即时重算预计扣费：delegated 监听避免与 renderSelects 每次重建 select 时抢 onchange
-  document.addEventListener('input', (e) => { if (e.target && e.target.id === 'episodes') syncEpisodeCostHint(); });
+  // v2.668 集数同时纠偏（1–300）、同步预设高亮，让「输入了什么」和「实际会生成多少」始终一致
+  document.addEventListener('input', (e) => {
+    if (e.target && e.target.id === 'episodes') { syncEpisodeCostHint(); syncEpisodePresets(); }
+  });
   document.addEventListener('change', (e) => {
-    if (e.target && (e.target.id === 'engine' || e.target.id === 'episodes')) { syncEpisodeCostHint(); return; }
+    if (e.target && e.target.id === 'episodes') {
+      const input = e.target;
+      const fixed = normalizeEpisodeCount(input.value);
+      if (String(fixed) !== String(input.value).trim()) {
+        input.value = String(fixed);
+        renderEpisodeHint(fixed);
+        // 轻微横向抖动提示「已替你纠正」，降动效由 CSS 守卫统一关闭
+        input.classList.remove('ep-shake');
+        void input.offsetWidth;
+        input.classList.add('ep-shake');
+      } else {
+        renderEpisodeHint(null);
+      }
+      syncEpisodePresets();
+      syncEpisodeCostHint();
+      return;
+    }
+    if (e.target && e.target.id === 'engine') { syncEpisodeCostHint(); return; }
     if (e.target && e.target.id === 'knFile') {
       const f = e.target.files[0]; if (!f) return;
       if (f.size > 4_000_000) { xnSay(lang === 'en' ? 'File too large (>4MB).' : '文件过大（>4MB），请粘贴关键文本'); return; }
@@ -12529,6 +12606,12 @@
       rd.onload = () => { $('knContent').value = String(rd.result || '').slice(0, 1_900_000); };
       rd.readAsText(f);
     }
+  });
+  // v2.668 常用集数快捷预设：点一下即写入并高亮，避免每次都从键盘敲「60」
+  document.addEventListener('click', (e) => {
+    const btn = e.target && e.target.closest ? e.target.closest('.ep-preset') : null;
+    if (!btn || btn.disabled) return;
+    applyEpisodePreset(btn.getAttribute('data-ep'));
   });
   // v2.651：审核队列首屏/续页共用状态与渲染器，第 51 条起由「加载更多」继续到达。
   let admKnowledgeItems = [];

@@ -77,7 +77,7 @@ function setup(names, extra = {}) {
     ...extra.sandbox,
   };
   vm.createContext(context);
-  for (const name of ['_znEsc', 'znSkeletonHtml', 'znSkeleton', 'znEmptyHtml', 'znEmpty', 'clampEngineTier', 'acctRank', 'engineLabel', 'platformLabel', 'clearDraftProject', 'syncDraftProject']) {
+  for (const name of ['_znEsc', 'znSkeletonHtml', 'znSkeleton', 'znEmptyHtml', 'znEmpty', 'clampEngineTier', 'acctRank', 'engineLabel', 'platformLabel', 'clearDraftProject', 'syncDraftProject', 'normalizeEpisodeCount']) {
     if (functions.has(name)) vm.runInContext(functions.get(name), context);
   }
   for (const name of names) if (functions.has(name)) vm.runInContext(functions.get(name), context);
@@ -194,7 +194,7 @@ test('resumeProjectForContinuation：写着第 N 集方向，锁定项目级参�
   assert.equal(c.draftProject._nextEp, 4);
   assert.equal(c.selectedMode, 'tag');
   assert.equal($('modeBrief').value, '', '续写新一集时简报留空，让用户写这一集方向');
-  assert.equal($('episodes').value, 20);
+  assert.equal($('episodes').value, '20');
   assert.equal($('episodes').disabled, true, '项目级参数在续写时必须锁定');
   assert.equal($('sourceText').value, project.bible.sourceText);
   assert.equal($('platform').value, 'douyin');
@@ -213,7 +213,7 @@ test('resumeProjectForContinuation：空项目续写第 1 集时沿用保存的�
   assert.equal(c.selectedMode, 'spark');
   assert.equal(c.selectedTrack, 'material_rewrite');
   assert.equal($('modeBrief').value, '保留名场面，强钩子');
-  assert.equal($('episodes').value, 12);
+  assert.equal($('episodes').value, '12');
 });
 
 test('openProject：有成稿时显示「继续创作 · 第 N+1 集」，归档项目隐藏续写并标注归档态', async () => {

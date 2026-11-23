@@ -37,7 +37,8 @@ function setup(names, extra = {}) {
     Api: { getUser: () => null, isAuthed: () => false }, meCache: null, _modeDetailOpen: true,
     ...extra };
   vm.createContext(context);
-  for (const name of names) if (functions.has(name)) vm.runInContext(functions.get(name), context);
+  // v2.668 集数口径单一真源：episodeCostHint 依赖 normalizeEpisodeCount，统一注入
+  for (const name of ['normalizeEpisodeCount', ...names]) if (functions.has(name)) vm.runInContext(functions.get(name), context);
   return { context, $ };
 }
 
