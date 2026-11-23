@@ -1875,10 +1875,10 @@
     const cardHtml = (c, rec) => {
       const on = craftSelCards.some((x) => x.id === c.id);
       const steps = c.steps && c.steps.length ? `<details class="craft-steps"><summary>${lang === 'en' ? 'Formula & steps' : '公式与步骤'}</summary>
-        <p class="craft-formula">${escapeHtml(c.formula || '')}</p><ol>${c.steps.map((s) => `<li>${escapeHtml(s)}</li>`).join('')}</ol></details>`
-        : `<p class="craft-formula">${escapeHtml(c.formula || '')}</p>`;
+        <p class="craft-formula">${highlightNeedle(c.formula || '', q)}</p><ol>${c.steps.map((s) => `<li>${escapeHtml(s)}</li>`).join('')}</ol></details>`
+        : `<p class="craft-formula">${highlightNeedle(c.formula || '', q)}</p>`;
       return `<div class="craft-card ${on ? 'on' : ''} ${rec ? 'rec' : ''}" data-cid="${c.id}">
-        <div class="craft-card-h"><b>${escapeHtml(c.title)}</b><span>${on ? (lang === 'en' ? 'selected ✓' : '已选 ✓') : (lang === 'en' ? 'tap to use' : '点选')}</span></div>${steps}</div>`;
+        <div class="craft-card-h"><b>${highlightNeedle(c.title, q)}</b><span>${on ? (lang === 'en' ? 'selected ✓' : '已选 ✓') : (lang === 'en' ? 'tap to use' : '点选')}</span></div>${steps}</div>`;
     };
     let html = '';
     // v2.662 搜索时隐藏推荐区：结果只来自过滤后的全量卡，避免同一张卡出现两遍、也避免无关推荐混进结果。
@@ -11547,6 +11547,64 @@
     }, 1400);
   }
   function escapeHtml(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])); }
+  // v2.670 搜索命中高亮：过滤只是「留下」，高亮才回答「为什么留下」。正则元字符按字面处理，先转义再拼。
+  function highlightNeedle(text, q) {
+    const raw = String(text == null ? '' : text);
+    const needle = String(q == null ? '' : q).trim();
+    if (!needle) return escapeHtml(raw);
+    const safe = needle.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const re = new RegExp(safe, 'gi');
+    let out = '', last = 0, m;
+    while ((m = re.exec(raw))) {
+      if (!m[0]) { re.lastIndex += 1; continue; }
+      out += escapeHtml(raw.slice(last, m.index)) + '<mark class="zn-hit">' + escapeHtml(m[0]) + '</mark>';
+      last = m.index + m[0].length;
+    }
+    return out + escapeHtml(raw.slice(last));
+  }
+  // v2.670 长表单字数计：只服务「上限真的会咬人」的长文本，短字段不打扰。
+  function formatCharCount(n) {
+    return String(Math.max(0, Math.floor(Number(n) || 0))).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+  }
+  function charCountState(len, max) {
+    if (!(max > 0)) return 'ok';
+    if (len >= max) return 'limit';
+    if (len >= max * 0.9) return 'warn';
+    return 'ok';
+  }
+  function syncCharCounter(el) {
+    if (!el || !el.maxLength || el.maxLength < 0) return null;
+    if (el.tagName !== 'TEXTAREA' && el.maxLength < 200) return null;
+    const host = el.closest ? el.closest('.field') : el.parentElement;
+    if (!host) return null;
+    let span = host.querySelector ? host.querySelector(':scope > .char-count') : null;
+    if (!span) {
+      span = document.createElement('span');
+      span.className = 'char-count';
+      if (span.setAttribute) span.setAttribute('aria-hidden', 'true');
+      host.appendChild(span);
+    }
+    const len = String(el.value || '').length;
+    const max = el.maxLength;
+    const state = charCountState(len, max);
+    span.textContent = `${formatCharCount(len)} / ${formatCharCount(max)}`;
+    span.classList.remove('is-warn', 'is-limit');
+    if (state === 'warn') span.classList.add('is-warn');
+    else if (state === 'limit') span.classList.add('is-limit');
+    return state;
+  }
+  function initCharCounters() {
+    const scan = () => {
+      const list = document.querySelectorAll ? document.querySelectorAll('textarea[maxlength], input[maxlength]') : [];
+      list.forEach((el) => { if (String(el.value || '').length) syncCharCounter(el); });
+    };
+    scan();
+    // 事件委托：弹窗/重渲染后新出现的字段，用户一打字就自动挂上，无需逐处接线。
+    document.addEventListener('input', (e) => {
+      const el = e.target;
+      if (el && (el.tagName === 'TEXTAREA' || el.tagName === 'INPUT')) syncCharCounter(el);
+    }, true);
+  }
   // v2.270 Roving tabindex 键盘导航：Tab 键只需按一次进入 tab 组，方向键在组内移动，Home/End 跳首尾
   // 幂等：同一 container 重复调用不会叠加事件监听；每次调用都会重新同步 tabindex/aria 状态
   function znBindTablist(container, opts = {}) {
@@ -13046,5 +13104,6 @@
   initViewRouter(); // v2.446 视图路由恢复：刷新/直链/后退落在同一页，先于业务取数
   initOfflineShell(); // v2.448 离线壳注册：失败静默，不影响首屏与业务请求
   initKeyboardInset(); // v2.477 移动端键盘避让：visualViewport 差值写 --kb-inset
+  initCharCounters(); // v2.670 长文本框实时字数与上限预警（委托式，弹窗/重渲染自动覆盖）
   if (Api.isAuthed()) loadMe();
 })();

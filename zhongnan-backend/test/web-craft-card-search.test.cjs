@@ -45,7 +45,7 @@ function setup(names, extra = {}) {
     escapeHtml: (x) => String(x ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c])),
     ...extra };
   vm.createContext(context);
-  for (const name of names) if (functions.has(name)) vm.runInContext(functions.get(name), context);
+  for (const name of ['highlightNeedle', ...names]) if (functions.has(name)) vm.runInContext(functions.get(name), context);
   return { context, $ };
 }
 
@@ -84,7 +84,7 @@ test('v2.662 搜索词命中标题或公式：只渲染匹配卡并自动展开'
   const { context: c, $ } = cardsHarness({ craftCardQuery: '反转' });
   c.renderCraftCards();
   const html = $('craftCards').innerHTML;
-  assert.match(html, /身份反转/, '命中标题的卡应保留');
+  assert.match(html, /身份.*反转/, '命中标题的卡应保留（命中词可被 <mark> 包裹）');
   assert.doesNotMatch(html, /冷开场/, '不匹配的卡不应出现');
   assert.doesNotMatch(html, /双雄对峙/, '不匹配的卡不应出现');
   assert.match(html, /<details class="craft-all" open>/, '搜索时应自动展开，否则用户看不到结果');

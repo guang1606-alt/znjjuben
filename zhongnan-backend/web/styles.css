@@ -627,15 +627,21 @@ details.home-updates[open] > summary.home-section-head .home-updates-caret { tra
   margin-top: 16px;
 }
 #sqPostBox > .field + button { margin-top: 16px; }
-.field label { font-size: .74rem; color: var(--text-2); letter-spacing: .05em; }
+.field label { font-size: .74rem; color: var(--text-2); letter-spacing: .05em; transition: color var(--motion) var(--ease-out); }
+.field:focus-within > label { color: var(--gold-deep); }
 .field select, .field input {
   background: var(--panel); color: var(--text); border: 1px solid var(--line); border-radius: var(--radius-sm);
   padding: 9px 11px; font: inherit; min-width: 130px;
+  transition: border-color var(--motion) var(--ease-out), box-shadow var(--motion) var(--ease-out), background var(--motion) var(--ease-out);
 }
 .field select:focus, .field input:focus, textarea:focus, .mini-input:focus, .mini-select:focus {
   outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--ring);
 }
-textarea { box-sizing: border-box; max-width: 100%; resize: vertical; background: var(--panel); color: var(--text); border: 1px solid var(--line); border-radius: var(--radius-sm); font: inherit; }
+textarea { box-sizing: border-box; max-width: 100%; resize: vertical; background: var(--panel); color: var(--text); border: 1px solid var(--line); border-radius: var(--radius-sm); font: inherit; transition: border-color var(--motion) var(--ease-out), box-shadow var(--motion) var(--ease-out); }
+.char-count { align-self: flex-end; font-size: .68rem; line-height: 1; color: var(--text-2); font-variant-numeric: tabular-nums; letter-spacing: .02em; transition: color var(--motion) var(--ease-out); }
+.char-count.is-warn { color: var(--gold-deep); }
+.char-count.is-limit { color: var(--danger-text); font-weight: 600; animation: zn-pop .24s var(--ease-out); }
+@media (prefers-reduced-motion: reduce){.char-count.is-limit{animation:none}}
 
 /* v2.668 集数控制：常用预设 chips + 纠偏提示（出本配置里唯一的高频数字项） */
 .ep-control { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
@@ -1192,7 +1198,10 @@ textarea { box-sizing: border-box; max-width: 100%; resize: vertical; background
 .craft-block-head input[type=search]{margin-left:auto;padding:6px 10px;border-radius:8px;border:1px solid var(--line);background:var(--panel);color:var(--text);min-width:200px}
 .craft-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:9px;margin:6px 0}
 .craft-group-label{font-size:.78rem;color:var(--text-2);margin:8px 0 2px}
-.craft-card{border:1px solid var(--line);border-radius:10px;padding:10px 12px;background:var(--panel);cursor:default;transition:border-color .15s,box-shadow .15s}
+.craft-card{border:1px solid var(--line);border-radius:10px;padding:10px 12px;background:var(--panel);cursor:default;transition:border-color var(--motion) var(--ease-out),box-shadow var(--motion) var(--ease-out),transform var(--motion) var(--ease-out)}
+.craft-card:not(.on):hover{border-color:color-mix(in srgb,var(--gold) 34%,var(--line));transform:translateY(-1px);box-shadow:0 10px 22px -18px color-mix(in srgb,var(--gold) 40%,transparent)}
+.zn-hit{background:color-mix(in srgb,var(--gold) 28%,transparent);color:inherit;border-radius:3px;padding:0 1px;font-weight:700}
+@media (prefers-reduced-motion: reduce){.craft-card:not(.on):hover{transform:none}}
 .craft-card.rec{border-style:dashed;border-color:var(--gold)}
 .craft-card.on{border-color:var(--accent);background:var(--accent-weak);box-shadow:0 0 0 1px var(--accent) inset}
 .craft-card-h{display:flex;align-items:center;gap:8px;cursor:pointer}
