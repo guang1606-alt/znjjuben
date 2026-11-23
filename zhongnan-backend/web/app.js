@@ -1774,6 +1774,25 @@
   let craftSelHooks = [];   // [{id,name}]
   let craftSelCards = [];   // [{id,title}]
   let craftRecCards = [];   // 推荐方法卡（含 formula/steps）
+  // v2.661 递招选择持久化：与标签偏好（zn_pref_tags）同思路——用户亲手挑的手法不该因刷新/切页丢失。
+  // 恢复时以分类库为准过滤：库内已删的钩子/卡片不得作为幽灵项复活，名称/标题一律取当前语言库内值。
+  const CRAFT_PICK_KEY = 'zn:craftPick';
+  function saveCraftPick() {
+    try { LS.s(CRAFT_PICK_KEY, JSON.stringify({ hooks: craftSelHooks, cards: craftSelCards })); } catch { /* 隐私模式写失败可忽略，不阻断创作 */ }
+  }
+  function restoreCraftPick() {
+    let o = null;
+    try { o = JSON.parse(LS.g(CRAFT_PICK_KEY, '') || 'null'); } catch { o = null; }
+    if (!o || typeof o !== 'object') return;
+    const hooks = Array.isArray(o.hooks) ? o.hooks : [];
+    const cards = Array.isArray(o.cards) ? o.cards : [];
+    const hasLib = !!(craftTaxonomy && Array.isArray(craftTaxonomy.hooks));
+    const allCards = (craftTaxonomy && Array.isArray(craftTaxonomy.cardGroups)) ? craftTaxonomy.cardGroups.flatMap((g) => g.cards) : [];
+    craftSelHooks = hooks.filter((h) => h && h.id && (!hasLib || !!findHook(h.id)))
+      .map((h) => { const f = findHook(h.id); return { id: h.id, name: f ? f.name : (h.name || h.id) }; });
+    craftSelCards = cards.filter((c) => c && c.id && (!allCards.length || allCards.some((x) => x.id === c.id)))
+      .map((c) => { const hit = allCards.find((x) => x.id === c.id); return { id: c.id, title: hit ? hit.title : (c.title || c.id) }; });
+  }
   async function loadCraftTaxonomy() {
     // v2.524 分类浏览按界面语言取：缓存需带语言标记，切语言后重新拉，否则英文界面一直显示中文钩子
     if (craftTaxonomy && craftTaxonomyLang === lang) return craftTaxonomy;
@@ -1797,13 +1816,13 @@
     if (craftSelHooks.some((h) => h.id === id)) return;
     // @module xiaonan
     const h = (typeof idOrObj === 'object' && idOrObj.name) ? idOrObj : (findHook(id) || { id, name: id });
-    craftSelHooks.push({ id, name: h.name }); renderCraftHooks(); renderCraftPicked();
+    craftSelHooks.push({ id, name: h.name }); saveCraftPick(); renderCraftHooks(); renderCraftPicked();
   }
-  function removeCraftHook(id) { craftSelHooks = craftSelHooks.filter((h) => h.id !== id); renderCraftHooks(); renderCraftPicked(); }
+  function removeCraftHook(id) { craftSelHooks = craftSelHooks.filter((h) => h.id !== id); saveCraftPick(); renderCraftHooks(); renderCraftPicked(); }
   function toggleCraftCard(c) {
     const on = craftSelCards.some((x) => x.id === c.id);
     craftSelCards = on ? craftSelCards.filter((x) => x.id !== c.id) : [...craftSelCards, { id: c.id, title: c.title }];
-    renderCraftCards(); renderCraftPicked();
+    saveCraftPick(); renderCraftCards(); renderCraftPicked();
   }
   function renderCraftHooks() {
     const box = $('craftHooks'); if (!box) return;
@@ -1898,6 +1917,7 @@
       craftSelHooks = (j.hooks || []).map((h) => ({ id: h.id, name: h.name }));
       craftRecCards = j.cards || [];
       craftSelCards = craftRecCards.map((c) => ({ id: c.id, title: c.title }));
+      saveCraftPick();
       renderCraftHooks(); renderCraftCards(); renderCraftPicked();
       if (j.openingAudit && j.openingAudit.advice) xnSay(j.openingAudit.advice);
     } catch (e) { xnSay(e.message || 'craft error'); } finally { loading.classList.add('hidden'); _craftGoing = false; }
@@ -1905,7 +1925,7 @@
   const craftGoBtn = $('craftGoBtn'); if (craftGoBtn) craftGoBtn.onclick = craftGo;
   const craftCopyBtn = $('craftCopyBtn');
   if (craftCopyBtn) craftCopyBtn.onclick = () => { const t = craftBriefLine(); if (t) copy(t, lang === 'en' ? 'Craft copied' : '手法已复制，可粘贴进创意'); else xnSay(lang === 'en' ? 'Nothing selected.' : '还没选用钩子或方法卡'); };
-  loadCraftTaxonomy().then(() => { renderCraftHooks(); renderCraftCards(); renderCraftPicked(); }).catch(() => {});
+  loadCraftTaxonomy().then(() => { restoreCraftPick(); renderCraftHooks(); renderCraftCards(); renderCraftPicked(); }).catch(() => {});
 
   // ═══ MODULE: misc (88行, 1fn) ═══ 免费合法小说素材库（多语言，只读外链）
   /* ---------- 免费合法小说素材库（多语言，只读外链） ---------- */
@@ -7854,6 +7874,12 @@
         return;
       }
       projTitle = generationDraft?.title || brief.slice(0, 40);
+    }
+    // v2.661 递招全模式生效：非标签模式下所选手法此前只留在内存、从不进出本创意，
+    // 面板「将自动注入出本创意」的承诺形同虚设。这里统一追加一次，简报里已含同串时不重复。
+    if (reuseBrief == null && !useTagBench) {
+      const craftLine = (typeof craftBriefLine === 'function') ? craftBriefLine() : '';
+      if (craftLine && !brief.includes(craftLine)) brief = brief + '\n' + craftLine;
     }
     // v2.93 剧情软广：品牌简报必填校验（广告词合规由服务端在扣费前预检并回传命中词）
     const bbPayload = brandBriefPayload();

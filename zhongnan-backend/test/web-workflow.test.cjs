@@ -390,3 +390,91 @@ test('v2.319/v2.329 brief/document extraction routes spark text into the source 
   assert.equal(tag.$('modeBrief').value, '提取出的正文内容', '标签模式仍进创意简报框');
   assert.equal(tag.$('sourceText').value, '');
 });
+
+// v2.661 递招选择可信化：面板承诺「将自动注入出本创意」，但此前只有标签模式注入，
+// 灵感式/采访/热点等模式的出本 brief 完全丢弃所选手法；且选择只在内存，刷新/切页即丢。
+const CRAFT_LINE = '创作手法：钩子[集尾钩]；方法[先抑后扬]';
+
+function craftGenerateHarness({ mode = 'spark', brief = '一个关于复仇的故事', craftLine = CRAFT_LINE, extra = {} } = {}) {
+  const requests = [];
+  const { context: c, $ } = setup(['startGenerate', 'failGenerationSession'], {
+    selectedMode: mode, selectedTrack: 'signature_scene', draftProject: null,
+    loadCastAssets: async () => {}, loadPropAssets: async () => {}, loadSceneAssets: async () => {},
+    brandBriefPayload: () => ({}), trendBriefPayload: () => ({}), branchBriefPayload: () => ({}),
+    hookPayload: () => ({}), beatPayload: () => ({}), scenesPayload: () => ({}), platformPayload: () => ({}), castAssetPayload: () => ({}), propAssetPayload: () => ({}), sceneAssetPayload: () => ({}), aigcPayload: () => ({}), sourceTextPayload: () => ({}), modeInputPayload: () => ({}), outLocale: () => 'zh',
+    craftBriefLine: () => craftLine,
+    PV: () => ({ createProgress: () => ({}) }), closeWorkbench() {}, showFail() {}, toastInfo() {},
+    Api: { isAuthed: () => true, request: async (url, opts) => {
+      requests.push({ url, data: opts && opts.body ? JSON.parse(opts.body) : null });
+      return url.endsWith('/projects') ? { ok: true, json: async () => ({ id: 'p1', title: brief.slice(0, 40), mode }) }
+        : { ok: true, body: { getReader: () => ({ read: async () => ({ done: true }) }), cancel: async () => {} } };
+    } },
+    ...extra,
+  });
+  $('modeBrief').value = brief; $('episodes').value = '20'; $('engine').value = 'STANDARD';
+  return { c, $, requests };
+}
+
+test('v2.661 非标签模式也要把所选手法注入出本创意（此前只在标签模式生效）', async () => {
+  const { c, requests } = craftGenerateHarness();
+  await c.startGenerate();
+  const create = requests.find(r => r.url === '/api/generate/projects');
+  const gen = requests.find(r => r.url === '/api/generate/episodes');
+  assert.ok(create && gen, '灵感式仍走立项 + 生成两段');
+  assert.equal(create.data.title, '一个关于复仇的故事', '标题只取用户创意，不得混入手法串');
+  assert.equal(gen.data.brief, '一个关于复仇的故事\n' + CRAFT_LINE, '所选手法必须随出本 brief 提交，不能只存在内存里');
+});
+
+test('v2.661 用户创意里已含手法串时不得重复注入', async () => {
+  const { c, requests } = craftGenerateHarness({ brief: '一个关于复仇的故事\n' + CRAFT_LINE });
+  await c.startGenerate();
+  const gen = requests.find(r => r.url === '/api/generate/episodes');
+  assert.equal((gen.data.brief.match(/创作手法：/g) || []).length, 1, '手法串只能出现一次');
+});
+
+test('v2.661 递招选择持久化：增删选与刷新恢复，且库内已删的幽灵项被过滤', () => {
+  const store = new Map();
+  const LS = { g: (k, d) => (store.has(k) ? store.get(k) : d), s: (k, v) => store.set(k, v) };
+  const taxonomy = { hooks: [{ id: 'episode_hook', name: '集尾钩' }], cardGroups: [{ name: '组', cards: [{ id: 'c1', title: '先抑后扬' }] }] };
+  const { context: c } = setup(['addCraftHook', 'removeCraftHook', 'toggleCraftCard', 'restoreCraftPick', 'saveCraftPick', 'findHook'], {
+    LS, CRAFT_PICK_KEY: 'zn:craftPick', craftSelHooks: [], craftSelCards: [], craftRecCards: [], craftTaxonomy: taxonomy, craftTaxonomyLang: 'zh',
+    renderCraftHooks() {}, renderCraftCards() {}, renderCraftPicked() {},
+  });
+  c.addCraftHook('episode_hook');
+  c.toggleCraftCard({ id: 'c1', title: '先抑后扬' });
+  assert.equal(store.size, 1, '选择变更必须落盘，刷新才不丢');
+  const key = [...store.keys()][0];
+  const saved = JSON.parse(store.get(key));
+  assert.deepEqual(saved.hooks.map(h => h.id), ['episode_hook']);
+  assert.deepEqual(saved.cards.map(x => x.id), ['c1']);
+
+  c.craftSelHooks = []; c.craftSelCards = [];
+  c.restoreCraftPick();
+  assert.equal(Array.from(c.craftSelHooks, h => h.id).join(','), 'episode_hook', '刷新后恢复已选钩子');
+  assert.equal(Array.from(c.craftSelCards, x => x.id).join(','), 'c1', '刷新后恢复已选方法卡');
+
+  c.removeCraftHook('episode_hook');
+  assert.deepEqual(JSON.parse(store.get(key)).hooks, [], '取消选择也要落盘');
+
+  store.set(key, JSON.stringify({ hooks: [{ id: 'ghost', name: '旧钩子' }], cards: [{ id: 'ghost2', title: '已删卡' }] }));
+  c.craftSelHooks = []; c.craftSelCards = [];
+  c.restoreCraftPick();
+  assert.equal(c.craftSelHooks.length, 0, '分类库已删的钩子不得作为幽灵项复活');
+  assert.equal(c.craftSelCards.length, 0, '分类库已删的方法卡不得作为幽灵项复活');
+});
+
+test('v2.661 一键递招的推荐结果同样持久化（刷新后仍是上次匹配组合）', async () => {
+  const store = new Map();
+  const LS = { g: (k, d) => (store.has(k) ? store.get(k) : d), s: (k, v) => store.set(k, v) };
+  const { context: c, $ } = setup(['craftGo', 'restoreCraftPick', 'saveCraftPick', 'findHook'], {
+    LS, CRAFT_PICK_KEY: 'zn:craftPick', lang: 'zh', tagChosen: [], craftSelHooks: [], craftSelCards: [], craftRecCards: [], _craftGoing: false,
+    craftTaxonomy: { hooks: [{ id: 'episode_hook', name: '集尾钩' }], cardGroups: [{ name: '组', cards: [{ id: 'c1', title: '先抑后扬' }] }] },
+    loadCraftTaxonomy: async () => {}, renderCraftHooks() {}, renderCraftCards() {}, renderCraftPicked() {}, xnSay() {},
+    Api: { request: async () => ({ json: async () => ({ hooks: [{ id: 'episode_hook', name: '集尾钩' }], cards: [{ id: 'c1', title: '先抑后扬' }] }) }) },
+  });
+  $('tagIdea').value = '';
+  await c.craftGo();
+  const saved = JSON.parse([...store.values()][0] || '{}');
+  assert.deepEqual(saved.hooks.map(h => h.id), ['episode_hook'], '递招推荐结果必须落盘');
+  assert.deepEqual(saved.cards.map(x => x.id), ['c1'], '递招推荐卡必须落盘');
+});
