@@ -784,6 +784,36 @@ textarea { box-sizing: border-box; max-width: 100%; resize: vertical; background
 .work-action-btn{font-size:12px;padding:3px 10px;border-radius:7px;cursor:pointer}
 .work-action-btn.danger{background:color-mix(in srgb,var(--cinnabar) 12%,var(--panel));color:var(--cinnabar)}
 .work-action-btn:hover{filter:brightness(1.1)}
+/* ===== v2.665 作品库批量管理：状态筛选 / 勾选 / 批量操作栏 ===== */
+.works-toolbar{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:10px}
+.works-filter{display:inline-flex;gap:4px;padding:4px;background:var(--panel-2);border:1px solid var(--line);border-radius:999px}
+.works-filter-btn{border:0;background:transparent;color:var(--text-2);font:inherit;font-size:13px;line-height:1;padding:8px 15px;border-radius:999px;cursor:pointer;transition:background var(--motion) var(--ease-out),color var(--motion) var(--ease-out)}
+.works-filter-btn:hover{color:var(--text)}
+.works-filter-btn:focus-visible{outline:2px solid var(--gold);outline-offset:2px}
+.works-filter-btn.on{background:var(--accent);color:var(--on-accent);box-shadow:0 6px 16px -12px color-mix(in srgb,var(--accent) 60%,transparent)}
+.works-bulk-toggle{margin-left:auto}
+.works-bulk-toggle[aria-pressed='true']{background:var(--gold-soft);border-color:var(--gold);color:var(--gold-text)}
+.work-card{position:relative}
+.work-card--selectable h3{padding-right:30px}
+.work-pick{position:absolute;top:10px;right:10px;z-index:2;width:26px;height:26px;padding:0;border-radius:50%;border:1.5px solid var(--line);background:var(--panel);color:transparent;display:none;place-items:center;font-size:14px;line-height:1;cursor:pointer;transition:background var(--motion),border-color var(--motion),color var(--motion)}
+.works-grid--bulk .work-pick{display:grid}
+.works-grid--bulk .work-actions{display:none}
+.works-grid--bulk .work-card{cursor:pointer}
+.work-card.is-selected{border-color:var(--gold);box-shadow:0 0 0 2px color-mix(in srgb,var(--gold) 34%,transparent),0 14px 30px -20px color-mix(in srgb,var(--gold) 55%,transparent);transform:translateY(-1px)}
+.work-card.is-selected .work-pick{background:var(--gold);border-color:var(--gold);color:var(--panel);animation:zn-pick-pop var(--motion-slow) var(--ease-spring)}
+.badge-archived{background:var(--gold-soft);color:var(--gold-text);border:1px solid color-mix(in srgb,var(--gold) 30%,transparent)}
+.works-bulkbar{position:sticky;bottom:14px;z-index:20;display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:14px;padding:10px 14px;background:var(--panel);border:1px solid var(--gold-soft);border-radius:var(--radius);box-shadow:var(--shadow-lg);animation:zn-rise var(--motion-slow) var(--ease-out)}
+.works-bulk-count{margin-right:auto;font-size:13px;color:var(--text-2)}
+.works-bulkbar.is-busy{pointer-events:none}
+.works-bulkbar.is-busy .works-bulk-count{color:var(--gold-text);font-weight:600}
+.works-bulkbar .btn-ghost{padding:6px 12px;font-size:13px}
+.works-bulk-danger{color:var(--danger-text)}
+@keyframes zn-pick-pop{0%{transform:scale(.6)}60%{transform:scale(1.12)}100%{transform:scale(1)}}
+@media (prefers-reduced-motion: reduce){
+  .works-bulkbar{animation:none}
+  .work-card.is-selected{transform:none}
+  .work-card.is-selected .work-pick{animation:none}
+}
 .ep-item{border:1px solid var(--line);border-radius:12px;padding:13px 15px;margin-bottom:10px;background:var(--panel-2)}
 .ep-item h4{margin:0 0 6px;font-size:14px;font-family:var(--serif)}
 .ep-item pre{white-space:pre-wrap;word-break:break-word;font-family:inherit;font-size:13.5px;line-height:1.7;margin:8px 0 0;color:var(--text)}

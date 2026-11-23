@@ -309,6 +309,9 @@
     syncSubAllLabel();
     // v2.663 成本提示随语言切换重排（金额来自目录，文案是前端拼的）
     syncEpisodeCostHint();
+    // v2.665 作品库批量栏（已选数量/归档或恢复/全选文案是动态拼的）随语言切换重排
+    syncWorksBulkBar();
+    syncWorksFilterUi();
   }
 
   /* ---------- v2.329 八模式（模式 × 剧本类型 × 输出语言 三维） ---------- */
@@ -3681,6 +3684,155 @@
     try { await task(); }
     finally { btn.disabled = oldDisabled; btn.textContent = oldTxt; _workActionBusy = false; }
   }
+  // ═══ v2.665 作品库批量管理 ═══
+  // 选择集只对「当前可见列表」成立：换搜索词/切状态筛选/重新拉取都会先清空，并按新列表再收敛一次，
+  // 避免用户在 A 筛选下选中、切到 B 筛选后看不见却仍被批量删除（幽灵选中）。
+  let worksBulkMode = false;
+  let worksSelected = new Set();
+  let worksStatusFilter = '';
+  let worksBulkBusy = false;
+  const worksStatusById = new Map();
+  function worksListUrl(q, status, cursor) {
+    let url = '/api/generate/projects?limit=50';
+    if (q) url += '&q=' + encodeURIComponent(q);
+    if (status) url += '&status=' + encodeURIComponent(status);
+    if (cursor) url += '&cursor=' + encodeURIComponent(cursor);
+    return url;
+  }
+  function toggleWorksSelected(id) {
+    if (!id) return false;
+    if (worksSelected.has(id)) worksSelected.delete(id); else worksSelected.add(id);
+    return worksSelected.has(id);
+  }
+  function clearWorksSelection() { worksSelected.clear(); }
+  function pruneWorksSelection(ids) {
+    const keep = new Set((ids || []).map(String));
+    let dropped = 0;
+    Array.from(worksSelected).forEach((id) => { if (!keep.has(id)) { worksSelected.delete(id); dropped++; } });
+    return dropped;
+  }
+  // 选中项全是已归档 → 恢复；只要混入创作中的项目 → 归档（避免「一半归档一半恢复」的歧义操作）
+  function worksBulkActionKind() {
+    if (!worksSelected.size) return 'archive';
+    let allArchived = true;
+    worksSelected.forEach((id) => { if (worksStatusById.get(id) !== 'archived') allArchived = false; });
+    return allArchived ? 'restore' : 'archive';
+  }
+  // 三种空态分流：搜索无结果 / 归档为空 / 作品库为空
+  function worksEmptyCopy(q) {
+    const query = String(q || '').trim();
+    if (query) return t('worksSearchEmpty', { q: query });
+    if (worksStatusFilter === 'archived') return t('worksEmptyArchived');
+    return t('worksEmpty');
+  }
+  // 勾选数量、归档/恢复标签、全选文案统一由这里刷新，避免多处渲染各说各话
+  function syncWorksBulkBar() {
+    const bar = $('worksBulkBar');
+    if (!bar) return;
+    const n = worksSelected.size;
+    bar.classList.toggle('hidden', !worksBulkMode);
+    bar.classList.toggle('is-empty', n === 0);
+    bar.setAttribute('aria-label', t('worksBulkAria', { n }));
+    const cnt = $('worksBulkCount');
+    if (cnt) cnt.textContent = worksBulkMode ? (n ? t('worksBulkCount', { n }) : t('worksBulkHint')) : '';
+    const arc = $('worksBulkArchive');
+    const restore = worksBulkActionKind() === 'restore';
+    if (arc) { arc.textContent = restore ? t('worksBulkRestore') : t('worksBulkArchive'); arc.hidden = n === 0; }
+    const del = $('worksBulkDelete');
+    if (del) del.hidden = n === 0;
+    const all = $('worksBulkAll');
+    if (all) {
+      const cards = Array.from(document.querySelectorAll('#worksGrid .work-card'));
+      const ids = cards.map((c) => c.dataset && c.dataset.pid).filter(Boolean);
+      const selectedVisible = ids.filter((id) => worksSelected.has(id)).length;
+      all.textContent = (ids.length > 0 && selectedVisible === ids.length) ? t('worksBulkSelectNone') : t('worksBulkSelectAll');
+      all.hidden = ids.length === 0;
+    }
+    const btn = $('worksBulkBtn');
+    if (btn) {
+      btn.setAttribute('aria-pressed', String(worksBulkMode));
+      btn.textContent = worksBulkMode ? t('worksBulkDone') : t('worksBulk');
+    }
+  }
+  function syncWorksFilterUi() {
+    const host = $('worksFilter');
+    if (!host) return;
+    host.querySelectorAll('[data-status]').forEach((b) => {
+      const on = (b.getAttribute('data-status') || '') === worksStatusFilter;
+      b.classList.toggle('on', on);
+      b.setAttribute('aria-selected', String(on));
+      b.setAttribute('tabindex', on ? '0' : '-1');
+    });
+  }
+  function paintWorkCard(card, id) {
+    if (!card) return;
+    const on = worksSelected.has(String(id));
+    card.classList.toggle('is-selected', on);
+    card.setAttribute('aria-selected', String(on));
+    const pick = card.querySelector ? card.querySelector('.work-pick') : null;
+    if (pick) pick.setAttribute('aria-pressed', String(on));
+    syncWorksBulkBar();
+  }
+  // 全选只作用于当前可见卡片；全员已选时再点 = 取消全选
+  function selectAllVisibleWorks() {
+    const cards = Array.from(document.querySelectorAll('#worksGrid .work-card'));
+    const ids = cards.map((c) => c.dataset && c.dataset.pid).filter(Boolean);
+    if (!ids.length) return 0;
+    const allSelected = ids.every((id) => worksSelected.has(id));
+    ids.forEach((id) => { if (allSelected) worksSelected.delete(id); else worksSelected.add(id); });
+    cards.forEach((c) => paintWorkCard(c, c.dataset.pid));
+    return ids.length;
+  }
+  function setWorksBulkMode(on) {
+    worksBulkMode = !!on;
+    clearWorksSelection();
+    const grid = $('worksGrid');
+    if (grid) {
+      grid.classList.toggle('works-grid--bulk', worksBulkMode);
+      grid.querySelectorAll('.work-card').forEach((card) => {
+        card.classList.toggle('work-card--selectable', worksBulkMode);
+        card.setAttribute('aria-selected', 'false');
+      });
+    }
+    syncWorksBulkBar();
+  }
+  // 批量执行：复用既有单条接口逐条跑，单条失败只计数不中断；结束后统一刷新列表与计数。
+  async function runWorksBulk(kind) {
+    if (worksBulkBusy) return { ok: 0, fail: 0, skipped: true };
+    const ids = Array.from(worksSelected);
+    if (!ids.length) return { ok: 0, fail: 0, skipped: true };
+    if (kind === 'delete') {
+      const yes = await uiConfirm({ body: t('worksBulkDeleteConfirm', { n: ids.length }), danger: true, okText: t('worksBulkDelete') });
+      if (!yes) return { ok: 0, fail: 0, cancelled: true };
+    }
+    worksBulkBusy = true;
+    const bar = $('worksBulkBar');
+    bar?.classList.add('is-busy');
+    let ok = 0, fail = 0;
+    try {
+      for (let i = 0; i < ids.length; i++) {
+        const cnt = $('worksBulkCount');
+        if (cnt) cnt.textContent = t('worksBulkRunning', { i: i + 1, n: ids.length });
+        try {
+          const r = kind === 'delete'
+            ? await Api.request(`/api/generate/projects/${encodeURIComponent(ids[i])}`, { method: 'DELETE' })
+            : await Api.request(`/api/generate/projects/${encodeURIComponent(ids[i])}/archive`, {
+              method: 'POST', headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ archive: kind === 'archive' }),
+            });
+          await Api.jsonOrThrow(r);
+          ok++;
+        } catch { fail++; }
+      }
+    } finally {
+      worksBulkBusy = false;
+      bar?.classList.remove('is-busy');
+    }
+    setWorksBulkMode(false);
+    await loadWorks();
+    if (fail) toastInfo(t('worksBulkPartial', { ok, fail })); else toastOk(t('worksBulkDoneOk', { n: ok }));
+    return { ok, fail };
+  }
   async function loadWorks() {
     const account = capturePrivateSession();
     const seq = ++worksReqSeq; // v2.274：发请求前自增，await 回来后据此判新旧（防抖连搜/翻页乱序）
@@ -3689,6 +3841,8 @@
     const grid = $('worksGrid'), empty = $('worksEmpty'); grid.innerHTML = '';
     // v2.553：换搜索词或重进作品库时重置游标（翻页追加才保留）
     myProjectsCursor = ''; myProjectsHasMore = false; myProjectsTotal = 0;
+    // v2.665：换搜索词 / 切状态 / 重新拉取一律先清空选择，防止批量操作落到看不见的项目上
+    clearWorksSelection();
     const ws = $('worksSearch');
     if (ws && !ws._bound) {
       ws._bound = true;
@@ -3702,7 +3856,7 @@
     const q = ($('worksSearch')?.value || '').trim();
     // v2.238 静默失败根治：此前无 try/catch，切视图入口调用点亦无 .catch——请求失败时 grid 已清空、面板全白零提示
     try {
-    const url = `/api/generate/projects?limit=50${q ? '&q=' + encodeURIComponent(q) : ''}`;
+    const url = worksListUrl(q, worksStatusFilter, '');
     const res = await Api.request(url);
     const raw = await Api.jsonOrThrow(res);
     if (!isPrivateSessionCurrent(account) || seq !== worksReqSeq) return; // v2.274：换号或旧查询晚回，均不得写 DOM
@@ -3714,17 +3868,28 @@
     grid.innerHTML = ''; // v2.278：清骨架后渲染真实内容
     $('worksCount').textContent = t('worksCount', { n: myProjectsTotal || list.length });
     empty.classList.toggle('hidden', list.length > 0);
-    if (!list.length) empty.innerHTML = znEmptyHtml(t('worksEmpty'));
+    // v2.665 三种空态分流：搜索无结果 ≠ 归档为空 ≠ 作品库为空（旧实现一律说「还没有作品」，像被删了）
+    if (!list.length) {
+      const hint = q ? t('worksSearchEmptyHint') : (worksStatusFilter === 'archived' ? t('worksEmptyArchivedHint') : '');
+      empty.innerHTML = znEmptyHtml(worksEmptyCopy(q), hint);
+    }
+    $('worksBulkBtn')?.classList.toggle('hidden', list.length === 0 && !worksBulkMode);
     // v2.647：首页与游标续页共用同一卡片渲染器；续页只追加结果，不再复制一套易漂移的卡片逻辑。
     const renderWorkCard = (p) => {
-      const c = document.createElement('div'); c.className = 'work-card';
+      const pid = String(p.id);
+      const picked = worksSelected.has(pid);
+      const c = document.createElement('div');
+      c.className = 'work-card' + (worksBulkMode ? ' work-card--selectable' : '') + (picked ? ' is-selected' : '');
+      c.dataset.pid = p.id;
+      c.setAttribute('aria-selected', String(picked));
       // v2.489 作品卡此前直接渲染后端 mode 原始枚举（tag / hit_lab…），中文界面里等于把内部 id 给用户看
       const modeText = (((I18N.DICT[lang] || I18N.DICT.zh).mode) || {})[p.mode] || (lang === 'en' ? 'Script' : '剧本');
       // v2.550 目标平台回显：立项时选了平台却只在续写时才看得到，作品库无法一眼确认投哪个平台
       const platLabel = platformLabel(p.platform || p.bible?.platform);
-      c.innerHTML = `<h3>${escapeHtml(p.title)}</h3>
+      c.innerHTML = `<button type="button" class="work-pick" data-pick="${escapeHtml(pid)}" aria-pressed="${picked}" aria-label="${escapeHtml(t('worksBulkPick', { title: p.title }))}"><span aria-hidden="true">✓</span></button>
+        <h3>${escapeHtml(p.title)}</h3>
         <div class="muted">${escapeHtml(modeText)} · ${p.totalEps || 0} eps · ${PV().formatDateTime(p.createdAt, lang)}</div>
-        <div class="work-badges"><span class="badge">${escapeHtml(engineLabel(p.engineTier, true) || (lang === 'en' ? 'Standard' : '标准'))}</span><span class="badge">${p.format === 'AIGC' ? 'Z-AIGC' : (lang === 'en' ? 'Live action' : '真人实拍')}</span>${platLabel ? `<span class="badge">${escapeHtml(platLabel)}</span>` : ''}</div>
+        <div class="work-badges"><span class="badge">${escapeHtml(engineLabel(p.engineTier, true) || (lang === 'en' ? 'Standard' : '标准'))}</span><span class="badge">${p.format === 'AIGC' ? 'Z-AIGC' : (lang === 'en' ? 'Live action' : '真人实拍')}</span>${platLabel ? `<span class="badge">${escapeHtml(platLabel)}</span>` : ''}${p.status === 'archived' ? `<span class="badge badge-archived">${escapeHtml(t('worksArchivedBadge'))}</span>` : ''}</div>
         <div class="work-actions">
           <button class="chip work-action-btn" data-act="rename">${lang === 'en' ? 'Rename' : '重命名'}</button>
           <button class="chip work-action-btn" data-act="clone">${lang === 'en' ? 'Clone' : '克隆'}</button>
@@ -3732,7 +3897,18 @@
           <button class="chip work-action-btn danger" data-act="delete">${lang === 'en' ? 'Delete' : '删除'}</button>
         </div>`;
       // 合并（剧本1）：账号隔离守卫——切号后旧响应不得打开他人项目
-      c.onclick = () => { if (isPrivateSessionCurrent(account)) openProject(p); };
+      c.onclick = () => {
+        if (!isPrivateSessionCurrent(account)) return;
+        // v2.665 批量态下点卡片是勾选/取消，不再直接打开项目（避免误触进详情打断批量操作）
+        if (worksBulkMode) { toggleWorksSelected(pid); paintWorkCard(c, pid); return; }
+        openProject(p);
+      };
+      const pickBtn = c.querySelector('.work-pick');
+      if (pickBtn) pickBtn.onclick = (e) => {
+        e.stopPropagation();
+        if (!isPrivateSessionCurrent(account)) return;
+        toggleWorksSelected(pid); paintWorkCard(c, pid);
+      };
       c.querySelectorAll('.work-action-btn').forEach((btn) => {
         btn.onclick = async (e) => {
           e.stopPropagation();
@@ -3786,6 +3962,11 @@
       return c;
     };
     list.forEach((p) => grid.appendChild(renderWorkCard(p)));
+    // v2.665：记录本页状态供「批量归档/恢复」判定，并按可见 id 收敛选择集
+    worksStatusById.clear();
+    list.forEach((p) => worksStatusById.set(String(p.id), p.status));
+    pruneWorksSelection(list.map((p) => String(p.id)));
+    syncWorksBulkBar();
     // v2.553：翻页追加按钮（只在 hasMore 时显示，避免用户以为点不动）
     let more = $('worksLoadMore');
     if (!more) {
@@ -3810,7 +3991,8 @@
     btn.disabled = true; const oldTxt = btn.textContent; btn.textContent = lang === 'en' ? 'Loading…' : '加载中…';
     try {
       const q = ($('worksSearch')?.value || '').trim();
-      const url = `/api/generate/projects?limit=50&cursor=${encodeURIComponent(myProjectsCursor)}${q ? '&q=' + encodeURIComponent(q) : ''}`;
+      // v2.665：翻页必须沿用当前状态筛选，否则「已归档」视图翻页会混进创作中项目
+      const url = worksListUrl(q, worksStatusFilter, myProjectsCursor);
       const res = await Api.request(url);
       const raw = await Api.jsonOrThrow(res);
       if (!isPrivateSessionCurrent(account) || seq !== worksReqSeq) return;
@@ -3818,7 +4000,8 @@
       myProjectsHasMore = !!raw.hasMore;
       myProjectsCursor = raw.nextCursor || '';
       const grid = $('worksGrid');
-      items.forEach((p) => grid.appendChild(renderWorkCard(p)));
+      items.forEach((p) => { grid.appendChild(renderWorkCard(p)); worksStatusById.set(String(p.id), p.status); });
+      syncWorksBulkBar();
       btn.hidden = !myProjectsHasMore || !myProjectsCursor;
     } catch (e) {
       toastInfo((e && e.message) || (lang === 'en' ? 'Load more failed.' : '加载更多失败'));
@@ -3826,6 +4009,35 @@
       btn.disabled = false; btn.textContent = oldTxt;
     }
   }
+  // v2.665 作品库筛选与批量栏接线（元素在 index.html 常驻，模块加载时绑一次）
+  if ($('worksFilter')) {
+    $('worksFilter').addEventListener('click', (e) => {
+      const btn = e.target && e.target.closest ? e.target.closest('[data-status]') : null;
+      if (!btn) return;
+      const next = btn.getAttribute('data-status') || '';
+      if (next === worksStatusFilter) return;
+      worksStatusFilter = next;
+      syncWorksFilterUi();
+      clearWorksSelection();
+      loadWorks();
+    });
+    // tablist 键盘约定：左右方向键在三档之间切换（此前只能 Tab 逐个走，读屏用户听到「选项卡」却按不动）
+    $('worksFilter').addEventListener('keydown', (e) => {
+      if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
+      const tabs = Array.from(document.querySelectorAll('#worksFilter [data-status]'));
+      const i = tabs.indexOf(document.activeElement);
+      if (i < 0) return;
+      e.preventDefault();
+      const next = tabs[(i + (e.key === 'ArrowRight' ? 1 : tabs.length - 1)) % tabs.length];
+      next.focus();
+      next.click();
+    });
+  }
+  if ($('worksBulkBtn')) $('worksBulkBtn').onclick = () => setWorksBulkMode(!worksBulkMode);
+  if ($('worksBulkAll')) $('worksBulkAll').onclick = () => selectAllVisibleWorks();
+  if ($('worksBulkExit')) $('worksBulkExit').onclick = () => setWorksBulkMode(false);
+  if ($('worksBulkArchive')) $('worksBulkArchive').onclick = () => { runWorksBulk(worksBulkActionKind()).catch(() => {}); };
+  if ($('worksBulkDelete')) $('worksBulkDelete').onclick = () => { runWorksBulk('delete').catch(() => {}); };
   // c202 版本逐行对比（零扣费、确定性）：渲染/请求/文案辅助，供作品详情与 fix 成功后自动展开
   const DIFF_LEVEL_LABEL = (typeof window !== 'undefined' && window.ZN_DATA && window.ZN_DATA.DIFF_LEVEL_LABEL) || {
     negligible: ['几乎未动', 'Barely touched'],

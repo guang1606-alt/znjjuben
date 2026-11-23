@@ -95,6 +95,8 @@ function setup(handler = async () => response([])) {
     // v2.274：loadWorks 同会话搜索请求序号（产品侧模块级 let，harness 逐函数 vm 求值需在此预置，同 purchaseViewSeq）
     worksReqSeq: 0,
     myProjectsCursor: '', myProjectsHasMore: false, myProjectsTotal: 0,
+    // v2.665：作品库批量管理状态（模块级 let/const），loadWorks 与作品卡渲染会读写
+    worksBulkMode: false, worksSelected: new Set(), worksStatusFilter: '', worksBulkBusy: false, worksStatusById: new Map(),
     // v2.275：作品卡片写操作在途锁（模块级 let），runWorkAction 内读写，需在 context 预置
     _workActionBusy: false,
     // v2.276/v2.277 startGenerate 模块级 let（逐函数 vm 求值需在 context 预置，否则入口 ReferenceError）
@@ -186,6 +188,9 @@ function setup(handler = async () => response([])) {
     // v2.550 作品卡目标平台回显（platformLabel 依赖 SELECT_OPTS）
     'platformLabel',
     'refreshResultScripts', 'handleEvent', 'startGenerate', 'openDirectorPack', 'openMaterials',
+    // v2.665：作品库批量管理依赖（列表 URL / 选择集 / 空态分流 / 批量栏同步），逐函数求值需注入真实实现
+    'worksListUrl', 'clearWorksSelection', 'pruneWorksSelection', 'syncWorksBulkBar', 'worksEmptyCopy',
+    'toggleWorksSelected', 'paintWorkCard', 'worksBulkActionKind',
   ]) {
     assert.ok(functions.has(name), `missing production function ${name}`);
     vm.runInContext(functions.get(name), c);

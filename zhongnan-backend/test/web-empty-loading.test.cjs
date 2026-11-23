@@ -250,7 +250,9 @@ describe('v2.238 作品列表/资产三族/导演交付包 三态收口', () => 
     const region = fnRegion('async function loadWorks()', '// c202 版本逐行对比');
     assert.doesNotMatch(region, /empty\.textContent = t\(/, 'worksEmpty 不应再 textContent 混写');
     assert.ok(/znEmptyHtml\(t\('needLogin'\)\)/.test(region), 'needLogin 应走 znEmptyHtml');
-    assert.ok(/znEmptyHtml\(t\('worksEmpty'\)\)/.test(region), 'worksEmpty 应走 znEmptyHtml');
+    // v2.665 三态分流后空态文案由 worksEmptyCopy 决定，仍必须经 znEmptyHtml 渲染
+    assert.ok(/znEmptyHtml\(worksEmptyCopy\(q\)/.test(region), 'worksEmpty 应走 znEmptyHtml');
+    assert.ok(/return t\('worksEmpty'\)/.test(src), '空库兜底文案仍为 worksEmpty');
   });
 
   it('资产三族：needLogin / 加载失败 / 空态全收口，notice 混用清零', () => {
