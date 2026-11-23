@@ -2886,7 +2886,11 @@ generateRouter.post('/projects/:id/fix', authRequired, async (req: AuthRequest, 
   // 复用 buildQcEngineDigest 路径 B 同形态（与落库/SSE 零分叉，健康稿 digest 不出键时显式写健康壳）。
   // c222 档位同口径：antiStrength/colloquialLevel 从旧 qcReport._profile 读档重放（normalize 白名单
   // 校验，旧项目无 _profile/脏数据回退默认档 balanced/mid）；scriptFormat 从 project.format 重建；
-  // styleCheck 缺 styleProfile（不落库）不重放，保留旧值。
+  //
+  // === KNOWN GAP (v2.659) ===
+  // styleCheck 缺 styleProfile（不落库，是请求级参数），/fix 无输入无法重算，保留旧值。
+  // 若将来把 styleProfile 写入 qcReport._profile，则此处可像 antiStrength/colloquialLevel 一样
+  // 从旧档读入传入 rescanGateEngines，完成重算闭环。方法论 #82② 有更完整声明。
   let freshGate: Record<string, unknown> = {};
   try {
     const prevProfile = (targetScript.qcReport as Record<string, unknown> | undefined)?._profile as Record<string, unknown> | undefined;
@@ -2979,7 +2983,7 @@ generateRouter.post('/projects/:id/fix', authRequired, async (req: AuthRequest, 
           ...(Object.keys(freshContinuityRest).length ? freshContinuityRest : {}), // c217 跨集连续性 23 长名诊断键按新正文+前序短名行重放（覆盖语义；异常时保留旧值）
           ...(Object.keys(freshDiagCurRows).length ? freshDiagCurRows : {}), // c197 c216 四短名摘要行（humiliation/mystery/promise/villain）随改写稿回写，本集新埋雷/新承诺当集入账
           ...(Object.keys(freshContCurRest).length ? freshContCurRest : {}), // c197 c217 其余 23 短名摘要行随改写稿回写，后续集 prev 读新稿账面（死亡/信物/时间线/境界…）
-          ...(Object.keys(freshGate).length ? freshGate : {}), // c218 闸门四键（cliche/tongue/grounded/lengthPlan）+ rhythm/character 按新正文重放；styleCheck 缺 styleProfile 保留旧值
+          ...(Object.keys(freshGate).length ? freshGate : {}), // c218 闸门四键（cliche/tongue/grounded/lengthPlan）+ rhythm/character 按新正文重放；styleCheck 缺 styleProfile 保留旧值（v2.659 KNOWN GAP，见上方详细注释）
           ...(((freshContinuityVf || freshVfCurRows) ? { villainFate: { ...(freshVfCurRows ?? {}), ...(freshContinuityVf ?? {}) } } : {})), // c197 rows 整集替换为新正文短名行 + 诊断覆盖（felled/issueCount/issues）；bundle 异常时两者皆空，base 展开保留 v1 旧值
           ...freshFormat, // v2.339 顶层 format（含 LIVE feasibility 制片闸门）按新正文覆盖；空稿/异常沿用旧值
           _aigc: freshAigc, // c219 AIGC 构成仪表盘按新正文重算（AIGC 格式项目）；LIVE 格式为 null

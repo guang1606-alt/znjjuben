@@ -8698,6 +8698,11 @@
   // c209：iOS Safari/WKWebView 规定 speechSynthesis.speak 必须挂在用户手势调用栈里。
   // 连播/跨集/片单入口的自动开口都发生在网络请求返回之后（脱离点击手势），iOS 会静默拒声且不报错，
   // 用户看到"在播"却没声音。这类路径统一改为"下一集就绪→轻点播放"，按钮点击即真实手势，必能开口。
+  //
+  // === KNOWN GAP (v2.659) ===
+  // listenIsIos() 基于 UA + iPadOS 13+ 伪装 Mac 的双维度探测，覆盖真机 iPhone/iPad/iPod。
+  // 但从未在真机上验证过 tapToPlay 条的实际出现与点击是否真能开口——目前仅桌面 Chrome 的
+  // Safari UA 模拟验证过逻辑路径。真机覆盖是 P3 待验项，方法论 #209 有完整声明。
   function listenIsIos() {
     try {
       return /ipad|iphone|ipod/i.test(navigator.userAgent)

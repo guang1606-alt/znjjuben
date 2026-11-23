@@ -279,6 +279,10 @@ export function batchCreativeDigest(text: string, castNames?: string[]): Record<
     } catch {
       // 同上：异常跳过
     }
+  } else {
+    // === KNOWN GAP (v2.659) ===
+    // voicePrint / dialogueNameCall 需 cast 名表。/fix 时若 project.bible.characters + cast
+    // 为空（新项目/旧项目未填圣经），此处不重算，保留 qcReport 旧值。方法论 #80 有完整声明。
   }
   const digest = buildQcEngineDigest(raw);
   // 覆盖语义：digest 不出键的健康引擎显式写健康壳清旧账。
