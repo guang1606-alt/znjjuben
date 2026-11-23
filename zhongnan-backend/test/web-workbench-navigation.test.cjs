@@ -62,6 +62,10 @@ function setup() {
   const scriptsResponse = new Promise(resolve => { resolveScripts = resolve; });
   const context = {
     $, console, lang: 'zh', _switchAnimToken: 0, PV: () => ProgressView,
+    // v2.667 作品详情头概况依赖模式文案/引擎档/平台选项真源
+    I18N: require('../web/i18n.js'),
+    ENGINE_TIERS: [{ id: 'ECONOMY', zh: '经济', en: 'Economy', min: 'free' }, { id: 'STANDARD', zh: '标准', en: 'Standard', min: 'basic' }, { id: 'FLAGSHIP', zh: '旗舰', en: 'Flagship', min: 'advanced' }],
+    SELECT_OPTS: { platform: { zh: [], en: [] } }, MODE_BRIEF: {}, worksListDirty: false,
     capturePrivateSession: () => ({ owner: 'fixture', epoch: 0 }), isPrivateSessionCurrent: () => true,
     MutationObserver: class {
       constructor(callback) { this.callback = callback; this.records = []; this.targets = new Set(); observers.push(this); }
@@ -91,7 +95,7 @@ function setup() {
   // _syncTopbarOffset（v2.612 topbar 避让）为 _showWorkbenchLayer 依赖；_navStack 的初始化器自带
   // ZnNavStack 存在性守卫，在 vm 中自然降级为 null，与浏览器缺 nav-stack.js 时的行为一致
   // v2.221 加载/空态统一：openProject 依赖 znSkeleton/znEmpty*，一并注入真实实现
-  for (const name of ['_znEsc', 'znSkeletonHtml', 'znSkeleton', 'znEmptyHtml', 'znEmpty', '_syncTopbarOffset', '_syncWorkbenchTopInset', '_initWorkbenchLayer', '_showWorkbenchLayer', '_hideWorkbenchLayer', 'openWorkbench', 'closeWorkbench', '_workbenchEsc', 'switchView', 'switchSession', 'renderTaskQueue', 'openProject', 'resetPanels', 'showFail', 'genClickGuard']) {
+  for (const name of ['_znEsc', 'znSkeletonHtml', 'znSkeleton', 'znEmptyHtml', 'znEmpty', 'engineLabel', 'platformLabel', 'workModeLabel', 'nextEpisodeNo', 'worksDetailMetaHtml', 'renderWorksDetailHead', '_syncTopbarOffset', '_syncWorkbenchTopInset', '_initWorkbenchLayer', '_showWorkbenchLayer', '_hideWorkbenchLayer', 'openWorkbench', 'closeWorkbench', '_workbenchEsc', 'switchView', 'switchSession', 'renderTaskQueue', 'openProject', 'resetPanels', 'showFail', 'genClickGuard']) {
     vm.runInContext(functions.get(name), context);
   }
   context._initWorkbenchLayer();

@@ -97,6 +97,8 @@ function setup(handler = async () => response([])) {
     myProjectsCursor: '', myProjectsHasMore: false, myProjectsTotal: 0,
     // v2.665：作品库批量管理状态（模块级 let/const），loadWorks 与作品卡渲染会读写
     worksBulkMode: false, worksSelected: new Set(), worksStatusFilter: '', worksBulkBusy: false, worksStatusById: new Map(),
+    // v2.667：详情内改名/归档后回列表重载的脏标记（模块级 let，openProject 处理器会写）
+    worksListDirty: false,
     // v2.275：作品卡片写操作在途锁（模块级 let），runWorkAction 内读写，需在 context 预置
     _workActionBusy: false,
     // v2.276/v2.277 startGenerate 模块级 let（逐函数 vm 求值需在 context 预置，否则入口 ReferenceError）
@@ -191,6 +193,8 @@ function setup(handler = async () => response([])) {
     // v2.665：作品库批量管理依赖（列表 URL / 选择集 / 空态分流 / 批量栏同步），逐函数求值需注入真实实现
     'worksListUrl', 'clearWorksSelection', 'pruneWorksSelection', 'syncWorksBulkBar', 'worksEmptyCopy',
     'toggleWorksSelected', 'paintWorkCard', 'worksBulkActionKind',
+    // v2.667：作品详情头概况与续写入口（openProject 渲染时依赖的模式文案/集数/概况片）
+    'nextEpisodeNo', 'workModeLabel', 'worksDetailMetaHtml', 'renderWorksDetailHead',
   ]) {
     assert.ok(functions.has(name), `missing production function ${name}`);
     vm.runInContext(functions.get(name), c);

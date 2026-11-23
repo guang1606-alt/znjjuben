@@ -809,7 +809,8 @@
     default: { zh: ['用一句话描述你的故事创意', '谁、遇到什么麻烦、准备怎么反击；越具体出本越准。'], en: ['One-line story idea', 'Who, what trouble, how they fight back — the more specific, the better.'] },
   };
   function syncModeBrief() {
-    if (draftProject && selectedMode !== 'spark') clearDraftProject();
+    // v2.667 续写草稿不再限定 spark：只要当前模式与项目一致就保留，手动切到别的模式才放弃续写
+    if (draftProject && !draftProjectMatchesMode(draftProject, selectedMode)) clearDraftProject();
     const panel = $('modeBriefPanel'); if (!panel) return;
     const show = selectedMode !== 'tag';
     panel.classList.toggle('hidden', !show);
@@ -3621,7 +3622,7 @@
     if (note) {
       note.classList.toggle('hidden', !draftProject);
       note.innerHTML = draftProject
-        ? `${lang === 'en' ? 'Continuing saved project' : '继续已保存项目'}：${escapeHtml(draftProject.title)} · ${draftProject.totalEps} ${lang === 'en' ? 'episodes' : '集'}
+        ? `${lang === 'en' ? 'Continuing saved project' : '继续已保存项目'}：${escapeHtml(draftProject.title)} · ${draftProject.totalEps} ${lang === 'en' ? 'episodes' : '集'}${Number(draftProject._nextEp) > 1 ? (lang === 'en' ? ` · this run writes Ep ${draftProject._nextEp}` : ` · 本次生成第${draftProject._nextEp}集`) : ''}
           <span class="muted">${lang === 'en' ? 'The project episode count, engine, format, scenes per episode and target platform are retained.' : '沿用该项目的集数、引擎、制式、每集场数与目标平台，可修改下方创作简报。'}</span>
           <button type="button" class="btn-ghost" id="leaveDraftBtn">${lang === 'en' ? 'Start a new project' : '另起新项目'}</button>`
         : '';
@@ -3634,33 +3635,101 @@
     if (typeof applyScriptTypeFormat === 'function') applyScriptTypeFormat();
   }
   function clearDraftProject() { draftProject = null; syncDraftProject(); }
-  function resumeAdaptationProject(project) {
+  // v2.667 作品详情「继续创作」：历史改编/小说/名场面统一落到灵感式的素材改编/名场面轨道；
+  // 其余模式原样续写，未知模式回落灵感式，避免把项目写坏。
+  function projectContinuationMode(project) {
+    const legacyTrack = {
+      adapt: 'material_rewrite', novel: 'material_rewrite',
+      hit_lab: 'signature_scene', hitlab: 'signature_scene', scene: 'signature_scene', reverse: 'signature_scene',
+    };
+    const raw = String(project?.mode || '').trim().toLowerCase();
+    const track = String(project?.track || project?.bible?.track || '').trim();
+    const mapped = legacyTrack[raw];
+    if (mapped) return { mode: 'spark', track: track || mapped };
+    if (raw && MODE_BRIEF[raw]) return { mode: raw, track };
+    return { mode: 'spark', track: track || 'material_rewrite' };
+  }
+  function draftProjectMatchesMode(project, mode) {
+    if (!project) return true;
+    return projectContinuationMode(project).mode === String(mode || '');
+  }
+  function nextEpisodeNo(eps) {
+    if (!Array.isArray(eps) || !eps.length) return 1;
+    return eps.reduce((mx, s) => Math.max(mx, Number(s && s.epNo) || 0), 0) + 1;
+  }
+  function workModeLabel(mode) {
+    return (((I18N.DICT[lang] || I18N.DICT.zh).mode) || {})[mode] || (lang === 'en' ? 'Script' : '剧本');
+  }
+  // v2.667 详情头概况：把列表卡片上的上下文（模式/集数/引擎/制式/平台/更新时间/归档态）
+  // 带进详情页，避免点进去反而丢了「这是哪个项目」的信息。
+  function worksDetailMetaHtml(p) {
+    if (!p) return '';
+    const en = lang === 'en';
+    const chips = [];
+    chips.push(`<span class="wd-chip">${escapeHtml(workModeLabel(p.mode))}</span>`);
+    chips.push(`<span class="wd-chip">${escapeHtml(t('worksDetailEps', { n: Number(p.totalEps) || 0 }))}</span>`);
+    const eng = engineLabel(p.engineTier, true) || (en ? 'Standard' : '标准');
+    chips.push(`<span class="wd-chip">${escapeHtml(eng)}</span>`);
+    chips.push(`<span class="wd-chip">${p.format === 'AIGC' ? 'Z-AIGC' : (en ? 'Live action' : '真人实拍')}</span>`);
+    const plat = platformLabel(p.platform || p.bible?.platform);
+    if (plat) chips.push(`<span class="wd-chip">${escapeHtml(plat)}</span>`);
+    const when = PV().formatDateTime(p.updatedAt || p.createdAt, lang);
+    if (when && when !== '—') chips.push(`<span class="wd-chip wd-chip--time">${escapeHtml(t('worksDetailUpdated', { t: when }))}</span>`);
+    if (p.status === 'archived') chips.push(`<span class="wd-chip wd-chip--archived">${escapeHtml(t('worksArchivedBadge'))}</span>`);
+    return chips.join('');
+  }
+  function renderWorksDetailHead(p, nextNo) {
+    const meta = $('worksDetailMeta');
+    if (meta) meta.innerHTML = worksDetailMetaHtml(p);
+    const rename = $('worksDetailRename');
+    if (rename) rename.textContent = t('worksDetailRename');
+    const arc = $('worksDetailArchive');
+    if (arc) arc.textContent = p.status === 'archived' ? t('worksDetailRestore') : t('worksDetailArchive');
+    const go = $('worksDetailContinue');
+    if (go) {
+      const ep = Math.max(1, Number(nextNo) || 1);
+      go.textContent = t('worksDetailContinue', { n: ep });
+      go.classList.toggle('hidden', ep <= 1 || p.status === 'archived');
+    }
+  }
+  // v2.667 任意模式的续写入口：锁定项目级参数，写新一集方向，生成时对该项目追加 epNo+1 集，
+  // 不再另起新项目造孤儿。空项目（nextNo=1）沿用保存的改编简报。
+  function resumeProjectForContinuation(project, nextNo, opts = {}) {
     if (!project?.id) return;
-    const draft = project?.bible?.adaptationDraft;
-    const hasAdaptBrief = !!draft?.brief;
-    const hasSource = typeof project.bible?.sourceText === 'string' && project.bible.sourceText.trim().length >= 10;
-    if (!hasAdaptBrief && !hasSource) return; // 不满足门槛就放弃（与作品库 canResume 对称）
+    const draft = project.bible?.adaptationDraft;
+    const pick = projectContinuationMode(project);
+    const nextEp = Math.max(1, Number(nextNo) || 1);
     draftProject = project;
-    // v2.329 改编/小说统一归灵感式·素材改编轨道
-    selectedMode = 'spark'; selectedTrack = 'material_rewrite';
-    selectedScriptType = project.bible?.scriptType || 'live_action_drama';
-    // v2.548 还原立项时落库的每集场数（否则界面显示「自动」、生成却沿用落库值，名实不符）
+    draftProject._nextEp = nextEp;
+    selectedMode = pick.mode;
+    selectedTrack = pick.track || 'material_rewrite';
+    selectedScriptType = project.scriptType || project.bible?.scriptType || 'live_action_drama';
     if ($('scenesPerEp')) $('scenesPerEp').value = project.bible?.scenesPerEp ? String(project.bible.scenesPerEp) : '';
-    // v2.549 还原立项时落库的目标平台（否则界面显示「不指定」、生成却沿用落库值，名实不符）
-    if ($('platform')) $('platform').value = project.bible?.platform || '';
+    if ($('platform')) $('platform').value = project.bible?.platform || project.platform || '';
     switchView('studio'); renderModes(); renderScriptTypes(); syncTagBench(); syncModeBrief();
-    $('modeBrief').value = draft?.brief || '';
+    $('modeBrief').value = nextEp > 1 ? '' : (draft?.brief || '');
     $('episodes').value = project.totalEps || 20;
     $('engine').value = clampEngineTier(project.engineTier || 'STANDARD');
     if ($('scriptFormatSel')) {
       $('scriptFormatSel').value = project.format || 'LIVE_ACTION';
       $('scriptFormatSel').dispatchEvent?.(new Event('change'));
     }
-    // v2.319 承接改编/草稿恢复时回填持久化原文（bible.sourceText；旧草稿兼容 adaptationDraft.sourceText），
-    // v2.322 novel 同样走这条路径（立项时 sourceText 已持久化进 bible）
     if ($('sourceText')) $('sourceText').value = project.bible?.sourceText || draft?.sourceText || '';
     syncDraftProject(); closeWorkbench();
     $('modeBrief').focus();
+    if (!opts.silent) {
+      xnSay(nextEp > 1
+        ? (lang === 'en' ? `Continuing "${project.title}" — describe Ep ${nextEp}, then generate.` : `继续《${project.title}》，写下第${nextEp}集的方向，点「生成剧本」即可续写。`)
+        : (lang === 'en' ? `Continuing "${project.title}" — describe this episode, then generate.` : `继续《${project.title}》，填写本集方向后点「生成剧本」即可续写。`));
+    }
+  }
+  function resumeAdaptationProject(project) {
+    if (!project?.id) return;
+    const draft = project?.bible?.adaptationDraft;
+    const hasAdaptBrief = !!draft?.brief;
+    const hasSource = typeof project.bible?.sourceText === 'string' && project.bible.sourceText.trim().length >= 10;
+    if (!hasAdaptBrief && !hasSource) return; // 不满足门槛就放弃（与作品库 canResume 对称）
+    resumeProjectForContinuation(project, 1, { silent: true });
     xnSay(hasAdaptBrief
       ? (lang === 'en' ? 'Your adaptation brief is ready. Review it, then generate this project.' : '已恢复改编大纲，确认简报后点击「生成剧本」即可继续这个项目。')
       : (lang === 'en' ? 'Source restored. Describe this episode direction, then generate.' : '原文已回填，填写本集方向后点击「生成剧本」即可继续。'));
@@ -3690,6 +3759,8 @@
   let worksBulkMode = false;
   let worksSelected = new Set();
   let worksStatusFilter = '';
+  // v2.667 详情内改名/归档后就地标记列表脏，回列表时重载，避免卡片残留旧标题/旧状态
+  let worksListDirty = false;
   let worksBulkBusy = false;
   const worksStatusById = new Map();
   function worksListUrl(q, status, cursor) {
@@ -4141,6 +4212,9 @@
     if (detail) detail.classList.add('hidden');
     const epsBox = $('epsList'); if (epsBox) epsBox.innerHTML = '';
     currentWorksProject = null; currentWorksDiagnosis = null;
+    // v2.667 详情里改过标题或归档态：直接重载列表（loadWorks 会重置筛选/滚动），
+    // 否则返回后卡片仍是旧标题、已归档项目还留在「创作中」筛选里，前后不自洽。
+    if (worksListDirty) { worksListDirty = false; loadWorks(); return; }
     const grid = $('worksGrid'); if (grid) grid.scrollIntoView({ behavior: 'smooth', block: 'start' });
   }
   async function openProject(p) {
@@ -4153,6 +4227,58 @@
     const detail = $('worksDetail'); detail.classList.remove('hidden');
     const worksBackBtn = $('worksBackBtn'); if (worksBackBtn) worksBackBtn.onclick = () => closeWorksDetail();
     $('worksDetailTitle').textContent = p.title;
+    // v2.667 详情头：项目概况 + 就地重命名/归档 + 有成稿即可续写下一集
+    let detailNextEp = 1;
+    renderWorksDetailHead(p, detailNextEp);
+    const worksDetailRenameBtn = $('worksDetailRename');
+    if (worksDetailRenameBtn) worksDetailRenameBtn.onclick = async () => {
+      const newTitle = ((await uiPrompt({ body: lang === 'en' ? 'New title:' : '输入新标题：', value: p.title })) || '').trim();
+      if (!newTitle || newTitle === p.title) return;
+      await runWorkAction(worksDetailRenameBtn, lang === 'en' ? 'Renaming…' : '重命名中…', async () => {
+        try {
+          const res = await Api.request(`/api/generate/projects/${encodeURIComponent(p.id)}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ title: newTitle }) });
+          await Api.jsonOrThrow(res);
+          if (!isCurrentProject()) return;
+          p.title = newTitle; worksListDirty = true;
+          $('worksDetailTitle').textContent = newTitle;
+          renderWorksDetailHead(p, detailNextEp);
+          xnSay(lang === 'en' ? 'Renamed.' : '已重命名。');
+        } catch (e) {
+          xnSay((e && e.message) || (lang === 'en' ? 'Rename failed.' : '重命名失败，请重试。'));
+        }
+      });
+    };
+    const worksDetailArchiveBtn = $('worksDetailArchive');
+    if (worksDetailArchiveBtn) worksDetailArchiveBtn.onclick = async () => {
+      const toArchive = p.status !== 'archived';
+      await runWorkAction(worksDetailArchiveBtn, lang === 'en' ? 'Updating…' : '处理中…', async () => {
+        try {
+          const res = await Api.request(`/api/generate/projects/${encodeURIComponent(p.id)}/archive`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ archive: toArchive }) });
+          await Api.jsonOrThrow(res);
+          if (!isCurrentProject()) return;
+          p.status = toArchive ? 'archived' : 'active'; worksListDirty = true;
+          renderWorksDetailHead(p, detailNextEp);
+          xnSay(toArchive
+            ? (lang === 'en' ? 'Archived. Restore it from the Archived filter.' : '已归档，可在「已归档」筛选里恢复。')
+            : (lang === 'en' ? 'Restored to active.' : '已恢复到创作中。'));
+        } catch (e) {
+          xnSay((e && e.message) || (lang === 'en' ? 'Update failed.' : '操作失败，请重试。'));
+        }
+      });
+    };
+    const worksDetailContinueBtn = $('worksDetailContinue');
+    if (worksDetailContinueBtn) worksDetailContinueBtn.onclick = async () => {
+      if (p.status === 'archived') return;
+      await runWorkAction(worksDetailContinueBtn, lang === 'en' ? 'Preparing…' : '准备续写…', async () => {
+        if (p.bible) { resumeProjectForContinuation(p, detailNextEp); return; }
+        try {
+          const res = await Api.request(`/api/generate/projects/${encodeURIComponent(p.id)}`);
+          resumeProjectForContinuation({ ...p, ...(await Api.jsonOrThrow(res)) }, detailNextEp);
+        } catch (e) {
+          toastInfo((e && e.message) || (lang === 'en' ? 'Failed to load project. Please retry.' : '项目详情加载失败，请重试。'));
+        }
+      });
+    };
     znSkeleton('epsList');
     // v2.257：scripts 取数失败必须就地兜底——作品卡片 onclick 为 fire-and-forget 无 catch，
     // 抛错冒泡会让 epsList 永久停在骨架屏（死骨架，与死 loading 同族）。
@@ -4195,6 +4321,9 @@
     const groups = new Map();
     eps.forEach((s) => { if (!groups.has(s.epNo)) groups.set(s.epNo, []); groups.get(s.epNo).push(s); });
     const latestEps = [...groups.values()].map((vs) => vs[vs.length - 1]);
+    // v2.667 有成稿时显示「继续创作 · 第 N+1 集」；归档项目由 render 统一隐藏
+    detailNextEp = nextEpisodeNo(eps);
+    renderWorksDetailHead(p, detailNextEp);
     // v2.517 作品库单集 → 体检：把成稿正文带进体检面板，用户不必手动复制（免费只读，不耗积分）
     const epTextMap = new Map();
     [...groups.entries()].forEach(([epNo, vs]) => epTextMap.set(Number(epNo), vs[vs.length - 1].content || ''));
@@ -4207,7 +4336,7 @@
         ? `<details class="ep-history"><summary>${lang === 'en' ? `Past versions (${oldVers.length})` : `历史版本（${oldVers.length}）`}</summary>${oldVers.map((v) =>
             `<div class="ep-oldver"><span>${PV().formatVersion(v.version)} · ${v.wordCount || 0} ${lang === 'en' ? 'chars' : '字'}</span>${cmpBtn(v.version, latest.version)}</div>`).join('')}</details>`
         : '';
-      return `<div class="ep-item" data-ep="${epNo}"><h4>EP${epNo} · ${escapeHtml(latest.title || '')} <span class="muted">(${PV().formatVersion(latest.version)} · ${latest.wordCount || 0} ${lang === 'en' ? 'chars' : '字'})</span>${oldVers.length ? cmpBtn(oldVers[oldVers.length - 1].version, latest.version) : ''}<button class="btn-ghost ep-listen-btn" type="button" data-listen-id="${latest.id}">🎧 ${lang === 'en' ? 'Listen' : '听剧本'}</button><button class="btn-ghost ep-lint-btn" type="button" data-lint-ep="${epNo}">${t('tbCardLint')}</button></h4>
+      return `<div class="ep-item" data-ep="${epNo}"><h4>EP${epNo} · ${escapeHtml(latest.title || '')} <span class="muted">(${PV().formatVersion(latest.version)} · ${latest.wordCount || 0} ${lang === 'en' ? 'chars' : '字'})</span>${oldVers.length ? cmpBtn(oldVers[oldVers.length - 1].version, latest.version) : ''}<button class="btn-ghost ep-listen-btn" type="button" data-listen-id="${latest.id}">🎧 ${lang === 'en' ? 'Listen' : '听剧本'}</button><button class="btn-ghost ep-lint-btn" type="button" data-lint-ep="${epNo}">${t('tbCardLint')}</button><button class="btn-ghost ep-copy-btn" type="button" data-copy-ep="${epNo}">${t('worksDetailCopyEp')}</button></h4>
         <div class="muted">${escapeHtml(latest.synopsis || '')}</div><pre>${escapeHtml(latest.content || '')}</pre>${hist}
         <div class="ep-diff hidden" data-diff-box="ep${epNo}"></div></div>`;
     }).join('');
@@ -4235,6 +4364,16 @@
         openWorkbench('lintPanel');
         const ta = $('lintText'); if (ta) ta.value = text;
         const run = $('lintRunBtn'); if (run) run.click();
+      };
+    });
+    // v2.667 单集复制：编剧常把某一集带进别的工具，此前只能全选正文手动复制
+    $('epsList').querySelectorAll('.ep-copy-btn').forEach((b) => {
+      b.onclick = (e) => {
+        e.stopPropagation();
+        const epNo = Number(b.getAttribute('data-copy-ep'));
+        const text = epTextMap.get(epNo) || '';
+        if (!text.trim()) return;
+        copy(text, t('worksDetailCopied', { n: epNo }), t('worksDetailCopyFail'));
       };
     });
     // c208：整剧连播入口（片单+续听定位+自动开播）；权益不足由 openListenSeries 的 403 分支统一引导
@@ -8174,13 +8313,14 @@
     _retryProject = null;
     _retryBrief = null;
     const account = capturePrivateSession();
-    const generationDraft = selectedMode === 'spark' ? draftProject : null;
+    const generationDraft = draftProject;
     for (const loadAssets of [loadCastAssets, loadPropAssets, loadSceneAssets]) {
       await loadAssets();
       if (!isPrivateSessionCurrent(account)) return;
     }
     let brief, projTitle;
-    const useTagBench = selectedMode === 'tag' && $('tagBench') && !$('tagBench').classList.contains('hidden');
+    // v2.667 续写时无论哪种模式都直接对既有项目追加下一集，标签台校验让位给「本集方向」输入
+    const useTagBench = !generationDraft && selectedMode === 'tag' && $('tagBench') && !$('tagBench').classList.contains('hidden');
     if (reuseBrief != null) {
       // v2.277 失败重试：沿用上一次已建项目的简报与标题，跳过输入框/tagBench 校验（失败时面板可能已不在原视图）
       brief = reuseBrief;
@@ -11315,10 +11455,14 @@
   $('langBtn').onclick = () => { const nx = lang === 'zh' ? 'en' : 'zh'; LS.s('zn_lang', nx); applyLang(); };
 
   /* ---------- 工具 ---------- */
-  function copy(text, okMsg) {
+  function copy(text, okMsg, failMsg) {
     if (!text) return;
     navigator.clipboard.writeText(text).then(() => xnSay(okMsg || (lang === 'en' ? 'Copied' : '已复制'))).catch(() => {
-      const ta = document.createElement('textarea'); ta.value = text; document.body.appendChild(ta); ta.select(); document.execCommand('copy'); ta.remove();
+      const ta = document.createElement('textarea'); ta.value = text; document.body.appendChild(ta); ta.select();
+      let ok = false;
+      try { ok = document.execCommand('copy'); } catch (e) { ok = false; }
+      ta.remove();
+      if (!ok && failMsg) xnSay(failMsg);
     });
   }
   function escapeHtml(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])); }

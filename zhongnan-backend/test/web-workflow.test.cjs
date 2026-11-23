@@ -40,6 +40,9 @@ function setup(names, extra = {}) {
       { id: 'FLAGSHIP', zh: '旗舰（顶配组合）', en: 'Flagship (top mix)', min: 'advanced' },
     ],
     _RANK: { free: 0, basic: 1, advanced: 2, pro: 3, paid: 3 },
+    // v2.667 续写轨道判定依赖模式真源；测试内给最小键集，未知模式走 spark 回落
+    MODE_BRIEF: { spark: {}, novel: {}, adapt: {}, tag: {} },
+    worksListDirty: false,
     meCache: null, isStaffAcct: () => false,
     capturePrivateSession: () => ({ owner: 'fixture', epoch: 0 }), isPrivateSessionCurrent: () => true,
     document: { getElementById: () => null, querySelector: () => null, querySelectorAll: () => [], removeEventListener() {}, createElement: () => $('created') },
@@ -69,7 +72,9 @@ function setup(names, extra = {}) {
     ...extra };
   vm.createContext(context);
   // v2.221 加载/空态统一：被抽取函数（openProject/switchSession 等）依赖 znSkeleton/znEmpty*，先注入真实实现
-  for (const name of ['_znEsc', 'znSkeletonHtml', 'znSkeleton', 'znEmptyHtml', 'znEmpty', 'clampEngineTier', 'acctRank', 'engineLabel']) if (functions.has(name)) vm.runInContext(functions.get(name), context);
+  for (const name of ['_znEsc', 'znSkeletonHtml', 'znSkeleton', 'znEmptyHtml', 'znEmpty', 'clampEngineTier', 'acctRank', 'engineLabel',
+    // v2.667 作品详情头概况/续写入口
+    'platformLabel', 'workModeLabel', 'nextEpisodeNo', 'worksDetailMetaHtml', 'renderWorksDetailHead', 'projectContinuationMode', 'draftProjectMatchesMode', 'resumeProjectForContinuation']) if (functions.has(name)) vm.runInContext(functions.get(name), context);
   for (const name of names) if (functions.has(name)) vm.runInContext(functions.get(name), context);
   return { context, $, flush: () => { while (timers.length) timers.shift()(); } };
 }

@@ -815,7 +815,18 @@
         <button type="button" class="btn-ghost" id="worksBulkExit" data-i="worksBulkExit">退出批量</button>
       </div>
       <section class="panel hidden" id="worksDetail">
-        <div class="section-title" style="margin-top:0"><h2 id="worksDetailTitle"></h2><button type="button" class="btn-ghost" id="worksBackBtn" style="margin-left:auto">← <span data-i="backToList"></span></button></div>
+        <div class="works-detail-head">
+          <div class="works-detail-title">
+            <h2 id="worksDetailTitle"></h2>
+            <div class="works-detail-meta" id="worksDetailMeta" role="status" aria-live="polite" data-i-aria="worksDetailMetaAria"></div>
+          </div>
+          <div class="works-detail-tools">
+            <button type="button" class="btn-primary hidden" id="worksDetailContinue"></button>
+            <button type="button" class="btn-ghost" id="worksDetailRename"></button>
+            <button type="button" class="btn-ghost" id="worksDetailArchive"></button>
+            <button type="button" class="btn-ghost" id="worksBackBtn">← <span data-i="backToList"></span></button>
+          </div>
+        </div>
         <!-- v2.492 回访老作品的增值工具入口：有成稿时显示，锁定项目上下文后复用创作台 open 函数 -->
         <div class="row-actions hidden" id="worksVaRow" style="margin-top:0">
           <button type="button" class="btn-ghost" id="worksPkBtn" data-i="worksPk"></button>

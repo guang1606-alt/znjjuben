@@ -814,6 +814,20 @@ textarea { box-sizing: border-box; max-width: 100%; resize: vertical; background
   .work-card.is-selected{transform:none}
   .work-card.is-selected .work-pick{animation:none}
 }
+/* v2.667 作品详情头：项目概况片 + 就地管理 + 续写入口 */
+.works-detail-head{display:flex;align-items:flex-start;gap:12px;flex-wrap:wrap;margin:0 2px 16px;animation:zn-rise var(--motion-slow) var(--ease-out)}
+.works-detail-title{flex:1 1 300px;min-width:0}
+.works-detail-title h2{margin:0;font-family:var(--serif);font-size:1.16rem;letter-spacing:.04em;word-break:break-word}
+.works-detail-meta{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
+.works-detail-meta:empty{display:none}
+.wd-chip{font-size:12px;color:var(--text-2);background:var(--panel-2);border:1px solid var(--line);border-radius:999px;padding:2px 10px;transition:color .2s var(--ease-out),border-color .2s var(--ease-out)}
+.wd-chip--time{font-variant-numeric:tabular-nums}
+.wd-chip--archived{color:var(--danger-text);border-color:color-mix(in srgb,var(--danger-text) 35%,transparent)}
+.works-detail-tools{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-left:auto}
+.works-detail-tools .btn-primary{padding:7px 16px}
+.ep-copy-btn{margin-left:8px;font-size:12px;padding:2px 10px}
+@media (max-width:640px){.works-detail-tools{width:100%;margin-left:0}.works-detail-tools .btn-primary{flex:1}}
+@media (prefers-reduced-motion: reduce) { .works-detail-head { animation: none } .wd-chip { transition: none } }
 .ep-item{border:1px solid var(--line);border-radius:12px;padding:13px 15px;margin-bottom:10px;background:var(--panel-2)}
 .ep-item h4{margin:0 0 6px;font-size:14px;font-family:var(--serif)}
 .ep-item pre{white-space:pre-wrap;word-break:break-word;font-family:inherit;font-size:13.5px;line-height:1.7;margin:8px 0 0;color:var(--text)}
