@@ -20,6 +20,7 @@ import { authRequired, AuthRequest } from '../middleware/auth';
 import { createRequireAdmin, requireSuperAdmin } from '../middleware/admin';
 import { prisma as defaultPrisma } from '../lib/prisma';
 import { logInternal } from '../lib/http-errors';
+import { parsePageParams } from '../lib/pagination';
 
 type PrismaLike = typeof defaultPrisma;
 
@@ -96,6 +97,25 @@ export function createUpdatesRouter(prisma: PrismaLike | any) {
       // v2.610：留痕，避免「无新公告」掩盖 DB 故障
       logInternal(e, 'updates.since');
       res.json({ items: [] });
+    }
+  });
+
+  /**
+   * v2.656 超管历史公告分页：面板 label 是「历史公告」，此前复用 /updates/since?version=0.0.0
+   * 的固定 take:100 窗口，第 101 条起没有任何入口可达。改为超管专用分页端点（统一分页契约），
+   * 公开增量端点 /updates/since 的语义与响应保持不变。
+   */
+  r.get('/admin/updates', ...admin, async (req: AuthRequest, res: any) => {
+    const { page, pageSize, limit, offset } = parsePageParams(req.query as any, { defaultLimit: 20, maxLimit: 100 });
+    try {
+      const [rows, total] = await Promise.all([
+        prisma.announcement.findMany({ orderBy: { createdAt: 'desc' }, skip: offset, take: pageSize }),
+        prisma.announcement.count(),
+      ]);
+      res.json({ items: rows.map(publicAnnouncement), total, page, pageSize, limit, offset });
+    } catch (e) {
+      logInternal(e, 'admin.updates');
+      res.status(500).json({ error: 'INTERNAL_ERROR' });
     }
   });
 

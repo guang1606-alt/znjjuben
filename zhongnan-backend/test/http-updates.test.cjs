@@ -200,3 +200,66 @@ test('GET /api/updates/since 公告表查询失败时降级返回 200 + 空列�
   assert.deepStrictEqual(json.items, []);
   server.close();
 });
+
+// v2.656 超管「历史公告」不再被 /updates/since 的固定 100 条窗口静默截断
+// 缺口：超管面板 label 写着「历史公告」，却复用 /updates/since?version=0.0.0（take: 100），
+// 第 101 条起无任何入口可达。产品铁律要求「每次优化都发公告」，100 条上限在设计上必然被击穿。
+// 修复：新增 GET /api/admin/updates（超管 + 分页统一契约），前端历史列表接翻页器。
+test('GET /api/admin/updates 超管分页浏览历史公告，第 101 条起可达', async () => {
+  const mem = createMemoryPrisma();
+  mem._seedUser({ id: 'admin', phone: '18891995171', nickname: '超管' });
+  mem._seedUser({ id: 'sub', phone: '13900000001', isAdmin: true, nickname: '副管' });
+  mem._seedUser({ id: 'u1', phone: '13900000002', level: 'BASIC', nickname: '张三' });
+  const baseTime = Date.UTC(2026, 2, 1);
+  for (let i = 1; i <= 105; i++) {
+    await mem.announcement.create({ data: {
+      version: `2.${i}.0`, titleZh: `公告 ${i}`, bodyZh: `公告正文 ${i}`,
+      createdAt: new Date(baseTime + i * 1000),
+    } });
+  }
+  const server = appWith(mem).listen(0);
+  await new Promise((r) => server.once('listening', r));
+  const base = `http://127.0.0.1:${server.address().port}`;
+  const adminTok = signAccess({ sub: 'admin', level: 'FREE' });
+  const subTok = signAccess({ sub: 'sub', level: 'FREE' });
+  const userTok = signAccess({ sub: 'u1', level: 'BASIC' });
+  const get = async (path, token) => {
+    const res = await fetch(base + path, { headers: token ? { Authorization: `Bearer ${token}` } : {} });
+    let json = null;
+    try { json = await res.json(); } catch { json = null; }
+    return { status: res.status, json };
+  };
+  try {
+    assert.strictEqual((await get('/api/admin/updates')).status, 401, '未登录必须 401');
+    const rUser = await get('/api/admin/updates', userTok);
+    assert.strictEqual(rUser.status, 403);
+    assert.strictEqual(rUser.json.needAdmin, true);
+    const rSub = await get('/api/admin/updates', subTok);
+    assert.strictEqual(rSub.status, 403);
+    assert.strictEqual(rSub.json.needSuperAdmin, true);
+
+    const p1 = await get('/api/admin/updates?page=1&pageSize=20', adminTok);
+    assert.strictEqual(p1.status, 200);
+    assert.strictEqual(p1.json.total, 105, 'total 必须是真总数而非本页条数');
+    assert.strictEqual(p1.json.page, 1);
+    assert.strictEqual(p1.json.pageSize, 20);
+    assert.strictEqual(p1.json.limit, 20);
+    assert.strictEqual(p1.json.offset, 0);
+    assert.strictEqual(p1.json.items.length, 20);
+    assert.strictEqual(p1.json.items[0].version, '2.105.0', '按 createdAt 倒序，最新在前');
+    assert.strictEqual(p1.json.items[0].createdById, undefined, '内部字段不外泄');
+
+    const p6 = await get('/api/admin/updates?page=6&pageSize=20', adminTok);
+    assert.strictEqual(p6.status, 200);
+    assert.strictEqual(p6.json.page, 6);
+    assert.strictEqual(p6.json.offset, 100);
+    assert.strictEqual(p6.json.items.length, 5, '第 6 页应剩 5 条（101~105）');
+    assert.deepStrictEqual(
+      p6.json.items.map((a) => a.version),
+      ['2.5.0', '2.4.0', '2.3.0', '2.2.0', '2.1.0'],
+      '第 101 条起必须可达且排序正确',
+    );
+  } finally {
+    await new Promise((resolve) => server.close(resolve));
+  }
+});

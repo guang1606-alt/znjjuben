@@ -658,6 +658,7 @@ function createMemoryPrisma() {
         const keys = Array.isArray(arg.orderBy) ? arg.orderBy : [arg.orderBy];
         r = [...r].sort((a, b) => { for (const o of keys) { const k = Object.keys(o)[0]; const dir = o[k] === 'asc' ? 1 : -1; const c = cmp(a[k], b[k]); if (c !== 0) return c * dir; } return 0; });
       }
+      if (arg.skip) r = r.slice(arg.skip);
       if (arg.take) r = r.slice(0, arg.take);
       return arg.select ? r.map((x) => projectRow(x, arg.select)) : r;
     },

@@ -11232,14 +11232,17 @@
     finally { if (btn) { btn.disabled = false; btn.textContent = '触发自动查询'; } }
   }
   // ── v2.187 工具优化弹窗铁律：超管发布更新公告 ──
+  // v2.656 历史公告改走超管分页端点，第 101 条起也可达（此前复用 since 的固定 100 条窗口）
+  const ADM_UPD_PAGE_SIZE = 20;
+  let admUpdPage = 1;
   async function loadAdmUpdates() {
     const listEl = $('admUpdList');
+    const pagerEl = $('admUpdPager');
     if (listEl) znSkeleton(listEl);
+    if (pagerEl) pagerEl.innerHTML = '';
     try {
-      // 复用 /api/updates/latest（只读最新一条）；历史全量走 /api/updates/since?version=0.0.0
-      const res = await Api.request('/api/updates/since?version=0.0.0');
-      const data = await Api.jsonOrThrow(res);
-      const items = Array.isArray(data?.items) ? data.items : [];
+      const d = await admApi(`/updates?page=${admUpdPage}&pageSize=${ADM_UPD_PAGE_SIZE}`);
+      const items = Array.isArray(d?.items) ? d.items : [];
       if (items.length === 0) { if (listEl) znEmpty(listEl, lang === 'en' ? 'No announcements yet.' : '暂无公告。'); return; }
       if (listEl) listEl.innerHTML = items.map((a) => {
         const title = a.titleZh || a.titleEn || `v${a.version}`;
@@ -11249,11 +11252,22 @@
         const ver = escapeHtml(a.version);
         const t1 = escapeHtml(title);
         const b1 = escapeHtml(body);
-        const d = a.createdAt ? new Date(a.createdAt).toLocaleString(lang === 'en' ? 'en-US' : 'zh-CN') : '';
-        return `<div class="card row-card"><div>${pinned}<b>v${ver}</b> <span>${t1}</span> <span class="muted">${d}</span></div><div class="muted" style="margin-top:4px;white-space:pre-wrap">${b1}</div></div>`;
+        const d2 = a.createdAt ? new Date(a.createdAt).toLocaleString(lang === 'en' ? 'en-US' : 'zh-CN') : '';
+        return `<div class="card row-card"><div>${pinned}<b>v${ver}</b> <span>${t1}</span> <span class="muted">${d2}</span></div><div class="muted" style="margin-top:4px;white-space:pre-wrap">${b1}</div></div>`;
       }).join('');
+      renderAdmUpdPager(d);
     // v2.256：错误源已走 Api.jsonOrThrow 脱敏层；muted 弱提示改 znErrorHtml
     } catch (e) { if (listEl) listEl.innerHTML = znErrorHtml((e && e.message) || (lang === 'en' ? 'Failed to load.' : '加载失败')); }
+  }
+  function renderAdmUpdPager(d) {
+    const pagerEl = $('admUpdPager');
+    if (!pagerEl) return;
+    const { pages, hasPrev, hasNext } = znPagerState(d.total, d.page, ADM_UPD_PAGE_SIZE);
+    pagerEl.innerHTML = `<span>${t('admTotal')} ${d.total} · ${t('admPage')} ${d.page}/${pages}</span>`
+      + ` <button class="btn-ghost" id="admUpdPrevPage"${hasPrev ? '' : ' disabled'}>‹ ${lang === 'en' ? 'Prev' : '上一页'}</button>`
+      + ` <button class="btn-ghost" id="admUpdNextPage"${hasNext ? '' : ' disabled'}>${lang === 'en' ? 'Next' : '下一页'} ›</button>`;
+    $('admUpdPrevPage').onclick = () => { if (admUpdPage > 1) { admUpdPage--; loadAdmUpdates(); } };
+    $('admUpdNextPage').onclick = () => { admUpdPage++; loadAdmUpdates(); };
   }
   async function submitAdmUpdate() {
     const version = $('admUpdVer').value.trim();
@@ -11274,6 +11288,7 @@
       xnSay(lang === 'en' ? `Published v${j.version}` : `已发布 v${j.version}`);
       $('admUpdVer').value = ''; $('admUpdTitleZh').value = ''; $('admUpdTitleEn').value = '';
       $('admUpdBodyZh').value = ''; $('admUpdBodyEn').value = ''; $('admUpdPinned').checked = false;
+      admUpdPage = 1;
       loadAdmUpdates();
     } catch (e) { xnSay(e.message || String(e)); }
   }
