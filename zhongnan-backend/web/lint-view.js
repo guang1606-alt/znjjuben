@@ -27,6 +27,9 @@
       truncatedNote: '正文超过 2 万字上限，仅体检前 2 万字，后面的内容未检',
       copyReport: '复制问题单', copied: '已复制', copyFailed: '复制失败，请手动选择文本',
       unlockHint: (names) => `未填「${names}」，对应的断章 / 终局倒推检查未运行；补上后再体检可多查两项。`,
+      staleHint: '正文或选填项已修改——下方结果对应修改前的内容。',
+      staleRerun: '按新内容重跑',
+      staleReportNote: '［注意］正文已修改，以下是修改前正文的体检结果。',
     },
     en: {
       checking: 'Checking…', matching: 'Matching archetypes…',
@@ -46,6 +49,9 @@
       truncatedNote: 'Text exceeds the 20,000-character limit; only the first 20,000 characters were checked.',
       copyReport: 'Copy issue list', copied: 'Copied', copyFailed: 'Copy failed, please select the text manually',
       unlockHint: (names) => `"${names}" is empty, so the cliffhanger / ending-backcast checks did not run; fill it in and re-run to add two checks.`,
+      staleHint: 'Text or optional fields changed — the result below reflects the earlier version.',
+      staleRerun: 'Re-run on current text',
+      staleReportNote: '[Note] Text has changed; the report below was produced from the earlier text.',
     },
   };
   const T = () => (en() ? L.en : L.zh);
@@ -55,6 +61,33 @@
     return window.Api.jsonOrThrow(res);
   }
   let last = null; // { kind: 'lint' | 'arch', data }
+  // v2.664 结果与输入同步：结果只对「提交那一刻的四段输入」成立。用户改了正文却照着旧结果改稿，
+  // 等于把上一版结论当成本版结论——这里用输入指纹守卫，过期就提示并可一键按新内容重跑。
+  let lastKey = null;
+  const LINT_FIELDS = ['lintText', 'lintTitle', 'lintEnding', 'lintOutline'];
+  function inputsKey() {
+    return LINT_FIELDS.map((id) => String(($(id) || {}).value || '').trim()).join('\u0001');
+  }
+  function isStale() {
+    return !!last && lastKey !== null && lastKey !== inputsKey();
+  }
+  function syncStale() {
+    const box = $('lintResult');
+    if (!box) return;
+    const stale = isStale();
+    box.classList.toggle('lint-stale', stale);
+    const bar = box.querySelector('[data-lint-stale]');
+    if (stale && !bar) {
+      const t = T();
+      const el = document.createElement('div');
+      el.className = 'lint-stale-bar';
+      el.setAttribute('data-lint-stale', '1');
+      el.innerHTML = `<span class="lint-stale-dot" aria-hidden="true"></span><span>${esc(t.staleHint)}</span><button type="button" class="chip" data-lint-rerun>${esc(t.staleRerun)}</button>`;
+      box.insertBefore(el, box.firstChild || null);
+    } else if (!stale && bar) {
+      bar.remove();
+    }
+  }
 
   function levelClass(level) {
     return level === 'P1' ? 'sev-mid' : level === 'P2' ? 'sev-low' : '';
@@ -179,6 +212,7 @@
   function reRender() {
     if (!last) return;
     if (last.kind === 'lint') renderLint(last.data, last.eps || 0, last.meta); else renderArch(last.data);
+    syncStale(); // 重渲染会清掉提示条：过期状态要跟着结果一起补回来
   }
 
   async function runLint() {
@@ -199,14 +233,17 @@
       if (title) body.title = title;
       if (ending) body.ending = ending;
       if (outline) body.outline = outline;
+      const key = inputsKey(); // 提交前快照：请求期间用户再改动，结果落地后也会立刻被判过期
       const d = await postJson('/api/craft/lint', body);
       const meta = { ending: !!ending, outline: !!outline, epsTotal: totalEps };
       last = { kind: 'lint', data: d, eps: eps.length, meta };
+      lastKey = key;
       renderLint(d, eps.length, meta);
     } catch (e) {
       $('lintResult').innerHTML = `<div class="dv-bad">${esc(T().fail)}${colon()}${esc((e && e.message) || '')}</div>`;
     } finally {
       if (btn) btn.disabled = old;
+      syncStale();
     }
   }
 
@@ -218,13 +255,16 @@
     if (btn) btn.disabled = true;
     $('lintResult').innerHTML = `<div class="muted">${esc(T().matching)}</div>`;
     try {
+      const key = inputsKey();
       const d = await postJson('/api/craft/archetype-match', { text, lang: en() ? 'en' : 'zh' });
       last = { kind: 'arch', data: d };
+      lastKey = key;
       renderArch(d);
     } catch (e) {
       $('lintResult').innerHTML = `<div class="dv-bad">${esc(T().fail)}${colon()}${esc((e && e.message) || '')}</div>`;
     } finally {
       if (btn) btn.disabled = old;
+      syncStale();
     }
   }
 
@@ -233,13 +273,21 @@
     $('lintRunBtn').onclick = runLint;
     $('lintArchBtn').onclick = runArch;
     $('lintClose').onclick = () => $('lintPanel').classList.add('hidden');
+    // 四个输入任一变化都重新判定结果是否还对应现在的正文
+    LINT_FIELDS.forEach((id) => { const el = $(id); if (el) el.addEventListener('input', syncStale); });
     document.addEventListener('zn-lang', reRender);
+    // 提示条里的「按新内容重跑」随结果区重建，走委托保证不丢
+    document.addEventListener('click', (e) => {
+      const hit = e.target && e.target.closest && e.target.closest('[data-lint-rerun]');
+      if (hit) runLint();
+    });
     // 复制按钮随结果区重渲染，用 document 级委托保证绑定不丢
     document.addEventListener('click', (e) => {
       const hit = e.target && e.target.closest && e.target.closest('[data-lint-copy]');
       if (!hit) return;
       if (!last || last.kind !== 'lint') return;
-      copyText(reportText(last.data, last.eps || 0, last.meta)).then(() => {
+      const warn = isStale() ? T().staleReportNote + '\n' : '';
+      copyText(warn + reportText(last.data, last.eps || 0, last.meta)).then(() => {
         const old = hit.textContent;
         hit.textContent = T().copied; hit.disabled = true;
         setTimeout(() => { hit.textContent = old; hit.disabled = false; }, 1200);

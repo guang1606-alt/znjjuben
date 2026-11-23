@@ -1188,6 +1188,14 @@ textarea { box-sizing: border-box; max-width: 100%; resize: vertical; background
 .lint-ta:focus{outline:2px solid var(--accent-weak);outline-offset:1px}
 .lint-two{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:10px}
 @media (max-width:720px){.lint-two{grid-template-columns:1fr}}
+/* v2.664 体检结果 / 正文同步：改过正文但没重跑时，结果区顶部出现常驻提示条，旧报告轻微降饱和——
+   一眼看出「这份结论不是当前正文的」，避免照着上一版问题单改错地方。圆点低频脉冲表示「待重跑」。 */
+.lint-stale-bar{display:flex;align-items:center;gap:9px;flex-wrap:wrap;margin:12px 0 2px;padding:8px 12px;border-radius:10px;font-size:12.5px;line-height:1.55;color:var(--warn-text);background:color-mix(in srgb,var(--gold) 12%,var(--panel));border:1px solid color-mix(in srgb,var(--gold) 40%,transparent);animation:zn-rise var(--motion) var(--ease-out) both}
+.lint-stale-bar [data-lint-rerun]{margin-left:auto}
+.lint-stale-dot{flex:none;width:7px;height:7px;border-radius:50%;background:var(--gold-deep);box-shadow:0 0 0 3px color-mix(in srgb,var(--gold) 18%,transparent);animation:zn-stale-pulse 2.4s var(--ease-out) infinite}
+#lintResult.lint-stale .dv-report{opacity:.66;filter:saturate(.75);transition:opacity var(--motion) var(--ease-out),filter var(--motion) var(--ease-out)}
+@keyframes zn-stale-pulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.4;transform:scale(.7)}}
+@media (prefers-reduced-motion:reduce){.lint-stale-bar{animation:none}.lint-stale-dot{animation:none}}
 .dv-table{width:100%;border-collapse:collapse;margin-top:8px;font-size:12.5px}
 .dv-table th,.dv-table td{border:1px solid var(--line);padding:5px 8px;text-align:center}
 @media(max-width:680px){.dv-tagline{grid-template-columns:1fr}}
