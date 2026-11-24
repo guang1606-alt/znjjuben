@@ -108,3 +108,15 @@ test('v2.673 新增样式齐备且动效有降级出口', () => {
   const tail = css.slice(css.indexOf('.stage-progress'));
   assert.ok(/prefers-reduced-motion:\s*reduce/.test(tail), '新增动效必须带降级出口');
 });
+
+// ── v2.674 入口一致性：首页卡片与工作台标题表都要认打磨阶梯 ──
+// 教训：v2.672 只把 stageLadder 加进 app.js 的兜底对象，而线上实际读的是
+// window.ZN_DATA.WORKBENCH_TITLES（constants.js）；两条数据源不同步时，
+// 工作台标题会静默退化成面板里的静态文字，首页也永远不出现这张卡。
+test('v2.674 首页工具卡与工作台标题表包含打磨阶梯', () => {
+  const app = fs.readFileSync(path.join(__dirname, '../web/app.js'), 'utf8');
+  const constants = fs.readFileSync(path.join(__dirname, '../web/data/constants.js'), 'utf8');
+  assert.match(constants, /id: 'toolStage', key: 'tbCardStage'/, 'constants.js 的 HOME_TOOLS 应含打磨阶梯（首页实际读这里）');
+  assert.match(constants, /stageLadder:\s*\{\s*zh: '打磨阶梯/, 'constants.js 的 WORKBENCH_TITLES 应含打磨阶梯标题');
+  assert.match(app, /id: 'toolStage', key: 'tbCardStage'/, 'app.js 兜底 HOME_TOOLS 应与 constants.js 对齐');
+});
