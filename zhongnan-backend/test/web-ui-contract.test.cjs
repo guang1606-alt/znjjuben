@@ -44,6 +44,16 @@ describe('v2.472 前端 UI 契约', () => {
   });
 });
 
+describe('v2.676 标签台联动回显', () => {
+  it('回显块、手动重算按钮、样式与接线齐备', () => {
+    assert.match(html, /id="tagCraftEcho"/, 'index.html 缺少标签台递招回显块');
+    assert.match(html, /id="tagCraftGo"/, 'index.html 缺少手动重新递招入口');
+    assert.match(css, /\.tag-craft-echo\s*\{/, 'styles.css 缺少 .tag-craft-echo 样式');
+    assert.ok(app.includes('function renderTagCraftEcho('), 'app.js 缺少回显渲染函数');
+    assert.ok(/tagCraftGo[\s\S]{0,80}onclick/.test(app), '手动重算按钮未接线');
+  });
+});
+
 // v2.524 分类浏览按界面语言取数据：不传 lang 时英文界面会一直显示中文钩子与方法卡，
 // 且缓存不带语言标记时切语言后不会重拉——这里守住三处接线。
 describe('v2.524 递招面板跟随界面语言', () => {

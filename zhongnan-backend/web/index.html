@@ -228,6 +228,16 @@
         <div class="tag-chosen" id="tagChosen"></div>
         <div class="field"><label data-i="tagIdeaLabel" for="tagIdea">补充一句话创意（选填，让方向更具体）</label>
           <input id="tagIdea" autocomplete="off" type="text" maxlength="80" data-ph="tagIdeaPh" placeholder="例：被顶替名额的女医生回乡逆袭" /></div>
+        <!-- v2.676 标签台联动回显：递招结果此前只写进隐藏的递招面板，标签台用户看不到手法与开篇审计。
+             放在「下一步」之前，保证用户先看到手法再决定是否出本。 -->
+        <div class="tag-craft-echo hidden" id="tagCraftEcho" role="region" aria-labelledby="tagCraftEchoTitle">
+          <div class="tag-craft-echo-head">
+            <b id="tagCraftEchoTitle" data-i="tagCraftEchoTitle">小南随标签递上的手法</b>
+            <span data-i="tagCraftEchoSub">已自动写进出本创意；改标签或创意后需重新递招</span>
+            <button type="button" class="chip" id="tagCraftGo" data-i="tagCraftEchoGo">按当前标签重新递招</button>
+          </div>
+          <div id="tagCraftEchoBody"></div>
+        </div>
         <!-- v2.657 下一步显式入口：此前标签选完只能靠工作台头部/二级界面按钮，原地无 CTA -->
         <div class="tag-bench-foot">
           <span class="muted" id="tagFootHint"></span>

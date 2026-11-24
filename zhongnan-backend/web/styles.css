@@ -1147,6 +1147,24 @@ textarea { box-sizing: border-box; max-width: 100%; resize: vertical; background
 .tag-why b{color:var(--gold-deep)}
 .tag-why p{margin:4px 0 0}
 .tag-en-note{color:var(--text-2);font-size:.8rem}
+/* v2.676 标签台联动回显：递招结果此前只渲染在隐藏的递招面板，标签台用户看不到手法与开篇审计 */
+.tag-craft-echo{margin:0 0 10px;padding:12px 14px;border:1px solid color-mix(in srgb,var(--gold) 26%,var(--line));border-radius:12px;background:linear-gradient(135deg,color-mix(in srgb,var(--gold) 6%,var(--panel-2)),var(--panel-2));animation:tag-craft-echo-in var(--motion) var(--ease-out)}
+.tag-craft-echo-head{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:6px}
+.tag-craft-echo-head b{font-family:var(--serif);font-size:.9rem;color:var(--gold-deep)}
+.tag-craft-echo-head span{font-size:.75rem;line-height:1.5;color:var(--text-2)}
+.tag-craft-echo-head .chip{margin-left:auto}
+.tag-craft-echo-row{display:flex;align-items:flex-start;gap:8px;flex-wrap:wrap;margin-top:6px}
+.tag-craft-echo-label{flex:0 0 auto;font-size:.75rem;color:var(--text-2);padding-top:3px}
+.tag-craft-echo-chip{display:inline-flex;align-items:center;padding:3px 9px;border-radius:999px;font-size:.78rem;line-height:1.5;background:color-mix(in srgb,var(--gold) 12%,var(--panel));border:1px solid color-mix(in srgb,var(--gold) 22%,var(--line));color:var(--text)}
+.tag-craft-echo-chip.is-card{background:color-mix(in srgb,var(--accent) 9%,var(--panel));border-color:color-mix(in srgb,var(--accent) 22%,var(--line))}
+.tag-craft-echo-audit{display:flex;flex-direction:column;gap:3px;margin-top:10px;padding-top:9px;border-top:1px dashed color-mix(in srgb,var(--line) 80%,transparent);font-size:.78rem;line-height:1.65}
+.tag-craft-echo-audit b{color:var(--accent-strong)}
+.tag-craft-echo-empty{margin:0;font-size:.8rem;color:var(--text-2)}
+.tag-craft-echo.is-stale{border-style:dashed;background:var(--panel-2)}
+.tag-craft-echo.is-stale .tag-craft-echo-head b{color:var(--text-2)}
+@keyframes tag-craft-echo-in{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:translateY(0)}}
+@media (max-width:640px){.tag-craft-echo-head .chip{margin-left:0;width:100%}.tag-craft-echo-row{flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none;padding-bottom:2px;-webkit-mask-image:linear-gradient(to right,#000 92%,transparent);mask-image:linear-gradient(to right,#000 92%,transparent)}.tag-craft-echo-row::-webkit-scrollbar{display:none}.tag-craft-echo-chip,.tag-craft-echo-label{flex:0 0 auto}}
+@media (prefers-reduced-motion: reduce){.tag-craft-echo{animation:none}}
 .tag-report{font-size:.84rem;min-height:20px}
 .tag-report.ok{color:var(--accent-strong);font-weight:600}
 .tag-report.bad{color:var(--cinnabar);font-weight:600}

@@ -255,7 +255,7 @@
     // v2.524 缓存带语言标记：切语言后旧缓存作废需重拉；推荐卡也按新语言重新匹配，避免中英混排
     if (typeof renderCraftHooks === 'function' && (craftTaxonomy || craftRecCards.length)) {
       const _langChanged = !!craftTaxonomyLang && craftTaxonomyLang !== lang;
-      if (_langChanged) { craftTaxonomy = null; craftRecCards = []; renderCraftOpeningAudit(null); }
+      if (_langChanged) { craftTaxonomy = null; craftRecCards = []; renderCraftOpeningAudit(null); if (typeof renderTagCraftEcho === 'function') renderTagCraftEcho({ stale: true }); }
       // v2.662 renderStaticText 会把块头洗回静态兜底，语言切换后需按库内总量重刷一次
       const _after = () => { renderCraftHooks(); renderCraftCards(); renderCraftPicked(); syncCraftFreeCount(); };
       if (_langChanged) loadCraftTaxonomy().then(_after).catch(_after); else _after();
@@ -1591,7 +1591,12 @@
     $('tagRandomBtn').onclick = () => smartRandomTags(false);
     $('tagRerollBtn').onclick = () => smartRandomTags(false);
     $('tagRecommendBtn').onclick = () => recommendTags();
-    $('tagClearBtn').onclick = () => { tagChosen = []; tagDirector = null; ++tagPoolSeq; renderTagChosen(); renderTagPool([]); $('tagWhy').classList.add('hidden'); $('tagReport').textContent = ''; xnSay(lang === 'en' ? 'Cleared.' : '已清空，可重新随机或搜索标签。'); };
+    $('tagClearBtn').onclick = () => { tagChosen = []; tagDirector = null; ++tagPoolSeq; renderTagChosen(); renderTagPool([]); $('tagWhy').classList.add('hidden'); $('tagReport').textContent = ''; if (typeof renderTagCraftEcho === 'function') renderTagCraftEcho({ stale: true }); xnSay(lang === 'en' ? 'Cleared.' : '已清空，可重新随机或搜索标签。'); };
+    // v2.676 标签台内手动重算：此前只有「智能随机一组」会顺带触发递招，手选标签无法主动重算
+    const tagCraftGo = $('tagCraftGo');
+    if (tagCraftGo) tagCraftGo.onclick = () => { if (typeof craftGo === 'function') craftGo().catch(() => {}); };
+    const tagIdeaEl = $('tagIdea');
+    if (tagIdeaEl) tagIdeaEl.oninput = () => { if (typeof renderTagCraftEcho === 'function') renderTagCraftEcho({ stale: true }); };
     const ol = $('outLang'); if (ol) ol.addEventListener('change', () => {
       if (selectedMode === 'tag') smartRandomTags(true);
       // v2.44 输出语言变化时，策略卡（钩子/节奏/台词/情绪/人物）按新语言重载
@@ -1651,8 +1656,9 @@
     if (tagChosen.includes(name)) return;
     if (tagChosen.length >= TAG_MAX) { xnSay(t('tagMaxWarn')); return; }
     tagChosen.push(name); renderTagChosen(); renderTagPool(lastPool); validateTagCombo();
+    if (typeof renderTagCraftEcho === 'function') renderTagCraftEcho({ stale: true });
   }
-  function removeTag(name) { tagChosen = tagChosen.filter((x) => x !== name); renderTagChosen(); renderTagPool(lastPool); validateTagCombo(); }
+  function removeTag(name) { tagChosen = tagChosen.filter((x) => x !== name); renderTagChosen(); renderTagPool(lastPool); validateTagCombo(); if (typeof renderTagCraftEcho === 'function') renderTagCraftEcho({ stale: true }); }
   function renderTagChosen() {
     const box = $('tagChosen'); if (!box) return;
     box.innerHTML = '';
@@ -1955,6 +1961,44 @@
       <p><b>${escapeHtml(t('craftAuditNext'))}</b>${escapeHtml(audit.advice || '')}</p>`;
     box.classList.remove('hidden');
   }
+  // v2.676 标签台联动回显：随机/重算标签后，钩子、方法卡与开篇审计原本只渲染在隐藏的递招面板，
+  // 标签台用户看不到任何结果。这里在标签台原地给一份只读摘要，改标签/创意即撤下，避免用旧手法出本。
+  let tagCraftEchoData = null;
+  function renderTagCraftEcho(data) {
+    if (data !== undefined) tagCraftEchoData = data;
+    const box = $('tagCraftEcho'), body = $('tagCraftEchoBody');
+    if (!box || !body) return;
+    const d = tagCraftEchoData;
+    if (!d) { box.classList.add('hidden'); box.classList.remove('is-stale'); body.innerHTML = ''; return; }
+    if (d.stale) {
+      // v2.676 失效态：标签/创意刚改过，保留块与「重新递招」按钮，避免用户失去重算入口
+      box.classList.add('is-stale');
+      body.innerHTML = `<p class="tag-craft-echo-empty">${escapeHtml(t('tagCraftEchoStale'))}</p>`;
+      box.classList.remove('hidden');
+      return;
+    }
+    box.classList.remove('is-stale');
+    const hookNames = (d.hooks || []).map((h) => h.name).filter(Boolean);
+    const cardTitles = (d.cards || []).map((c) => c.title).filter(Boolean);
+    if (!hookNames.length && !cardTitles.length && !d.audit) {
+      body.innerHTML = `<p class="tag-craft-echo-empty">${escapeHtml(t('tagCraftEchoEmpty'))}</p>`;
+      box.classList.remove('hidden');
+      return;
+    }
+    const row = (label, items, cls) => items.length
+      ? `<div class="tag-craft-echo-row"><span class="tag-craft-echo-label">${escapeHtml(label)}</span>${items.map((x) => `<span class="tag-craft-echo-chip${cls}">${escapeHtml(x)}</span>`).join('')}</div>`
+      : '';
+    let html = row(t('tagCraftEchoHooks'), hookNames, ' is-hook') + row(t('tagCraftEchoCards'), cardTitles, ' is-card');
+    if (d.audit) {
+      const used = (Array.isArray(d.audit.used) ? d.audit.used : []).map((id) => { const h = findHook(id); return h ? h.name : id; });
+      const usedText = used.length ? used.join(lang === 'en' ? ', ' : '、') : t('craftAuditEmpty');
+      html += `<div class="tag-craft-echo-audit"><b>${escapeHtml(t('tagCraftEchoAdvice'))}</b>`
+        + `<span>${escapeHtml(t('tagCraftEchoUsed'))}${escapeHtml(usedText)}</span>`
+        + `<span>${escapeHtml(d.audit.advice || '')}</span></div>`;
+    }
+    body.innerHTML = html;
+    box.classList.remove('hidden');
+  }
   function wireCraftContext() {
     const idea = $('craftIdea');
     const opening = $('craftOpening');
@@ -1988,6 +2032,10 @@
       saveCraftPick();
       renderCraftHooks(); renderCraftCards(); renderCraftPicked();
       renderCraftOpeningAudit(j.openingAudit);
+      // v2.676 标签台联动：就地回显本次匹配，用户不切面板也能看到手法与开篇建议
+      if (useTagContext && typeof renderTagCraftEcho === 'function') {
+        renderTagCraftEcho({ hooks: craftSelHooks, cards: craftSelCards, audit: j.openingAudit || null });
+      }
     } catch (e) { xnSay(e.message || 'craft error'); } finally { loading.classList.add('hidden'); _craftGoing = false; }
   }
   wireCraftContext();

@@ -542,3 +542,51 @@ test('v2.675 独立递招出本走自动匹配，标题与简报都来自当前�
   assert.equal(create.data.tags, undefined, '不得伪装成隐藏标签创作');
   assert.equal(gen.data.brief, '女医生回乡查出顶替真相\n' + CRAFT_LINE);
 });
+
+test('v2.676 标签台递招结果原地回显，用户不必切到隐藏的递招面板', async () => {
+  const { context: c, $ } = setup(['craftGo', 'renderCraftOpeningAudit', 'renderTagCraftEcho', 'findHook', 'saveCraftPick'], {
+    lang: 'zh', tagChosen: ['医生', '悬疑'], craftSelHooks: [], craftSelCards: [], craftRecCards: [], _craftGoing: false,
+    craftTaxonomy: { hooks: [{ id: 'anticommon_hook', name: '反常钩' }], cardGroups: [{ name: '组', cards: [{ id: 'c1', title: '先抑后扬' }] }] },
+    loadCraftTaxonomy: async () => {}, renderCraftHooks() {}, renderCraftCards() {}, renderCraftPicked() {}, xnSay() {},
+    Api: { request: async () => ({ json: async () => ({ hooks: [{ id: 'anticommon_hook', name: '反常钩' }], cards: [{ id: 'c1', title: '先抑后扬' }], openingAudit: { used: ['anticommon_hook'], advice: '第二句再收紧。' } }) }) },
+  });
+  $('tagBench').classList.remove('hidden');
+  $('tagIdea').value = '女医生回乡查出顶替真相';
+  await c.craftGo();
+  assert.equal($('tagCraftEcho').classList.contains('hidden'), false, '标签台必须原地展示递招结果');
+  assert.match($('tagCraftEchoBody').innerHTML, /反常钩/, '钩子名要回显');
+  assert.match($('tagCraftEchoBody').innerHTML, /先抑后扬/, '方法卡要回显');
+  assert.match($('tagCraftEchoBody').innerHTML, /第二句再收紧。/, '开篇审计建议要回显');
+});
+
+test('v2.676 独立递招只在递招面板显示，不污染标签台回显', async () => {
+  const { context: c, $ } = setup(['craftGo', 'renderCraftOpeningAudit', 'renderTagCraftEcho', 'findHook', 'saveCraftPick'], {
+    lang: 'zh', tagChosen: [], craftSelHooks: [], craftSelCards: [], craftRecCards: [], _craftGoing: false,
+    craftTaxonomy: { hooks: [], cardGroups: [] },
+    loadCraftTaxonomy: async () => {}, renderCraftHooks() {}, renderCraftCards() {}, renderCraftPicked() {}, xnSay() {},
+    Api: { request: async () => ({ json: async () => ({ hooks: [{ id: 'anticommon_hook', name: '反常钩' }], cards: [{ id: 'c1', title: '先抑后扬' }] }) }) },
+  });
+  $('craftBench').classList.remove('hidden');
+  $('craftIdea').value = '独立创意';
+  await c.craftGo();
+  assert.equal($('tagCraftEcho').classList.contains('hidden'), true, '独立递招不得在标签台留回显');
+});
+
+test('v2.676 标签或创意变化会立即作废旧递招回显，避免用旧手法出本', async () => {
+  const { context: c, $ } = setup(['craftGo', 'renderCraftOpeningAudit', 'renderTagCraftEcho', 'findHook', 'saveCraftPick', 'addTag'], {
+    lang: 'zh', tagChosen: ['医生'], TAG_MAX: 14, lastPool: [], craftSelHooks: [], craftSelCards: [], craftRecCards: [], _craftGoing: false,
+    craftTaxonomy: { hooks: [], cardGroups: [] },
+    loadCraftTaxonomy: async () => {}, renderCraftHooks() {}, renderCraftCards() {}, renderCraftPicked() {}, xnSay() {},
+    renderTagChosen() {}, renderTagPool() {}, validateTagCombo() {},
+    Api: { request: async () => ({ json: async () => ({ hooks: [{ id: 'anticommon_hook', name: '反常钩' }], cards: [] }) }) },
+  });
+  $('tagBench').classList.remove('hidden');
+  $('tagIdea').value = '女医生回乡';
+  await c.craftGo();
+  assert.equal($('tagCraftEcho').classList.contains('hidden'), false);
+  c.addTag('复仇');
+  assert.equal($('tagCraftEcho').classList.contains('hidden'), false, '失效态要保持可见，否则重算按钮也没了');
+  assert.equal($('tagCraftEcho').classList.contains('is-stale'), true, '失效态要有明确视觉区分');
+  assert.match($('tagCraftEchoBody').innerHTML, /tagCraftEchoStale/, '失效态要提示重新递招');
+  assert.doesNotMatch($('tagCraftEchoBody').innerHTML, /反常钩/, '旧手法内容不得残留');
+});
