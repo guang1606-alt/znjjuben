@@ -404,3 +404,25 @@ describe('v2.680 素材库说明折叠、英文标签与空态复位', () => {
     assert.ok(!/\.tag-search-row, \.novel-lang-row \{ flex-direction: column/.test(css), '窄屏不得再把语言筛选改成竖排');
   });
 });
+
+// v2.681 折叠胶囊与空态按钮的动效细节：展开/收起平滑、按钮入场与按压反馈；
+// 同时必须全部带降动效兜底，避免前庭敏感用户被动画冒犯。
+describe('v2.681 素材库动效细节', () => {
+  it('折叠说明展开/收起有高度与透明度过渡，箭头用弹性曲线', () => {
+    assert.match(css, /\.craft-note::details-content\{[^}]*transition:[^}]*block-size/, '折叠正文缺高度过渡');
+    assert.match(css, /\.craft-note\[open\]::details-content\{[^}]*block-size:auto/, '展开态须显式回到 auto 才能过渡');
+    assert.match(css, /\.craft-note>summary::after\{[^}]*transition:transform var\(--motion\) var\(--ease-spring\)/, '箭头旋转缺弹性过渡');
+  });
+
+  it('空态与复位按钮有入场、悬停上浮、按压回弹与焦点环', () => {
+    assert.match(css, /\.novel-empty\{[^}]*animation:zn-empty-in/, '空态缺入场动画');
+    assert.match(css, /@keyframes zn-empty-in/, '缺少 zn-empty-in 关键帧');
+    assert.match(css, /\.novel-empty \.btn-ghost:hover\{[^}]*translateY\(-1px\)/, '复位按钮缺悬停上浮');
+    assert.match(css, /\.novel-empty \.btn-ghost:active\{[^}]*scale\(\.96\)/, '复位按钮缺按压回弹');
+    assert.match(css, /\.novel-empty \.btn-ghost:focus-visible\{[^}]*outline:2px solid/, '复位按钮缺键盘焦点环');
+  });
+
+  it('降动效偏好下新增过渡与动画全部关闭', () => {
+    assert.match(css, /@media \(prefers-reduced-motion:reduce\)\{[^}]*\.craft-note::details-content[^}]*\.novel-empty[^}]*transition:none;animation:none/, '降动效兜底未覆盖折叠正文与空态');
+  });
+});
