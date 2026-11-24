@@ -4,7 +4,7 @@
   'use strict';
   const C = {};
 // v2.498 运行时版本号（首页更新通知用；bump-version.cjs 同步更新）
-C.ZN_VERSION = '2.679.0';
+C.ZN_VERSION = '2.680.0';
 C.HOME_TOOLS = [
     { id: 'toolPitch', key: 'tbCardPitch', desc: 'tbCardPitchP', cost: 'tbCostPitch' },
     { id: 'toolRead', key: 'tbCardRead', desc: 'tbCardReadP', cost: 'tbCostRead' },
@@ -155,7 +155,7 @@ C.CRAFT_HOOK_EN = {
   };
 
 C.NOVEL_LIC_LABEL = {
-    public_domain: { zh: '公版', en: 'PD' },
+    public_domain: { zh: '公版', en: 'Public domain' },
     cc: { zh: 'CC授权·遵协议', en: 'CC · per license' },
     platform_free: { zh: '正版免费·仅阅读', en: 'Free to read' },
   };
