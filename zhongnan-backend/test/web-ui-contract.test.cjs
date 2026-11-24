@@ -377,3 +377,30 @@ describe('v2.679 分集卡片标题与操作分行', () => {
     assert.match(css, /#loginBtn\{order:-1/, '账号按钮未前置到控件区首位');
   });
 });
+
+// v2.680 素材库可读性：授权说明整段铺在列表前，手机要滑过一大段法律文字才看到来源；
+// 英文界面语言筛选仍显示中文「多语」，公版徽标缩写 PD 对普通用户不可读；筛选无结果时没有一键复位。
+describe('v2.680 素材库说明折叠、英文标签与空态复位', () => {
+  it('授权说明收进可展开的 details，列表更早出现', () => {
+    assert.match(html, /<details class="craft-note">/, '缺少可折叠说明容器');
+    assert.match(html, /data-i="novelSrcNoteSum"/, '缺少说明折叠标题');
+    assert.match(html, /data-i="novelSrcSub"/, '授权说明正文仍需保留（折叠内）');
+  });
+  it('英文界面语言筛选与公版徽标本地化', () => {
+    assert.match(app, /lang === 'en' \? 'Multi' : '多语'/, '多语筛选在英文下仍显示中文');
+    const constants = fs.readFileSync(path.join(ROOT, 'web', 'data', 'constants.js'), 'utf8');
+    assert.match(constants, /public_domain:\s*\{\s*zh:\s*'公版',\s*en:\s*'Public domain'\s*\}/, '英文公版徽标仍是 PD 缩写');
+  });
+  it('筛选无结果时给出清除搜索与筛选的出口', () => {
+    assert.match(app, /novelClearBtn/, '空态缺少一键复位按钮');
+    const i18n = require(path.join(ROOT, 'web', 'i18n.js'));
+    for (const key of ['novelSrcNoteSum', 'novelClearFilter']) {
+      assert.ok(i18n.t('zh', key) !== key, '中文缺文案 ' + key);
+      assert.ok(i18n.t('en', key) !== key, '英文缺文案 ' + key);
+    }
+  });
+  it('窄屏语言筛选单行横滑，不再竖排占满首屏', () => {
+    assert.match(css, /@media screen and \(max-width:640px\)\{[\s\S]{0,400}\.novel-lang-row\{[^}]*flex-wrap:nowrap/, '窄屏语言筛选须改为单行横滑');
+    assert.ok(!/\.tag-search-row, \.novel-lang-row \{ flex-direction: column/.test(css), '窄屏不得再把语言筛选改成竖排');
+  });
+});

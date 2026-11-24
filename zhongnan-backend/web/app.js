@@ -2061,7 +2061,7 @@
   /* ---------- 免费合法小说素材库（多语言，只读外链） ---------- */
   const NOVEL_LANG_LABEL = { zh: '中文', en: 'English', ja: '日本語', ko: '한국어', es: 'Español', de: 'Deutsch', fr: 'Français', it: 'Italiano', ru: 'Русский', pt: 'Português', ar: 'العربية', multi: '多语' };
   const NOVEL_LIC_LABEL = (typeof window !== 'undefined' && window.ZN_DATA && window.ZN_DATA.NOVEL_LIC_LABEL) || {
-    public_domain: { zh: '公版', en: 'PD' },
+    public_domain: { zh: '公版', en: 'Public domain' },
     cc: { zh: 'CC授权·遵协议', en: 'CC · per license' },
     platform_free: { zh: '正版免费·仅阅读', en: 'Free to read' },
   };
@@ -2090,7 +2090,7 @@
     all.forEach(({ lang: l }) => {
       const b = document.createElement('button');
       b.type = 'button'; b.className = 'chip novel-lang-chip' + (novelCurLang === l ? ' on' : '');
-      b.textContent = (l === '' ? (lang === 'en' ? 'All' : '全部') : (NOVEL_LANG_LABEL[l] || l));
+      b.textContent = l === '' ? (lang === 'en' ? 'All' : '全部') : (l === 'multi' ? (lang === 'en' ? 'Multi' : '多语') : (NOVEL_LANG_LABEL[l] || l));
       b.onclick = () => { novelCurLang = l; renderNovelLangRow(); renderNovelGrid(); };
       row.appendChild(b);
     });
@@ -2104,7 +2104,19 @@
     if (novelCurLang) list = list.filter((s) => s.langs.includes(novelCurLang) || s.langs.includes('multi'));
     if (adaptOnly) list = list.filter((s) => s.adapt);
     if (q) list = list.filter((s) => [s.name, s.desc, s.adaptNote, s.id].join(' ').toLowerCase().includes(q));
-    if (!list.length) { grid.innerHTML = `<div class="muted">${lang === 'en' ? 'No source matches.' : '没有匹配的来源'}</div>`; return; }
+    if (!list.length) {
+      const filtered = !!(q || adaptOnly || novelCurLang);
+      grid.innerHTML = `<div class="novel-empty"><span class="muted">${lang === 'en' ? 'No source matches.' : '没有匹配的来源'}</span>`
+        + (filtered ? `<button type="button" class="btn-ghost" id="novelClearBtn">${t('novelClearFilter')}</button>` : '') + '</div>';
+      const cb = $('novelClearBtn');
+      if (cb) cb.onclick = () => {
+        const s = $('novelSrcSearch'); if (s) s.value = '';
+        const a = $('novelAdaptOnly'); if (a) a.checked = false;
+        novelCurLang = '';
+        renderNovelLangRow(); renderNovelGrid();
+      };
+      return;
+    }
     grid.innerHTML = list.map((s) => {
       const lic = NOVEL_LIC_LABEL[s.license] || { zh: s.license, en: s.license };
       const licCls = s.license === 'public_domain' ? 'lic-pd' : (s.license === 'cc' ? 'lic-cc' : 'lic-pf');
