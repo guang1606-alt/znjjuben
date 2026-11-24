@@ -4430,7 +4430,15 @@
         ? `<details class="ep-history"><summary>${lang === 'en' ? `Past versions (${oldVers.length})` : `历史版本（${oldVers.length}）`}</summary>${oldVers.map((v) =>
             `<div class="ep-oldver"><span>${PV().formatVersion(v.version)} · ${v.wordCount || 0} ${lang === 'en' ? 'chars' : '字'}</span>${cmpBtn(v.version, latest.version)}</div>`).join('')}</details>`
         : '';
-      return `<div class="ep-item" data-ep="${epNo}" style="--ep-i:${Math.min(i, 8)}"><h4>EP${epNo} · ${escapeHtml(latest.title || '')} <span class="muted">(${PV().formatVersion(latest.version)} · ${latest.wordCount || 0} ${lang === 'en' ? 'chars' : '字'})</span>${oldVers.length ? cmpBtn(oldVers[oldVers.length - 1].version, latest.version) : ''}<button class="btn-ghost ep-listen-btn" type="button" data-listen-id="${latest.id}">🎧 ${lang === 'en' ? 'Listen' : '听剧本'}</button><button class="btn-ghost ep-lint-btn" type="button" data-lint-ep="${epNo}">${t('tbCardLint')}</button><button class="btn-ghost ep-copy-btn" type="button" data-copy-ep="${epNo}">${t('worksDetailCopyEp')}</button></h4>
+      const epTitle = latest.title || '';
+      return `<div class="ep-item" data-ep="${epNo}" style="--ep-i:${Math.min(i, 8)}">
+        <div class="ep-head">
+          <div class="ep-head-main">
+            <h4 class="ep-title"><span class="ep-no">EP${epNo}</span><span class="ep-name" title="${escapeHtml(epTitle)}">${escapeHtml(epTitle)}</span></h4>
+            <div class="ep-meta muted">${PV().formatVersion(latest.version)} · ${latest.wordCount || 0} ${lang === 'en' ? 'chars' : '字'}</div>
+          </div>
+          <div class="ep-actions">${oldVers.length ? cmpBtn(oldVers[oldVers.length - 1].version, latest.version) : ''}<button class="btn-ghost ep-listen-btn" type="button" data-listen-id="${latest.id}">🎧 ${lang === 'en' ? 'Listen' : '听剧本'}</button><button class="btn-ghost ep-lint-btn" type="button" data-lint-ep="${epNo}">${t('tbCardLint')}</button><button class="btn-ghost ep-copy-btn" type="button" data-copy-ep="${epNo}">${t('worksDetailCopyEp')}</button></div>
+        </div>
         <div class="muted">${escapeHtml(latest.synopsis || '')}</div><pre>${escapeHtml(latest.content || '')}</pre>${hist}
         <div class="ep-diff hidden" data-diff-box="ep${epNo}"></div></div>`;
     }).join('');
@@ -11388,7 +11396,10 @@
     if (back && !back.onclick) back.onclick = returnToLintOrigin;
     if (!_lintOrigin) { bar.classList.add('hidden'); return; }
     const txt = $('lintOriginText');
-    if (txt) txt.textContent = t('lintOriginFrom', { title: _lintOrigin.projectTitle || '', n: _lintOrigin.epNo });
+    if (txt) {
+      txt.textContent = t('lintOriginFrom', { title: _lintOrigin.projectTitle || '', n: _lintOrigin.epNo });
+      txt.title = txt.textContent; // v2.679 长英文作品名窄屏省略后可悬停看全
+    }
     bar.classList.remove('hidden');
   }
   function returnToLintOrigin() {

@@ -203,6 +203,13 @@ html[data-theme="tech"] .net-banner {
 .spacer { flex: 1; }
 .ctl { display: flex; gap: 7px; align-items: center; flex-shrink: 0; }
 .ctl button { white-space: nowrap; }
+/* v2.679 移动端顶栏：账号入口排到控件区最前（始终先看到），其余控件横向可滑；
+   吸右方案会压住「反馈」按钮抢点击，故改为顺序前置，零遮挡 */
+@media screen and (max-width:640px){
+  .ctl{overflow-x:auto;scrollbar-width:none;-webkit-overflow-scrolling:touch;max-width:100%;gap:6px;padding-left:4px}
+  .ctl::-webkit-scrollbar{display:none}
+  #loginBtn{order:-1}
+}
 .chip {
   background: color-mix(in srgb, var(--panel) 60%, transparent); border: 1px solid var(--line);
   color: var(--text); border-radius: 999px; padding: 6px 13px; font-size: .82rem; line-height: 1.4;
@@ -870,7 +877,7 @@ textarea { box-sizing: border-box; max-width: 100%; resize: vertical; background
 .wd-chip--archived{color:var(--danger-text);border-color:color-mix(in srgb,var(--danger-text) 35%,transparent)}
 .works-detail-tools{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-left:auto}
 .works-detail-tools .btn-primary{padding:7px 16px}
-.ep-copy-btn{margin-left:8px;font-size:12px;padding:2px 10px;transition:color var(--motion) var(--ease-out),border-color var(--motion) var(--ease-out),background var(--motion) var(--ease-out)}
+.ep-copy-btn{font-size:12px;padding:2px 10px;transition:color var(--motion) var(--ease-out),border-color var(--motion) var(--ease-out),background var(--motion) var(--ease-out)}
 .ep-copy-btn:hover{color:var(--gold-text);border-color:color-mix(in srgb,var(--gold) 40%,transparent)}
 .ep-copy-btn.is-copied{color:var(--gold-text);border-color:color-mix(in srgb,var(--gold) 45%,transparent);background:var(--gold-soft)}
 @media (max-width:640px){.works-detail-tools{width:100%;margin-left:0}.works-detail-tools .btn-primary{flex:1}}
@@ -878,6 +885,22 @@ textarea { box-sizing: border-box; max-width: 100%; resize: vertical; background
 .ep-item{border:1px solid var(--line);border-radius:12px;padding:13px 15px;margin-bottom:10px;background:var(--panel-2);animation:zn-rise var(--motion-slow) var(--ease-out) both;animation-delay:calc(var(--ep-i,0) * 45ms)}
 @media (prefers-reduced-motion: reduce){.ep-item{animation:none}}
 .ep-item h4{margin:0 0 6px;font-size:14px;font-family:var(--serif)}
+/* v2.679 分集卡片头部：标题/元信息与操作组分行，窄屏不再把四个按钮挤进标题；长英文标题可悬停看全、窄屏换行 */
+.ep-head{display:flex;align-items:flex-start;justify-content:space-between;gap:8px 12px;flex-wrap:wrap;margin-bottom:6px}
+.ep-head-main{min-width:0;flex:1 1 260px}
+.ep-title{display:flex;align-items:baseline;gap:8px;min-width:0;margin:0;font-size:14px;font-family:var(--serif);line-height:1.45}
+.ep-no{flex:none;font-size:12px;letter-spacing:.04em;color:var(--gold-text);font-variant-numeric:tabular-nums}
+.ep-name{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ep-meta{font-size:12px;margin-top:2px;font-variant-numeric:tabular-nums}
+.ep-actions{display:flex;flex-wrap:wrap;align-items:center;gap:6px;flex:none}
+.ep-actions .btn-ghost{margin-left:0;font-size:12px;padding:3px 10px;line-height:1.4}
+@media screen and (max-width:640px){
+  .ep-head{gap:8px}
+  .ep-head-main{flex:1 1 100%}
+  .ep-name{white-space:normal;overflow:visible;text-overflow:clip;word-break:break-word}
+  .ep-actions{width:100%}
+  .ep-actions .btn-ghost{flex:1 1 auto;justify-content:center;padding:5px 8px}
+}
 .ep-item pre{white-space:pre-wrap;word-break:break-word;font-family:inherit;font-size:13.5px;line-height:1.7;margin:8px 0 0;color:var(--text)}
 .user-chip{font-size:12px;color:var(--accent-strong);font-weight:600;padding:0 4px}
 .profile-card{margin-bottom:18px}
@@ -1570,7 +1593,7 @@ summary:hover{color:var(--accent-strong)}
 .listen-sec{font-size:11px;color:var(--text-2);text-align:right;padding-top:2px;font-variant-numeric:tabular-nums}
 #listenBtn.tier-lock{opacity:.78}
 /* c206 作品详情每集听剧本入口 */
-.ep-listen-btn{margin-left:8px;padding:2px 10px;font-size:12px;vertical-align:middle}
+.ep-listen-btn{padding:2px 10px;font-size:12px;vertical-align:middle}
 /* c206 多角色有声播放器控制条 */
 .listen-player{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:10px 0 2px;padding:10px 12px;border-radius:10px;background:var(--panel-2);border:1px solid color-mix(in srgb,var(--accent) 25%,transparent)}
 .listen-player .listen-pp{min-width:108px}
@@ -1978,7 +2001,7 @@ summary:hover{color:var(--accent-strong)}
 .fb-reply-b { font-size: 13px; line-height: 1.7; color: var(--text); white-space: pre-wrap; word-break: break-word; }
 
 /* c202 版本逐行对比 + 历史版本折叠 */
-.ep-item h4 .ep-diff-btn { margin-left: 8px; vertical-align: middle; font-size: 12px; padding: 2px 10px; }
+.ep-actions .ep-diff-btn { margin-left: 0; vertical-align: middle; font-size: 12px; padding: 2px 10px; }
 .ep-history { margin-top: 8px; }
 .ep-history > summary { cursor: pointer; font-size: 12.5px; color: var(--text-2); }
 .ep-oldver { display: flex; align-items: center; gap: 10px; padding: 4px 0 4px 4px; font-size: 12.5px; color: var(--text-2); }

@@ -349,3 +349,31 @@ describe('v2.675 独立递招的创作上下文与开篇审计闭环', () => {
     assert.match(css, /@media \(prefers-reduced-motion: reduce\)\{[^}]*\.craft-opening-audit/, '审计动画缺少 reduced-motion 降级');
   });
 });
+
+// v2.679 分集卡片可读性：标题与四个操作按钮原先全塞在同一个 h4 里，
+// 390px 下挤成一团；英文长标题被从中截断且无法查看全名。
+describe('v2.679 分集卡片标题与操作分行', () => {
+  it('头部把标题/元信息与操作组分开，窄屏自动换行', () => {
+    assert.match(app, /class="ep-head"/, '缺少分集头部容器');
+    assert.match(app, /class="ep-head-main"/, '缺少标题主区');
+    assert.match(app, /class="ep-actions"/, '缺少操作组容器');
+    assert.match(css, /\.ep-head\{[^}]*display:flex[^}]*flex-wrap:wrap/, '头部需可换行');
+    assert.match(css, /\.ep-actions\{[^}]*display:flex[^}]*flex-wrap:wrap/, '操作组需可换行');
+    assert.match(app, /class="ep-name" title="/, '长标题需带 title 供悬停查看全名');
+    assert.match(css, /\.ep-name\{[^}]*text-overflow:ellipsis/, '长标题需省略号而非硬溢出');
+    const epMobile = css.match(/@media screen and \(max-width:640px\)\{\s*\.ep-head\{[\s\S]*?\n\}/);
+    assert.ok(epMobile && /\.ep-name\{[^}]*white-space:normal/.test(epMobile[0]), '窄屏英文长标题需换行展示');
+  });
+  it('操作按钮不再用 margin-left 拼接，由 flex gap 统一控距', () => {
+    assert.ok(!/\.ep-copy-btn\{margin-left:8px/.test(css), '复制按钮仍靠 margin-left 挤在标题后');
+    assert.ok(!/\.ep-listen-btn\{margin-left:8px/.test(css), '听剧本按钮仍靠 margin-left 挤在标题后');
+  });
+  // 390px 英文下顶栏控件区内容 354px、可视 267px，账号按钮整体落在屏外且无任何滑动提示。
+  // 吸右会压住反馈按钮抢点击（审计 7 处 clickStolen），故改为账号前置 + 控件横滑。
+  it('移动端顶栏账号按钮优先可见，其余控件可横滑', () => {
+    const m = css.match(/@media screen and \(max-width:640px\)\{\s*\.ctl\{[\s\S]*?\n\}/);
+    assert.ok(m, '缺少移动端 .ctl 规则');
+    assert.match(m[0], /overflow-x:auto/, '控件区应允许横滑而不是裁掉账号入口');
+    assert.match(css, /#loginBtn\{order:-1/, '账号按钮未前置到控件区首位');
+  });
+});
