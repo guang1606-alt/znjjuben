@@ -55,19 +55,57 @@ export function canAdvance(
   return { ok: true };
 }
 
-/** 各阶段产出物的最低结构校验（离线，不判文采，只判“有没有”） */
-export function stageArtifactOk(stage: StageId, text: string): { ok: boolean; reason?: string } {
+/** 缺口标识：UI 侧据此给出“还差哪几项”的逐条提示，而不是一句笼统的 reason */
+export type StageGap = 'tooShort' | 'characterBio' | 'episodeOutline' | 'sceneHeader' | 'dialogue';
+
+/** 逐项列出当前产出物还缺什么（只判“有没有”，不判好坏；空数组=达标） */
+export function stageGaps(stage: StageId, text: string): StageGap[] {
   const t = (text || '').trim();
-  if (t.length < 20) return { ok: false, reason: '产出内容过少，无法进入下一阶段' };
+  if (t.length < 20) return ['tooShort'];
+  const gaps: StageGap[] = [];
   if (stage === 'outline') {
-    const hasChar = /人物|小传|主角|人设/.test(t);
-    const hasEp = /分集|第[一二三四五六七八九十0-9]+集|大纲/.test(t);
-    if (!hasChar || !hasEp) return { ok: false, reason: '梗概大纲需包含人物小传与分集/全剧大纲' };
+    if (!/人物|小传|主角|人设/.test(t)) gaps.push('characterBio');
+    if (!/分集|第[一二三四五六七八九十0-9]+集|大纲/.test(t)) gaps.push('episodeOutline');
   }
   if (stage === 'draft') {
-    const hasScene = /内景|外景|△/.test(t);
-    const hasLine = /[一-龥]{1,6}(?:（[^）]*）)?[：:]/.test(t);
-    if (!hasScene || !hasLine) return { ok: false, reason: '初稿需包含场景信息与角色台词' };
+    if (!/内景|外景|△/.test(t)) gaps.push('sceneHeader');
+    if (!/[一-龥]{1,6}(?:（[^）]*）)?[：:]/.test(t)) gaps.push('dialogue');
   }
-  return { ok: true };
+  return gaps;
 }
+
+/** 各阶段产出物的最低结构校验（离线，不判文采，只判“有没有”） */
+export function stageArtifactOk(stage: StageId, text: string): { ok: boolean; reason?: string } {
+  const gaps = stageGaps(stage, text);
+  if (!gaps.length) return { ok: true };
+  if (gaps[0] === 'tooShort') return { ok: false, reason: '产出内容过少，无法进入下一阶段' };
+  if (stage === 'outline') return { ok: false, reason: '梗概大纲需包含人物小传与分集/全剧大纲' };
+  if (stage === 'draft') return { ok: false, reason: '初稿需包含场景信息与角色台词' };
+  return { ok: false };
+}
+
+/** 英文阶段名（中文原文见 STAGES；前端按语言取一份，避免双份维护跑偏） */
+export const STAGE_EN: Record<StageId, { label: string; roles: string[]; deliverable: string; gate: string }> = {
+  outline: { label: 'Synopsis & Outline', roles: ['Story Architect', 'Character Designer'], deliverable: 'Core idea + character bios + series outline + per-episode synopsis', gate: 'Must include character bios and episode synopsis' },
+  draft: { label: 'First Draft', roles: ['Episode Writer'], deliverable: 'Complete first draft with plot and dialogue', gate: 'Must include scene headings and character dialogue' },
+  polish: { label: 'Polish', roles: ['Detail Polisher', 'De-AI Check'], deliverable: 'Pacing / dialogue / detail polish, remove AI tells', gate: 'De-AI and pacing must pass' },
+  final: { label: 'Final Pass', roles: ['Compliance Reviewer', 'Market Analyst'], deliverable: 'Delivery-grade script for platform / shoot / AIGC', gate: 'Format and length pass, compliance cleared' },
+};
+
+/** 缺口的中英文案（后端统一供给，前端不再各存一份） */
+export const GAP_LABELS: Record<'zh' | 'en', Record<StageGap, string>> = {
+  zh: {
+    tooShort: '内容过少（至少 20 字）',
+    characterBio: '缺人物小传',
+    episodeOutline: '缺分集 / 全剧大纲',
+    sceneHeader: '缺场景信息（内景 / 外景 / △）',
+    dialogue: '缺角色台词（角色名：台词）',
+  },
+  en: {
+    tooShort: 'Too short (at least 20 characters)',
+    characterBio: 'Missing character bios',
+    episodeOutline: 'Missing series / episode outline',
+    sceneHeader: 'Missing scene headings (INT. / EXT. / △)',
+    dialogue: 'Missing character dialogue (Name: line)',
+  },
+};

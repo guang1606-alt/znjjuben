@@ -21,6 +21,33 @@ test('初稿无场景或台词→不准进入润色', () => {
   assert.strictEqual(W.stageArtifactOk('draft', '内景 家·日\n△ 他坐下。\n林晚：你来了。').ok, true);
 });
 
+test('缺口逐条：大纲阶段缺人设/分集时精确列出，不达标', () => {
+  assert.deepStrictEqual(W.stageGaps('outline', '短'), ['tooShort']);
+  assert.deepStrictEqual(W.stageGaps('outline', '这是一个完整的创意描述，讲述都市青年的成长与逆袭，字数足够二十个。'), ['characterBio', 'episodeOutline']);
+  assert.deepStrictEqual(W.stageGaps('outline', '人物小传：林晚，三十岁，性格坚韧。\n第一集 梗概：冲突爆发，主角被迫反击。'), []);
+});
+
+test('缺口逐条：初稿阶段缺场景/台词时精确列出，且与 stageArtifactOk 口径一致', () => {
+  assert.deepStrictEqual(W.stageGaps('draft', '这是一段没有场景也没有台词的纯叙述文字凑够二十个字以上。'), ['sceneHeader', 'dialogue']);
+  const text = '内景 家·日\n△ 他坐下。\n林晚：你来了。';
+  assert.deepStrictEqual(W.stageGaps('draft', text), []);
+  // 口径一致：有缺口 ⇔ 不达标
+  for (const sample of ['短', '这是一段没有场景也没有台词的纯叙述文字凑够二十个字以上。', text]) {
+    assert.strictEqual(W.stageGaps('draft', sample).length === 0, W.stageArtifactOk('draft', sample).ok);
+  }
+});
+
+test('英文阶段名与缺口文案齐备（前端按语言取，不各存一份）', () => {
+  for (const s of W.STAGES) {
+    const e = W.STAGE_EN[s.id];
+    assert.ok(e && e.label && e.deliverable && e.gate && e.roles.length, `缺英文阶段信息：${s.id}`);
+  }
+  for (const k of ['tooShort', 'characterBio', 'episodeOutline', 'sceneHeader', 'dialogue']) {
+    assert.ok(W.GAP_LABELS.zh[k], `缺中文缺口文案：${k}`);
+    assert.ok(W.GAP_LABELS.en[k], `缺英文缺口文案：${k}`);
+  }
+});
+
 test('分阶段计费：会员折扣正确、每阶段>0、全流程高于一键生成', () => {
   assert.strictEqual(W.stageCredits('outline', 'basic'), 4);
   assert.strictEqual(W.stageCredits('draft', 'basic'), 10);

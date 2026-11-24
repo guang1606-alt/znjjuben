@@ -3085,3 +3085,46 @@ body:has(.ui-dlg-overlay) .toast { --toast-y: 10px; }
 
 /* v2.671 textarea 到 maxlength 时的朱砂色边框：软反馈，不打断用户但让他知道"到顶了" */
 textarea.is-at-limit { border-color: var(--danger-text); }
+
+/* ===== v2.672 打磨阶梯：竖排四阶 + 鎏金进度线 + 准入判定 ===== */
+.stage-ladder-hint { margin: 2px 0 12px; line-height: 1.65; }
+.stage-free-tag { font-size: .74rem; color: var(--gold-text); border: 1px solid color-mix(in srgb, var(--gold) 40%, transparent); background: color-mix(in srgb, var(--gold-soft) 55%, transparent); padding: 2px 9px; border-radius: 999px; white-space: nowrap; }
+.stage-rail { list-style: none; margin: 0; padding: 0 0 4px; display: flex; flex-direction: column; }
+.stage-node { position: relative; display: flex; align-items: center; gap: 10px; padding: 9px 10px 9px 0; cursor: pointer; border-radius: 12px; transition: background var(--motion) var(--ease-out); }
+.stage-node::before { content: ''; position: absolute; left: 13px; top: 37px; bottom: -6px; width: 2px; background: var(--line); }
+.stage-node:last-child::before { display: none; }
+.stage-node.done::before, .stage-node.past::before { background: color-mix(in srgb, var(--gold) 68%, var(--line)); }
+.stage-node:hover { background: color-mix(in srgb, var(--panel-2) 45%, transparent); }
+.stage-idx { position: relative; z-index: 1; width: 28px; height: 28px; flex: 0 0 28px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: .8rem; font-weight: 600; background: var(--panel-2); color: var(--text-2); border: 1px solid var(--line); transition: background var(--motion) var(--ease-out), color var(--motion) var(--ease-out), border-color var(--motion) var(--ease-out), box-shadow var(--motion) var(--ease-out); }
+.stage-node.on .stage-idx { background: var(--gold); color: #fff; border-color: var(--gold); box-shadow: 0 0 0 4px color-mix(in srgb, var(--gold) 18%, transparent); }
+.stage-node.done .stage-idx { background: var(--ok); color: #fff; border-color: var(--ok); }
+.stage-node.past .stage-idx { border-color: color-mix(in srgb, var(--gold) 45%, var(--line)); }
+.stage-name { font-size: .9rem; color: var(--text-2); transition: color var(--motion) var(--ease-out), transform var(--motion) var(--ease-out); }
+.stage-node.on .stage-name { color: var(--text); font-weight: 600; transform: translateX(2px); }
+.stage-tick { margin-left: auto; width: 6px; height: 6px; border-radius: 50%; background: transparent; transition: background var(--motion) var(--ease-out); }
+.stage-node.on .stage-tick { background: var(--gold); }
+
+.stage-detail { border: 1px solid var(--line); background: var(--panel-2); border-radius: var(--radius-sm); padding: 14px; margin-top: 6px; animation: stage-in var(--motion-slow) var(--ease-out); }
+@keyframes stage-in { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+.stage-detail-head { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
+.stage-detail-head b { font-size: 1rem; }
+.stage-chip { font-size: .72rem; color: var(--gold-text); background: color-mix(in srgb, var(--gold-soft) 60%, transparent); border-radius: 999px; padding: 2px 8px; }
+.stage-spec { margin: 0 0 12px; padding: 0; display: grid; gap: 8px; }
+.stage-spec > div { display: grid; grid-template-columns: 72px 1fr; gap: 8px; align-items: start; }
+.stage-spec dt { font-size: .76rem; color: var(--text-2); }
+.stage-spec dd { margin: 0; font-size: .86rem; color: var(--text); line-height: 1.55; }
+.stage-role { display: inline-block; font-size: .72rem; color: var(--text-2); border: 1px solid var(--line); background: var(--panel); border-radius: 999px; padding: 1px 8px; margin: 0 6px 4px 0; }
+.stage-paste-l { display: block; font-size: .8rem; color: var(--text-2); margin-bottom: 6px; }
+.stage-ta { width: 100%; box-sizing: border-box; border: 1px solid var(--line); background: var(--panel); color: var(--text); border-radius: 10px; padding: 10px 12px; font: inherit; font-size: .88rem; line-height: 1.6; resize: vertical; transition: border-color var(--motion) var(--ease-out), box-shadow var(--motion) var(--ease-out); }
+.stage-ta:focus { outline: none; border-color: var(--gold); box-shadow: 0 0 0 3px color-mix(in srgb, var(--gold) 16%, transparent); }
+.stage-act { display: flex; align-items: center; gap: 12px; margin-top: 10px; }
+.stage-chars { font-size: .76rem; color: var(--text-2); font-variant-numeric: tabular-nums; }
+.stage-verdict { margin-top: 12px; display: none; padding: 11px 13px; border-radius: 10px; font-size: .85rem; line-height: 1.55; border: 1px solid var(--line); }
+.stage-verdict:not(:empty) { display: block; }
+.stage-verdict b { display: block; margin-bottom: 4px; }
+.stage-verdict.ok { background: var(--soft-ok); border-color: color-mix(in srgb, var(--ok) 35%, var(--line)); color: var(--ok-text); }
+.stage-verdict.blocked { background: var(--soft-warn); border-color: color-mix(in srgb, var(--warn-text) 30%, var(--line)); color: var(--warn-text); }
+.stage-gaps { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+.stage-gap { font-size: .76rem; background: var(--panel); border: 1px solid color-mix(in srgb, var(--warn-text) 28%, var(--line)); border-radius: 999px; padding: 2px 9px; }
+@media (max-width: 560px) { .stage-spec > div { grid-template-columns: 1fr; gap: 2px; } }
+@media (prefers-reduced-motion: reduce) { .stage-detail { animation: none; } .stage-node, .stage-idx, .stage-name, .stage-tick { transition: none; } .stage-verdict.ep-shake { animation: none; } }

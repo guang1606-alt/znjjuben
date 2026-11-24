@@ -19,6 +19,7 @@ import { webnovelLint } from '../engine/webnovel-craft';
 import type { LintIssue } from '../engine/craft-lint';
 import { craftLint } from '../engine/craft-lint';
 import { narrativeLint } from '../engine/narrative-craft';
+import { STAGES, STAGE_EN, GAP_LABELS, stageGaps, stageArtifactOk, type StageId } from '../engine/stage-workflow';
 
 /** 体检正文上限：只读工具，超出部分截断而不是拒绝，避免用户粘贴长剧本时空白报错 */
 const LINT_MAX_CHARS = 20000;
@@ -226,6 +227,55 @@ export function createCraftRouter() {
       villain: en ? localize(m.villain, VILLAIN_EN) : m.villain,
       system: sys,
       hasSystem: m.system.length > 0,
+    });
+  });
+
+  /* ---------- 打磨阶梯：四阶段路线 + 产出物准入判定（免费、离线、不耗 token） ---------- */
+  // 把「大纲→初稿→润色→定稿」的阶段与交付物/准入标准显式化，让用户随时知道"现在在第几阶、还差什么才能进阶"
+  r.get('/stages', (req, res) => {
+    const lang: 'zh' | 'en' = req.query.lang === 'en' ? 'en' : 'zh';
+    const en = lang === 'en';
+    res.json({
+      stages: STAGES.map((s) => {
+        const e = STAGE_EN[s.id];
+        return {
+          id: s.id, order: s.order, baseCredits: s.baseCredits,
+          label: en ? e.label : s.label,
+          roles: en ? e.roles : s.roles,
+          deliverable: en ? e.deliverable : s.deliverable,
+          gate: en ? e.gate : s.gate,
+        };
+      }),
+      gaps: GAP_LABELS[lang],
+    });
+  });
+  // 判一次：给定阶段 + 当前产出文本，回报达标与否 + 还缺哪几项（逐条可执行，不是一句笼统结论）
+  r.post('/stage-check', (req, res) => {
+    const b = req.body ?? {};
+    const lang: 'zh' | 'en' = b.lang === 'en' ? 'en' : 'zh';
+    const en = lang === 'en';
+    const stage = String(b.stage ?? '') as StageId;
+    if (!STAGES.some((s) => s.id === stage)) {
+      return res.status(400).json({ error: en ? 'Unknown stage' : '未知的阶段' });
+    }
+    const rawText = String(b.text ?? '');
+    const truncated = rawText.length > LINT_MAX_CHARS;
+    const text = rawText.slice(0, LINT_MAX_CHARS);
+    if (!text.trim()) {
+      return res.status(400).json({ error: en ? 'Paste this stage’s output first' : '请先粘贴这一阶段的产出' });
+    }
+    const order = STAGES.map((s) => s.id);
+    const idx = order.indexOf(stage);
+    const nextId = order[idx + 1];
+    const gaps = stageGaps(stage, text);
+    const verdict = stageArtifactOk(stage, text);
+    const label = (id: StageId) => (en ? STAGE_EN[id].label : STAGES.find((s) => s.id === id)!.label);
+    res.json({
+      lang, stage, chars: text.length, truncated,
+      ok: verdict.ok,
+      reason: en ? undefined : verdict.reason,
+      gaps: gaps.map((g) => ({ id: g, label: GAP_LABELS[lang][g] })),
+      next: nextId ? { id: nextId, label: label(nextId), ready: verdict.ok } : null,
     });
   });
 

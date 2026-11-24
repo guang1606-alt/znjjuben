@@ -169,6 +169,11 @@
           <p data-i="tbCardLintP">粘贴一集正文，按人物原型、情绪兑付、网文钩子、改稿尺子、叙事逻辑五组逐条体检，标出 P0/P1/P2 硬伤并给改法；也能按一句话创意匹配主角与反派原型</p>
           <span class="tool-cost" data-i="tbCostLint">免费 · 不耗积分</span>
         </button>
+        <button type="button" class="mode-card tool-card" id="toolStage">
+          <h2 data-i="tbCardStage">打磨阶梯</h2>
+          <p data-i="tbCardStageP">大纲 → 初稿 → 润色 → 定稿四阶路线，逐阶写明交付物与准入标准；粘贴当前产出即判定「能不能进下一阶、还差哪几项」，不判文采、免费不耗积分</p>
+          <span class="tool-cost" data-i="tbCostStage">免费 · 本地判定</span>
+        </button>
       </div>
     </div>
 
@@ -353,6 +358,19 @@
           </div>
         </div>
         <div id="lintResult" role="status" aria-live="polite"></div>
+      </section>
+
+      <!-- v2.672 打磨阶梯（免费 · 本地判定）：四阶路线 + 产出物准入，粘贴即判"能否进阶、还差哪几项" -->
+      <section class="panel hidden" id="stageLadder" role="group" aria-labelledby="stageLadderTitle">
+        <div class="room-tabs">
+          <b style="align-self:center" id="stageLadderTitle" data-i="stageLadderTitle">打磨阶梯</b>
+          <span class="spacer" style="flex:1"></span>
+          <span class="stage-free-tag" data-i="stageLadderFree">免费 · 本地判定</span>
+          <button class="room-close" id="stageLadderClose" data-i="tbCollapse">收起</button>
+        </div>
+        <div class="muted stage-ladder-hint" data-i="stageLadderSub">大纲 → 初稿 → 润色 → 定稿。逐阶写明交付物与准入标准，你负责审稿拍板，按阶推进不返工。</div>
+        <ol class="stage-rail" id="stageRail" role="tablist" aria-label="打磨阶段"></ol>
+        <div class="stage-detail" id="stageDetail" role="tabpanel" aria-live="polite"></div>
       </section>
 
       <section class="panel hidden" id="roomPanel" role="region" aria-label="编剧室" data-i-aria="roomPanelAria">
@@ -1648,6 +1666,7 @@
   <script defer src="./diversity-view.js"></script>
   <script defer src="./branch-view.js"></script>
   <script defer src="./lint-view.js"></script>
+  <script defer src="./stage-ladder-view.js"></script>
   <script defer src="./ad-roll.js"></script>
   <script defer src="./pointer-fx.js"></script>
   <!-- v2.186 全局反馈层：toast + skeleton + view-stack 容器 -->

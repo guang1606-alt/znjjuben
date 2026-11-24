@@ -509,7 +509,7 @@
         card.innerHTML = `<h3>${escapeHtml(t(tool.key))}</h3><p>${escapeHtml(t(tool.desc))}</p><span class="tool-cost">${escapeHtml(costTxt)}</span>`;
         card.onclick = () => {
     // @module misc
-          const panel = ({ toolPitch: 'roomPanel', toolRead: 'roomPanel', toolTeardown: 'teardownPanel', toolDiversity: 'diversityPanel', toolBranch: 'branchPanel', toolCraftLint: 'lintPanel' })[tool.id];
+          const panel = ({ toolPitch: 'roomPanel', toolRead: 'roomPanel', toolTeardown: 'teardownPanel', toolDiversity: 'diversityPanel', toolBranch: 'branchPanel', toolCraftLint: 'lintPanel', toolStage: 'stageLadder' })[tool.id];
           if (panel) openWorkbench(panel);
         };
         tg.appendChild(card);
@@ -2753,7 +2753,7 @@
      syncModeBrief / 任务流等）依旧用 classList.toggle('hidden', ...) 即可触发。 */
   const _WORKBENCH_PANEL_IDS = [
     'tagBench', 'craftBench', 'novelSrcBench',
-    'branchPanel', 'branchBriefPanel', 'diversityPanel', 'lintPanel', 'roomPanel', 'teardownPanel',
+    'branchPanel', 'branchBriefPanel', 'diversityPanel', 'lintPanel', 'stageLadder', 'roomPanel', 'teardownPanel',
     'interviewPanel', 'brandPanel', 'trendPanel', 'sourceTextPanel',
     'taskQueuePanel', 'progressPanel', 'resultPanel', 'failPanel'
   ];
@@ -2765,6 +2765,7 @@
     branchBriefPanel: { zh: '互动分支 · 分支简报',     en: 'Branch Brief' },
     diversityPanel:   { zh: '多版本去重体检',           en: 'Diversity Audit' },
     lintPanel:        { zh: '剧本体检 · 原型选型',       en: 'Script Checkup' },
+    stageLadder:      { zh: '打磨阶梯 · 四阶路线',       en: 'Polish Ladder' },
     roomPanel:        { zh: '编剧室',                 en: 'Writers’ Room' },
     teardownPanel:    { zh: '拆爆款工作台',             en: 'Teardown' },
     interviewPanel:   { zh: '采访式创作',               en: 'Interview' },
@@ -3272,7 +3273,7 @@
   }
 
   // 6 工具卡 → 工作台 panel（toolPitch/toolRead → 编剧室；toolTeardown → 拆爆款；toolDiversity → 去重；toolBranch → 分支；toolCraftLint → 剧本体检）
-  const _TOOL_TO_PANEL = { toolPitch: 'roomPanel', toolRead: 'roomPanel', toolTeardown: 'teardownPanel', toolDiversity: 'diversityPanel', toolBranch: 'branchPanel', toolCraftLint: 'lintPanel' };
+  const _TOOL_TO_PANEL = { toolPitch: 'roomPanel', toolRead: 'roomPanel', toolTeardown: 'teardownPanel', toolDiversity: 'diversityPanel', toolBranch: 'branchPanel', toolCraftLint: 'lintPanel', toolStage: 'stageLadder' };
   Object.entries(_TOOL_TO_PANEL).forEach(([tid, pid]) => {
     const t = $(tid); if (t) t.addEventListener('click', () => openWorkbench(pid));
   });
@@ -3288,7 +3289,7 @@
     });
   }
   // 各 panel 的"收起"按钮 → 关工作台层
-  ['roomClose', 'teardownClose', 'dvClose', 'brClose', 'lintClose'].forEach((id) => {
+  ['roomClose', 'teardownClose', 'dvClose', 'brClose', 'lintClose', 'stageLadderClose'].forEach((id) => {
     const b = $(id); if (b) b.addEventListener('click', closeWorkbench);
   });
   // v2.511 成稿抽检 → 完整体检：把结果区正文回填进体检面板并立即开跑（体检本身免费、不耗积分）
