@@ -788,6 +788,18 @@
           </span>
           <button class="btn-ghost" data-i="retry" id="retryBtn"></button>
         </div>
+        <!-- v2.677 出本后衔接：生成完成停在结果页时，直接给出「看分集/版本」与「续写下一集」两个出口，
+             不必再靠顶部任务卡或手动切作品库找项目。 -->
+        <div class="result-next hidden" id="resultNextBar">
+          <div class="result-next-copy">
+            <b data-i="nextStepTitle">下一步</b>
+            <span data-i="nextStepSub">成稿已存入作品库，可接着看分集或写下一集</span>
+          </div>
+          <div class="result-next-actions">
+            <button type="button" class="btn-ghost" id="resultNextWorks" data-i="nextStepWorks">查看全部分集与版本</button>
+            <button type="button" class="btn-primary" id="resultNextContinue" data-i="nextStepContinueFallback">继续写下一集</button>
+          </div>
+        </div>
       </section>
 
       <section class="panel hidden" id="failPanel">

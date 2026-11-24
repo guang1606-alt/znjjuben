@@ -9068,7 +9068,8 @@
     }
     renderAigcDash(done);
     renderLiveProdDash(done);
-    refreshResultScripts(projectId);
+    const eps = await refreshResultScripts(projectId);
+    renderResultNext(projectId, nextEpisodeNo(eps));
     if (done.opportunity) xnSay(lang === 'en' ? 'Done. Check the opportunity radar.' : '完成啦，记得看机会雷达评估～');
     // 全本质量诊断（craft/emotion/webnovel/去AI 四套尺子归一的六维报告）
     loadDiagnosis(projectId).catch(() => {});
@@ -9091,7 +9092,7 @@
     try {
       const r = await Api.request(`/api/generate/projects/${projectId}/scripts`);
       const eps = latestScriptsByEpisode(await Api.jsonOrThrow(r));
-      if (!isPrivateSessionCurrent(account) || (currentProjectId && currentProjectId !== projectId)) return;
+      if (!isPrivateSessionCurrent(account) || (currentProjectId && currentProjectId !== projectId)) return [];
       currentScripts = eps;
       // v2.527 英文界面：导出 TXT / 复制正文此前固定用「第N集」拼分集头，
       // 英文用户拿到的成稿整篇是中文集号，与界面语言不符。
@@ -9109,7 +9110,44 @@
       // 面板必须跟着最新集走，否则刷新即失明；AIGC 制式 feasibility 为 undefined，面板自动隐藏。
       renderLiveProdDash({ format: (latest && latest.qcReport) ? latest.qcReport.format : null });
       refreshListenBtn();
+      return eps;
     } catch { if (isPrivateSessionCurrent(account) && (!currentProjectId || currentProjectId === projectId)) $('scriptText').textContent = ''; }
+    return [];
+  }
+  // v2.677 出本后衔接：结果页此前只有诊断卡，用户想接着看分集/版本/单集体检或续写下一集，
+  // 只能靠顶部小任务卡或手动切作品库再找项目。这里在结果页底部给出两个直接出口。
+  // 项目详情按需拉取，避免 done 帧缺标题时把 undefined 写进作品详情头。
+  function renderResultNext(projectId, nextEp) {
+    const bar = $('resultNextBar'); if (!bar) return;
+    if (!projectId || !(nextEp > 1)) { bar.classList.add('hidden'); return; }
+    bar.classList.remove('hidden');
+    const load = async () => {
+      const res = await Api.request(`/api/generate/projects/${encodeURIComponent(projectId)}`);
+      return await Api.jsonOrThrow(res);
+    };
+    const cont = $('resultNextContinue');
+    if (cont) {
+      cont.textContent = t('nextStepContinue', { n: nextEp });
+      cont.disabled = false;
+      cont.onclick = async () => {
+        if (cont.disabled) return;
+        cont.disabled = true;
+        try { resumeProjectForContinuation(await load(), nextEp); }
+        catch (e) { xnSay((e && e.message) || t('nextStepOpenFail')); }
+        finally { cont.disabled = false; }
+      };
+    }
+    const works = $('resultNextWorks');
+    if (works) {
+      works.disabled = false;
+      works.onclick = async () => {
+        if (works.disabled) return;
+        works.disabled = true;
+        try { const project = await load(); switchView('works'); await openProject(project); }
+        catch (e) { xnSay((e && e.message) || t('nextStepOpenFail')); }
+        finally { works.disabled = false; }
+      };
+    }
   }
   // v2.55 听剧本：缓存当前项目分集与小南能力矩阵
   let currentScripts = [];

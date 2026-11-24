@@ -123,11 +123,38 @@ test('result refresh displays one latest version per episode, sorted for copy an
 });
 
 test('result scores display numeric fields from the generation response', async () => {
-  const { context: c, $ } = setup(['renderResult'], { refreshResultScripts() {} });
+  const { context: c, $ } = setup(['renderResult', 'renderResultNext', 'nextEpisodeNo'], { refreshResultScripts() { return []; } });
   await c.renderResult({ antiAi: { antiAiScore: 83 }, market: { scores: {}, overall: 76, advice: [] }, audience: { cravingScore: 91, riskPoints: [], wantNext: '追更' } }, 'p1');
   assert.match($('scoreGrid').innerHTML, /<b>76<\/b>/);
   assert.match($('scoreGrid').innerHTML, /<b>91<\/b>/);
   assert.doesNotMatch($('scoreGrid').innerHTML, /\[object Object\]/);
+});
+
+// v2.677 出本后衔接：生成完成停在结果页时，用户此前只能靠顶部小任务卡或手动切「作品库」
+// 才能看到分集/版本/单集体检/续写下一集。结果页必须自带「下一步」交接条。
+test('result page shows a next-step handoff to episodes and the next episode', async () => {
+  const records = [{ epNo: 1, version: 1, title: '一', content: '第一集正文' }];
+  const project = { id: 'p1', title: '成稿作品', totalEps: 20 };
+  const calls = {};
+  const { context: c, $ } = setup(['renderResult', 'renderResultNext', 'latestScriptsByEpisode', 'refreshResultScripts', 'nextEpisodeNo'], {
+    Api: {
+      request: async (url) => ({ url }),
+      jsonOrThrow: async (res) => (String(res.url).endsWith('/scripts') ? records : project),
+    },
+    t: (k, p) => (k === 'nextStepContinue' ? `继续写第${p.n}集` : k),
+    openProject: async (p) => { calls.opened = p.id; },
+    switchView(v) { calls.view = v; },
+  });
+  // setup 会预载真实 resumeProjectForContinuation，这里在求值后替换为探针，验证交接条传参。
+  c.resumeProjectForContinuation = (p, n) => { calls.resume = [p.id, n]; };
+  await c.renderResult({ antiAi: { antiAiScore: 83 }, market: { overall: 76 }, audience: { cravingScore: 91 } }, 'p1');
+  assert.equal($('resultNextBar').classList.contains('hidden'), false, '结果页应显示下一步交接条');
+  assert.match($('resultNextContinue').textContent, /第2集/, '续写按钮应指向第 2 集');
+  await $('resultNextContinue').onclick();
+  assert.deepEqual(calls.resume, ['p1', 2], '续写应带真实项目与下一集集号');
+  await $('resultNextWorks').onclick();
+  assert.equal(calls.view, 'works', '查看分集应切到作品库');
+  assert.equal(calls.opened, 'p1', '查看分集应直接打开该项目详情');
 });
 
 for (const [kind, render, required] of [['cast', 'renderCastLibEditor', 'Persona'], ['prop', 'renderPropLibEditor', 'Meaning'], ['scene', 'renderSceneLibEditor', 'Meaning']]) {

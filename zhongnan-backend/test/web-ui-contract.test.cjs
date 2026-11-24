@@ -16,6 +16,7 @@ const ROOT = path.join(__dirname, '..');
 const css = fs.readFileSync(path.join(ROOT, 'web', 'styles.css'), 'utf8');
 const html = fs.readFileSync(path.join(ROOT, 'web', 'index.html'), 'utf8');
 const app = fs.readFileSync(path.join(ROOT, 'web', 'app.js'), 'utf8');
+const i18n = fs.readFileSync(path.join(ROOT, 'web', 'i18n.js'), 'utf8');
 
 describe('v2.472 前端 UI 契约', () => {
   it('G1 index.html 使用的 .input 类在样式表中有定义', () => {
@@ -51,6 +52,25 @@ describe('v2.676 标签台联动回显', () => {
     assert.match(css, /\.tag-craft-echo\s*\{/, 'styles.css 缺少 .tag-craft-echo 样式');
     assert.ok(app.includes('function renderTagCraftEcho('), 'app.js 缺少回显渲染函数');
     assert.ok(/tagCraftGo[\s\S]{0,80}onclick/.test(app), '手动重算按钮未接线');
+  });
+});
+
+// v2.677 出本后衔接：结果页必须给「下一步」交接条（分集/版本 + 续写下一集），
+// 且顶部分数标题不能再把三格速览称作「六维质量评分」。
+describe('v2.677 出本后衔接与评分名实', () => {
+  it('结果页有下一步交接条与两个出口', () => {
+    assert.match(html, /id="resultNextBar"/, 'index.html 缺少结果页下一步交接条');
+    assert.match(html, /id="resultNextWorks"/, 'index.html 缺少查看分集入口');
+    assert.match(html, /id="resultNextContinue"/, 'index.html 缺少续写下一集入口');
+    assert.ok(app.includes('function renderResultNext('), 'app.js 缺少 renderResultNext 渲染函数');
+    assert.match(css, /\.result-next\s*\{/, 'styles.css 缺少 .result-next 样式');
+    assert.match(i18n, /nextStepWorks:/, 'i18n 缺少查看分集文案');
+    assert.match(i18n, /nextStepContinue:/, 'i18n 缺少续写下一集文案');
+  });
+
+  it('三格速览标题改为名实相符的「质量速览」', () => {
+    assert.match(i18n, /scoreTitle: '质量速览'/, 'scoreTitle 仍称六维，与三格速览不符');
+    assert.match(i18n, /scoreTitle: 'Quality snapshot'/, '英文 scoreTitle 需同步改名');
   });
 });
 
