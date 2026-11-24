@@ -4,13 +4,14 @@
   'use strict';
   const C = {};
 // v2.498 运行时版本号（首页更新通知用；bump-version.cjs 同步更新）
-C.ZN_VERSION = '2.673.0';
+C.ZN_VERSION = '2.674.0';
 C.HOME_TOOLS = [
     { id: 'toolPitch', key: 'tbCardPitch', desc: 'tbCardPitchP', cost: 'tbCostPitch' },
     { id: 'toolRead', key: 'tbCardRead', desc: 'tbCardReadP', cost: 'tbCostRead' },
     { id: 'toolTeardown', key: 'tbCardTd', desc: 'tbCardTdP', cost: 'tbCostTd' },
     { id: 'toolDiversity', key: 'tbCardDv', desc: 'tbCardDvP', cost: 'tbCostDv' },
     { id: 'toolCraftLint', key: 'tbCardLint', desc: 'tbCardLintP', cost: 'tbCostLint' },
+    { id: 'toolStage', key: 'tbCardStage', desc: 'tbCardStageP', cost: 'tbCostStage' },
   ];
 
 C.X_REGIONS = [
@@ -227,6 +228,7 @@ C.WORKBENCH_TITLES = {
     progressPanel:    { zh: '生成进度',                en: 'Generation Progress' },
     resultPanel:      { zh: '创作结果',                 en: 'Result' },
     failPanel:        { zh: '生成失败',                 en: 'Failure' },
+    stageLadder:      { zh: '打磨阶梯 · 四阶路线',       en: 'Polish Ladder' },
   };
 
 C.DIFF_LEVEL_LABEL = {
