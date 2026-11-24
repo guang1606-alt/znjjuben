@@ -45,7 +45,7 @@ function setup(names, extra = {}) {
     escapeHtml: (x) => String(x ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c])),
     ...extra };
   vm.createContext(context);
-  for (const name of ['highlightNeedle', ...names]) if (functions.has(name)) vm.runInContext(functions.get(name), context);
+  for (const name of ['highlightNeedle', 'znEmptyHtml', '_znEsc', ...names]) if (functions.has(name)) vm.runInContext(functions.get(name), context);
   return { context, $ };
 }
 

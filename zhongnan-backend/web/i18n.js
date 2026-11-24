@@ -160,6 +160,8 @@
       novelAdaptOnly: '只看可直接改编（公版）',
       craftHooks: '选用钩子', craftAddHook: '＋ 从全部钩子添加', craftCards: '推荐方法卡（点卡片选用/取消，展开看公式与步骤）', craftCopy: '复制手法',
       craftCardSearchPh: '搜方法卡，如 反转 / 冷开场',
+      craftSearchEmptyHint: '清空搜索词可看全部 43 张方法卡',
+      backToTop: '回到顶部',
       craftFreeCount: '免费 · {cards}张方法卡 / {hooks}类钩子',
       
       tbCardPitch: '选题会', tbCardPitchP: '和小南开创作会：市场/故事/制作/观众四席位评估“人物关系·冲突空间·拍摄难度”，给立项/缓议/否决决议', tbCostPitch: '20 积分/轮',
@@ -382,6 +384,8 @@
       novelAdaptOnly: 'Adaptable (public domain) only',
       craftHooks: 'Selected hooks', craftAddHook: '+ Add from all hooks', craftCards: 'Recommended cards (tap header to toggle, expand for formula & steps)', craftCopy: 'Copy craft',
       craftCardSearchPh: 'Search cards, e.g. reversal / cold open',
+      craftSearchEmptyHint: 'Clear search to browse all 43 cards',
+      backToTop: 'Back to top',
       craftFreeCount: 'Free · {cards} cards / {hooks} hook types',
       
       tbCardPitch: 'Pitch meeting', tbCardPitchP: 'A four-seat review (market/story/production/audience) of relation, conflict space and shoot difficulty → GO / hold / pass', tbCostPitch: '20 pts / round',

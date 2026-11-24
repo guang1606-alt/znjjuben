@@ -3064,3 +3064,24 @@ body:has(.ui-dlg-overlay) .toast { --toast-y: 10px; }
 @media (prefers-reduced-motion: reduce) {
   .mode-detail, .mode-detail.view-out { animation: none; }
 }
+
+/* v2.671 全局回顶悬浮按钮：右下角、鎏金描边、opacity+transform 过渡，超过 120px 出现 */
+.back-to-top { position: fixed; right: 20px; bottom: 28px; width: 40px; height: 40px; border-radius: 50%; border: 1px solid color-mix(in srgb, var(--gold) 45%, transparent); background: var(--panel); color: var(--gold-text); font-size: 1.2rem; cursor: pointer; z-index: 50; box-shadow: 0 6px 22px -12px color-mix(in srgb, var(--gold) 50%, transparent); opacity: 0; transform: translateY(10px) scale(.9); pointer-events: none; transition: opacity var(--motion) var(--ease-out), transform var(--motion) var(--ease-out), box-shadow var(--motion) var(--ease-out), border-color var(--motion) var(--ease-out); }
+.back-to-top.show { opacity: 1; transform: translateY(0) scale(1); pointer-events: auto; }
+.back-to-top:hover { border-color: var(--gold); box-shadow: 0 10px 28px -12px color-mix(in srgb, var(--gold) 60%, transparent); }
+.back-to-top:active { transform: translateY(0) scale(.94); }
+@media (prefers-reduced-motion: reduce) { .back-to-top { transition: none; } }
+@media (max-width: 560px) { .back-to-top { right: 14px; bottom: 90px; } }
+
+/* v2.671 搜索清空快捷按钮：只有有内容才显示，靠父容器 .craft-block-head position: relative */
+.craft-block-head { position: relative; }
+.search-clear { position: absolute; right: 8px; top: 50%; transform: translateY(-50%); width: 22px; height: 22px; border-radius: 50%; border: 1px solid var(--line); background: var(--panel-2); color: var(--text-2); font-size: .72rem; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; transition: color var(--motion) var(--ease-out), border-color var(--motion) var(--ease-out), background var(--motion) var(--ease-out), opacity var(--motion) var(--ease-out); }
+.search-clear:hover { color: var(--danger-text); border-color: color-mix(in srgb, var(--danger-text) 45%, var(--line)); }
+.search-clear[hidden] { display: none; }
+
+/* v2.671 空态 hint 次文案：在 zn-empty 图标+主文案下面给出"为什么空"的引导 */
+.zn-empty-hint { display: block; font-size: .74rem; color: var(--text-2); margin-top: 6px; line-height: 1.5; }
+.tag-empty { display: block; font-size: .8rem; color: var(--text-2); padding: 20px 8px; text-align: center; }
+
+/* v2.671 textarea 到 maxlength 时的朱砂色边框：软反馈，不打断用户但让他知道"到顶了" */
+textarea.is-at-limit { border-color: var(--danger-text); }

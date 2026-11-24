@@ -248,7 +248,7 @@
         </div>
         <div class="craft-block">
           <div class="craft-block-head"><b data-i="craftCards">推荐方法卡（点卡片选用/取消，展开看公式与步骤）</b>
-            <input id="craftCardSearch" type="search" autocomplete="off" class="craft-card-search" data-ph="craftCardSearchPh" placeholder="搜方法卡，如 反转 / 冷开场" /></div>
+            <input id="craftCardSearch" type="search" autocomplete="off" class="craft-card-search" data-ph="craftCardSearchPh" placeholder="搜方法卡，如 反转 / 冷开场" /><button type="button" id="craftSearchClear" class="search-clear" aria-label="清空搜索" hidden>✕</button></div>
           <div class="craft-cards" id="craftCards"></div>
         </div>
         <div class="craft-foot">
@@ -1652,5 +1652,7 @@
   <script defer src="./pointer-fx.js"></script>
   <!-- v2.186 全局反馈层：toast + skeleton + view-stack 容器 -->
   <div class="toast-stack" id="toastStack" aria-live="polite" aria-atomic="false"></div>
+  <!-- v2.671 长面板回顶悬浮：滚动超过 120px 出现，点一下平滑滚顶 -->
+  <button id="backToTop" class="back-to-top" aria-label="回到顶部" hidden>↥</button>
 </body>
 </html>

@@ -1893,7 +1893,7 @@
           ? `<details class="craft-all" open><summary>${lang === 'en' ? `Search results (${hits})` : `搜索结果（${hits} 张）`}</summary>` +
             groups.map(({ g, cards }) => `<div class="craft-group-label">${escapeHtml(g.name)}${lang === 'en' ? ` (${cards.length})` : `（${cards.length}）`}</div><div class="craft-grid">` +
               cards.map((c) => cardHtml(c, false)).join('') + '</div>').join('') + '</details>'
-          : `<span class="tag-empty">${lang === 'en' ? `No cards match “${escapeHtml(q)}”. Try another keyword.` : `没有匹配「${escapeHtml(q)}」的方法卡，换个关键词试试`}</span>`;
+          : znEmptyHtml(lang === 'en' ? `No cards match “${q}”.` : `没有匹配「${q}」的方法卡`, t('craftSearchEmptyHint'));
       } else {
         // v2.525 张数取分类库总量：写死 43 会在库增删后失真
         const totalCards = (craftTaxonomy.totals && craftTaxonomy.totals.cards) || craftTaxonomy.cardGroups.reduce((n, g) => n + g.cards.length, 0);
@@ -1972,7 +1972,17 @@
   if (craftCopyBtn) craftCopyBtn.onclick = () => { const t = craftBriefLine(); if (t) copy(t, lang === 'en' ? 'Craft copied' : '手法已复制，可粘贴进创意'); else xnSay(lang === 'en' ? 'Nothing selected.' : '还没选用钩子或方法卡'); };
   // v2.662 方法卡搜索接线：type=search 的清除按钮同样触发 input，清空即回到全量浏览。
   const craftCardSearch = $('craftCardSearch');
-  if (craftCardSearch) craftCardSearch.oninput = () => { craftCardQuery = craftCardSearch.value || ''; renderCraftCards(); };
+  // v2.671 搜索框清空快捷按钮：有内容才显，点一下清空后触发渲染回到全量浏览。
+  const craftSearchClear = $('craftSearchClear');
+  if (craftCardSearch) {
+    craftCardSearch.oninput = () => {
+      const q = craftCardSearch.value || '';
+      craftCardQuery = q;
+      if (craftSearchClear) craftSearchClear.hidden = !q;
+      renderCraftCards();
+    };
+  }
+  if (craftSearchClear && craftCardSearch) craftSearchClear.onclick = () => { craftCardSearch.value = ''; craftCardQuery = ''; craftSearchClear.hidden = true; renderCraftCards(); craftCardSearch.focus(); };
   loadCraftTaxonomy().then(() => { restoreCraftPick(); renderCraftHooks(); renderCraftCards(); renderCraftPicked(); }).catch(() => {});
 
   // ═══ MODULE: misc (88行, 1fn) ═══ 免费合法小说素材库（多语言，只读外链）
@@ -11602,8 +11612,44 @@
     // 事件委托：弹窗/重渲染后新出现的字段，用户一打字就自动挂上，无需逐处接线。
     document.addEventListener('input', (e) => {
       const el = e.target;
-      if (el && (el.tagName === 'TEXTAREA' || el.tagName === 'INPUT')) syncCharCounter(el);
+      if (el && (el.tagName === 'TEXTAREA' || el.tagName === 'INPUT')) { syncCharCounter(el); triggerMaxLimitShake(el); }
     }, true);
+  }
+  // v2.671 表单到顶温和拒绝：浏览器 maxlength 会静默截断，用户不知道"到顶了"。这里给一个抖一下+朱砂色的软反馈。
+  function triggerMaxLimitShake(el) {
+    if (!el || !el.maxLength || el.maxLength < 0) return;
+    if (el.tagName !== 'TEXTAREA') return; // 短 input 不打扰
+    const atLimit = String(el.value || '').length >= el.maxLength;
+    if (atLimit) {
+      el.classList.add('is-at-limit', 'ep-shake');
+      clearTimeout(el._limitTimer);
+      el._limitTimer = setTimeout(() => el.classList.remove('is-at-limit', 'ep-shake'), 600);
+    } else {
+      el.classList.remove('is-at-limit');
+    }
+  }
+  // v2.671 全局回顶悬浮按钮：超过 120px 出现，点一下平滑滚顶，滚回阈值以下自动隐藏。
+  // 为什么不做顶部吸顶：终南集顶栏本身已经 sticky，再叠一层吸顶会 z-index 打架且占宝贵视口——右下角悬浮更克制。
+  function scrollToTop() {
+    try { window.scrollTo({ top: 0, behavior: 'smooth' }); } catch (e) { window.scrollTo(0, 0); }
+  }
+  function updateBackToTop() {
+    const btn = document.getElementById('backToTop');
+    if (!btn) return;
+    const y = (window && typeof window.scrollY === 'number') ? window.scrollY : 0;
+    const show = y >= 120;
+    btn.classList.toggle('show', show);
+    btn.hidden = !show; // index.html 初始 hidden=true，滚过阈值必须解除
+  }
+  function initBackToTop() {
+    const btn = document.getElementById('backToTop');
+    if (!btn || !window) return;
+    btn.onclick = scrollToTop;
+    let ticking = false;
+    window.addEventListener('scroll', () => {
+      if (!ticking) { requestAnimationFrame(() => { updateBackToTop(); ticking = false; }); ticking = true; }
+    }, { passive: true });
+    updateBackToTop();
   }
   // v2.270 Roving tabindex 键盘导航：Tab 键只需按一次进入 tab 组，方向键在组内移动，Home/End 跳首尾
   // 幂等：同一 container 重复调用不会叠加事件监听；每次调用都会重新同步 tabindex/aria 状态
@@ -13105,5 +13151,6 @@
   initOfflineShell(); // v2.448 离线壳注册：失败静默，不影响首屏与业务请求
   initKeyboardInset(); // v2.477 移动端键盘避让：visualViewport 差值写 --kb-inset
   initCharCounters(); // v2.670 长文本框实时字数与上限预警（委托式，弹窗/重渲染自动覆盖）
+  initBackToTop(); // v2.671 全局悬浮回顶：右下角，超过 120px 出现，滚到阈值以下自动隐藏
   if (Api.isAuthed()) loadMe();
 })();
