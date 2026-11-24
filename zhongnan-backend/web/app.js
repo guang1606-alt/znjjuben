@@ -7756,10 +7756,11 @@
   // v2.178 资产补全建议渲染（三族共用）：1 条单行显示，多条用 <details> 折叠展开（CSP 友好，原生展开）
   // 复盘 c172-c173：thin 视图闭环里编导需要看完整 advice 清单，原代码只显示 advice[0] 隐藏后续——多条建议不可见
   // v2.179 c175 复盘修复：去掉 level==='rich' 条件——后端 asset-health L67-68 rich 资产也生成 advice（达标提醒"可直接跨剧引用..."），原条件把 rich 的达标提醒也隐藏了，编导看不到"已达标可跨剧引用"的正向反馈
-  // → rich 用绿色（#2e7d32 正向反馈），usable/thin 用棕色（#8a6d3b 待补全建议）—— 颜色区分达标 vs 待补全
+  // v2.683 颜色改走主题令牌：写死深绿/棕色在 tech/dark 面板上不足 4.5:1，达标与待补全的区分在暗色下等于没有
+  // → rich 用 --ok-text（正向反馈），usable/thin 用 --warn-text（待补全建议）
   function adviceHtml(h) {
     if (!h || !h.advice || !h.advice.length) return '';
-    const color = h.level === 'rich' ? '#2e7d32' : '#8a6d3b';
+    const color = h.level === 'rich' ? 'var(--ok-text)' : 'var(--warn-text)';
     if (h.advice.length === 1) {
       return `<div class="muted" style="font-size:11px;margin-top:3px;color:${color}">💡 ${escapeHtml(h.advice[0])}</div>`;
     }
@@ -8933,7 +8934,7 @@
         clTip.classList.remove('hidden');
         const hard = [...(cl.p0 || []), ...(cl.p1 || [])];
         const avg = typeof cl.avg === 'number' ? cl.avg : 0;
-        const color = avg >= 80 ? '#2e7d32' : avg >= 60 ? '#e0a030' : 'var(--danger-text)';
+        const color = avg >= 80 ? 'var(--grade-good)' : avg >= 60 ? 'var(--grade-warn)' : 'var(--danger-text)';
         if (hard.length) {
           clTip.innerHTML = (lang === 'en'
             ? `<b style="color:${color}">Craft score ${avg}/100</b> · ${hard.length} hard issue(s): ${hard.map((i) => i.dim).join(', ')}`
@@ -8957,7 +8958,7 @@
         cdTip.classList.remove('hidden');
         const hard = (cd.p1 || []).length;
         const avg = typeof cd.avg === 'number' ? cd.avg : 0;
-        const color = avg >= 80 ? '#1565c0' : avg >= 60 ? '#e0a030' : 'var(--danger-text)';
+        const color = avg >= 80 ? 'var(--grade-mid)' : avg >= 60 ? 'var(--grade-warn)' : 'var(--danger-text)';
         const subs = [cd.emotion, cd.webnovel, cd.archetype, cd.narrative].filter(Boolean);
         cdTip.innerHTML = (lang === 'en'
           ? `<b style="color:${color}">Craft depth ${avg}/100</b> · ${subs.map((s) => `${s.avg}`).join('/')} across emotion/webnovel/archetype/narrative${hard ? ` · ${hard} hard issue(s)` : ''}`
@@ -8983,7 +8984,7 @@
       if (tp && tp.first13) {
         tpTip.classList.remove('hidden');
         const score = tp.score || 0;
-        const color = score >= 100 ? '#2e7d32' : score >= 66 ? '#e0a030' : 'var(--danger-text)';
+        const color = score >= 100 ? 'var(--grade-good)' : score >= 66 ? 'var(--grade-warn)' : 'var(--danger-text)';
         tpTip.innerHTML = (lang === 'en'
           ? `<b style="color:${color}">Title pitch ${score}/100</b> · first 13 chars: "${tp.first13}" · identity ${tp.hasIdentity ? '✓' : '✗'} conflict ${tp.hasConflict ? '✓' : '✗'} contrast ${tp.hasContrast ? '✓' : '✗'}`
           : `<b style="color:${color}">标题传播力 ${score}/100</b> · 前13字「${tp.first13}」· 身份${tp.hasIdentity ? '✓' : '✗'} 冲突${tp.hasConflict ? '✓' : '✗'} 反差${tp.hasContrast ? '✓' : '✗'}`);
@@ -8997,7 +8998,7 @@
       if (tq) {
         tqTip.classList.remove('hidden');
         const allOk = tq.want && tq.block && tq.whyNext;
-        const color = allOk ? '#2e7d32' : 'var(--danger-text)';
+        const color = allOk ? 'var(--grade-good)' : 'var(--danger-text)';
         tqTip.innerHTML = (lang === 'en'
           ? `<b style="color:${color}">Episode 3-Q</b> · Want ${tq.want ? '✓' : '✗'} Block ${tq.block ? '✓' : '✗'} Why-Next ${tq.whyNext ? '✓' : '✗'}${allOk ? ' — all present' : ' — missing element(s)'}`
           : `<b style="color:${color}">每集三问</b> · 想要${tq.want ? '✓' : '✗'} 阻拦${tq.block ? '✓' : '✗'} 追更${tq.whyNext ? '✓' : '✗'}${allOk ? '——三要素齐全' : '——缺项需补'}`);
@@ -9010,7 +9011,7 @@
       if (oc) {
         ocTip.classList.remove('hidden');
         const allOk = oc.trouble && oc.oppressor && oc.counterPlan && oc.mustWatch;
-        const color = allOk ? '#2e7d32' : 'var(--danger-text)';
+        const color = allOk ? 'var(--grade-good)' : 'var(--danger-text)';
         ocTip.innerHTML = (lang === 'en'
           ? `<b style="color:${color}">Opening 4-check</b> · Trouble ${oc.trouble ? '✓' : '✗'} Oppressor ${oc.oppressor ? '✓' : '✗'} Counter-plan ${oc.counterPlan ? '✓' : '✗'} Must-watch ${oc.mustWatch ? '✓' : '✗'} (${oc.score}/100)`
           : `<b style="color:${color}">开场四要素</b> · 麻烦${oc.trouble ? '✓' : '✗'} 施压者${oc.oppressor ? '✓' : '✗'} 反击${oc.counterPlan ? '✓' : '✗'} 必看${oc.mustWatch ? '✓' : '✗'}（${oc.score}/100）`);
@@ -9023,7 +9024,7 @@
       const sc = done.scorecard;
       if (sc) {
         scTip.classList.remove('hidden');
-        const color = sc.total >= 85 ? '#2e7d32' : sc.total >= 70 ? '#1565c0' : sc.total >= 60 ? '#e0a030' : 'var(--danger-text)';
+        const color = sc.total >= 85 ? 'var(--grade-good)' : sc.total >= 70 ? 'var(--grade-mid)' : sc.total >= 60 ? 'var(--grade-warn)' : 'var(--danger-text)';
         const dims = (sc.dimensions || []).map((d) => `${d.label}${d.score}`).join(' / ');
         scTip.innerHTML = (lang === 'en'
           ? `<b style="color:${color}">Quality scorecard ${sc.total}/100 (${sc.level})</b> · ${dims} · Weakest: ${sc.weakest.label}(${sc.weakest.score})`
@@ -9049,7 +9050,7 @@
       const iv = done.investor;
       if (iv) {
         ivTip.classList.remove('hidden');
-        const color = iv.verdict === 'STRONG' ? '#2e7d32' : iv.verdict === 'TALK' ? '#1565c0' : iv.verdict === 'CAUTION' ? '#e0a030' : 'var(--danger-text)';
+        const color = iv.verdict === 'STRONG' ? 'var(--grade-good)' : iv.verdict === 'TALK' ? 'var(--grade-mid)' : iv.verdict === 'CAUTION' ? 'var(--grade-warn)' : 'var(--danger-text)';
         ivTip.innerHTML = (lang === 'en'
           ? `<b style="color:${color}">Investor lens ${iv.overall}/100 (${iv.verdictLabel})</b>${iv.vetoes && iv.vetoes.length ? ' · Veto: ' + iv.vetoes.join('; ') : ''}`
           : `<b style="color:${color}">资方视角 ${iv.overall}/100（${iv.verdictLabel}）</b>${iv.vetoes && iv.vetoes.length ? ' · 否决：' + iv.vetoes.join('；') : ''}`);

@@ -782,6 +782,9 @@ textarea { box-sizing: border-box; max-width: 100%; resize: vertical; background
 /* v2.466 冲突提示：三处资产库冲突条原为内联 style="border-color:var(--danger-text)" 的 hack，
  * 与「颜色归 CSS」的方向相悖，收成类名（仅换左边框色，不改背景与文字）。 */
 .notice.conflict { border-left-color: var(--cinnabar); }
+/* v2.683 结果页诊断卡：每条诊断带自己的 --tone（评分/赛道/合规各一色），极轻同色底让一屏多条诊断
+ * 不再是同一种灰底糊成一片；颜色仍全部来自主题令牌，四套主题各自达标。 */
+#resultPanel .notice[style*="--tone"] { background: color-mix(in srgb, var(--panel) 90%, var(--tone) 10%); }
 
 /* ================= 登录 / 模态 ================= */
 .modal-mask{position:fixed;inset:0;background:rgba(38,32,18,.42);backdrop-filter:blur(4px);display:flex;align-items:center;justify-content:center;z-index:60;padding:20px}
