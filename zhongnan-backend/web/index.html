@@ -373,6 +373,12 @@
           <button class="btn-primary" id="lintRunBtn" data-i="tbLintRun">开始体检</button>
           <button class="room-close" id="lintClose" data-i="tbCollapse">收起</button>
         </div>
+        <!-- v2.678 单集体检来源条：从作品库分集进入时标明「哪部作品第几集」，并可一键回到该集改稿 -->
+        <div class="lint-origin hidden" id="lintOrigin" role="status" aria-live="polite">
+          <span class="lint-origin-dot" aria-hidden="true"></span>
+          <span class="lint-origin-text" id="lintOriginText"></span>
+          <button type="button" class="chip lint-origin-back" id="lintOriginBack" data-i="lintOriginBack">回到该集</button>
+        </div>
         <div class="muted" style="margin:6px 0 10px" data-i="tbLintHint">粘贴一集正文（2 万字内），按人物原型、情绪兑付、网文钩子、改稿尺子、叙事逻辑五组逐条体检，按 P0/P1/P2 标出硬伤并给改法；也可只写一句话创意做原型选型。全程本地规则引擎，不耗积分。</div>
         <label class="muted" for="lintTitle" data-i="tbLintTitleL">剧名（选填）</label>
         <input id="lintTitle" class="mini-input" style="width:100%;margin-bottom:10px" autocomplete="off" data-ph="tbLintTitlePh" placeholder="例如：退婚后，我成了首富。填了就体检剧名是否一眼想看。">

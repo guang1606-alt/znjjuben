@@ -1321,6 +1321,16 @@ textarea { box-sizing: border-box; max-width: 100%; resize: vertical; background
 .lint-ta:focus{outline:2px solid var(--accent-weak);outline-offset:1px}
 .lint-two{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:10px}
 @media (max-width:720px){.lint-two{grid-template-columns:1fr}}
+/* v2.678 单集体检来源条：从作品库分集进入时，顶部常驻「来自《作品》· EP3」+ 回到该集，
+   多集交替体检也不怕「本集」指代不清；金点作为视觉锚，窄屏自动换行不挤占正文。 */
+.lint-origin{display:flex;align-items:center;gap:10px;margin:0 0 12px;padding:8px 12px;border-radius:10px;border:1px solid color-mix(in srgb,var(--gold) 30%,var(--line));background:color-mix(in srgb,var(--gold) 9%,var(--panel-2));font-size:13px;color:var(--text-2);animation:zn-rise var(--motion) var(--ease-out) both}
+.lint-origin-dot{width:6px;height:6px;border-radius:50%;background:var(--gold);flex:none;box-shadow:0 0 0 3px color-mix(in srgb,var(--gold) 22%,transparent)}
+.lint-origin-text{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--text)}
+.lint-origin-back{flex:none}
+@media screen and (max-width:640px){.lint-origin{flex-wrap:wrap}.lint-origin-text{white-space:normal;flex:1 1 100%}.lint-origin-back{margin-left:16px}}
+@media (prefers-reduced-motion: reduce){.lint-origin{animation:none}}
+/* 回到该集：目标分集卡片短暂描金，帮用户一眼锁定该改哪一集（不改动画，避免与入场动画打架） */
+.ep-item.ep-flash{border-color:color-mix(in srgb,var(--gold) 55%,var(--line));box-shadow:0 0 0 3px color-mix(in srgb,var(--gold) 18%,transparent)}
 /* v2.664 体检结果 / 正文同步：改过正文但没重跑时，结果区顶部出现常驻提示条，旧报告轻微降饱和——
    一眼看出「这份结论不是当前正文的」，避免照着上一版问题单改错地方。圆点低频脉冲表示「待重跑」。 */
 .lint-stale-bar{display:flex;align-items:center;gap:9px;flex-wrap:wrap;margin:12px 0 2px;padding:8px 12px;border-radius:10px;font-size:12.5px;line-height:1.55;color:var(--warn-text);background:color-mix(in srgb,var(--gold) 12%,var(--panel));border:1px solid color-mix(in srgb,var(--gold) 40%,transparent);animation:zn-rise var(--motion) var(--ease-out) both}

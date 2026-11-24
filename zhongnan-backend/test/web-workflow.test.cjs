@@ -157,6 +157,52 @@ test('result page shows a next-step handoff to episodes and the next episode', a
   assert.equal(calls.opened, 'p1', '查看分集应直接打开该项目详情');
 });
 
+// v2.678 作品库单集体检：体检面板此前只吃正文，不带「来自哪部作品第几集」，
+// 多集交替体检时「本集」指代不清，体检完也找不到回哪一集改稿。
+// 从分集进入时必须标明来源，并提供一键回到该集（关闭工作台 + 滚到分集卡片并高亮）。
+test('single-episode checkup carries its source and offers a way back', async () => {
+  const records = [{ id: 's1', epNo: 1, version: 1, title: '一', content: '第一集正文' }];
+  const project = { id: 'p1', title: '成稿作品', totalEps: 20 };
+  const calls = { workbench: [], closed: 0, scrolled: null, flashed: null };
+  const item = {
+    classList: { add: (x) => { calls.flashed = x; }, remove() {}, contains: () => false },
+    scrollIntoView: (o) => { calls.scrolled = o; },
+  };
+  const { context: c, $ } = setup(
+    ['openProject', 'setLintOrigin', 'returnToLintOrigin'],
+    {
+      Api: { request: async () => ({}), jsonOrThrow: async () => records },
+      openWorkbench: (id) => calls.workbench.push(id),
+      closeWorkbench: () => { calls.closed += 1; },
+      document: {
+        getElementById: () => null, querySelector: () => item, querySelectorAll: () => [],
+        removeEventListener() {}, createElement: () => $('created'),
+      },
+      t: (k, vars) => {
+        let s = require('../web/i18n.js').t('zh', k);
+        if (vars) Object.entries(vars).forEach(([kk, vv]) => { s = s.split('{' + kk + '}').join(String(vv)); });
+        return s;
+      },
+    }
+  );
+  const lintBtn = { getAttribute: () => '1', onclick: null };
+  $('epsList').querySelectorAll = (sel) => (sel === '.ep-lint-btn' ? [lintBtn] : []);
+  $('lintRunBtn').click = () => {};
+  await c.openProject(project);
+  assert.equal($('lintOrigin').classList.contains('hidden'), true, '未从分集进入体检时不应出现来源条');
+  lintBtn.onclick({ stopPropagation() {} });
+  assert.deepEqual(calls.workbench, ['lintPanel'], '分集体检应打开体检面板');
+  assert.equal($('lintText').value, '第一集正文', '体检正文应带入当前集最新版');
+  assert.equal($('lintOrigin').classList.contains('hidden'), false, '从分集进入体检必须显示来源条');
+  assert.equal($('lintOriginText').textContent, '来自《成稿作品》· EP1', '来源条要写清作品名与集号');
+  $('lintOriginBack').onclick();
+  assert.equal(calls.closed, 1, '回到该集要先关闭体检工作台');
+  assert.equal(calls.scrolled && calls.scrolled.block, 'center', '回到该集应把分集卡片滚到视野中央');
+  assert.equal(calls.flashed, 'ep-flash', '回到该集应短暂高亮目标分集');
+  c.setLintOrigin(null);
+  assert.equal($('lintOrigin').classList.contains('hidden'), true, '离开分集入口后来源条必须收起');
+});
+
 for (const [kind, render, required] of [['cast', 'renderCastLibEditor', 'Persona'], ['prop', 'renderPropLibEditor', 'Meaning'], ['scene', 'renderSceneLibEditor', 'Meaning']]) {
   test(`${kind} edit keeps the source ID when the user renames the asset`, async () => {
     let saved;

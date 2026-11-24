@@ -511,7 +511,7 @@
         card.onclick = () => {
     // @module misc
           const panel = ({ toolPitch: 'roomPanel', toolRead: 'roomPanel', toolTeardown: 'teardownPanel', toolDiversity: 'diversityPanel', toolBranch: 'branchPanel', toolCraftLint: 'lintPanel', toolStage: 'stageLadder' })[tool.id];
-          if (panel) openWorkbench(panel);
+          if (panel) { if (panel === 'lintPanel') setLintOrigin(null); openWorkbench(panel); }
         };
         tg.appendChild(card);
       });
@@ -3370,6 +3370,7 @@
     if (!hit) return;
     const text = (($('scriptText') && $('scriptText').textContent) || '').trim();
     if (!text) { toastInfo(t('lintNoText')); return; }
+    setLintOrigin(null); // v2.678 结果页抽检不来自某一集，清掉上轮分集来源条
     openWorkbench('lintPanel');
     const ta = $('lintText');
     if (ta) ta.value = text;
@@ -4449,11 +4450,14 @@
       b.onclick = (e) => { e.stopPropagation(); openListen(b.getAttribute('data-listen-id')); };
     });
     // v2.517 作品库单集体检：正文取当前最新版，点开即填好并开跑（免费只读，不耗积分）
+    // v2.678 带上来源（作品名 + 集号），体检完可一键回到该集改稿
     $('epsList').querySelectorAll('.ep-lint-btn').forEach((b) => {
       b.onclick = (e) => {
         e.stopPropagation();
-        const text = epTextMap.get(Number(b.getAttribute('data-lint-ep'))) || '';
+        const epNo = Number(b.getAttribute('data-lint-ep'));
+        const text = epTextMap.get(epNo) || '';
         if (!text.trim()) return;
+        setLintOrigin({ projectId: p.id, projectTitle: p.title, epNo });
         openWorkbench('lintPanel');
         const ta = $('lintText'); if (ta) ta.value = text;
         const run = $('lintRunBtn'); if (run) run.click();
@@ -11374,6 +11378,30 @@
 
   /* ---------- 诊断→一键针对性优化（付费增值，失败后端自动退积分） ---------- */
   let currentWorksProject = null, currentWorksDiagnosis = null;
+  // v2.678 单集体检来源：从作品库分集进入体检时记录「哪部作品第几集」，
+  // 体检面板顶部常驻来源条；点「回到该集」关闭工作台并滚到该分集卡片高亮。
+  let _lintOrigin = null;
+  function setLintOrigin(src) {
+    _lintOrigin = src || null;
+    const bar = $('lintOrigin'); if (!bar) return;
+    const back = $('lintOriginBack');
+    if (back && !back.onclick) back.onclick = returnToLintOrigin;
+    if (!_lintOrigin) { bar.classList.add('hidden'); return; }
+    const txt = $('lintOriginText');
+    if (txt) txt.textContent = t('lintOriginFrom', { title: _lintOrigin.projectTitle || '', n: _lintOrigin.epNo });
+    bar.classList.remove('hidden');
+  }
+  function returnToLintOrigin() {
+    const o = _lintOrigin;
+    closeWorkbench();
+    if (!o) return;
+    if (!currentWorksProject || currentWorksProject.id !== o.projectId) return;
+    const item = document.querySelector(`#epsList .ep-item[data-ep="${o.epNo}"]`);
+    if (!item) return;
+    try { item.scrollIntoView({ behavior: 'smooth', block: 'center' }); } catch { /* 老浏览器忽略 */ }
+    item.classList.add('ep-flash');
+    setTimeout(() => item.classList.remove('ep-flash'), 1400);
+  }
   // c202 F2：409（处理中/已处理）锁定按钮旁补一个零费“刷新查看新版”。
   // 刷新只重新拉作品/结果页，绝不重新提交 fix（rrFixedKeys 仍在服务端拦截重复扣费）。
   function attach409Refresh(btn, projectId, inWorks, after) {
