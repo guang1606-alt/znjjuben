@@ -3127,4 +3127,17 @@ textarea.is-at-limit { border-color: var(--danger-text); }
 .stage-gaps { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
 .stage-gap { font-size: .76rem; background: var(--panel); border: 1px solid color-mix(in srgb, var(--warn-text) 28%, var(--line)); border-radius: 999px; padding: 2px 9px; }
 @media (max-width: 560px) { .stage-spec > div { grid-template-columns: 1fr; gap: 2px; } }
-@media (prefers-reduced-motion: reduce) { .stage-detail { animation: none; } .stage-node, .stage-idx, .stage-name, .stage-tick { transition: none; } .stage-verdict.ep-shake { animation: none; } }
+/* v2.673：进度总览 / 过期结论 / 下一步入口 / 截断提示 */
+.stage-ladder-top { display: flex; align-items: baseline; gap: 10px; }
+.stage-ladder-top .stage-ladder-hint { flex: 1 1 auto; min-width: 0; }
+.stage-progress { flex: 0 0 auto; font-size: .74rem; color: var(--gold-text); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.stage-progress.all { color: var(--ok-text); }
+.stage-progress.all::before { content: '✓ '; }
+.stage-verdict.stale { background: var(--panel-2); border-style: dashed; color: var(--text-2); }
+.stage-next { display: inline-flex; align-items: center; margin-top: 10px; padding: 6px 13px; border-radius: 999px; border: 1px solid color-mix(in srgb, var(--ok) 45%, var(--line)); background: var(--panel); color: var(--ok-text); font: inherit; font-size: .82rem; cursor: pointer; transition: transform var(--motion) var(--ease-out), box-shadow var(--motion) var(--ease-out), background var(--motion) var(--ease-out); }
+.stage-next:hover { transform: translateY(-1px); background: var(--soft-ok); box-shadow: var(--shadow-lg); }
+.stage-next:active { transform: none; }
+.stage-trunc { display: block; margin-top: 8px; font-size: .76rem; color: var(--warn-text); }
+.stage-clear { font-size: .76rem; }
+@media (max-width: 560px) { .stage-ladder-top { flex-wrap: wrap; gap: 2px; } .stage-progress { margin-left: auto; } }
+@media (prefers-reduced-motion: reduce) { .stage-detail { animation: none; } .stage-node, .stage-idx, .stage-name, .stage-tick { transition: none; } .stage-verdict.ep-shake { animation: none; } .stage-next { transition: none; } .stage-next:hover { transform: none; } }

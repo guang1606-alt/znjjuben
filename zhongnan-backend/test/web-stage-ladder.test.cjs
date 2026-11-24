@@ -60,3 +60,51 @@ test('样式齐备且动效带降级出口', () => {
   const tail = css.slice(css.indexOf('.stage-rail'));
   assert.ok(/prefers-reduced-motion:\s*reduce/.test(tail), '打磨阶梯动效必须带降级出口');
 });
+
+// ── v2.673 创作端一致性：结论与输入同步 + 草稿不丢 + 进度可读 ──
+test('v2.673 草稿与通过态落本地：刷新不丢，且可单阶清空', () => {
+  assert.match(view, /zn_stage_drafts/, '草稿应持久化到 localStorage');
+  assert.match(view, /zn_stage_passed/, '通过态应持久化，刷新后阶梯勾选不丢');
+  assert.match(view, /data-stage-clear/, '应提供「清空本阶」入口');
+  assert.match(view, /localStorage\.setItem/, '写入必须走 localStorage');
+  // 读写必须真用同一组键（放在常量里最容易「声明了却没接上」）
+  assert.match(view, /readLS\(LS_DRAFT\)/, '草稿应经 readLS(LS_DRAFT) 读取');
+  assert.match(view, /writeLS\(LS_DRAFT, drafts\)/, '草稿应在输入/判定时写回');
+  assert.match(view, /writeLS\(LS_PASSED, passed\)/, '通过态应在判定时写回');
+  // 清空要同时撤销该阶的判定结论，避免「文本清空了、勾还在」
+  assert.match(view, /delete drafts\[/, '清空应删除该阶草稿');
+  assert.match(view, /delete passed\[/, '清空应撤销该阶通过态');
+});
+
+test('v2.673 结论随输入失效 + 通过卡给下一步 + 截断如实提示', () => {
+  // 输入变化即撤销上一轮结论（与 v2.664 剧本体检同一条原则：界面结论只对提交那一刻成立）
+  assert.match(view, /stage-verdict stale/, '输入改动后结论应转为过期提示');
+  assert.match(view, /verdict\.className = 'stage-verdict stale'/, '过期提示必须真的落到 #stageVerdict');
+  assert.match(view, /staleHint/, '过期提示需有双语文案');
+  assert.match(view, /delete lastResult\[/, '输入改动应丢弃该阶旧结论');
+  assert.match(view, /delete passed\[/, '输入改动应撤销该阶通过态');
+  // 通过卡不再让用户自己找下一阶（模板 + 点击代理都要在）
+  assert.match(view, /data-stage-next/, '通过卡应有「进入下一阶」按钮');
+  assert.match(view, /closest\('\[data-stage-next\]'\)/, '点击代理需处理 data-stage-next');
+  assert.match(view, /nextRung/, '下一步按钮文案需双语');
+  // 后端截断必须让用户知道（此前 truncated 字段被白白丢掉）
+  assert.match(view, /r\.truncated/, '应消费后端 truncated 字段');
+  assert.match(view, /truncatedNote/, '截断提示需有双语文案');
+});
+
+test('v2.673 进度总览 + 竖排方向键，与既有 tablist 交互一致', () => {
+  assert.match(html, /id="stageProgress"/, '面板需有进度总览节点');
+  assert.match(html, /aria-orientation="vertical"/, '竖排 tablist 应声明 aria-orientation');
+  assert.match(view, /stageProgress/, '模块应刷新进度文案');
+  assert.match(view, /passedCount/, '进度文案需双语');
+  assert.match(view, /ArrowDown/, '竖排 tablist 应支持 ↓ 切阶');
+  assert.match(view, /ArrowUp/, '竖排 tablist 应支持 ↑ 切阶');
+});
+
+test('v2.673 新增样式齐备且动效有降级出口', () => {
+  for (const cls of ['.stage-progress', '.stage-next', '.stage-verdict.stale']) {
+    assert.ok(css.includes(cls), `styles.css 缺 ${cls}`);
+  }
+  const tail = css.slice(css.indexOf('.stage-progress'));
+  assert.ok(/prefers-reduced-motion:\s*reduce/.test(tail), '新增动效必须带降级出口');
+});
