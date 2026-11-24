@@ -1062,7 +1062,16 @@ textarea { box-sizing: border-box; max-width: 100%; resize: vertical; background
 .room-tab.on{background:var(--accent);color:var(--on-accent);border-color:var(--accent)}
 .room-close{margin-left:auto;background:none;border:0;color:var(--text-2);cursor:pointer}
 .room-close:hover{color:var(--cinnabar)}
+/* v2.686 编剧室标签行：历史入口独占 auto 外边距（与 .room-close 各分一半会把「我的编剧室」挤到行中央），
+ * 收起按钮跟随其后，不再参与分配空白 */
+.room-history-chip{margin-left:auto}
+#roomClose{margin-left:0}
 .room-stream{max-height:380px;overflow:auto;display:flex;flex-direction:column;gap:10px;margin:12px 0;padding:12px;border:1px solid var(--line);border-radius:12px;background:var(--panel-2)}
+/* v2.686 空态：会议纪要区在还没有任何发言时不再露出一只空边框盒子；
+ * 用一条页边批注式的提示承接「发起后会看到什么」，有第一条发言后自动让位。 */
+.room-stream:empty{display:none}
+.room-idle-hint{margin:8px 0 14px;padding-left:10px;border-left:2px solid var(--line);color:var(--text-2);font-size:13px;line-height:1.65}
+.room-stream:not(:empty) + .room-idle-hint{display:none}
 .rm{max-width:86%;display:flex;flex-direction:column}
 .rm-xn{align-self:flex-start}
 .rm-me{align-self:flex-end;align-items:flex-end}
@@ -2322,6 +2331,9 @@ body:has(.ui-dlg-overlay) .toast { --toast-y: 10px; }
 @media (max-width: 768px) {
   .workbench-layer { padding: var(--workbench-top, 70px) 8px 8px; }
   .workbench-body { padding: 12px; }
+  /* v2.686 窄屏去重：工作台头部已有「← 返回」，面板内再放一枚「收起」只会多占一行、
+   * 把标签行挤成两行（实测 390px 下单独占一行靠右）。窄屏隐藏面板内收起，返回按钮始终可见。 */
+  .workbench-body .room-close { display: none; }
   .workbench-head { padding: 10px 12px; gap: 8px; }
   .workbench-back { padding: 5px 10px; font-size: 12.5px; }
   .workbench-head h2 { font-size: 16px; }

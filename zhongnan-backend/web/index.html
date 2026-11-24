@@ -428,7 +428,7 @@
         <div class="room-tabs">
           <button class="room-tab on" data-rtab="pitch" data-i="tbTabPitch">选题会</button>
           <button class="room-tab" data-rtab="read" data-i="tbTabRead">剧本围读</button>
-          <button class="chip" id="roomHistoryBtn" data-i="tbRoomHistory" style="margin-left:auto">🕘 我的编剧室</button>
+          <button class="chip room-history-chip" id="roomHistoryBtn" data-i="tbRoomHistory">🕘 我的编剧室</button>
           <button class="room-close" id="roomClose" data-i="tbCollapse">收起</button>
         </div>
 
@@ -445,6 +445,7 @@
             <div class="field" style="align-self:flex-end"><button class="btn-primary" id="pitchOpenBtn" data-i="tbPitchOpen">开始选题会（20积分）</button></div>
           </div>
           <div class="room-stream" id="pitchStream"></div>
+          <p class="room-idle-hint" id="pitchIdleHint" data-i="roomIdleHint">会议尚未开始：发起后，市场、故事、制作、观众四位席位会在这里逐条发言，形成可回溯的纪要。</p>
           <div class="hidden" id="pitchMore">
             <div class="configbar" style="padding:0;border:0">
               <div class="field"><label data-i="tbPitchRelL" for="pitchRel">人物关系</label><input id="pitchRel" autocomplete="off" data-ph="tbPitchRelPh" placeholder="师徒反目/合伙人对立" /></div>
