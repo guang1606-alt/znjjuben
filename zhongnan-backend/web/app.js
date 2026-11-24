@@ -255,7 +255,7 @@
     // v2.524 缓存带语言标记：切语言后旧缓存作废需重拉；推荐卡也按新语言重新匹配，避免中英混排
     if (typeof renderCraftHooks === 'function' && (craftTaxonomy || craftRecCards.length)) {
       const _langChanged = !!craftTaxonomyLang && craftTaxonomyLang !== lang;
-      if (_langChanged) { craftTaxonomy = null; craftRecCards = []; }
+      if (_langChanged) { craftTaxonomy = null; craftRecCards = []; renderCraftOpeningAudit(null); }
       // v2.662 renderStaticText 会把块头洗回静态兜底，语言切换后需按库内总量重刷一次
       const _after = () => { renderCraftHooks(); renderCraftCards(); renderCraftPicked(); syncCraftFreeCount(); };
       if (_langChanged) loadCraftTaxonomy().then(_after).catch(_after); else _after();
@@ -1944,20 +1944,42 @@
     if (lang === 'en') return `Craft: hooks [${hk.join(', ')}]; methods [${cd.join('; ')}]`;
     return `创作手法：钩子[${hk.join('、')}]；方法[${cd.join('；')}]`;
   }
+  function renderCraftOpeningAudit(audit) {
+    const box = $('craftOpeningAudit'); if (!box) return;
+    if (!audit) { box.classList.add('hidden'); box.innerHTML = ''; return; }
+    const used = Array.isArray(audit.used) ? audit.used : [];
+    const names = used.map((id) => { const h = findHook(id); return h ? h.name : id; });
+    const usedText = names.length ? names.join(lang === 'en' ? ', ' : '、') : t('craftAuditEmpty');
+    box.innerHTML = `<b class="craft-audit-title">${escapeHtml(t('craftAuditTitle'))}</b>
+      <p><b>${escapeHtml(t('craftAuditUsed'))}</b>${escapeHtml(usedText)}</p>
+      <p><b>${escapeHtml(t('craftAuditNext'))}</b>${escapeHtml(audit.advice || '')}</p>`;
+    box.classList.remove('hidden');
+  }
+  function wireCraftContext() {
+    const idea = $('craftIdea');
+    const opening = $('craftOpening');
+    if (idea) idea.oninput = () => { craftRecCards = []; renderCraftCards(); };
+    if (opening) opening.oninput = () => renderCraftOpeningAudit(null);
+  }
   // v2.260 递招在途锁：craftGoBtn 双击与 smartRandomTags 后程序化调用共享一把锁（推荐幂等，重入纯浪费）
   let _craftGoing = false;
   async function craftGo() {
     if (_craftGoing) return;
+    const useTagContext = $('tagBench') && !$('tagBench').classList.contains('hidden');
+    const ideaEl = useTagContext ? $('tagIdea') : $('craftIdea');
+    const idea = (ideaEl?.value || '').trim();
+    if (!useTagContext && !idea) { xnSay(t('craftNeedIdea')); $('craftIdea')?.focus(); return; }
     _craftGoing = true;
     const loading = $('craftLoading'); loading.classList.remove('hidden');
     loading.textContent = lang === 'en' ? 'Matching craft to your idea…' : '小南正在匹配最贴的钩子与方法…';
     try {
       await loadCraftTaxonomy();
-      const idea = ($('tagIdea') && $('tagIdea').value || '').trim();
-      const body = { text: idea, tags: tagChosen, limit: 6 };
+      const body = { text: idea, tags: useTagContext ? tagChosen : [], limit: 6 };
       if (lang === 'en') body.lang = 'en';
-      // 已有正文时把开篇带上：递招同时给出开篇钩子审计（纯本地规则，不耗积分、不调模型）
-      const opening = String(($('scriptText') || {}).value || '').trim().slice(0, 1200);
+      // 标签台联动审计已有正文；独立递招只读取当前面板可见的开篇底稿。
+      const openingEl = useTagContext ? $('scriptText') : $('craftOpening');
+      const openingText = useTagContext ? openingEl?.textContent : openingEl?.value;
+      const opening = String(openingText || '').trim().slice(0, 1200);
       if (opening) body.opening = opening;
       const j = await (await Api.request('/api/craft/recommend', { method: 'POST', body: JSON.stringify(body) })).json();
       craftSelHooks = (j.hooks || []).map((h) => ({ id: h.id, name: h.name }));
@@ -1965,9 +1987,10 @@
       craftSelCards = craftRecCards.map((c) => ({ id: c.id, title: c.title }));
       saveCraftPick();
       renderCraftHooks(); renderCraftCards(); renderCraftPicked();
-      if (j.openingAudit && j.openingAudit.advice) xnSay(j.openingAudit.advice);
+      renderCraftOpeningAudit(j.openingAudit);
     } catch (e) { xnSay(e.message || 'craft error'); } finally { loading.classList.add('hidden'); _craftGoing = false; }
   }
+  wireCraftContext();
   const craftGoBtn = $('craftGoBtn'); if (craftGoBtn) craftGoBtn.onclick = craftGo;
   const craftCopyBtn = $('craftCopyBtn');
   if (craftCopyBtn) craftCopyBtn.onclick = () => { const t = craftBriefLine(); if (t) copy(t, lang === 'en' ? 'Craft copied' : '手法已复制，可粘贴进创意'); else xnSay(lang === 'en' ? 'Nothing selected.' : '还没选用钩子或方法卡'); };
@@ -8390,6 +8413,8 @@
     let brief, projTitle;
     // v2.667 续写时无论哪种模式都直接对既有项目追加下一集，标签台校验让位给「本集方向」输入
     const useTagBench = !generationDraft && selectedMode === 'tag' && $('tagBench') && !$('tagBench').classList.contains('hidden');
+    const useCraftBench = !generationDraft && reuseBrief == null && !useTagBench && $('craftBench') && !$('craftBench').classList.contains('hidden');
+    const generationMode = useCraftBench ? 'auto' : selectedMode;
     if (reuseBrief != null) {
       // v2.277 失败重试：沿用上一次已建项目的简报与标题，跳过输入框/tagBench 校验（失败时面板可能已不在原视图）
       brief = reuseBrief;
@@ -8399,6 +8424,10 @@
       if (!brief || !brief.trim()) { xnSay(t('tagNoPick')); return; }
       rememberPrefTags(tagChosen); // 手动确认出本的标签同样沉淀为长期偏好
       projTitle = tagProjectTitle();
+    } else if (useCraftBench) {
+      brief = ($('craftIdea')?.value || '').trim();
+      if (!brief) { xnSay(t('craftNeedIdea')); $('craftIdea')?.focus(); return; }
+      projTitle = brief.slice(0, 40);
     } else {
       brief = ($('modeBrief')?.value || '').trim();
       // v2.317 采访模式：主创意框为空时，认采访面板内嵌框里已写的创意并回填，不再让用户重抄一遍
@@ -8427,14 +8456,17 @@
       if (craftLine && !brief.includes(craftLine)) brief = brief + '\n' + craftLine;
     }
     // v2.93 剧情软广：品牌简报必填校验（广告词合规由服务端在扣费前预检并回传命中词）
-    const bbPayload = brandBriefPayload();
+    const bbPayload = useCraftBench ? {} : brandBriefPayload();
     if (bbPayload === null) return;
     // v2.94 热点追更：热点简报必填校验（隐私硬信息由服务端在扣费前预检拦截）
-    const tbPayload = trendBriefPayload();
+    const tbPayload = useCraftBench ? {} : trendBriefPayload();
     if (tbPayload === null) return;
     // v2.95 互动分支：分支简报必填校验（闭环矛盾由服务端在扣费前预检拦截）
-    const brPayload = branchBriefPayload();
+    const brPayload = useCraftBench ? {} : branchBriefPayload();
     if (brPayload === null) return;
+    // 独立递招已是本次创作的完整上下文，不夹带上一种模式留下的隐藏表单。
+    const sourcePayload = useCraftBench ? {} : sourceTextPayload();
+    const modePayload = useCraftBench ? {} : modeInputPayload();
     // v2.132 多任务并行：每单注册独立会话卡片，genBtn 不再被单任务独占（生成期间可再开新单）
     const session = { id: 'S' + Date.now() + Math.random().toString(36).slice(2, 6), account, title: projTitle, projectId: null, progress: null, abortCtrl: null, status: 'running', doneData: null, pendingWarnings: null, error: null };
     _genStarting = false; // v2.276 建卡前瞬时释放（与下一行 unshift 同同步执行段，二次点击事件无法插入）；卡后即恢复 v2.132 并行
@@ -8453,14 +8485,14 @@
           ? crypto.randomUUID()
           : `idem-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
         const projectPayload = {
-          title: projTitle, mode: selectedMode, scriptType: selectedScriptType, outputLang: outputLangValue(), ...(selectedMode === 'spark' ? { track: selectedTrack } : {}), totalEps, engineTier: $('engine').value,
+          title: projTitle, mode: generationMode, scriptType: selectedScriptType, outputLang: outputLangValue(), ...(generationMode === 'spark' ? { track: selectedTrack } : {}), totalEps, engineTier: $('engine').value,
           // v2.328 自动匹配：创意随立项一起提交，后端据此路由模式/轨道（不手选）
-          ...(selectedMode === 'auto' ? { brief: brief.trim() } : {}),
+          ...(generationMode === 'auto' ? { brief: brief.trim() } : {}),
           // v2.319 tags 模式：选中标签结构化上传（中文原名，服务端消费端按中文精确匹配；不再只依赖纯文本 brief）
           ...(useTagBench ? { tags: tagChosen.slice(0, TAG_MAX) } : {}),
           // v2.319 adapt/novel/hit_lab：原文立项即持久化进 bible，刷新续写/草稿恢复版权闸门不中断（与 episodes 同口径）
-          ...sourceTextPayload(),
-          format: $('scriptFormatSel') ? $('scriptFormatSel').value : 'LIVE_ACTION', investWan, specialTopic, ...hookPayload(), ...beatPayload(), ...scenesPayload(), ...platformPayload(), ...castAssetPayload(), ...propAssetPayload(), ...sceneAssetPayload(), ...modeInputPayload(),
+          ...sourcePayload,
+          format: $('scriptFormatSel') ? $('scriptFormatSel').value : 'LIVE_ACTION', investWan, specialTopic, ...hookPayload(), ...beatPayload(), ...scenesPayload(), ...platformPayload(), ...castAssetPayload(), ...propAssetPayload(), ...sceneAssetPayload(), ...modePayload,
         };
         const postProject = () => Api.request('/api/generate/projects', { method: 'POST', headers: { 'Idempotency-Key': idemKey }, body: JSON.stringify(projectPayload) });
         let pr;
@@ -8504,7 +8536,7 @@
       renderTaskQueue();
       session.briefText = brief.trim(); // v2.277 仅 episodes 阶段留存原简报：失败后 #failRetry 凭此 + session.project 安装复用句柄
       const res = await Api.request('/api/generate/episodes', { method: 'POST', signal: abortCtrl.signal,
-        body: JSON.stringify({ projectId: project.id, brief: brief.trim(), engineTier: $('engine').value, lang: outLocale(), ...hookPayload(), ...beatPayload(), ...scenesPayload(), ...platformPayload(), ...(aigcPayload()), ...(selectedMode === 'spark' ? { track: selectedTrack } : {}), ...bbPayload, ...tbPayload, ...brPayload, ...sourceTextPayload() }) });
+        body: JSON.stringify({ projectId: project.id, brief: brief.trim(), engineTier: $('engine').value, lang: outLocale(), ...hookPayload(), ...beatPayload(), ...scenesPayload(), ...platformPayload(), ...(aigcPayload()), ...(generationMode === 'spark' ? { track: selectedTrack } : {}), ...bbPayload, ...tbPayload, ...brPayload, ...sourcePayload }) });
       if (!isPrivateSessionCurrent(account)) { res.body?.cancel().catch(() => {}); return; }
       if (!res.ok || !res.body) {
         const txt = await res.text().catch(() => '');

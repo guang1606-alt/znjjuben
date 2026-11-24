@@ -243,9 +243,29 @@
           <h3 data-i="craftTitle" id="craftBenchTitle">小南递招 · 方法卡与钩子</h3>
           <span class="muted" data-i="craftFree" id="craftFree">免费 · 43张方法卡 / 10类钩子</span>
           <span class="spacer"></span>
-          <button class="btn-primary" id="craftGoBtn" data-i="craftGo">按当前创意递招</button>
         </div>
         <div class="muted craft-sub" data-i="craftSub">系统先按题材给默认钩子组合与最贴的方法，你可点 × 移除、用下拉增选钩子；选中的手法会自动写进出本创意，让多岗位协同更聚焦。</div>
+        <div class="craft-context" id="craftContext">
+          <div class="craft-context-head">
+            <b data-i="craftContextTitle">先留一句底稿</b>
+            <span class="muted" data-i="craftContextSub">独立递招只读这里的内容；已写开篇还能顺手检查前 300 字有没有钩住人。</span>
+          </div>
+          <div class="craft-context-grid">
+            <div class="field craft-idea-field">
+              <label for="craftIdea" data-i="craftIdeaLabel">一句话创意</label>
+              <input id="craftIdea" type="text" maxlength="160" autocomplete="off" data-ph="craftIdeaPh" placeholder="例：女医生回乡，竟查到自己的死亡证明" />
+            </div>
+            <div class="field craft-opening-field">
+              <label for="craftOpening" data-i="craftOpeningLabel">开篇试写（选填）</label>
+              <textarea id="craftOpening" rows="3" maxlength="1200" data-ph="craftOpeningPh" aria-describedby="craftOpeningHint" placeholder="贴上开场几句，小南会指出已用钩子与下一处发力点"></textarea>
+              <small class="craft-opening-hint" id="craftOpeningHint" data-i="craftOpeningHint">最多读取 1200 字；修改开篇后，重新递招即可更新审计。</small>
+            </div>
+          </div>
+          <div class="craft-context-actions">
+            <button class="btn-primary" id="craftGoBtn" data-i="craftGo">按当前创意递招</button>
+          </div>
+          <div class="craft-opening-audit hidden" id="craftOpeningAudit" role="status" aria-live="polite"></div>
+        </div>
         <div class="craft-loading hidden" id="craftLoading"></div>
         <div class="craft-block">
           <div class="craft-block-head"><b data-i="craftHooks">选用钩子</b>

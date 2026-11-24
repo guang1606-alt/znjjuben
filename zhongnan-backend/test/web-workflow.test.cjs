@@ -473,15 +473,72 @@ test('v2.661 递招选择持久化：增删选与刷新恢复，且库内已删�
 test('v2.661 一键递招的推荐结果同样持久化（刷新后仍是上次匹配组合）', async () => {
   const store = new Map();
   const LS = { g: (k, d) => (store.has(k) ? store.get(k) : d), s: (k, v) => store.set(k, v) };
-  const { context: c, $ } = setup(['craftGo', 'restoreCraftPick', 'saveCraftPick', 'findHook'], {
+  const { context: c, $ } = setup(['craftGo', 'restoreCraftPick', 'saveCraftPick', 'findHook', 'renderCraftOpeningAudit'], {
     LS, CRAFT_PICK_KEY: 'zn:craftPick', lang: 'zh', tagChosen: [], craftSelHooks: [], craftSelCards: [], craftRecCards: [], _craftGoing: false,
     craftTaxonomy: { hooks: [{ id: 'episode_hook', name: '集尾钩' }], cardGroups: [{ name: '组', cards: [{ id: 'c1', title: '先抑后扬' }] }] },
     loadCraftTaxonomy: async () => {}, renderCraftHooks() {}, renderCraftCards() {}, renderCraftPicked() {}, xnSay() {},
     Api: { request: async () => ({ json: async () => ({ hooks: [{ id: 'episode_hook', name: '集尾钩' }], cards: [{ id: 'c1', title: '先抑后扬' }] }) }) },
   });
   $('tagIdea').value = '';
+  $('craftIdea').value = '一个关于复仇的故事';
   await c.craftGo();
   const saved = JSON.parse([...store.values()][0] || '{}');
   assert.deepEqual(saved.hooks.map(h => h.id), ['episode_hook'], '递招推荐结果必须落盘');
   assert.deepEqual(saved.cards.map(x => x.id), ['c1'], '递招推荐卡必须落盘');
+});
+
+test('v2.675 独立递招只发送可见创意与开篇，不偷用隐藏标签，并留下持久审计', async () => {
+  let sent;
+  const { context: c, $ } = setup(['craftGo', 'renderCraftOpeningAudit', 'findHook', 'saveCraftPick'], {
+    lang: 'zh', tagChosen: ['隐藏随机标签'], craftSelHooks: [], craftSelCards: [], craftRecCards: [], _craftGoing: false,
+    craftTaxonomy: { hooks: [{ id: 'anticommon_hook', name: '反常钩' }], cardGroups: [] },
+    loadCraftTaxonomy: async () => {}, renderCraftHooks() {}, renderCraftCards() {}, renderCraftPicked() {}, xnSay() {},
+    Api: { request: async (url, opts) => { sent = { url, body: JSON.parse(opts.body) }; return { json: async () => ({ hooks: [], cards: [], openingAudit: { used: ['anticommon_hook'], advice: '第二句再收紧。' } }) }; } },
+  });
+  $('craftIdea').value = '女医生回乡查出顶替真相';
+  $('craftOpening').value = '她竟然在祖屋看见了自己的死亡证明。';
+  await c.craftGo();
+  assert.equal(sent.url, '/api/craft/recommend');
+  assert.equal(sent.body.text, '女医生回乡查出顶替真相');
+  assert.deepEqual(sent.body.tags, [], '独立递招不得携带隐藏标签');
+  assert.equal(sent.body.opening, '她竟然在祖屋看见了自己的死亡证明。');
+  assert.equal($('craftOpeningAudit').classList.contains('hidden'), false, '审计应留在面板上');
+  assert.match($('craftOpeningAudit').innerHTML, /反常钩/);
+  assert.match($('craftOpeningAudit').innerHTML, /第二句再收紧。/);
+});
+
+test('v2.675 标签台联动递招读取标签创意、已选标签与作品正文，不受独立底稿干扰', async () => {
+  let sent;
+  const { context: c, $ } = setup(['craftGo', 'renderCraftOpeningAudit', 'findHook', 'saveCraftPick'], {
+    lang: 'zh', tagChosen: ['医生', '悬疑'], craftSelHooks: [], craftSelCards: [], craftRecCards: [], _craftGoing: false,
+    craftTaxonomy: { hooks: [], cardGroups: [] },
+    loadCraftTaxonomy: async () => {}, renderCraftHooks() {}, renderCraftCards() {}, renderCraftPicked() {}, xnSay() {},
+    Api: { request: async (url, opts) => { sent = { url, body: JSON.parse(opts.body) }; return { json: async () => ({ hooks: [], cards: [] }) }; } },
+  });
+  $('tagBench').classList.remove('hidden');
+  $('tagIdea').value = '标签台专属创意';
+  $('scriptText').textContent = '刀尖抵着她的喉咙。';
+  $('craftIdea').value = '独立面板旧创意不得串入';
+  $('craftOpening').value = '独立面板旧开篇不得串入';
+  await c.craftGo();
+  assert.equal(sent.url, '/api/craft/recommend');
+  assert.equal(sent.body.text, '标签台专属创意');
+  assert.deepEqual(sent.body.tags, ['医生', '悬疑']);
+  assert.equal(sent.body.opening, '刀尖抵着她的喉咙。', '作品正文是 div，必须读取 textContent 而不是 value');
+});
+
+test('v2.675 独立递招出本走自动匹配，标题与简报都来自当前可见创意', async () => {
+  const { c, $, requests } = craftGenerateHarness({ mode: 'tag', brief: '' });
+  $('modeBrief').value = '';
+  $('craftBench').classList.remove('hidden');
+  $('craftIdea').value = '女医生回乡查出顶替真相';
+  await c.startGenerate();
+  const create = requests.find(r => r.url === '/api/generate/projects');
+  const gen = requests.find(r => r.url === '/api/generate/episodes');
+  assert.ok(create && gen, '独立递招应能直接立项并生成');
+  assert.equal(create.data.mode, 'auto');
+  assert.equal(create.data.brief, '女医生回乡查出顶替真相\n' + CRAFT_LINE);
+  assert.equal(create.data.title, '女医生回乡查出顶替真相');
+  assert.equal(create.data.tags, undefined, '不得伪装成隐藏标签创作');
+  assert.equal(gen.data.brief, '女医生回乡查出顶替真相\n' + CRAFT_LINE);
 });

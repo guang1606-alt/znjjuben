@@ -140,7 +140,9 @@ describe('v2.511 剧本体检：工具箱入口与免费端点接线', () => {
   it('递招带上已有正文的开篇与界面语言（开篇审计不再睡死）', () => {
     const app = fs.readFileSync(path.join(root, 'app.js'), 'utf8');
     assert.match(app, /if \(lang === 'en'\) body\.lang = 'en';/, '递招须带上界面语言');
-    assert.match(app, /const opening = String\(\(\$\('scriptText'\) \|\| \{\}\)\.value \|\| ''\)\.trim\(\)\.slice\(0, 1200\);/, '须从创作台正文取前 1200 字作为开篇');
+    assert.match(app, /const openingEl = useTagContext \? \$\('scriptText'\) : \$\('craftOpening'\);/, '须按当前递招上下文选择正文来源');
+    assert.match(app, /const openingText = useTagContext \? openingEl\?\.textContent : openingEl\?\.value;/, '创作台正文是 div，须读取 textContent');
+    assert.match(app, /const opening = String\(openingText \|\| ''\)\.trim\(\)\.slice\(0, 1200\);/, '须取当前正文前 1200 字作为开篇');
     assert.match(app, /if \(opening\) body\.opening = opening;/, '有正文时才发开篇，避免空文本触发无依据结论');
   });
 

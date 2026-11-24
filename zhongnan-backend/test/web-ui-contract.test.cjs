@@ -265,3 +265,57 @@ describe('v2.531 拆爆款改编大纲标点随界面语言', () => {
     assert.ok(seg.includes('${paren(esc(c.role))}'), '人物角色未走语言化括号');
   });
 });
+
+// v2.675 独立递招必须自带创作上下文：此前从首页进入仍读取隐藏标签台的空创意/随机标签，
+// 「按当前创意递招」名实不符；生成按钮又聚焦当前面板不存在的 modeBrief。开篇审计只弹一次
+// toast，也无法对照原文修改。本组把输入、请求、出本、审计失效和响应式动效一次钉住。
+describe('v2.675 独立递招的创作上下文与开篇审计闭环', () => {
+  const i18n = fs.readFileSync(path.join(ROOT, 'web', 'i18n.js'), 'utf8');
+
+  it('创作底稿与持久审计骨架完整，所有新增文案中英双份', () => {
+    for (const id of ['craftContext', 'craftIdea', 'craftOpening', 'craftOpeningAudit']) {
+      assert.ok(html.includes(`id="${id}"`), `index.html 缺少 #${id}`);
+    }
+    assert.ok(html.includes('for="craftIdea"') && html.includes('for="craftOpening"'), '两个输入都应有显式 label');
+    for (const key of ['craftContextTitle', 'craftContextSub', 'craftIdeaLabel', 'craftIdeaPh', 'craftOpeningLabel', 'craftOpeningPh', 'craftOpeningHint', 'craftNeedIdea', 'craftAuditTitle', 'craftAuditUsed', 'craftAuditEmpty', 'craftAuditNext']) {
+      const hits = i18n.match(new RegExp(`\\b${key}:`, 'g')) || [];
+      assert.equal(hits.length, 2, `${key} 必须同时存在于 zh/en 字典`);
+    }
+  });
+
+  it('独立推荐读取可见创意与开篇，标签台路径才携带 tags', () => {
+    const i = app.indexOf('async function craftGo(');
+    const seg = app.slice(i, app.indexOf('const craftGoBtn', i));
+    assert.ok(seg.includes("const useTagContext = $('tagBench')"), '必须显式区分标签台联动与独立递招');
+    assert.ok(seg.includes("$('craftIdea')"), '独立推荐未读取可见创意');
+    assert.ok(seg.includes("$('craftOpening')"), '独立推荐未读取可见开篇');
+    assert.ok(seg.includes('tags: useTagContext ? tagChosen : []'), '独立推荐不得发送隐藏随机标签');
+    assert.ok(seg.includes("t('craftNeedIdea')"), '空创意应给当前面板内的明确提示');
+    assert.ok(seg.includes('renderCraftOpeningAudit(j.openingAudit)'), '审计结果必须进入持久结果区');
+  });
+
+  it('独立递招出本读取自己的创意，并按自动匹配模式立项', () => {
+    const i = app.indexOf('async function startGenerate(');
+    const seg = app.slice(i, i + 10500);
+    assert.ok(seg.includes('const useCraftBench ='), '缺少独立递招出本分支');
+    assert.ok(seg.includes('const generationMode = useCraftBench ?'), '独立递招必须切到自动匹配出本');
+    assert.ok(seg.includes("brief = ($('craftIdea')?.value || '').trim()"), '出本仍读取隐藏 modeBrief');
+    assert.ok(seg.includes('mode: generationMode'), '立项 mode 未使用本次出本模式');
+    assert.ok(seg.includes("...(generationMode === 'auto' ? { brief: brief.trim() } : {})"), '自动匹配立项缺少 brief');
+  });
+
+  it('创意变化作废旧推荐，开篇变化作废旧审计，但保留已选手法', () => {
+    const i = app.indexOf('function wireCraftContext(');
+    const seg = app.slice(i, i + 1800);
+    assert.ok(i >= 0, '缺少创作底稿输入接线');
+    assert.ok(seg.includes('craftRecCards = []'), '创意变化后旧推荐仍冒充当前匹配');
+    assert.ok(seg.includes('renderCraftOpeningAudit(null)'), '开篇变化后旧审计仍残留');
+    assert.ok(!seg.includes('craftSelCards = []') && !seg.includes('craftSelHooks = []'), '输入变化不得清空用户已选手法');
+  });
+
+  it('底稿桌面双栏、移动单栏，审计浮现支持减少动态效果', () => {
+    assert.match(css, /\.craft-context-grid\s*\{[^}]*grid-template-columns:/, '缺少底稿双栏布局');
+    assert.match(css, /@media \(max-width:640px\)\{[^}]*\.craft-context-grid[^}]*grid-template-columns:1fr/, '缺少移动端单栏降级');
+    assert.match(css, /@media \(prefers-reduced-motion: reduce\)\{[^}]*\.craft-opening-audit/, '审计动画缺少 reduced-motion 降级');
+  });
+});

@@ -98,8 +98,9 @@ export function openingHookAudit(opening: string): { used: string[]; missing: Ho
   const missing = crisisLike
     ? []
     : [HOOK_TAXONOMY.find((h) => h.id === 'action_hook')!, HOOK_TAXONOMY.find((h) => h.id === 'anticommon_hook')!];
+  const usedNames = used.map((id) => HOOK_TAXONOMY.find((h) => h.id === id)?.name || id);
   const advice = crisisLike
-    ? `开篇已含钩子：${used.join('、')}。注意第二句必须是“雷声”而非背景铺垫，前300字内把人物扔进具体麻烦。`
+    ? `开篇已含钩子：${usedNames.join('、')}。注意第二句必须是“雷声”而非背景铺垫，前300字内把人物扔进具体麻烦。`
     : '开篇前300字未见明确钩子（无反常动作/危机/倒计时/问号）。建议三选一立即破局：①一个反常动作开场；②第一句推翻常识；③面无表情隐忍并埋下复仇倒计时。删掉天气、起床、世界观铺陈。';
   return { used, missing, advice };
 }

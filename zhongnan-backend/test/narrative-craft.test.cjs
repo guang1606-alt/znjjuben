@@ -42,6 +42,9 @@ test('openingHookAudit：平铺背景判缺钩，危机动作判已用钩', () =
   const crisis = openingHookAudit('刀尖正抵着他喉咙，他却笑了：还有三天，你们就该跪下来求我');
   assert.ok(crisis.used.length >= 2);
   assert.strictEqual(crisis.missing.length, 0);
+  assert.match(crisis.advice, /反常识钩（认知颠覆）/);
+  assert.match(crisis.advice, /动作钩（反常动作开场）/);
+  assert.doesNotMatch(crisis.advice, /[a-z]+_hook/, '用户建议不得泄露内部钩子 ID');
 });
 
 test('拆滤镜：感官滤镜词堆砌判低分，直接电影式呈现不判', () => {

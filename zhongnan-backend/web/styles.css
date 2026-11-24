@@ -1190,6 +1190,26 @@ textarea { box-sizing: border-box; max-width: 100%; resize: vertical; background
 .craft-head h3{margin:0;font-family:var(--serif);font-size:16px}
 .craft-head .spacer{flex:1}
 .craft-sub{font-size:.82rem;line-height:1.65;margin-bottom:10px}
+.craft-context{position:relative;margin:12px 0 16px;padding:16px;border:1px solid color-mix(in srgb,var(--gold) 28%,var(--line));border-radius:14px;background:linear-gradient(135deg,color-mix(in srgb,var(--gold) 7%,var(--panel-2)),var(--panel-2));overflow:hidden}
+.craft-context::before{content:"";position:absolute;inset:0 auto 0 0;width:3px;background:linear-gradient(var(--gold),transparent)}
+.craft-context-head{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap;margin-bottom:12px}
+.craft-context-head b{font-family:var(--serif);font-size:.95rem;color:var(--gold-deep)}
+.craft-context-head span{font-size:.78rem;line-height:1.6}
+.craft-context-grid{display:grid;grid-template-columns:minmax(0,.85fr) minmax(0,1.15fr);gap:14px}
+.craft-context .field{margin:0;min-width:0}
+.craft-context .field label{font-size:.8rem;font-weight:650;color:var(--text)}
+.craft-context input,.craft-context textarea{width:100%;box-sizing:border-box;border:1px solid var(--line);border-radius:9px;background:var(--panel);color:var(--text);padding:9px 11px;font:inherit;line-height:1.55;transition:border-color var(--motion) var(--ease-out),box-shadow var(--motion) var(--ease-out)}
+.craft-context textarea{resize:vertical;min-height:88px;max-height:280px}
+.craft-context input:focus,.craft-context textarea:focus{outline:none;border-color:var(--gold);box-shadow:0 0 0 3px color-mix(in srgb,var(--gold) 14%,transparent)}
+.craft-opening-hint{display:block;margin-top:5px;font-size:.72rem;line-height:1.5;color:var(--text-2)}
+.craft-context-actions{display:flex;justify-content:flex-end;margin-top:12px}
+.craft-opening-audit{margin-top:12px;padding:11px 13px;border:1px solid color-mix(in srgb,var(--accent) 26%,var(--line));border-radius:10px;background:color-mix(in srgb,var(--accent) 7%,var(--panel));animation:craft-audit-in var(--motion) var(--ease-out)}
+.craft-audit-title{display:block;margin-bottom:5px;color:var(--accent-strong);font-size:.84rem}
+.craft-opening-audit p{margin:4px 0;font-size:.8rem;line-height:1.65}
+.craft-opening-audit p b{color:var(--text-2);font-weight:600;margin-right:6px}
+@keyframes craft-audit-in{from{opacity:0;transform:translateY(5px)}to{opacity:1;transform:translateY(0)}}
+@media (max-width:640px){.craft-context-grid{grid-template-columns:1fr}.craft-context{padding:14px}.craft-context-actions .btn-primary{width:100%}}
+@media (prefers-reduced-motion: reduce){.craft-opening-audit{animation:none}.craft-context input,.craft-context textarea{transition:none}}
 .craft-loading{font-size:.84rem;color:var(--accent-strong);padding:6px 0}
 .craft-block{margin:10px 0}
 .craft-block-head{display:flex;align-items:center;gap:10px;margin-bottom:6px}

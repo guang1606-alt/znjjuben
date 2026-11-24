@@ -529,6 +529,8 @@ test('logout during asset prefetch prevents generation from creating a project',
 test('logout while project creation JSON is pending prevents the paid generation request', async () => {
   const created = deferred();
   const h = setup(async url => url === '/api/generate/projects' ? response(created.promise) : response({ assets: [] }));
+  // 本用例走普通创作模式；沙箱节点默认可见，须显式隐藏独立递招面板，避免误入 craftIdea 分支。
+  h.$('craftBench').classList.add('hidden');
   h.$('modeBrief').value = 'Alice private idea'; h.$('episodes').value = '1'; h.$('engine').value = 'STANDARD';
   const generating = h.c.startGenerate();
   await until(() => h.requests.some(item => item.url === '/api/generate/projects'));
