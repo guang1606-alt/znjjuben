@@ -42,7 +42,7 @@
       homeToolsTitle: '创作工具箱', homeToolsSub: '像真实编剧团队一样开会、判断、围读改稿',
       homeUpdatesTitle: '最新动态', homeUpdatesEmpty: '暂无新动态',
       zoneCreate: '创作专区', works: '我的作品', market: '剧本交易', square: '交流广场', vip: '会员充值', backToList: '返回列表',
-      navRoom: '编剧室', navToolbox: '工具箱', navCraft: '递招', navNovel: '素材库', toolboxSub: '拆解爆款、反同质化、互动分支校验——像真实编剧团队一样判断与改稿。',
+      navRoom: '编剧室', navToolbox: '工具箱', navCraft: '递招', navNovel: '素材库', toolboxSub: '开会、围读、拆解、反同质化、体检、打磨——像真实编剧团队一样判断与改稿。',
       skipToMain: '跳到主内容', navAria: '主导航', breadcrumbAria: '面包屑', adRollAria: '公告与合作位', roomPanelAria: '编剧室', worksSearchPh: '🔍 搜索项目标题…',
       start: '开始创作', modesTitle: '选择创作模式（8 种 + 自动匹配）', modeTip: '不同会员等级解锁不同模式，越高阶越强', modesEyebrow: 'MODES', modeBack: '返回模式选择',
       episodes: '剧集数', epPresetAria: '常用集数快捷选择', episodesAutoFixed: '已调整为 {n} 集（可填 1–300 集）', scenesPerEp: '每集场数', scenesAuto: '自动（按节奏策略）', platform: '目标平台', platformAuto: '不指定（自动适配）', outLang: '剧本语言', scriptTypeLabel: '剧本类型', engine: '创作引擎档',
@@ -261,7 +261,7 @@
       brand: 'ZhongnanJi · AGI Master',
       footerLine: 'ZhongnanJi · AGI Screenwriting Master — proprietary AGI prompt-engineering stack and multi-model heterogeneous collaboration by Zhongnan Yinghua · Shaanxi Zhongnan Yinghua AI Technology Co., Ltd. · +86 18629152777',
       zoneCreate: 'Studio', works: 'My Works', market: 'Script Market', square: 'Plaza', vip: 'Membership', backToList: 'Back to list',
-      navRoom: 'Writers’ Room', navToolbox: 'Toolbox', navCraft: 'Craft Cards', navNovel: 'Sources', toolboxSub: 'Break down hits, fight copycatting, validate branching—judge and revise like a real writers’ room.',
+      navRoom: 'Writers’ Room', navToolbox: 'Toolbox', navCraft: 'Craft Cards', navNovel: 'Sources', toolboxSub: 'Pitch, table-read, teardown, de-duplicate, lint, polish—judge and revise like a real writers’ room.',
       skipToMain: 'Skip to main content', navAria: 'Main navigation', breadcrumbAria: 'Breadcrumb', adRollAria: 'Announcements & partners', roomPanelAria: 'Writers’ Room', worksSearchPh: '🔍 Search projects…',
       home: 'Home', homeEyebrow: 'ZHONGNAN · FILM ATELIER',
       // v2.498 home login split

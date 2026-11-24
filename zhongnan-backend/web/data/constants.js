@@ -4,12 +4,13 @@
   'use strict';
   const C = {};
 // v2.498 运行时版本号（首页更新通知用；bump-version.cjs 同步更新）
-C.ZN_VERSION = '2.683.0';
+C.ZN_VERSION = '2.684.0';
 C.HOME_TOOLS = [
     { id: 'toolPitch', key: 'tbCardPitch', desc: 'tbCardPitchP', cost: 'tbCostPitch' },
     { id: 'toolRead', key: 'tbCardRead', desc: 'tbCardReadP', cost: 'tbCostRead' },
     { id: 'toolTeardown', key: 'tbCardTd', desc: 'tbCardTdP', cost: 'tbCostTd' },
     { id: 'toolDiversity', key: 'tbCardDv', desc: 'tbCardDvP', cost: 'tbCostDv' },
+    { id: 'toolBranch', key: 'tbCardBr', desc: 'tbCardBrP', cost: 'tbCostBr' },
     { id: 'toolCraftLint', key: 'tbCardLint', desc: 'tbCardLintP', cost: 'tbCostLint' },
     { id: 'toolStage', key: 'tbCardStage', desc: 'tbCardStageP', cost: 'tbCostStage' },
   ];

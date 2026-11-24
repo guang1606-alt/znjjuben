@@ -465,6 +465,7 @@
     { id: 'toolRead', key: 'tbCardRead', desc: 'tbCardReadP', cost: 'tbCostRead' },
     { id: 'toolTeardown', key: 'tbCardTd', desc: 'tbCardTdP', cost: 'tbCostTd' },
     { id: 'toolDiversity', key: 'tbCardDv', desc: 'tbCardDvP', cost: 'tbCostDv' },
+    { id: 'toolBranch', key: 'tbCardBr', desc: 'tbCardBrP', cost: 'tbCostBr' },
     { id: 'toolCraftLint', key: 'tbCardLint', desc: 'tbCardLintP', cost: 'tbCostLint' },
     { id: 'toolStage', key: 'tbCardStage', desc: 'tbCardStageP', cost: 'tbCostStage' },
   ];
@@ -498,7 +499,7 @@
       });
       znBindGrid(qg, { selector: '.home-quick-card' }); // v2.271 首页快捷模式卡方向键导航
     }
-    // 工具箱快捷入口（6 个）
+    // 工具箱快捷入口（7 个，与工具箱页同源同序）
     const tg = $('homeToolGrid');
     if (tg) {
       tg.innerHTML = '';
