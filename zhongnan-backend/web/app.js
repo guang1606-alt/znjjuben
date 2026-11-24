@@ -3223,134 +3223,193 @@
     $('modeBackBtn')?.addEventListener('click', backToGrid);
   });
 
+  // ═══ v2.682 语言切换时重建已打开的二级界面 ═══
+  // 标题 / 描述 / 动态块 / 侧栏都是 JS 现拼的，applyLang 只刷 data-i，
+  // 不重建它们 → 切换后会出现「顶部导航已是英文、二级界面仍是中文」的混排。
+  // 重建前快照输入，重建后回填，避免切语言把用户已写的设定清空。
+  function _snapshotModeDetail() {
+    const body = $('modeDetailBody');
+    const fields = {}, radios = {}, lines = [];
+    if (!body) return { fields, radios, lines };
+    body.querySelectorAll('input[id], textarea[id], select[id]').forEach((el) => {
+      if (el.type === 'radio') { if (el.checked) radios[el.name] = el.value; return; }
+      fields[el.id] = el.value;
+    });
+    body.querySelectorAll('.multiverse-choice').forEach((row) => {
+      const route = row.querySelector('.mv-line-route');
+      const cost = row.querySelector('.mv-line-cost');
+      lines.push({ route: route ? route.value : '', cost: cost ? cost.value : '' });
+    });
+    return { fields, radios, lines };
+  }
+
+  function _restoreModeDetail(snap) {
+    const body = $('modeDetailBody');
+    if (!body || !snap) return;
+    Object.entries(snap.fields).forEach(([id, v]) => { const el = $(id); if (el) el.value = v; });
+    Object.entries(snap.radios).forEach(([name, v]) => {
+      const el = body.querySelector(`input[type="radio"][name="${name}"][value="${v}"]`);
+      if (el) el.checked = true;
+    });
+    // 世界线默认 3 条；用户加过第 4 条时先补出来再回填（上限 4）
+    const addBtn = $('mvAddLineBtn');
+    let guard = 0;
+    while (addBtn && guard++ < 4 && body.querySelectorAll('.multiverse-choice').length < snap.lines.length) addBtn.click();
+    body.querySelectorAll('.multiverse-choice').forEach((row, i) => {
+      const s = snap.lines[i];
+      if (!s) return;
+      const route = row.querySelector('.mv-line-route');
+      const cost = row.querySelector('.mv-line-cost');
+      if (route) route.value = s.route;
+      if (cost) cost.value = s.cost;
+    });
+  }
+
+  document.addEventListener('zn-lang', () => {
+    if (!_modeDetailOpen || !_modeDetailMode) return;
+    // 工作台弹层盖在二级界面上时不动它，避免切语言顺手把用户正在用的弹层关掉
+    const layer = $('workbenchLayer');
+    if (layer && !layer.classList.contains('hidden')) return;
+    const snap = _snapshotModeDetail();
+    const focusId = document.activeElement && document.activeElement.id;
+    showModeDetail(_modeDetailMode);
+    _restoreModeDetail(snap);
+    if (focusId) { const el = $(focusId); if (el && el.focus) el.focus(); }
+  });
+
   // ═══ _renderModeBody：9 种模式的二级界面渲染器 ═══
   // 签名 fn(modeId, mainEl, sideEl) — mainEl 已包含 move 过来的既有 panel
   const _renderModeBody = {
     tag(_mid, _main, side) { side.appendChild(_sideBlocks([
-      { title: '为什么标签先行', body: '题材 / 人设 / 冲突 / 世界观 四维度组合 → 系统定向出本；标签越准，钩子越狠。' },
-      { title: '生成前三件事', body: '① 题材 + 冲突维度必选；② 人设至少 2 个反差；③ 点「🧩 补齐维度」让系统帮你查漏。' },
+      { title: { zh: '为什么标签先行', en: 'Why tags first' }, body: { zh: '题材 / 人设 / 冲突 / 世界观 四维度组合 → 系统定向出本；标签越准，钩子越狠。', en: 'Topic / cast / conflict / world combine into a directed draft; the sharper the tags, the harder the hook.' } },
+      { title: { zh: '生成前三件事', en: 'Three things before generating' }, body: { zh: '① 题材 + 冲突维度必选；② 人设至少 2 个反差；③ 点「🧩 补齐维度」让系统帮你查漏。', en: '① Pick topic + conflict; ② give the lead at least two contrasting traits; ③ tap “Fill gaps” to let the system check what is missing.' } },
     ])); },
     interview(_mid, _main, side) { side.appendChild(_sideBlocks([
-      { title: '采访式创作', body: '小南来采访你，想到哪说到哪即可；系统在你「落稿」时把对话结构化，不会中途自动写剧本。' },
-      { title: '真实优先', body: '不必润色、不必有逻辑漏洞，越像真实对话，后面 AI 能挖到的金矿越多。' },
+      { title: { zh: '采访式创作', en: 'Interview mode' }, body: { zh: '小南来采访你，想到哪说到哪即可；系统在你「落稿」时把对话结构化，不会中途自动写剧本。', en: 'Xiaonan interviews you — say whatever comes to mind. The system structures the conversation only when you commit it; it never auto-writes mid-way.' } },
+      { title: { zh: '真实优先', en: 'Truth first' }, body: { zh: '不必润色、不必有逻辑漏洞，越像真实对话，后面 AI 能挖到的金矿越多。', en: 'No polish or logic needed; the rawer the conversation, the more the AI can mine later.' } },
     ])); },
     hot(_mid, _main, side) { side.appendChild(_sideBlocks([
-      { title: '四借法', body: 'persona_spin（换主角）/ setting_remix（换场景）/ formula_clone（抄结构）/ reversal（反转结局）。' },
-      { title: '快即是命', body: '热点 24 小时内蹭最有效；填完简报直接生成，别等想清楚再来。' },
+      { title: { zh: '四借法', en: 'Four borrowings' }, body: { zh: 'persona_spin（换主角）/ setting_remix（换场景）/ formula_clone（抄结构）/ reversal（反转结局）。', en: 'persona_spin (swap lead) / setting_remix (swap setting) / formula_clone (copy structure) / reversal (flip the ending).' } },
+      { title: { zh: '快即是命', en: 'Speed is the game' }, body: { zh: '热点 24 小时内蹭最有效；填完简报直接生成，别等想清楚再来。', en: 'A trend peaks within 24 hours; fill the brief and generate — do not wait until it feels fully thought through.' } },
     ])); },
     spark(_mid, _main, side) { side.appendChild(_sideBlocks([
-      { title: '三条轨道', body: '素材改编（基础）→ 名场面拓展（高级）→ 爆款逆向批量（专业）。选你当前需要的。' },
-      { title: '原作参考必填', body: '素材改编轨道建议粘贴原作原文，系统做 n-gram 重合度检测，防侵权。' },
+      { title: { zh: '三条轨道', en: 'Three tracks' }, body: { zh: '素材改编（基础）→ 名场面拓展（高级）→ 爆款逆向批量（专业）。选你当前需要的。', en: 'Material adaptation (Basic) → iconic-scene expansion (Advanced) → hit reverse-engineering at scale (Pro). Pick what you need now.' } },
+      { title: { zh: '原作参考必填', en: 'Source text required' }, body: { zh: '素材改编轨道建议粘贴原作原文，系统做 n-gram 重合度检测，防侵权。', en: 'On the adaptation track, paste the original text; the system runs an n-gram overlap check to prevent infringement.' } },
     ])); },
     auto(_mid, _main, side) { side.appendChild(_sideBlocks([
-      { title: '意图路由', body: '你只管写想法，系统自动判断最匹配的创作模式（采访 / 灵感 / 标签 / …）并切引擎。' },
-      { title: '写得越啰嗦越好', body: '不用挑模式、不用管结构，倒完就行 — 路由靠的是意图识别。' },
+      { title: { zh: '意图路由', en: 'Intent routing' }, body: { zh: '你只管写想法，系统自动判断最匹配的创作模式（采访 / 灵感 / 标签 / …）并切引擎。', en: 'Just write your idea; the system picks the best-fit mode (interview / spark / tags / …) and switches engines.' } },
+      { title: { zh: '写得越啰嗦越好', en: 'More detail is better' }, body: { zh: '不用挑模式、不用管结构，倒完就行 — 路由靠的是意图识别。', en: 'No need to pick a mode or structure — just dump everything; routing relies on intent.' } },
     ])); },
 
     // —— 无既有 panel 的模式：往 main 里 append 动态块 ——
 
     diary(_mid, main, side) {
+      const en = lang === 'en';
       const auth = document.createElement('div');
       auth.className = 'dyn-mode-block mode-section';
       auth.innerHTML = `
-        <div class="mode-section-title"><span>🔒 落稿授权</span><em class="muted">未经授权不进入剧本</em></div>
-        <div class="diary-auth" role="radiogroup" aria-label="diary authorization level">
+        <div class="mode-section-title"><span>${en ? '🔒 Commit authorization' : '🔒 落稿授权'}</span><em class="muted">${en ? 'Nothing enters the script without your permission' : '未经授权不进入剧本'}</em></div>
+        <div class="diary-auth" role="radiogroup" aria-label="${en ? 'Diary authorization level' : '日记落稿授权档位'}">
           <label><input type="radio" name="diaryAuth" value="summary" checked />
-            <span><b>① 仅摘要</b><span class="muted"> · 系统只提炼梗概，逐字不进剧本</span></span></label>
+            <span><b>${en ? '① Summary only' : '① 仅摘要'}</b><span class="muted"> · ${en ? 'the system extracts a synopsis; no verbatim text enters the script' : '系统只提炼梗概，逐字不进剧本'}</span></span></label>
           <label><input type="radio" name="diaryAuth" value="selected" />
-            <span><b>② 指定段落</b><span class="muted"> · 在日记里用「// 纳入」标记想纳入的段落</span></span></label>
+            <span><b>${en ? '② Selected passages' : '② 指定段落'}</b><span class="muted"> · ${en ? 'mark passages with “// include” inside the diary' : '在日记里用「// 纳入」标记想纳入的段落'}</span></span></label>
           <label><input type="radio" name="diaryAuth" value="full" />
-            <span><b>③ 全部放行</b><span class="muted"> · 完整进入剧本，风险自担，随时可撤回</span></span></label>
+            <span><b>${en ? '③ Everything' : '③ 全部放行'}</b><span class="muted"> · ${en ? 'full text enters the script; you own the risk and can revoke anytime' : '完整进入剧本，风险自担，随时可撤回'}</span></span></label>
         </div>`;
       main.appendChild(auth);
       side.appendChild(_sideBlocks([
-        { title: '隐私承诺', body: '日记默认仅你可见；选哪档、什么时候撤回，全在你。系统不会偷偷读。' },
-        { title: '推荐做法', body: '第一次用「仅摘要」，觉得好再加「指定段落」，「全部放行」给特别棒的素材。' },
+        { title: { zh: '隐私承诺', en: 'Privacy promise' }, body: { zh: '日记默认仅你可见；选哪档、什么时候撤回，全在你。系统不会偷偷读。', en: 'Diaries are visible only to you by default; which tier to use and when to revoke is entirely your call. The system never reads them silently.' } },
+        { title: { zh: '推荐做法', en: 'Recommended path' }, body: { zh: '第一次用「仅摘要」，觉得好再加「指定段落」，「全部放行」给特别棒的素材。', en: 'Start with “Summary only”; move to “Selected passages” once it feels right; reserve “Everything” for truly strong material.' } },
       ]));
     },
 
     persona(_mid, main, side) {
+      const en = lang === 'en';
       const card = document.createElement('div');
       card.className = 'dyn-mode-block mode-section persona-card';
       card.innerHTML = `
-        <div class="mode-section-title"><span>第一人称叙述者</span><em class="muted">填四个字段，系统用不可靠叙述在线索</em></div>
-        <label><span>他 / 她是谁（身份 / 职业 / 处境）</span><textarea id="personaIdentity" rows="2" placeholder="32 岁急诊医生，刚升主治，婚姻在名存实亡边缘"></textarea></label>
-        <label><span>他 / 她最想要什么（可以拿命换的）</span><textarea id="personaWant" rows="2" placeholder="把三年前那场手术的真相查出来，哪怕砸掉自己的饭碗"></textarea></label>
-        <label><span>他 / 她最怕什么（不敢面对的）</span><textarea id="personaFear" rows="2" placeholder="害怕自己其实早就知道真相，只是不敢承认"></textarea></label>
-        <label><span>他 / 她可能对自己撒的谎（埋在前半的线）</span><textarea id="personaLie" rows="2" placeholder="对所有人说「我没事」，其实已经三个月没睡过整觉"></textarea></label>`;
+        <div class="mode-section-title"><span>${en ? 'First-person narrator' : '第一人称叙述者'}</span><em class="muted">${en ? 'Fill four fields; the system plants clues through unreliable narration' : '填四个字段，系统用不可靠叙述在线索'}</em></div>
+        <label><span>${en ? 'Who they are (identity / job / situation)' : '他 / 她是谁（身份 / 职业 / 处境）'}</span><textarea id="personaIdentity" rows="2" placeholder="${en ? 'A 32-year-old ER doctor just made attending, marriage on the edge of existing in name only' : '32 岁急诊医生，刚升主治，婚姻在名存实亡边缘'}"></textarea></label>
+        <label><span>${en ? 'What they want most (worth risking their life for)' : '他 / 她最想要什么（可以拿命换的）'}</span><textarea id="personaWant" rows="2" placeholder="${en ? 'To uncover the truth behind that surgery three years ago, even if it costs them their career' : '把三年前那场手术的真相查出来，哪怕砸掉自己的饭碗'}"></textarea></label>
+        <label><span>${en ? 'What they fear most (cannot face)' : '他 / 她最怕什么（不敢面对的）'}</span><textarea id="personaFear" rows="2" placeholder="${en ? 'That they already knew the truth and simply refused to admit it' : '害怕自己其实早就知道真相，只是不敢承认'}"></textarea></label>
+        <label><span>${en ? 'The lie they may tell themselves (seeded early)' : '他 / 她可能对自己撒的谎（埋在前半的线）'}</span><textarea id="personaLie" rows="2" placeholder="${en ? 'Tells everyone “I am fine” while not having slept a full night in three months' : '对所有人说「我没事」，其实已经三个月没睡过整觉'}"></textarea></label>`;
       main.appendChild(card);
       side.appendChild(_sideBlocks([
-        { title: '不可靠叙述', body: '前半段让叙述者撒谎 / 隐瞒 / 选择性记忆，后半段撕开 → 观众情绪翻三倍。' },
-        { title: '谎 vs 秘密', body: '谎是对自己撒的（自欺），秘密是对别人藏的；前者更有张力。' },
+        { title: { zh: '不可靠叙述', en: 'Unreliable narration' }, body: { zh: '前半段让叙述者撒谎 / 隐瞒 / 选择性记忆，后半段撕开 → 观众情绪翻三倍。', en: 'Let the narrator lie, omit or misremember in the first half, then tear it open in the second — the emotional payoff triples.' } },
+        { title: { zh: '谎 vs 秘密', en: 'Lie vs secret' }, body: { zh: '谎是对自己撒的（自欺），秘密是对别人藏的；前者更有张力。', en: 'A lie is told to oneself (self-deception); a secret is hidden from others. The former carries more tension.' } },
       ]));
     },
 
     duel(_mid, main, side) {
+      const en = lang === 'en';
       const duel = document.createElement('div');
       duel.className = 'dyn-mode-block mode-section';
       duel.innerHTML = `
-        <div class="mode-section-title"><span>双人对撞</span><em class="muted">A 和 B 各填三字段，轮流出招逐轮加码</em></div>
+        <div class="mode-section-title"><span>${en ? 'Head-to-head' : '双人对撞'}</span><em class="muted">${en ? 'Three fields each for A and B; they trade moves and escalate every round' : 'A 和 B 各填三字段，轮流出招逐轮加码'}</em></div>
         <div class="duel-ab">
           <div class="duel-col duel-col-a">
-            <h4>A<span class="muted">· 不可退让</span></h4>
-            <label><span>身份</span><input id="duelAIdentity" placeholder="刚拿到融资的 CEO"></label>
-            <label><span>要什么</span><textarea id="duelAWant" rows="2" placeholder="必须砍掉 30% 团队才能活"></textarea></label>
-            <label><span>为什么不能退</span><textarea id="duelALine" rows="2" placeholder="投资人签的是生死协议，退了就坐牢"></textarea></label>
+            <h4>A<span class="muted">· ${en ? 'cannot retreat' : '不可退让'}</span></h4>
+            <label><span>${en ? 'Identity' : '身份'}</span><input id="duelAIdentity" placeholder="${en ? 'A CEO who just closed a funding round' : '刚拿到融资的 CEO'}"></label>
+            <label><span>${en ? 'What they want' : '要什么'}</span><textarea id="duelAWant" rows="2" placeholder="${en ? 'Must cut 30% of the team to survive' : '必须砍掉 30% 团队才能活'}"></textarea></label>
+            <label><span>${en ? 'Why they cannot retreat' : '为什么不能退'}</span><textarea id="duelALine" rows="2" placeholder="${en ? 'The investor signed a life-or-death clause; backing out means prison' : '投资人签的是生死协议，退了就坐牢'}"></textarea></label>
           </div>
           <div class="duel-vs" aria-hidden="true">VS</div>
           <div class="duel-col duel-col-b">
-            <h4>B<span class="muted">· 不可退让</span></h4>
-            <label><span>身份</span><input id="duelBIdentity" placeholder="跟着公司干了 8 年的老员工"></label>
-            <label><span>要什么</span><textarea id="duelBWant" rows="2" placeholder="这批兄弟一个都不能走"></textarea></label>
-            <label><span>为什么不能退</span><textarea id="duelBLine" rows="2" placeholder="走了对不起当年一起在车库打地铺的兄弟"></textarea></label>
+            <h4>B<span class="muted">· ${en ? 'cannot retreat' : '不可退让'}</span></h4>
+            <label><span>${en ? 'Identity' : '身份'}</span><input id="duelBIdentity" placeholder="${en ? 'An eight-year veteran who built the company from day one' : '跟着公司干了 8 年的老员工'}"></label>
+            <label><span>${en ? 'What they want' : '要什么'}</span><textarea id="duelBWant" rows="2" placeholder="${en ? 'Not a single one of these people can be let go' : '这批兄弟一个都不能走'}"></textarea></label>
+            <label><span>${en ? 'Why they cannot retreat' : '为什么不能退'}</span><textarea id="duelBLine" rows="2" placeholder="${en ? 'Walking away would betray the people who slept on the garage floor with them' : '走了对不起当年一起在车库打地铺的兄弟'}"></textarea></label>
           </div>
         </div>`;
       main.appendChild(duel);
       side.appendChild(_sideBlocks([
-        { title: '轮流出招', body: '系统让 A 和 B 各说一句、各出一招、每轮加码。直到一方掀底牌或被迫妥协。' },
-        { title: '不要写好坏人', body: 'A 和 B 都必须有道理 — 观众才能被撕到。' },
+        { title: { zh: '轮流出招', en: 'Trading moves' }, body: { zh: '系统让 A 和 B 各说一句、各出一招、每轮加码。直到一方掀底牌或被迫妥协。', en: 'A and B each speak and strike in turn, escalating every round until one shows their final card or is forced to yield.' } },
+        { title: { zh: '不要写好坏人', en: 'No cartoon villains' }, body: { zh: 'A 和 B 都必须有道理 — 观众才能被撕到。', en: 'Both A and B must have a valid case — that is what tears the audience apart.' } },
       ]));
     },
 
     multiverse(_mid, main, side) {
+      const en = lang === 'en';
       const mv = document.createElement('div');
       mv.className = 'dyn-mode-block mode-section';
       mv.innerHTML = `
-        <div class="mode-section-title"><span>关键选择 + 世界线分叉</span><em class="muted">2-4 条线，每条写清路线和代价</em></div>
-        <div class="field"><label>那个关键选择是</label><textarea id="mvChoice" aria-label="那个关键选择是" rows="2" placeholder="女主发现丈夫的保险单受益人不是她"></textarea></div>
+        <div class="mode-section-title"><span>${en ? 'Pivotal choice + worldline fork' : '关键选择 + 世界线分叉'}</span><em class="muted">${en ? '2–4 lines; state each route and its cost' : '2-4 条线，每条写清路线和代价'}</em></div>
+        <div class="field"><label>${en ? 'The pivotal choice is' : '那个关键选择是'}</label><textarea id="mvChoice" aria-label="${en ? 'The pivotal choice is' : '那个关键选择是'}" rows="2" placeholder="${en ? 'The heroine finds the beneficiary on her husband insurance policy is not her' : '女主发现丈夫的保险单受益人不是她'}"></textarea></div>
         <div class="multiverse-choices" id="mvChoices"></div>
-        <button type="button" class="chip" id="mvAddLineBtn">+ 再加一条世界线（2-4 条）</button>`;
+        <button type="button" class="chip" id="mvAddLineBtn">${en ? '+ Add a worldline (2–4)' : '+ 再加一条世界线（2-4 条）'}</button>`;
       const choicesEl = mv.querySelector('#mvChoices');
       const _mkLine = (i) => {
         const wrap = document.createElement('div');
         wrap.className = 'multiverse-choice';
         wrap.innerHTML = `
-          <h4>世界线 ${String.fromCharCode(64 + i)}</h4>
-          <label><span>走哪条路</span><input class="mv-line-route" name="mvRoute" placeholder="女主假装不知道，继续过日子"></label>
-          <label><span>代价是什么</span><textarea class="mv-line-cost" name="mvCost" rows="2" placeholder="三年后发现丈夫一直在转移资产，自己已成弃子"></textarea></label>`;
+          <h4>${en ? 'Worldline' : '世界线'} ${String.fromCharCode(64 + i)}</h4>
+          <label><span>${en ? 'Which path' : '走哪条路'}</span><input class="mv-line-route" name="mvRoute" placeholder="${en ? 'She pretends not to know and keeps living as before' : '女主假装不知道，继续过日子'}"></label>
+          <label><span>${en ? 'What it costs' : '代价是什么'}</span><textarea class="mv-line-cost" name="mvCost" rows="2" placeholder="${en ? 'Three years later she learns he has been moving assets all along and she is left with nothing' : '三年后发现丈夫一直在转移资产，自己已成弃子'}"></textarea></label>`;
         return wrap;
       };
       for (let i = 1; i <= 3; i++) choicesEl.appendChild(_mkLine(i));
       mv.querySelector('#mvAddLineBtn').onclick = () => {
-        if (choicesEl.children.length >= 4) { xnSay(lang === 'en' ? 'Max 4 worldlines.' : '最多 4 条世界线'); return; }
+        if (choicesEl.children.length >= 4) { xnSay(en ? 'Max 4 worldlines.' : '最多 4 条世界线'); return; }
         choicesEl.appendChild(_mkLine(choicesEl.children.length + 1));
       };
       main.appendChild(mv);
       side.appendChild(_sideBlocks([
-        { title: '每条线必须自洽', body: '路线写「人物做了什么选择」，代价写「这个选择不可逆地改变了什么」。' },
-        { title: '合并回主线', body: '系统默认把所有世界线的教训合并回主线结局；你也可以明确写「不合并、每条线独立」。' },
+        { title: { zh: '每条线必须自洽', en: 'Every line must hold' }, body: { zh: '路线写「人物做了什么选择」，代价写「这个选择不可逆地改变了什么」。', en: 'Route = what the character chooses; cost = what that choice irreversibly changes.' } },
+        { title: { zh: '合并回主线', en: 'Merge back' }, body: { zh: '系统默认把所有世界线的教训合并回主线结局；你也可以明确写「不合并、每条线独立」。', en: 'By default all worldline lessons merge into the main ending; you can also state “do not merge — each line stands alone”.' } },
       ]));
     },
   };
 
-  // 侧栏块生成器
+  // 侧栏块生成器（v2.682：标题/正文支持 {zh,en}，切语言后重建时取当前语言）
   function _sideBlocks(blocks) {
     const side = document.createElement('aside');
-    side.className = 'mode-detail-side dyn-mode-block';
+    side.className = 'mode-detail-blocks dyn-mode-block';
+    const pick = (v) => (v && typeof v === 'object' ? (lang === 'en' ? v.en : v.zh) : v);
     blocks.forEach(b => {
       const block = document.createElement('div');
       block.className = 'side-block';
-      block.innerHTML = `<h4>${b.title}</h4><p>${b.body}</p>`;
+      block.innerHTML = `<h4>${pick(b.title)}</h4><p>${pick(b.body)}</p>`;
       side.appendChild(block);
     });
     return side;

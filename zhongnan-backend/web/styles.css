@@ -2973,12 +2973,16 @@ body:has(.ui-dlg-overlay) .toast { --toast-y: 10px; }
   border-color: color-mix(in srgb, var(--mode-accent, var(--accent)) 35%, var(--border, #e8e4dd));
   background: color-mix(in srgb, var(--mode-accent-soft, var(--panel-2)) 55%, var(--panel, #fff));
 }
-.mode-detail-side #genConfigBar {
-  position: sticky; bottom: 12px; z-index: 2;
-  box-shadow: 0 -1px 0 var(--border, #e8e4dd), 0 10px 24px -18px rgba(40, 32, 16, .28);
-}
 .mode-detail-side .hook-console { margin: 0; }
 .mode-detail-side .hook-console .chip { width: 100%; text-align: left; }
+
+/* v2.682 侧栏说明块：不再复用 .mode-detail-side（旧写法套了一层同 class 的容器，
+   在暗色主题下把 --surface 的浅色兜底铺成一块亮底），改成纯排布容器。 */
+.mode-detail-blocks { display: flex; flex-direction: column; gap: 14px; }
+
+/* v2.682 生成配置栏不再整体 sticky：英文/长标签下配置可高达 2000px+，
+   sticky bottom 会把它整体上移盖住上方说明块。改为随页面滚动，避免遮挡。 */
+.mode-detail-side #genConfigBar { position: static; box-shadow: none; }
 
 /* v2.344 二级界面内容错峰入场（主栏面板 → 侧栏说明 → 侧栏配置，依次 40ms 递进） */
 .mode-detail-main > *, .mode-detail-side > * {
@@ -3042,13 +3046,14 @@ body:has(.ui-dlg-overlay) .toast { --toast-y: 10px; }
 /* persona: 第一人称卡 */
 .persona-card {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 10px;
   padding: 12px 14px;
   border: 1px solid var(--border, #e8e4dd);
   border-radius: 10px;
-  background: var(--mode-accent-soft, #faf8f5);
+  background: color-mix(in srgb, var(--mode-accent, #8b6e35) 8%, var(--panel, #fff));
 }
+.persona-card .mode-section-title { grid-column: 1 / -1; }
 .persona-card label { font-size: .78rem; color: var(--text-2); display: block; margin-bottom: 4px; }
 .persona-card input, .persona-card textarea {
   width: 100%;
@@ -3070,14 +3075,14 @@ body:has(.ui-dlg-overlay) .toast { --toast-y: 10px; }
 .duel-col {
   padding: 14px;
   border-radius: 10px;
-  background: var(--mode-accent-soft, #faf8f5);
+  background: color-mix(in srgb, var(--mode-accent, #8b6e35) 8%, var(--panel, #fff));
   border: 1px solid var(--border, #e8e4dd);
 }
 .duel-col h4 {
   margin: 0 0 10px;
   font-family: var(--serif, serif);
   font-size: .9rem;
-  color: var(--mode-accent, #c9a227);
+  color: color-mix(in srgb, var(--mode-accent, #c9a227) 45%, var(--text, #27241b));
 }
 .duel-col h4 .muted { font-weight: 400; font-size: .7rem; margin-left: 4px; }
 .duel-vs {
@@ -3100,13 +3105,13 @@ body:has(.ui-dlg-overlay) .toast { --toast-y: 10px; }
   padding: 12px 14px;
   border-radius: 10px;
   border: 1px solid var(--border, #e8e4dd);
-  background: var(--mode-accent-soft, #faf8f5);
+  background: color-mix(in srgb, var(--mode-accent, #8b6e35) 8%, var(--panel, #fff));
 }
 .multiverse-choice h4 {
   margin: 0 0 8px;
   font-size: .85rem;
   font-weight: 600;
-  color: var(--mode-accent, #27ae60);
+  color: color-mix(in srgb, var(--mode-accent, #27ae60) 45%, var(--text, #27241b));
 }
 .multiverse-choice textarea,
 .multiverse-choice input.mv-line-route {
@@ -3127,7 +3132,7 @@ body:has(.ui-dlg-overlay) .toast { --toast-y: 10px; }
   padding: 10px;
   border-radius: 8px;
   border: 1px solid var(--border, #e8e4dd);
-  background: var(--mode-accent-soft, #f0eeeb);
+  background: color-mix(in srgb, var(--mode-accent, #8b6e35) 8%, var(--panel, #fff));
 }
 .diary-auth label {
   flex: 1;
@@ -3165,6 +3170,9 @@ body:has(.ui-dlg-overlay) .toast { --toast-y: 10px; }
   .mode-detail-side { border-radius: 0 0 var(--radius, 12px) var(--radius, 12px); padding: 18px 22px; }
   .duel-ab { grid-template-columns: 1fr; }
   .duel-vs { transform: rotate(90deg); padding: 4px 0; }
+  /* v2.682 日记三档在窄屏改成竖排：横排时每档只剩几十像素，英文说明被拆成单词竖条 */
+  .diary-auth { flex-direction: column; }
+  .diary-auth label { align-items: flex-start; }
   .mode-detail-head { flex-wrap: wrap; gap: 10px; }
   .mode-detail-cost { margin-left: auto; margin-top: -24px; }
 }
@@ -3174,6 +3182,7 @@ body:has(.ui-dlg-overlay) .toast { --toast-y: 10px; }
   .mode-detail-main { padding: 16px; }
   .mode-detail-side { padding: 14px 16px; }
   .mode-detail-title h3 { font-size: 1rem; }
+  .persona-card { grid-template-columns: 1fr; }
 }
 
 @media (prefers-reduced-motion: reduce) {
