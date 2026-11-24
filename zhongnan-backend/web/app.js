@@ -897,16 +897,6 @@
         : selectedMode === 'spark' ? 'sourceTextPanel' : '';
       if (_target) openWorkbench(_target);
     }
-    // v2.267 [P1-1] 纯内联简报模式（shortvideo：有 modeBrief 但无专属工作台面板）：
-    // 点击卡片后把内联简报区平滑滚入视口并聚焦输入框，避免"点了没反应"
-    // （#workbenchLayer 不展开、简报区在卡片网格下方不可见）。初始化/语言同步期间不滚。
-    if (!_initSyncing && !['interview', 'hot', 'spark', 'tag'].includes(selectedMode) && selectedScriptType !== 'ad_script' && !isInteractiveType(selectedScriptType)) {
-      const _bp = $('modeBriefPanel');
-      if (_bp && !_bp.hidden) {
-        _bp.scrollIntoView({ behavior: 'smooth', block: 'start' });
-        setTimeout(() => { const _ta = $('modeBrief'); if (_ta && document.contains(_ta)) _ta.focus({ preventScroll: true }); }, 350);
-      }
-    }
   }
   // ═══ MODULE: tags (71行, 3fn) ═══ v2.93 剧情软广·结构化品牌简报（标签/占位/软性度双语渲染 + 采集 + 合规错误回显）
   /* ---------- v2.93 剧情软广·结构化品牌简报（标签/占位/软性度双语渲染 + 采集 + 合规错误回显） ---------- */
@@ -2934,6 +2924,31 @@
   // v2.343 模式独立二级界面路由状态（showModeDetail / backToGrid 控制；Observer 与 workbench 显隐受其守卫）
   let _modeDetailOpen = false;
   let _modeDetailMode = null;
+  // v2.685 进入二级界面前记录卡片网格的滚动位置，返回时原位还原，避免用户被丢在半截页面。
+  let _studioGridScrollY = 0;
+  function _prefersReducedMotion() {
+    return !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
+  }
+  function _scrollModeDetailIntoView() {
+    const detail = $('modeDetail');
+    if (!detail || typeof window.scrollTo !== 'function' || typeof detail.getBoundingClientRect !== 'function') return;
+    const rect = detail.getBoundingClientRect();
+    // 窄屏 html/body 的 overflow-x:hidden 会让吸顶导航失效（导航随页滚走），
+    // 此时再按导航高度留白，二级界面上方会多出一条空白；只在导航真正吸顶时让位。
+    const narrow = typeof window.matchMedia === 'function' && window.matchMedia('(max-width: 640px)').matches;
+    const tb = typeof document.querySelector === 'function' ? document.querySelector('.topbar') : null;
+    const tbRect = tb && typeof tb.getBoundingClientRect === 'function' ? tb.getBoundingClientRect() : null;
+    const inset = narrow ? 8 : Math.ceil((tbRect ? tbRect.bottom : 72) + 10);
+    const top = Math.max(0, Math.round((window.scrollY || 0) + rect.top - inset));
+    try { window.scrollTo({ top, behavior: _prefersReducedMotion() ? 'auto' : 'smooth' }); }
+    catch { window.scrollTo(0, top); }
+  }
+  function _restoreStudioScroll() {
+    if (typeof window.scrollTo !== 'function') return;
+    const top = Math.max(0, Math.round(_studioGridScrollY || 0));
+    try { window.scrollTo({ top, behavior: _prefersReducedMotion() ? 'auto' : 'smooth' }); }
+    catch { window.scrollTo(0, top); }
+  }
   // 模式 → 既有 panel 映射（无既有 panel 的模式数组为空，全靠 _renderModeBody 动态渲染）
   const _MODE_PANEL_MAP = {
     tag:        ['tagBench'],
@@ -3107,6 +3122,7 @@
     const D = (window.I18N?.DICT?.[lang] || window.I18N?.DICT?.zh || {});
     const detail = $('modeDetail'), body = $('modeDetailBody');
     if (!detail || !body || !mode) return;
+    if (!_modeDetailOpen) _studioGridScrollY = window.scrollY || 0;
 
     // 1. 隐藏 studio 主区
     document.querySelectorAll('#view-studio > .section-title, #view-studio > .grid#modeGrid, #view-studio > #scriptTypeBar')
@@ -3169,8 +3185,15 @@
     _modeDetailOpen = true;
     _modeDetailMode = modeId;
 
-    // 9. 焦点
-    $('modeBackBtn')?.focus();
+    // 9. 焦点与落点：先让返回键在不抢滚动的前提下获得焦点，再把二级界面顶部对齐吸顶导航；
+    // 桌面精确指针再顺手把光标放进创作简报输入框（触屏不自动弹键盘，避免一进来就被键盘盖住半屏）。
+    try { $('modeBackBtn')?.focus({ preventScroll: true }); } catch { $('modeBackBtn')?.focus(); }
+    _scrollModeDetailIntoView();
+    const _briefPanel = $('modeBriefPanel');
+    if (_briefPanel && _briefPanel.parentNode === main
+      && typeof window.matchMedia === 'function' && window.matchMedia('(pointer: fine)').matches) {
+      try { $('modeBrief')?.focus({ preventScroll: true }); } catch { /* 老内核忽略 */ }
+    }
   }
 
   function backToGrid() {
@@ -3205,6 +3228,7 @@
 
       renderModes(); renderScriptTypes();
       syncTagBench(); syncModeBrief();
+      _restoreStudioScroll();
     };
 
     const reduce = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;

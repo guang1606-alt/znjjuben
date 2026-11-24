@@ -74,12 +74,15 @@ function makeEl(id = '') {
 
 function setup() {
   const nodes = new Map();
+  const scrollCalls = [];
   const $ = (id) => { if (!nodes.has(id)) nodes.set(id, makeEl(id)); return nodes.get(id); };
 
   const viewStudio = makeEl('view-studio');
   const sectionTitle = makeEl('sectionTitle');
   const modeGrid = makeEl('modeGrid');
   const modeDetail = makeEl('modeDetail'); modeDetail.classList.add('hidden');
+  // v2.685 进入二级界面须把 modeDetail 头部滚到吸顶导航下方：给出可断言的文档坐标
+  modeDetail.getBoundingClientRect = () => ({ top: 400, bottom: 2600, height: 2200, left: 0, right: 800, width: 800 });
   const modeDetailBody = makeEl('modeDetailBody');
   modeDetail.appendChild(modeDetailBody);
   ['modeDetailName', 'modeDetailDesc', 'modeDetailCost', 'modeBackBtn'].forEach((id) => nodes.set(id, makeEl(id)));
@@ -106,23 +109,29 @@ function setup() {
   nodes.set('workbenchBody', wb);
   nodes.set('workbenchLayer', makeEl('workbenchLayer'));
 
+  const topbar = makeEl('topbar');
+  topbar.getBoundingClientRect = () => ({ top: 0, bottom: 78, height: 78, left: 0, right: 390, width: 390 });
   const documentMock = {
     querySelectorAll: (sel) => (String(sel).startsWith('#view-studio') ? [sectionTitle, modeGrid] : []),
+    querySelector: (sel) => (sel === '.topbar' ? topbar : null),
     addEventListener() {}, removeEventListener() {},
     createElement: () => makeEl(),
     activeElement: null,
   };
   const windowMock = {
+    scrollY: 1200,
+    scrollTo: (arg, y2) => { scrollCalls.push(arg && typeof arg === 'object' ? { ...arg } : { top: arg, left: y2 }); },
     I18N: {
       MODES: [{ id: 'tag', name: '标签创建', cost: '30积分' }, { id: 'auto', name: '全自动', cost: '50积分' }],
       DICT: { zh: { mode: { tag: '标签创建', auto: '全自动' }, modeDesc: { tag: '四维标签定向出本', auto: '系统替你选模式' } } },
     },
-    matchMedia: () => ({ matches: true }), // reduced-motion：backToGrid 同步完成
+    matchMedia: (q) => ({ matches: q.includes('prefers-reduced-motion') || q.includes('pointer: fine') }), // reduced-motion：backToGrid 同步完成；桌面视口非窄屏
   };
 
   const code = `
     let _modeDetailOpen = false;
     let _modeDetailMode = null;
+    let _studioGridScrollY = 0;
     let _workbenchHideTimer = null;
     let _workbenchPrevFocus = null;
     const _WORKBENCH_PANEL_IDS = ${initializers.get('_WORKBENCH_PANEL_IDS')};
@@ -138,6 +147,9 @@ function setup() {
     ${functions.get('_hideWorkbenchLayer')}
     ${functions.get('closeWorkbench')}
     ${functions.get('_sideBlocks')}
+    ${functions.get('_prefersReducedMotion')}
+    ${functions.get('_scrollModeDetailIntoView')}
+    ${functions.get('_restoreStudioScroll')}
     ${functions.get('showModeDetail')}
     ${functions.get('backToGrid')}
     this.__api = { showModeDetail, backToGrid, isOpen: () => _modeDetailOpen };
@@ -150,7 +162,7 @@ function setup() {
     Promise,
   });
   vm.runInContext(code, ctx);
-  return { api: ctx.__api, $, viewStudio, modeDetail, modeDetailBody, scriptTypeBar, genConfigBar, hookConsole, modeGrid, fEngine };
+  return { api: ctx.__api, $, viewStudio, modeDetail, modeDetailBody, scriptTypeBar, genConfigBar, hookConsole, modeGrid, fEngine, scrollCalls, windowMock };
 }
 
 const inDetail = (modeDetailBody, el) => {
@@ -230,4 +242,25 @@ test('连续切换两个模式不丢配置元素（innerHTML 清空前已还原�
   assert.ok(!s.genConfigBar.classList.contains('hidden'));
   s.api.backToGrid();
   assert.equal(s.genConfigBar.parentNode, s.viewStudio);
+});
+
+// v2.685 进入/退出二级界面的落点：旧实现先在 syncModeBrief 里按「panel 挂载前」的位置平滑滚动，
+// showModeDetail 随后把 panel 移到主栏，滚动目标变成过期坐标，用户落在侧栏半截、左侧空白。
+test('进入二级界面把 modeDetail 滚到吸顶导航下方（用当前视口 + 实时 rect 计算）', () => {
+  const s = setup();
+  s.api.showModeDetail('tag');
+  assert.ok(s.scrollCalls.length > 0, '进入二级界面必须滚动一次（否则用户停在卡片网格的旧位置）');
+  const call = s.scrollCalls[s.scrollCalls.length - 1];
+  // scrollY 1200 + detail.top 400 - topbar 78 - 10 = 1512
+  assert.equal(call.top, 1512, '落点应为 modeDetail 顶部对齐吸顶导航下方 10px');
+  assert.equal(call.behavior, 'auto', 'reduced-motion 下应为即时滚动');
+});
+
+test('返回卡片网格恢复进入前的滚动位置', () => {
+  const s = setup();
+  s.api.showModeDetail('tag');
+  s.windowMock.scrollY = 0; // 模拟用户在二级界面里滚动过
+  s.api.backToGrid();
+  const call = s.scrollCalls[s.scrollCalls.length - 1];
+  assert.equal(call.top, 1200, '返回后应回到进入二级界面前的网格位置，而不是停在半截页面');
 });

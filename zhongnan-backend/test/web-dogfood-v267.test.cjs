@@ -47,23 +47,33 @@ function fnWindow(startMarker, endMarker, maxLen) {
   return src.slice(s, s + (maxLen || 4000));
 }
 
-describe('v2.267 [P1-1] shortvideo 模式卡点击必须有进入反馈', () => {
+describe('v2.685 [取代 v2.267 P1-1] 进入创作模式的落点由 showModeDetail 统一接管', () => {
   const w = fnWindow('function syncModeBrief', '/* ---------- v2.93');
 
   it('syncModeBrief 存在且可定位', () => {
     assert.ok(w, '应定位到 syncModeBrief 函数窗口');
   });
 
-  it('对无专属工作台面板的模式，把内联 modeBriefPanel 滚动入视（scrollIntoView）', () => {
-    assert.ok(/modeBriefPanel/.test(w), '应引用内联简报面板 modeBriefPanel');
-    assert.ok(/scrollIntoView/.test(w),
-      '应将 modeBriefPanel scrollIntoView（shortvideo 无 openWorkbench 目标，须靠滚动给进入反馈）');
+  it('syncModeBrief 不再自行滚动内联简报（panel 尚未挂进二级界面，坐标必然过期）', () => {
+    assert.ok(!/scrollIntoView/.test(w),
+      'v2.267 在 syncModeBrief 里滚动 modeBriefPanel 的写法必须移除：showModeDetail 随后会把 panel 移进主栏，滚动落点变成旧坐标');
   });
 
-  it('滚动反馈仅在用户显式选模式时触发（!_initSyncing），且聚焦简报输入框', () => {
-    assert.ok(/_initSyncing/.test(w), '滚动反馈须受 _initSyncing 守卫（初始化/语言同步时不得自动滚动）');
-    assert.ok(/modeBrief['"]?\)?\s*;?[^\n]*focus|focus\s*\(\s*\{?\s*preventScroll/.test(w) || /\$\(['"]modeBrief['"]\)[\s\S]{0,120}focus/.test(w),
-      '滚动后应聚焦 #modeBrief 输入框（focus preventScroll，避免与平滑滚动打架）');
+  it('showModeDetail 在布局完成、焦点落位后调用滚动助手', () => {
+    const detailWin = fnWindow('function showModeDetail', 'function backToGrid');
+    assert.ok(detailWin, '应定位到 showModeDetail');
+    const focusPos = detailWin.indexOf('modeBackBtn');
+    const scrollPos = detailWin.indexOf('_scrollModeDetailIntoView');
+    assert.ok(scrollPos > 0, 'showModeDetail 必须调用 _scrollModeDetailIntoView（进入即落到二级界面顶部）');
+    assert.ok(focusPos >= 0 && scrollPos > focusPos, '滚动应发生在焦点落位之后，避免焦点把页面拽回旧位置');
+  });
+
+  it('滚动助手按吸顶导航实时高度计算，并尊重 reduced-motion', () => {
+    const helper = fnWindow('function _prefersReducedMotion', 'function showModeDetail');
+    assert.ok(helper, '应定义 _scrollModeDetailIntoView');
+    assert.ok(/\.topbar/.test(helper), '落点需读取吸顶导航实际高度（窄屏会换行变高）');
+    assert.ok(/prefers-reduced-motion/.test(helper), '应尊重 reduced-motion：偏好减弱动效时即时跳转');
+    assert.ok(/window\.scrollTo/.test(helper), '应使用 window.scrollTo 滚动窗口而不是元素的 scrollIntoView');
   });
 });
 
