@@ -1950,14 +1950,15 @@ summary:hover{color:var(--accent-strong)}
   #view-studio > .section-title h2 { grid-column: 1 / -1; grid-row: 2; min-width: 0; }
   #view-studio > .section-title small { grid-column: 1 / -1; grid-row: 3; }
   #view-studio > .section-title #sampleEntryBtn { grid-column: 2; grid-row: 1; justify-self: end; margin-left: 0 !important; white-space: nowrap; }
-  #view-market > .section-title { display: grid; grid-template-columns: minmax(0, 1fr); align-items: center; gap: 8px; }
-  #view-market > .section-title h2 { grid-column: 1; grid-row: 1; min-width: 0; white-space: nowrap; }
-  #view-market > .section-title small { grid-column: 1; grid-row: 2; line-height: 1.5; }
+  /* v2.694 窄屏集市：两个入口并排成一对，不再各占一整行把橱窗压到第二屏 */
+  #view-market > .section-title { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); align-items: center; gap: 8px; }
+  #view-market > .section-title h2 { grid-column: 1 / -1; grid-row: 1; min-width: 0; white-space: nowrap; }
+  #view-market > .section-title small { grid-column: 1 / -1; grid-row: 2; line-height: 1.5; }
   #view-market > .section-title .spacer { display: none; }
-  #view-market > .section-title #mkSort { grid-column: 1; grid-row: 3; width: 100%; min-width: 0; }
+  #view-market > .section-title #mkSort { grid-column: 1 / -1; grid-row: 3; width: 100%; min-width: 0; }
   #view-market > .section-title #mkListBtn, #view-market > .section-title #mkMineBtn { width: 100%; min-width: 0; min-height: 40px; white-space: nowrap; padding: 8px; }
   #view-market > .section-title #mkListBtn { grid-column: 1; grid-row: 4; }
-  #view-market > .section-title #mkMineBtn { grid-column: 1; grid-row: 5; }
+  #view-market > .section-title #mkMineBtn { grid-column: 2; grid-row: 4; }
   .site-footer { padding-right: 76px; }
   .wrap { padding: 14px 12px 96px; }
   .hero { padding: 26px 2px 18px; }
@@ -2821,28 +2822,28 @@ body:has(.ui-dlg-overlay) .toast { --toast-y: 10px; }
     align-items: center;
     gap: 7px 9px;
   }
+  /* v2.694 390px 下标题「选择创作模式（8 种 + 自动匹配）」被视口硬切、没有省略号，
+     看着像样式坏了；窄屏让眉标独占一行、标题整行左对齐，中英一致。 */
   #view-studio > .section-title .eyebrow {
-    grid-column: 1;
+    grid-column: 1 / -1;
     grid-row: 1;
     justify-self: start;
   }
   #view-studio > .section-title h2 {
-    grid-column: 2;
-    grid-row: 1;
-    white-space: nowrap;
-  }
-  html[data-lang="en"] #view-studio > .section-title h2 {
+    grid-column: 1 / -1;
+    grid-row: 2;
     white-space: normal;
     overflow-wrap: anywhere;
+    line-height: 1.32;
   }
   #view-studio > .section-title small {
     grid-column: 1 / -1;
-    grid-row: 2;
+    grid-row: 3;
     line-height: 1.55;
   }
   #view-studio > .section-title #sampleEntryBtn {
     grid-column: 1 / -1;
-    grid-row: 3;
+    grid-row: 4;
     justify-self: start;
     min-height: 38px;
   }
@@ -3339,3 +3340,10 @@ textarea.is-at-limit { border-color: var(--danger-text); }
 .stage-clear { font-size: .76rem; }
 @media (max-width: 560px) { .stage-ladder-top { flex-wrap: wrap; gap: 2px; } .stage-progress { margin-left: auto; } }
 @media (prefers-reduced-motion: reduce) { .stage-detail { animation: none; } .stage-node, .stage-idx, .stage-name, .stage-tick { transition: none; } .stage-verdict.ep-shake { animation: none; } .stage-next { transition: none; } .stage-next:hover { transform: none; } }
+
+/* v2.694 窄屏空态不再垂直居中：骨架占位高度在 390px 上（≈4 张卡）会把空态文字推到首屏之外，
+   用户只看到「发布」下面一片空白，像页面坏了。窄屏改顶部对齐，提示紧贴列表区出现；
+   桌面端仍保留垂直居中（占位本身就是为了不跳版）。 */
+@media (max-width: 560px) {
+  .zn-empty-reserve { align-items: flex-start; }
+}

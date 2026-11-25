@@ -439,6 +439,14 @@
     if (isStaffAcct()) return _RANK.pro;
     return _RANK[String(meCache?.level || 'FREE').toLowerCase()] ?? 0;
   }
+  // v2.694 模式可用度单一真源：免费用户过去只看到一排「看得到点不了」的卡片和一句
+  // 「越高阶越强」，不知道自己到底能用几个。这里给出可用/总数，供创作页提示与引导复用。
+  function modeAvailability(rank) {
+    const my = typeof rank === 'number' ? rank : acctRank();
+    const list = I18N.MODES.filter((m) => !m.lock);
+    const available = list.filter((m) => (_RANK[m.free] ?? 0) <= my).length;
+    return { available, total: list.length, locked: list.length - available };
+  }
   function renderModes() {
     const grid = $('modeGrid'); if (!grid || !window.I18N) return;
     const D = I18N.DICT[lang] || I18N.DICT.zh;
@@ -476,6 +484,12 @@
       grid.appendChild(card);
     });
     znBindGrid(grid, { selector: '.mode-card' }); // v2.271 12 张模式卡四方向键导航（Tab 只需进网格一次）
+    // v2.694 档位不足时把泛泛的「越高阶越强」换成具体可用数量，用户先知道差什么再决定升不升
+    const tipEl = document.querySelector('#view-studio > .section-title small');
+    if (tipEl) {
+      const av = modeAvailability(myRank0);
+      tipEl.textContent = av.locked > 0 ? t('modeTipAvail', { a: av.available, b: av.total }) : t('modeTip');
+    }
   }
   // ═══ MODULE: misc (220行, 5fn) ═══ v2.190 清爽首页渲染
   /* ---------- v2.190 清爽首页渲染 ---------- */
@@ -5884,8 +5898,11 @@
       const c = document.createElement('div'); c.className = 'listing-card';
       const gradeBadge = l.valueGrade && l.valueGrade !== 'NA'
         ? `<span class="lv-grade lv-grade-sm ${gradeCls(l.valueGrade)}" title="${lang === 'en' ? 'Value certified at listing' : '上架时价值认证'}">${l.valueGrade}${l.valueIndex != null ? '·' + Math.round(l.valueIndex) : ''}</span>` : '';
+      const sellerName = l.seller && l.seller.nickname ? String(l.seller.nickname) : '';
+      // v2.694 卖家未设昵称时不再渲染「卖家：—」（像取数失败），改给一个如实的匿名称谓
+      const sellerLine = `<div class="muted">${t('seller')}${lang === 'en' ? ': ' : '：'}${sellerName ? escapeHtml(sellerName) : t('anonSeller')}</div>`;
       c.innerHTML = `<h4>${escapeHtml(l.title)} ${gradeBadge}</h4>
-        <div class="muted">${t('seller')}：${escapeHtml(l.seller?.nickname || '—')}</div>
+        ${sellerLine}
         <div class="listing-sample">${escapeHtml(l.sample || (lang==='en'?'No sample':'暂无样章'))}</div>
         <div class="listing-foot"><span class="price-tag">${l.pricePoints} ${t('points')}</span>
         <button class="btn-primary">${lang === 'en' ? 'View' : '查看详情'}</button></div>`;
@@ -5931,11 +5948,15 @@
       const strengths = v && v.strengthsZh ? v.strengthsZh.filter(Boolean).slice(0, 2).map((s) => `<li>${escapeHtml(s)}</li>`).join('') : '';
       const risks = v && v.risksZh ? v.risksZh.filter(Boolean).slice(0, 2).map((s) => `<li>${escapeHtml(s)}</li>`).join('') : '';
       const band = v && v.band ? `¥${v.band.perEpLow}–${v.band.perEpHigh}/集` : (snap ? `¥${snap.bandLow}–${snap.bandHigh}/集` : '—');
+      // v2.694 详情元信息按已知事实组装：卖家未设昵称时给匿名称谓，缺指数时不再拼出「价值指数 —」
+      const metaParts = [];
+      metaParts.push(`${lang === 'en' ? 'Seller: ' : '卖家：'}${d.seller && d.seller.nickname ? escapeHtml(String(d.seller.nickname)) : t('anonSeller')}`);
+      if (idx != null) metaParts.push(`${lang === 'en' ? 'Value index' : '价值指数'} ${escapeHtml(String(idx))}`);
+      const metaLine = metaParts.length ? `<div class="muted">${metaParts.join(' · ')}</div>` : '';
       body.innerHTML = `
         <div class="d-head">
           <span class="lv-grade ${gradeCls(grade)}">${grade}</span>
-          <div><h3 style="margin:0">${escapeHtml(d.title)}</h3>
-            <div class="muted">${lang === 'en' ? 'Seller' : '卖家'}：${escapeHtml(d.seller?.nickname || '—')} · ${lang === 'en' ? 'Value index' : '价值指数'} ${idx != null ? idx : '—'}</div></div>
+          <div><h3 style="margin:0">${escapeHtml(d.title)}</h3>${metaLine}</div>
         </div>
         ${v ? `<div class="v-section"><b>${lang === 'en' ? 'Six-dimension craft score' : '六维创作力评分'}</b>${dimBars}</div>` : ''}
         ${strengths ? `<div class="v-section"><b>${lang === 'en' ? 'Funder strengths' : '资方视角强项'}</b><ul>${strengths}</ul></div>` : ''}
@@ -5993,8 +6014,11 @@
       const foot = l.status === 'SOLD'
         ? `<div class="listing-foot"><span class="price-tag">${l.pricePoints} ${t('points')}</span><span class="muted">${lang === 'en' ? 'Just sold' : '刚刚成交'}</span></div>`
         : `<div class="listing-foot"><span class="price-tag">${l.pricePoints} ${t('points')}</span><button class="btn-primary">${lang === 'en' ? 'View' : '查看详情'}</button></div>`;
+      // v2.694 同橱窗卡：卖家名缺失时不出「—」占位行，统一给匿名称谓
+      const sellerName = l.sellerNickname || (l.seller && l.seller.nickname) || '';
+      const sellerLine = `<div class="muted">${t('seller')}${lang === 'en' ? ': ' : '：'}${sellerName ? escapeHtml(String(sellerName)) : t('anonSeller')}</div>`;
       c.innerHTML = `<h4>${escapeHtml(l.title)} ${gradeBadge}${soldBadge}</h4>
-        <div class="muted">${t('seller')}：${escapeHtml(l.sellerNickname || l.seller?.nickname || '—')}</div>
+        ${sellerLine}
         <div class="listing-sample">${escapeHtml(l.sample || (lang==='en'?'No sample':'暂无样章'))}</div>${foot}`;
       const btn = c.querySelector('button');
       if (btn) btn.onclick = () => openListingDetail(l.id);
