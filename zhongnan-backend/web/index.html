@@ -670,9 +670,11 @@
         <div class="field"><label data-i="investWan" for="investWan">预估投资额(万·选填,用于备案分类)</label><input id="investWan" autocomplete="off" type="number" min="0" max="100000" step="1" placeholder="不填按三类" /></div>
         <div class="field" style="align-self:flex-end"><label class="chk-line"><input type="checkbox" id="specialTopic" /> <span data-i="specialTopic">特殊题材(政治/军事/民族宗教等)</span></label></div>
         <button class="btn-ghost" id="smartDefaultBtn" data-i="smartDefaultBtn">✨ 看看系统替你默认了什么</button>
-        <div class="gen-cost-hint" id="genCostHint" role="note"></div>
-        <button class="chip gen-cost-fix hidden" id="genCostFix" type="button"></button>
-        <button class="btn-primary" id="genBtn" data-i="gen"></button>
+        <div class="gen-action-dock" id="genActionDock">
+          <div class="gen-cost-hint" id="genCostHint" role="note"></div>
+          <button class="chip gen-cost-fix hidden" id="genCostFix" type="button"></button>
+          <button class="btn-primary" id="genBtn" data-i="gen"></button>
+        </div>
       </section>
 
       <!-- 钩子编排（v1.83，导演钩子体系：用户选项 vs 系统默认，默认折叠不增负担） -->

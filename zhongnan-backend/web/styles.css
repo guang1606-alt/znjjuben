@@ -3266,6 +3266,44 @@ body:has(.ui-dlg-overlay) .toast { --toast-y: 10px; }
   .persona-card { grid-template-columns: 1fr; }
 }
 
+/* v2.696 生成决策区：费用与生成动作是一组，不再埋在长配置末尾。
+   桌面 sticky 吸附视口下缘；复用原控件，费用/额度/禁用态仍只有一份真源。 */
+.gen-action-dock {
+  position: sticky; bottom: 12px; z-index: 4;
+  display: flex; flex-direction: column; align-items: stretch; gap: 8px;
+  width: 100%; padding: 10px;
+  border: 1px solid color-mix(in srgb, var(--gold) 24%, var(--line));
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--panel) 94%, transparent);
+  box-shadow: 0 -10px 24px -22px color-mix(in srgb, var(--gold) 50%, transparent);
+  backdrop-filter: blur(14px);
+  animation: gen-dock-in var(--motion-slow) var(--ease-out) both;
+}
+@keyframes gen-dock-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+.gen-action-dock .gen-cost-hint { flex-basis: auto; margin: 0; }
+.gen-action-dock .gen-cost-fix { flex-basis: auto; align-self: stretch; margin: 0; }
+.gen-action-dock .btn-primary { min-height: 44px; margin: 0; }
+
+@media (max-width: 900px) {
+  /* fixed 不能被祖先 animation 末帧的 transform 重新参照到视图/卡片；
+     二级界面打开时关闭相关祖先动画，其余首屏入场不受影响。 */
+  body:has(#modeDetail:not(.hidden)) #view-studio.active,
+  #modeDetail, #modeDetail.view-out,
+  .mode-detail-side > #genConfigBar { animation: none; }
+  /* 固定区脱离长表单后，尾部仍预留空间，最后的钩子编排与资产入口可完整滚出。 */
+  .mode-detail-body { padding-bottom: calc(176px + env(safe-area-inset-bottom, 0px)); }
+  .mode-detail-side .gen-action-dock {
+    position: fixed;
+    left: 10px; right: 82px; width: auto;
+    bottom: calc(10px + env(safe-area-inset-bottom, 0px) + var(--kb-inset, 0px));
+    z-index: 45; padding: 10px;
+    background: color-mix(in srgb, var(--panel) 96%, transparent);
+    box-shadow: var(--shadow-lg);
+  }
+  .mode-detail-side .gen-action-dock .btn-primary { min-height: 48px; }
+}
+@media (prefers-reduced-motion: reduce) { .gen-action-dock { animation: none; } }
+
 @media (prefers-reduced-motion: reduce) {
   .mode-detail, .mode-detail.view-out { animation: none; }
 }

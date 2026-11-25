@@ -84,3 +84,46 @@ test('v2.695 作品列表入口打开详情时显式滚动，刷新路径不抢�
   assert.match(open.slice(0, 1400), /if \(!opts\.reveal\) return;/, 'openProject 须按 reveal 决定是否滚动');
   assert.match(open.slice(0, 1400), /scrollIntoView\(\{ behavior: reduce \? 'auto' : 'smooth', block: 'start' \}\)/, '滚动到详情头并尊重降动效');
 });
+
+// v2.696 实测 390px 灵感式创作的生成按钮落在 y≈3277，桌面也落在两屏之后。
+// 行动区只重组既有真实控件，不复制生成逻辑或费用真源。
+test('v2.696 生成决策区聚合唯一费用、额度修正与生成控件', () => {
+  const html = fs.readFileSync(path.join(ROOT, 'web/index.html'), 'utf8');
+  const start = html.indexOf('<div class="gen-action-dock" id="genActionDock">');
+  assert.ok(start >= 0, '缺少生成决策区容器');
+  const dock = html.slice(start, html.indexOf('\n      </section>', start));
+  const cost = dock.indexOf('id="genCostHint"');
+  const fix = dock.indexOf('id="genCostFix"');
+  const gen = dock.indexOf('id="genBtn"');
+  assert.ok(cost >= 0 && fix > cost && gen > fix, '费用 → 额度修正 → 生成必须按决策顺序同组');
+  for (const id of ['genCostHint', 'genCostFix', 'genBtn']) {
+    assert.equal((html.match(new RegExp(`id="${id}"`, 'g')) || []).length, 1, `${id} 不得复制出第二套状态`);
+  }
+});
+
+test('v2.696 桌面生成决策区 sticky 可达，配置栏本身仍不 sticky', () => {
+  const start = CSS.indexOf('.gen-action-dock {');
+  assert.ok(start >= 0, '缺少桌面生成决策区样式');
+  const base = CSS.slice(start, CSS.indexOf('}', start) + 1);
+  assert.match(base, /position: sticky;/, '桌面行动区应在首屏下缘吸附');
+  assert.match(base, /bottom: 12px;/, '桌面行动区须留视口呼吸间距');
+  assert.match(CSS, /\.mode-detail-side #genConfigBar \{ position: static; box-shadow: none; \}/, '不得恢复整条配置栏 sticky');
+});
+
+test('v2.696 窄屏生成决策区固定到拇指区，避让键盘/悬浮按钮并尊重降动效', () => {
+  const base = CSS.indexOf('.gen-action-dock {');
+  const start = CSS.indexOf('@media (max-width: 900px)', base);
+  assert.ok(start > base, '窄屏规则须在桌面行动区之后覆盖');
+  const mobileEnd = CSS.indexOf('@media (prefers-reduced-motion: reduce)', start);
+  assert.ok(mobileEnd > start, '窄屏行动区规则须有明确终点，避免跨区误匹配');
+  const mobile = CSS.slice(start, mobileEnd);
+  assert.match(mobile, /position: fixed;/, '窄屏行动区必须脱离四屏长表单固定可达');
+  assert.match(mobile, /right: 82px;/, '右侧须给现有小南与回顶按钮留工具轨道');
+  assert.match(mobile, /width: auto;/, '固定行动区须解除 width:100%，否则 right 避让会被 CSS 过约束忽略');
+  assert.match(mobile, /var\(--kb-inset, 0px\)/, '行动区须随真实键盘高度抬升');
+  assert.match(mobile, /env\(safe-area-inset-bottom, 0px\)/, '行动区须避让底部安全区');
+  assert.match(mobile, /min-height: 48px;/, '主生成按钮不得小于 48px 触控高度');
+  assert.match(mobile, /#view-studio\.active[\s\S]*?animation: none/, '视图祖先的 transform 动画须关闭，否则 fixed 会相对视图定位');
+  assert.match(mobile, /\.mode-detail-side > #genConfigBar[\s\S]*?animation: none/, '配置栏祖先的 transform 动画须关闭');
+  assert.match(CSS, /@media \(prefers-reduced-motion: reduce\) \{ \.gen-action-dock \{ animation: none; \} \}/, '行动区入场动效须尊重降动效');
+});
