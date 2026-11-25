@@ -5007,7 +5007,26 @@
     e.preventDefault();
     doChangePw();
   };
-  function fmtBytes(n) { if (!n) return '0 MB'; const mb = n / (1024 * 1024); return mb >= 1 ? mb.toFixed(1) + ' MB' : (n / 1024).toFixed(0) + ' KB'; }
+  // v2.689 整数不带多余 .0（1 MB 而非 1.0 MB）；≥1024 MB 转 GB，避免 10 GB 配额显示成
+  // 「10240.0 MB」——390 窄屏下那串长数字会断成两行，看起来像坏了。
+  function fmtBytes(n) {
+    if (!n) return '0 MB';
+    const mb = n / (1024 * 1024);
+    const trim = (x) => (Number.isInteger(x) ? String(x) : x.toFixed(1));
+    if (mb >= 1024) return trim(mb / 1024) + ' GB';
+    if (mb >= 1) return trim(mb) + ' MB';
+    return Math.round(n / 1024) + ' KB';
+  }
+  // v2.689 单价按「十倍积分换一元」换算；整元不带小数零（¥1 而非 ¥1.0）
+  function _fmtYuanFromPoints(pts) { const y = pts / 10; return Number.isInteger(y) ? String(y) : y.toFixed(1); }
+  // v2.689 会员单价权益文案：旧 `${t('perEp')} 1.2` → 「单集低至 1.2」/「from /ep 1.2」
+  //   缺 ¥ 与「/集」「/ep」后缀，英文语序也错。统一在此拼，单一真源。
+  function formatPerEpPerk(overagePts, en) {
+    const y = _fmtYuanFromPoints(overagePts);
+    return en ? `from ¥${y}/ep` : `单集低至 ¥${y}/集`;
+  }
+  // v2.689 年卡节省比例：英文「save」与数字之间要空格（save 16%），中文紧贴（省16%）
+  function formatYearSave(savePct, en) { return en ? `save ${savePct}%` : `省${savePct}%`; }
   // v2.561 海报卡片的生成时间：只显示体积时，多次生成后分不清哪张是刚做的，删除容易删错。
   // 卡片空间窄，用 MM-DD HH:mm 紧凑格式；完整时间放 title，悬停/读屏可拿到。
   function posterTimeText(iso) {
@@ -5179,11 +5198,19 @@
       const remain = (p.freeRemain === null || p.freeRemain === undefined) ? null : Math.max(0, Math.min(free, parseInt(p.freeRemain, 10) || 0));
       const showFreeFix = plan && plan.level === 'FREE' && free > 0 && remain !== null && remain > 0 && eps > remain;
       const showVipFix = isFreeQuotaBlocked(p);
-      fix.classList.toggle('hidden', !(showFreeFix || showVipFix));
-      fix.dataset.mode = showVipFix ? 'vip' : 'free';
-      fix.textContent = showVipFix
-        ? (p.en ? 'Upgrade to keep writing' : '开通会员继续创作')
-        : (p.en ? `Write ${remain} free ep${remain > 1 ? 's' : ''} first` : `先写 ${remain} 集（免费）`);
+      const showFix = showFreeFix || showVipFix;
+      fix.classList.toggle('hidden', !showFix);
+      // v2.689 只在显示时写文案：隐藏时清空，避免 DOM 残留「Write null free ep first」
+      // （remain 为 null 的付费档此前会走进 else 分支把 null 拼进去，虽然按钮 hidden 看不见，但脏文案留在 DOM 里）
+      if (showFix) {
+        fix.dataset.mode = showVipFix ? 'vip' : 'free';
+        fix.textContent = showVipFix
+          ? (p.en ? 'Upgrade to keep writing' : '开通会员继续创作')
+          : (p.en ? `Write ${remain} free ep${remain > 1 ? 's' : ''} first` : `先写 ${remain} 集（免费）`);
+      } else {
+        fix.textContent = '';
+        delete fix.dataset.mode;
+      }
     }
   }
   function isFreeQuotaBlocked(p) {
@@ -5238,7 +5265,7 @@
       if (q && p.level === cur && q.total > 0) {
         perks.push(lang === 'en' ? `This cycle left: ${q.remain}/${q.total} eps` : `本周期剩余 ${q.remain}/${q.total} 集`);
       }
-      if (p.overagePerEp) perks.push(`${t('perEp')} ${(p.overagePerEp / 10).toFixed(1)}`);
+      if (p.overagePerEp) perks.push(formatPerEpPerk(p.overagePerEp, lang === 'en'));
       // 引擎档/模式/项目数等显性权益，拉开档位差距、诱导升级
     // @module profile
       const engN = (p.engines || []).length;
@@ -5273,7 +5300,7 @@
     // @module profile
         const yearMonthly = (yearItem.amountFen / 12 / 100);
         const savePct = Math.round((1 - yearItem.amountFen / (p.monthlyFen * 12)) * 100);
-        yearLine = `<button class="btn-ghost plan-year" data-sku="${yearSku}"${disabled}>${lang==='en'?'Yearly':'年卡'} ¥${yearItem.amountYuan} · ${lang==='en'?'≈':'折'}¥${yearMonthly.toFixed(1)}/${lang==='en'?'mo':'月'} · ${lang==='en'?'save':'省'}${savePct}%</button>`;
+        yearLine = `<button class="btn-ghost plan-year" data-sku="${yearSku}"${disabled}>${lang==='en'?'Yearly':'年卡'} ¥${yearItem.amountYuan} · ${lang==='en'?'≈':'折'}¥${yearMonthly.toFixed(1)}/${lang==='en'?'mo':'月'} · ${formatYearSave(savePct, lang === 'en')}</button>`;
       }
       return `<div class="plan-card ${p.level==='ADVANCED'?'featured':''} ${p.level==='FREE'?'plan-free':''}">
         <h3>${lvName(p.level)}${isCur?` <span class="badge">${t('currentPlan')}</span>`:''}</h3>
