@@ -782,6 +782,10 @@ textarea { box-sizing: border-box; max-width: 100%; resize: vertical; background
 /* v2.466 冲突提示：三处资产库冲突条原为内联 style="border-color:var(--danger-text)" 的 hack，
  * 与「颜色归 CSS」的方向相悖，收成类名（仅换左边框色，不改背景与文字）。 */
 .notice.conflict { border-left-color: var(--cinnabar); }
+/* v2.687 额度失败指引：不是第二条报错，而是一张「下一步」卡——余额/重置时间 + 两个可继续的出口 */
+.fail-help { margin-top: 12px; padding: 13px 15px; border: 1px solid var(--line); border-radius: var(--radius-sm); background: var(--soft-warn); }
+.fail-help p { margin: 0; font-size: .84rem; line-height: 1.65; color: var(--text); }
+.fail-help .row-actions { margin-top: 10px; }
 /* v2.683 结果页诊断卡：每条诊断带自己的 --tone（评分/赛道/合规各一色），极轻同色底让一屏多条诊断
  * 不再是同一种灰底糊成一片；颜色仍全部来自主题令牌，四套主题各自达标。 */
 #resultPanel .notice[style*="--tone"] { background: color-mix(in srgb, var(--panel) 90%, var(--tone) 10%); }
@@ -2294,7 +2298,9 @@ body:has(.ui-dlg-overlay) .toast { --toast-y: 10px; }
   background: var(--bg, #f6f1e7);
   backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
   display: flex; align-items: stretch; justify-content: center;
-  padding: var(--workbench-top, 78px) 16px 16px;
+  /* v2.687 真全屏：覆盖层不透明且压在顶栏之上，按顶栏高度留白等于制造一段死空间。
+     改为安全区（刘海/独立窗口）+ 10px 呼吸位，内容整体上移，创作区多出一屏可见高度。 */
+  padding: calc(env(safe-area-inset-top, 0px) + 10px) 16px 16px;
   animation: workbench-in var(--motion-slow, .32s) var(--ease-out, cubic-bezier(.22,.61,.36,1)) both;
 }
 .workbench-layer.hidden { display: none; }
@@ -2316,12 +2322,18 @@ body:has(.ui-dlg-overlay) .toast { --toast-y: 10px; }
   padding: 6px 14px; border-radius: 999px;
   background: var(--accent-weak, #cfdbe5); color: var(--accent-strong, #0d3a38);
   border: 0; font-weight: 600; font-size: 13.5px; cursor: pointer;
+  flex-shrink: 0; white-space: nowrap; /* v2.687 窄屏防拆行：箭头与「返回」不再被压成两行 */
   transition: all var(--motion, .2s) var(--ease-out, cubic-bezier(.22,.61,.36,1));
 }
 .workbench-back:hover { background: var(--accent, #1a4d4a); color: #fff; }
 .workbench-back:active { transform: scale(.97); }
-.workbench-head h2 { margin: 0; font-family: var(--serif, Georgia, serif); font-size: 18px; font-weight: 600; color: var(--text, #2a2a2a); }
-.workbench-head #workbenchActions { display: flex; gap: 8px; align-items: center; }
+/* v2.687 长标题不再顶开头部：单行省略，给右侧动作留固定位（390px 下原标题换成两行把
+   返回键与「生成剧本」一起挤成多行，头部高度从 34px 涨到 68px） */
+.workbench-head h2 {
+  margin: 0; font-family: var(--serif, Georgia, serif); font-size: 18px; font-weight: 600; color: var(--text, #2a2a2a);
+  min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.workbench-head #workbenchActions { display: flex; gap: 8px; align-items: center; flex-shrink: 0; }
 .workbench-body { flex: 1; overflow: auto; padding: 18px 24px; min-height: 0; }
 .workbench-body > .panel { margin: 0; border: 0; padding: 0; background: transparent; box-shadow: none; }
 .workbench-body > .panel.hidden { display: none; }
@@ -2329,14 +2341,17 @@ body:has(.ui-dlg-overlay) .toast { --toast-y: 10px; }
 @keyframes workbench-out { from { opacity: 1; transform: translateY(0) scale(1); } to { opacity: 0; transform: translateY(12px) scale(.99); } }
 @media (prefers-reduced-motion: reduce) { .workbench-layer, .workbench-layer.view-out { animation: none; } }
 @media (max-width: 768px) {
-  .workbench-layer { padding: var(--workbench-top, 70px) 8px 8px; }
+  .workbench-layer { padding: calc(env(safe-area-inset-top, 0px) + 8px) 8px 8px; }
   .workbench-body { padding: 12px; }
   /* v2.686 窄屏去重：工作台头部已有「← 返回」，面板内再放一枚「收起」只会多占一行、
    * 把标签行挤成两行（实测 390px 下单独占一行靠右）。窄屏隐藏面板内收起，返回按钮始终可见。 */
   .workbench-body .room-close { display: none; }
   .workbench-head { padding: 10px 12px; gap: 8px; }
+  /* v2.687 窄屏头部三件套不再抢行：标题吃剩余宽度做省略，返回与主按钮各自不换行 */
+  .workbench-head .spacer { display: none; }
+  .workbench-head h2 { flex: 1 1 auto; font-size: 16px; }
   .workbench-back { padding: 5px 10px; font-size: 12.5px; }
-  .workbench-head h2 { font-size: 16px; }
+  .workbench-head #workbenchActions .btn-primary { padding: 6px 12px; font-size: 12.5px; white-space: nowrap; }
 }
 
 /* ============================================================

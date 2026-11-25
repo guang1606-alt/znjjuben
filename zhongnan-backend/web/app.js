@@ -264,6 +264,7 @@
     // refreshHookSummary 内部对元素/数据全空值守卫，钩子卡未初始化时调用安全
     if (typeof refreshHookSummary === 'function') refreshHookSummary();
     if (typeof renderBoardStatus === 'function') renderBoardStatus();
+    if (typeof syncFailQuotaHelp === 'function') syncFailQuotaHelp(); // v2.687 失败面板额度指引随语言重刷
     if (typeof syncModeBrief === 'function') syncModeBrief();
     _initSyncing = false;
     if (typeof renderNovelLangRow === 'function' && novelAll) { renderNovelLangRow(); renderNovelGrid(); }
@@ -2859,24 +2860,11 @@
   let _workbenchOpenToken = ''; // v2.266 用户显式打开令牌：openWorkbench 设令牌，Observer 消费一次即放行 view-studio 守卫（后台直达 classList 无令牌仍被拦）
   // v2.189 生成类工作台：在这些 panel 内显示"生成剧本"按钮（举一反三：tagBench/craftBench/branchBriefPanel/interviewPanel/brandPanel/trendPanel/sourceTextPanel）
   const _GENERATIVE_PANELS = new Set(['tagBench', 'craftBench', 'branchBriefPanel', 'interviewPanel', 'brandPanel', 'trendPanel', 'sourceTextPanel']);
-  function _syncWorkbenchTopInset() {
-    const layer = $('workbenchLayer');
-    const topbar = document.querySelector('.topbar');
-    if (!layer || !topbar || typeof topbar.getBoundingClientRect !== 'function') return;
-    const rect = topbar.getBoundingClientRect();
-    const viewportHeight = typeof window === 'undefined' ? 0 : window.innerHeight;
-    const isVisible = rect.bottom > 0 && (!viewportHeight || rect.top < viewportHeight);
-    layer.style.setProperty('--workbench-top', `${isVisible ? Math.ceil(Math.max(0, rect.bottom) + 8) : 8}px`);
-  }
+  // v2.687 工作台改为真全屏：覆盖层背景不透明且层级高于顶栏，之前按顶栏高度留出的 --workbench-top
+  // 实际是一段什么都看不到的死空白（390px 下约 140px）。改由 CSS 用安全区 + 小间距接管，这里不再测量顶栏。
   function _initWorkbenchLayer() {
     if (_workbenchInited) return; _workbenchInited = true;
     const body = $('workbenchBody'); if (!body) return;
-    const topbar = document.querySelector('.topbar');
-    if (topbar && typeof ResizeObserver !== 'undefined') {
-      _syncWorkbenchTopInset();
-      new ResizeObserver(_syncWorkbenchTopInset).observe(topbar);
-    }
-    if (typeof window !== 'undefined') window.addEventListener('scroll', _syncWorkbenchTopInset, { passive: true });
     // 静态转移：把工作台 panel 从 #view-studio 移到 #workbenchBody，事件绑定不丢
     _WORKBENCH_PANEL_IDS.forEach((id) => { const el = $(id); if (el) body.appendChild(el); });
     // 返回按钮
@@ -3018,7 +3006,6 @@
     if (_workbenchHideTimer) { clearTimeout(_workbenchHideTimer); _workbenchHideTimer = null; }
     // 把 panel 移到 body 顶部（让它在最前）
     if (body && el.parentElement !== body) body.appendChild(el);
-    _syncWorkbenchTopInset();
     layer.dataset.current = id;
     layer.classList.remove('hidden');
     layer.setAttribute('aria-hidden', 'false');
@@ -3043,19 +3030,17 @@
     // v2.243 焦点移入面板：键盘/读屏用户打开后立即可操作；焦点已在 layer 内（如面板重显）不偷焦
     try { if (!layer.contains(document.activeElement)) $('workbenchBack')?.focus(); } catch {}
   }
-  // v2.191 顶部留白统一同步：topbar 换行后高度不定，同步更新 workbench / toast 的顶部偏移，
-  // 避免 topbar 浮岛压住返回键、toast 压在导航上
+  // v2.191 顶部留白统一同步：topbar 换行后高度不定，同步更新 toast 的顶部偏移，
+  // 避免 toast 压在导航上
   // v2.462 模态框不再参与：遮罩 z-index(60) 本就高于 topbar(40)，卡片天然盖在浮岛之上，
   //   而「把 topbar 底边写成 padding-top」在横屏（844×390，topbar 换行到约 127px）会写成 143px，
   //   390 减去 143+8 留白后卡片可用高只剩 239，363 高的登录卡片被顶出视口（提交按钮底部 430 > 390），
   //   滚动页面也推不动。顶部让位交给 CSS：.modal 用 max-height + overflow-y 自适应视口，任何高度都完整可达。
+  // v2.687 工作台同样退出：覆盖层不透明且 z-index(60) 盖住顶栏，再按顶栏高度写 padding-top
+  //   （实测 139px）等于在顶部留一整条死空间，把创作区压掉一屏。顶部改由 CSS 安全区负责。
   function _syncTopbarOffset() {
     const tb = document.querySelector('.topbar');
     const tbBottom = tb ? tb.getBoundingClientRect().bottom : 78;
-    const pad = Math.max(78, Math.ceil(tbBottom) + 16) + 'px';
-    // 工作台
-    const wl = $('workbenchLayer');
-    if (wl && !wl.classList.contains('hidden')) wl.style.paddingTop = pad;
     // Toast 通知（v2.225 起 #toastStack 富版单体系接管；v2.191 该让位逻辑此前只覆盖旧 znToastHost，富版压顶缺口一并修复）
     // v2.470 改写 CSS 变量而非内联 top：内联 top 会压过「弹窗态停靠底部」(top:auto)，令堆栈上下同时定位被拉伸
     const stack = document.getElementById('toastStack');
@@ -10939,9 +10924,42 @@
     } catch (e) { xnSay(e.message); }
   };
 
+  // v2.687 额度/积分失败指引：只显示「积分不足」「免费额度已用完」等于把用户留在死路。
+  // 这里识别两类可恢复失败，补上当前余额、重置时间与「还能做什么」（免费工具 / 降档 / 补充积分），
+  // 并给出两个直达入口。applyLang 会重刷，切语言后不残留旧文案。
+  let _lastFailMsg = '';
+  function quotaFailKind(msg) {
+    const s = String(msg || '');
+    if (/今日免费|免费额度|free (?:daily )?(?:quota|episodes)|daily free/i.test(s)) return 'free';
+    if (/积分不足|余额不足|insufficient points|not enough points|out of points/i.test(s)) return 'points';
+    return '';
+  }
+  function syncFailQuotaHelp(msg) {
+    const box = $('failQuotaHelp'); if (!box) return;
+    if (msg != null) _lastFailMsg = String(msg);
+    const kind = quotaFailKind(_lastFailMsg);
+    box.classList.toggle('hidden', !kind);
+    if (!kind) return;
+    const en = lang === 'en';
+    const raw = meCache && meCache.points ? Number(meCache.points.balance) : NaN;
+    const bal = Number.isFinite(raw) ? raw : null;
+    const text = kind === 'free'
+      ? (en
+        ? 'Today’s free episodes are used up (resets at midnight). You can still polish existing scripts with the free Script Checkup, Polish Ladder, Multi-version De-dup and Branch Check — or upgrade to keep writing without limits.'
+        : '今日免费额度已用完（每日 0 点重置）。你还可以用「剧本体检」「打磨阶梯」「多版本去重」「分支校验」这些免费工具打磨已有本子；开通会员可继续无限创作。')
+      : (en
+        ? `Not enough points${bal != null ? ` — balance ${bal}` : ''}. Try fewer episodes or the economy tier, polish with the free tools first, or top up on the membership page.`
+        : `积分不足${bal != null ? `：当前余额 ${bal} 积分` : ''}。可先减少本次集数或切换经济档再试；也可用免费工具先打磨，或到会员页补充积分。`);
+    $('failQuotaText').textContent = text;
+    $('failQuotaVip').textContent = kind === 'free'
+      ? (en ? 'Upgrade membership' : '开通会员')
+      : (en ? 'Top up points' : '补充积分');
+    $('failQuotaFree').textContent = en ? 'Open free toolbox' : '去免费工具箱';
+  }
   function showFail(msg, refunded) {
     $('progressPanel').classList.add('hidden'); $('failPanel').classList.remove('hidden');
     $('failText').textContent = (refunded ? (lang === 'en' ? 'Failed and refunded: ' : '已失败并退回积分：') : '') + translateProgressState(msg);
+    syncFailQuotaHelp(msg);
   }
 
   // ═══ MODULE: misc (17行, 2fn) ═══ 结果操作
@@ -11698,6 +11716,9 @@
     }
     startGenerate();
   });
+  // v2.687 失败面板的额度出口：会员页补充积分 / 免费工具箱先打磨，都是可继续的一步
+  $('failQuotaVip').onclick = () => { $('failPanel').classList.add('hidden'); switchView('vip'); };
+  $('failQuotaFree').onclick = () => { $('failPanel').classList.add('hidden'); switchView('toolbox'); };
   // v2.233 取消生成：调后端取消端点（abort 流水线 + 退冻结积分），随后等 cancelled 帧统一走失败态
   $('genCancelBtn').onclick = async () => {
     const as = genSessions.find((s) => s.id === activeSessionId);

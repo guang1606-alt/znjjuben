@@ -49,3 +49,44 @@ test('静态契约：中英双语文案键齐备', () => {
   const hits = i18n.match(/roomIdleHint\s*:/g) || [];
   assert.equal(hits.length, 2, 'roomIdleHint 必须在中英两份 DICT 中各出现一次');
 });
+
+// v2.687 工作台头部窄屏防拆行：390px 下长标题「小南递招 · 方法卡与钩子」换成两行，
+// 连带把「← 返回」和「生成剧本」压成多行，头部高度从约 34px 涨到 68px，第一屏可见创作区被吃掉。
+// 修法：标题单行省略吃剩余宽度，返回键与动作区各自不换行；窄屏隐藏纯占位 spacer，
+// 由标题 flex 增长把动作推到行尾。
+function ruleBody(selector, fromIndex = 0) {
+  const esc = selector.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const m = css.slice(fromIndex).match(new RegExp(esc + '\\s*\\{([^}]*)\\}'));
+  return m ? m[1] : null;
+}
+
+test('静态契约：工作台标题单行省略，不再撑高头部', () => {
+  const body = ruleBody('.workbench-head h2');
+  assert.ok(body, '缺少 .workbench-head h2 规则');
+  assert.match(body, /white-space:\s*nowrap/, '标题必须单行');
+  assert.match(body, /overflow:\s*hidden/, '标题溢出须裁剪');
+  assert.match(body, /text-overflow:\s*ellipsis/, '标题溢出须省略号');
+  assert.match(body, /min-width:\s*0/, '标题须可收缩（flex 子项默认 min-width:auto 撑破容器）');
+});
+
+test('静态契约：返回键与动作区不被挤压换行', () => {
+  const back = ruleBody('.workbench-back');
+  assert.ok(back, '缺少 .workbench-back 规则');
+  assert.match(back, /flex-shrink:\s*0/, '返回键不得被压缩');
+  assert.match(back, /white-space:\s*nowrap/, '返回键文字不得换行');
+  const actions = ruleBody('.workbench-head #workbenchActions');
+  assert.ok(actions, '缺少 #workbenchActions 规则');
+  assert.match(actions, /flex-shrink:\s*0/, '动作区不得被压缩');
+});
+
+test('静态契约：窄屏隐藏占位 spacer，标题吃剩余宽度、主按钮紧凑', () => {
+  const at = css.indexOf('.workbench-head .spacer');
+  assert.ok(at > 0, '缺少窄屏 .workbench-head .spacer 规则');
+  const mediaAt = css.lastIndexOf('@media (max-width: 768px)', at);
+  assert.ok(mediaAt > 0 && mediaAt < at, '该规则必须落在 768px 媒体查询内');
+  assert.match(css.slice(at, at + 80), /display:\s*none/, '窄屏应隐藏 spacer');
+  const h2 = ruleBody('.workbench-head h2', mediaAt);
+  assert.ok(h2 && /flex:\s*1 1 auto/.test(h2), '窄屏标题应 flex:1 1 auto 吃剩余宽度');
+  const btn = ruleBody('.workbench-head #workbenchActions .btn-primary', mediaAt);
+  assert.ok(btn && /white-space:\s*nowrap/.test(btn), '窄屏主按钮文字不得换行');
+});

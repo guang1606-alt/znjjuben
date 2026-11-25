@@ -825,6 +825,14 @@
 
       <section class="panel hidden" id="failPanel">
         <div class="notice err" id="failText"></div>
+        <!-- v2.687 额度/积分失败不是死路：说清余额与还能做什么，避免只留一句「积分不足」 -->
+        <div class="fail-help hidden" id="failQuotaHelp" role="note">
+          <p id="failQuotaText"></p>
+          <div class="row-actions">
+            <button class="btn-primary" id="failQuotaVip" type="button"></button>
+            <button class="chip" id="failQuotaFree" type="button"></button>
+          </div>
+        </div>
         <div class="row-actions"><button class="btn-primary" data-i="retry" id="failRetry"></button></div>
       </section>
     </div>

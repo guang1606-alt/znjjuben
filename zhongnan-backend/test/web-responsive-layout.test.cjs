@@ -220,9 +220,7 @@ before(async () => {
         .replace('  #modeGrid, .tool-grid { margin-right: 64px; }', '')
         .replace('.field label.chk-line, .field label.fb-check { display: flex; white-space: normal; }', '')
         .replace('.chk-line > span, .fb-check > span { min-width: 0; overflow-wrap: anywhere; }', '')
-        .replace(/\.field input:is\(\[type="checkbox"\], \[type="radio"\]\), \.configbar input:is\(\[type="checkbox"\], \[type="radio"\]\) \{[^}]*\}/, '')
-        .replace('var(--workbench-top, 78px)', '78px')
-        .replace('var(--workbench-top, 70px)', '70px');
+        .replace(/\.field input:is\(\[type="checkbox"\], \[type="radio"\]\), \.configbar input:is\(\[type="checkbox"\], \[type="radio"\]\) \{[^}]*\}/, '');
       response.end(legacy); return;
     }
     fs.createReadStream(filename).pipe(response);
@@ -308,7 +306,7 @@ after(async () => {
   }
 });
 
-layoutTest('workbench header remains above the navigation hit area at tablet and mobile widths', async () => {
+layoutTest('workbench header owns the top edge and its back button stays clickable at all widths', async () => {
   const failures = [];
   for (const [width, height] of [[1440, 900], [1024, 768], [390, 844], [320, 700]]) {
     await loadPage(width, height);
@@ -318,10 +316,18 @@ layoutTest('workbench header remains above the navigation hit area at tablet and
       const button = document.querySelector('#workbenchBack');
       const rect = button.getBoundingClientRect();
       const hit = document.elementFromPoint(rect.left + rect.width / 2, rect.top + rect.height / 2);
-      return { clickable: !!hit?.closest('#workbenchBack'), top: rect.top, navBottom: document.querySelector('.topbar').getBoundingClientRect().bottom };
+      const nav = document.querySelector('.nav');
+      const navRect = nav.getBoundingClientRect();
+      const navHit = document.elementFromPoint(navRect.left + navRect.width / 2, navRect.top + navRect.height / 2);
+      return {
+        clickable: !!hit?.closest('#workbenchBack'),
+        top: rect.top,
+        navCovered: !!navHit?.closest('#workbenchLayer'),
+      };
     })()`);
     await screenshot(`workbench-${width}`, ['#workbenchBack', '.topbar']);
-    if (!result.clickable || result.top < result.navBottom) failures.push({width,...result});
+    // v2.687 工作台是全屏覆盖层：顶部只留安全区 + 10px 呼吸位，不再按被遮住的顶栏高度留白
+    if (!result.clickable || result.top > 24 || !result.navCovered) failures.push({width,...result});
     if (result.clickable) {
       const rect = await evaluate("(() => { const r = document.querySelector('#workbenchBack').getBoundingClientRect(); return {x:r.left+r.width/2,y:r.top+r.height/2}; })()");
       await cdp.send('Input.dispatchMouseEvent', {type:'mousePressed',button:'left',clickCount:1,...rect});
@@ -330,7 +336,7 @@ layoutTest('workbench header remains above the navigation hit area at tablet and
       assert.equal(await evaluate("document.querySelector('#workbenchLayer').classList.contains('hidden')"), true, 'back button must close the workbench');
     }
   }
-  assert.deepEqual(failures, [], 'workbench back buttons must be below the navigation and clickable');
+  assert.deepEqual(failures, [], 'workbench header must sit at the top edge, cover the nav and keep back clickable');
 });
 
 layoutTest('mobile checkbox controls keep intrinsic width and their labels do not overflow', async () => {
@@ -371,17 +377,18 @@ layoutTest('mobile floating assistant does not overlap the mode card action', as
   assert.equal(overlap, 0, `floating assistant overlaps mode action by ${overlap}px2`);
 });
 
-layoutTest('an open workbench tracks navigation height after a desktop to mobile resize', async () => {
+layoutTest('an open workbench keeps its full-screen top edge after a desktop to mobile resize', async () => {
   await loadPage(1440, 900);
   await evaluate("document.querySelector('#interviewPanel').classList.remove('hidden')");
   await delay(400);
   await setViewport(390, 844);
   await delay(200);
   const geometry = await evaluate(`(() => ({
-    navBottom: document.querySelector('.topbar').getBoundingClientRect().bottom,
-    headerTop: document.querySelector('.workbench-head').getBoundingClientRect().top
+    headerTop: document.querySelector('.workbench-head').getBoundingClientRect().top,
+    layerTop: document.querySelector('#workbenchLayer').getBoundingClientRect().top
   }))()`);
-  assert.ok(geometry.headerTop >= geometry.navBottom + 7, JSON.stringify(geometry));
+  assert.ok(geometry.layerTop === 0, JSON.stringify(geometry));
+  assert.ok(geometry.headerTop <= 24, JSON.stringify(geometry));
 });
 
 layoutTest('mobile navigation, section headings and cards use the available width cleanly', async () => {

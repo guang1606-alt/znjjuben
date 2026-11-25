@@ -111,14 +111,17 @@ describe('v2.462 弹层在低高度视口可达（横屏登录不被截断）', 
     assert.ok(pxOf(lowModal.body) < baseModalPad, `低高度档的卡片留白应小于基础值 ${baseModalPad}px，当前为 ${pxOf(lowModal.body)}px`);
   });
 
-  it('_syncTopbarOffset 不得再给 .modal-mask 写 paddingTop（横屏会写成 143px 把卡片顶出视口）', () => {
+  it('_syncTopbarOffset 不得再给 .modal-mask / 工作台覆盖层写 paddingTop（会把内容顶出 / 留死空间）', () => {
     const app = fs.readFileSync(path.join(__dirname, '..', 'web', 'app.js'), 'utf8');
     const start = app.indexOf('function _syncTopbarOffset()');
     assert.ok(start > 0, '未找到 _syncTopbarOffset');
     const end = app.indexOf('\n  }', start);
     const body = app.slice(start, end);
     assert.ok(!/modal-mask/.test(body), '_syncTopbarOffset 不应再操作 .modal-mask：遮罩 z-index 高于 topbar，无需让位');
-    assert.ok(/workbenchLayer/.test(body), '_syncTopbarOffset 仍须负责工作台顶部让位');
+    // v2.687：工作台覆盖层不透明且压在顶栏之上，按顶栏高度写 paddingTop 会在顶部留一条死空间；
+    // 顶部让位改由 CSS 安全区负责，这里不得再出现对 workbenchLayer 的 padding 写入。
+    assert.ok(!/workbenchLayer[\s\S]{0,120}paddingTop/.test(body),
+      '_syncTopbarOffset 不应再给 workbenchLayer 写 paddingTop（顶部交给 CSS 安全区）');
     // 前置条件：遮罩必须真的盖在 topbar 之上，否则去掉让位会被浮岛压住
     // 取「只含该选择器」的最后一条声明（`.topbar, .wrap…{z-index:1}` 这类组合规则不算）
     const zOf = (sel) => {
