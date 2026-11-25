@@ -176,7 +176,7 @@ function setup(handler = async () => response([])) {
   vm.createContext(c);
   for (const name of [
     'privateAccountId', 'syncPrivateAccount', 'capturePrivateSession', 'isPrivateSessionCurrent',
-    'resetPrivateAccountState', 'clearDraftProject', 'renderAuthButton', 'loadWorks', 'loadMoreWorks', 'openProject',
+    'resetPrivateAccountState', 'clearDraftProject', 'renderAuthButton', 'epCount', 'loadWorks', 'loadMoreWorks', 'openProject',
     // v2.275：loadWorks 的卡片操作经 runWorkAction（在途锁+按钮态），注入真实实现以解析引用
     'runWorkAction',
     'viewPurchasedScript',

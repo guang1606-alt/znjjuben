@@ -249,12 +249,13 @@ describe('v2.529 英文界面括号与集号不外溢', () => {
 
   it('成人准入状态与跨项目对标集号随语言', () => {
     assert.ok(/lang === 'en' \? ` \(\$\{T\.signed\}\$\{until\}\)` : `（\$\{T\.signed\}\$\{until\}）`/.test(app), '准入状态括号未按语言');
-    assert.ok(/lang === 'en' \? ` \(\$\{p\.totalEps\} eps\)` : `（\$\{p\.totalEps\}集）`/.test(app), '对标项目集号未按语言');
+    // v2.692：集号统一走 epCount（英文 1 ep / n eps，中文 n 集），不再写死 " eps"
+    assert.ok((app.match(/` \(\$\{epCount\(p\.totalEps\)\}\)` : `（\$\{epCount\(p\.totalEps\)\}）`/g) || []).length >= 2, '对标/上架下拉集号未按语言或未走 epCount');
   });
 
   it('方法卡分组计数、上架下拉、截断提示的括号随语言', () => {
     assert.ok(app.includes("` (${g.count})` : `（${g.count}）`"), '方法卡分组计数未按语言');
-    assert.ok(app.includes("` (${p.totalEps || 0} eps)` : `（${p.totalEps || 0} eps）`"), '上架下拉未按语言');
+    assert.ok(/function epCount\(n\) \{[\s\S]{0,220}v === 1 \? ' ep' : ' eps'/.test(app), 'epCount 英文单复数缺失');
     assert.ok(app.includes("` (${t('dashTrunc'"), '资产截断提示英文仍用全角括号');
   });
 

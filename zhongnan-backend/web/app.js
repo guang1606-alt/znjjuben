@@ -16,6 +16,13 @@
   };
   const LEVEL_ZH = { FREE: '免费', BASIC: '基础', ADVANCED: '高级', PRO: '专业' };
   const LEVEL_EN = { FREE: 'Free', BASIC: 'Basic', ADVANCED: 'Advanced', PRO: 'Pro' };
+  // v2.692 集数单位单一真源：作品卡此前写死 `${n} eps`，中文界面里冒出英文单位，
+  // 英文下 1 集显示 "1 eps"；中文补「集」，英文按单复数切换。
+  function epCount(n) {
+    const v = Number(n) || 0;
+    if (lang === 'en') return v + (v === 1 ? ' ep' : ' eps');
+    return v + ' 集';
+  }
   // v2.193 身份标签：超管/副管理员优先显示身份，普通用户显示会员档（避免超管登录显示"专业版"的名实不符）
   function userRoleLabel(u) {
     if (!u) return '';
@@ -323,6 +330,12 @@
     // v2.665 作品库批量栏（已选数量/归档或恢复/全选文案是动态拼的）随语言切换重排
     syncWorksBulkBar();
     syncWorksFilterUi();
+    // v2.692 作品卡是动态生成的：切语言后模式名、集数单位、日期与卡内按钮仍是旧语言，
+    // 直到用户离开再回到作品库（实测中文切英文后卡片仍写着「标签创建 · 20 集」）。
+    // 作品库可见时按新语言重拉一次（与登录后刷新同一路径）；隐藏时绝不发请求。
+    if (!$('view-works').classList.contains('hidden') && window.Api && Api.isAuthed()) {
+      loadWorks().catch((e) => { if (e && e.code !== 'SESSION_CHANGED') toastError(e.message); });
+    }
   }
 
   /* ---------- v2.329 八模式（模式 × 剧本类型 × 输出语言 三维） ---------- */
@@ -4177,7 +4190,7 @@
       const platLabel = platformLabel(p.platform || p.bible?.platform);
       c.innerHTML = `<button type="button" class="work-pick" data-pick="${escapeHtml(pid)}" aria-pressed="${picked}" aria-label="${escapeHtml(t('worksBulkPick', { title: p.title }))}"><span aria-hidden="true">✓</span></button>
         <h3>${escapeHtml(p.title)}</h3>
-        <div class="muted">${escapeHtml(modeText)} · ${p.totalEps || 0} eps · ${PV().formatDateTime(p.createdAt, lang)}</div>
+        <div class="muted">${escapeHtml(modeText)} · ${epCount(p.totalEps)} · ${PV().formatDateTime(p.createdAt, lang)}</div>
         <div class="work-badges"><span class="badge">${escapeHtml(engineLabel(p.engineTier, true) || (lang === 'en' ? 'Standard' : '标准'))}</span><span class="badge">${p.format === 'AIGC' ? 'Z-AIGC' : (lang === 'en' ? 'Live action' : '真人实拍')}</span>${platLabel ? `<span class="badge">${escapeHtml(platLabel)}</span>` : ''}${p.status === 'archived' ? `<span class="badge badge-archived">${escapeHtml(t('worksArchivedBadge'))}</span>` : ''}</div>
         <div class="work-actions">
           <button class="chip work-action-btn" data-act="rename">${lang === 'en' ? 'Rename' : '重命名'}</button>
@@ -5998,7 +6011,7 @@
     const projectsRaw = await res.json();
     const projects = Array.isArray(projectsRaw) ? projectsRaw : (projectsRaw.items || []);
     if (!projects.length) { xnSay(lang === 'en' ? 'Create a script first.' : '请先创作一部剧本再上架'); return; }
-    $('listScript').innerHTML = projects.map((p) => `<option value="${p.id}">${escapeHtml(p.title)}${lang === 'en' ? ` (${p.totalEps || 0} eps)` : `（${p.totalEps || 0} eps）`}</option>`).join('');
+    $('listScript').innerHTML = projects.map((p) => `<option value="${p.id}">${escapeHtml(p.title)}${lang === 'en' ? ` (${epCount(p.totalEps)})` : `（${epCount(p.totalEps)}）`}</option>`).join('');
     $('listValue').classList.add('hidden'); $('listValue').innerHTML = '';
     $('listScript').onchange = () => previewListingValue($('listScript').value);
     if (projects.length) previewListingValue(projects[0].id);
@@ -10968,34 +10981,70 @@
   /* ---------- 投稿渠道推荐（按标签匹配适配平台，商业闭环） ---------- */
   async function loadSubmissionMatch(tags) {
     const panel = $('submissionPanel'); if (!panel) return;
-    if (!tags || !tags.length) { panel.classList.add('hidden'); return; }
+    const picked = Array.isArray(tags) ? tags.filter(Boolean) : [];
+    // v2.692 未选标签不再静默隐藏整个面板：创意/围读模式出本的用户没有标签，此前永远看不到
+    // 「最后一公里」的投稿渠道。改为请求综合推荐，并在提示里如实说明来源（无标签时由渲染函数单独出文案）。
     const seq = ++subMatchSeq; // v2.258：投资人体检串联触发，连跑两个项目时旧匹配作废
     try {
-      const r = await Api.request('/api/submission/match?tags=' + encodeURIComponent(tags.join(',')) + '&count=6');
+      const q = picked.length
+        ? '?tags=' + encodeURIComponent(picked.join(',')) + '&count=6'
+        : '?count=6';
+      const r = await Api.request('/api/submission/match' + q);
       const d = await Api.jsonOrThrow(r);
       if (seq !== subMatchSeq) return;
-      renderSubmission(d.matches);
+      renderSubmission(d.matches, { noTags: !picked.length });
       panel.classList.remove('hidden');
     } catch { if (seq !== subMatchSeq) return; panel.classList.add('hidden'); }
   }
-  function renderSubmission(matches) {
+  function renderSubmission(matches, opts) {
     const list = $('submissionList'); if (!list) return;
-    list.innerHTML = matches.map((c) => {
+    const list2 = Array.isArray(matches) ? matches : [];
+    const noTags = !!(opts && opts.noTags);
+    // v2.692 面板副标题跟随数据来源：未选标签时不能继续写「按题材标签智能匹配」。
+    // 同步改写 data-i，切语言后由 renderStaticText 按新键自愈，不会退回旧文案。
+    const subEl = $('submissionSub');
+    if (subEl) {
+      const key = noTags ? 'subFreeGeneral' : 'subFree';
+      subEl.setAttribute('data-i', key);
+      subEl.textContent = t(key);
+    }
+    list.innerHTML = list2.map((c) => {
       const verifiedBadge = c.verified
         ? `<span class="chip" style="background:var(--soft-ok);color:var(--ok-text)">${lang === 'en' ? 'Verified' : '联系方式已核验'}</span>`
         : `<span class="chip" style="background:var(--soft-warn);color:var(--warn-text)">${lang === 'en' ? 'Contact pending' : '联系方式待核验'}</span>`;
     // @module tags
       const kinds = (c.kinds || []).join('·');
     // @module tags
-      const matched = (c.matched || []).map((t) => `<span class="chip" style="font-size:11px">${escapeHtml(t)}</span>`).join('');
-      return `<div class="sub-card">
-        <div class="sub-head"><b>${escapeHtml(c.name)}</b><span class="muted">${escapeHtml(c.region === 'overseas' ? (lang === 'en' ? 'Overseas' : '海外') : (lang === 'en' ? 'Domestic' : '国内'))}</span>${verifiedBadge}</div>
+      const hitTags = Array.isArray(c.matched) ? c.matched : [];
+      const matched = hitTags.map((t) => `<span class="chip" style="font-size:11px">${escapeHtml(t)}</span>`).join('');
+      // v2.692 零命中不冒充精准匹配：渠道库对科幻/机甲这类冷门题材可能一个标签都命中不了，
+      // 后端仍按综合分兜底返回。如实标「综合参考」并弱化卡片（.sub-card--fallback），
+      // 避免用户误以为这些平台与自己的题材高度契合。
+      const fallbackBadge = hitTags.length
+        ? ''
+        : `<span class="chip sub-fallback-chip">${lang === 'en' ? 'General pick' : '综合参考'}</span>`;
+      return `<div class="sub-card${hitTags.length ? '' : ' sub-card--fallback'}">
+        <div class="sub-head"><b>${escapeHtml(c.name)}</b><span class="muted">${escapeHtml(c.region === 'overseas' ? (lang === 'en' ? 'Overseas' : '海外') : (lang === 'en' ? 'Domestic' : '国内'))}</span>${verifiedBadge}${fallbackBadge}</div>
         <div class="sub-meta"><span>${escapeHtml(kinds)}</span>${matched}</div>
         ${c.highlight ? `<div class="sub-hl">${escapeHtml(c.highlight)}</div>` : ''}
       </div>`;
-    }).join('');
+    }).join('') || znEmptyHtml(lang === 'en' ? 'No matching channels yet.' : '暂无匹配渠道');
     const notice = $('submissionNotice');
-    if (notice) notice.textContent = lang === 'en'
+    if (!notice) return;
+    // 空结果只留空态，不再跟一句「标待核验的渠道…」——没有卡片时这句提示无所指，反而像没加载完。
+    if (!list2.length) { notice.textContent = ''; return; }
+    const allFallback = list2.every((c) => !(Array.isArray(c.matched) && c.matched.length));
+    if (allFallback) {
+      notice.textContent = noTags
+        ? (lang === 'en'
+          ? 'No tags selected — the list below is a general reference. Pick tags in tag mode for sharper matching.'
+          : '未选择题材标签，以下为综合参考渠道；在标签模式选好标签可获得更精准的匹配。')
+        : (lang === 'en'
+          ? 'None of your tags hit a precise fit in the channel library — the list below is a general reference. Adjust tags for sharper matches.'
+          : '所选标签暂未命中渠道库的精准适配项，以下为综合参考；调整题材标签可得到更精准的匹配。');
+      return;
+    }
+    notice.textContent = lang === 'en'
       ? 'Tip: platforms with pending contacts are listed for reference only; verify official entry before submitting.'
       : '提示：标"待核验"的渠道仅作题材适配参考，投稿前请务必到官方入口核验对接方式，勿轻信第三方。';
   }
@@ -11126,7 +11175,7 @@
       (projects || []).filter((p) => p.id !== currentProjectId && (p.totalEps || 0) > 0).slice(0, 8).forEach((p) => {
         const el = document.createElement('div');
         el.className = 'pk-opp';
-        el.textContent = `📄 ${p.title}${lang === 'en' ? ` (${p.totalEps} eps)` : `（${p.totalEps}集）`}`;
+        el.textContent = `📄 ${p.title}${lang === 'en' ? ` (${epCount(p.totalEps)})` : `（${epCount(p.totalEps)}）`}`;
         el.onclick = () => { pkOpponentId = p.id; document.querySelectorAll('.pk-opp').forEach((o) => o.classList.remove('selected')); el.classList.add('selected'); };
         box.appendChild(el);
       });

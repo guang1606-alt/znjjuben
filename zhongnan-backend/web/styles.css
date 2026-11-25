@@ -1256,6 +1256,10 @@ textarea { box-sizing: border-box; max-width: 100%; resize: vertical; background
 .sub-meta{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin:5px 0;font-size:.8rem;color:var(--text-2)}
 .sub-meta .chip{font-size:11px;padding:2px 7px;border-radius:6px}
 .sub-hl{font-size:.82rem;line-height:1.55;color:var(--accent-strong);margin-top:4px}
+/* v2.692 综合参考渠道：标签零命中时不再与精准命中卡片同样显眼——底纹压一级、左侧描边改用中性的线色，
+   让用户一眼分清「为我题材匹配」与「兜底参考」。 */
+.sub-card--fallback{background:var(--panel-2);border-style:dashed}
+.sub-fallback-chip{background:var(--panel-2);color:var(--text-2);border:1px dashed var(--line);font-size:11px;padding:2px 7px;border-radius:6px}
 
 /* ================= 小南递招：方法卡 + 钩子 ================= */
 .craft-bench{margin:14px 0}
@@ -1918,6 +1922,10 @@ summary:hover{color:var(--accent-strong)}
 }
 @media (max-width: 640px) {
   html, body { max-width: 100%; overflow-x: hidden; }
+  /* v2.692 触控目标：作品页筛选片实测 45x29、卡片操作片 67x25，低于 30px，拇指误触率高。
+     窄屏统一抬到 ≥32px 高（宽度不变），桌面鼠标场景仍保持紧凑。 */
+  .works-filter-btn { min-height: 34px; padding: 9px 16px; }
+  .work-action-btn { min-height: 32px; padding: 6px 12px; font-size: 12.5px; }
   .topbar { gap: 8px; padding: 9px 12px; position: sticky; max-width: 100vw; min-width: 0; flex-direction: column; align-items: stretch; }
   .brand { align-self: flex-start; min-width: 0; order: 1; }
   .brand b { font-size: 1rem; white-space: nowrap; }
