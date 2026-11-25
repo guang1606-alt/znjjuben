@@ -18,6 +18,9 @@ export interface NovelSource {
   desc: string;
   adapt: boolean;          // 是否可直接用于改编
   adaptNote: string;
+  descEn?: string;         // v2.688 英文界面文案（中文侧保持原文）
+  adaptNoteEn?: string;
+  nameEn?: string;         // v2.688 英文界面站名（人名/品牌名不译，只替换中文部分）
 }
 
 export const NOVEL_SOURCES: NovelSource[] = [
@@ -56,6 +59,76 @@ export const NOVEL_SOURCES: NovelSource[] = [
 
 // 已知盗版/侵权高风险域名黑名单，永远不得收录
 export const PIRACY_BLACKLIST = ['z-lib', 'zlibrary', 'libgen', '123freebook', 'pdfdrive', 'annas-archive', 'anna.s', 'bqg', 'biquge', 'shuquge'];
+
+/* v2.688 英文界面不再出现整段中文：desc / adaptNote 逐条给英文对照。
+   放在数组之后统一挂载，避免 30 条数据行被拉长到两倍、也保证中文侧仍是唯一真源。
+   新增来源若漏写英文，前端回退中文原文（优雅降级，不会出现空白卡片）。 */
+const EN_COPY: Record<string, [string, string]> = {
+  gutenberg: ["The world's largest public-domain library: 75,000+ multilingual classics, free downloads, no DRM.", 'Public domain — free to adapt and use commercially.'],
+  'standard-ebooks': ['Carefully edited, beautifully typeset public-domain classics.', 'Public domain — free to adapt and use commercially.'],
+  'internet-archive': ['Vast public-domain books and historical texts; some titles require free borrowing.', 'Downloadable public-domain items are free to adapt; lending copies remain copyrighted.'],
+  'open-library': ["Internet Archive's library: public-domain downloads plus digital lending for in-copyright books.", 'Only public-domain items are adaptable; lent books are not.'],
+  manybooks: ['50,000+ public-domain and indie free books, filterable by language.', 'Public domain is free to adapt; indie free books follow their own license.'],
+  'feedbooks-pd': ["Feedbooks' public-domain section, multilingual classics.", 'Public domain — free to adapt and use commercially.'],
+  'wikisource-zh': ['Multilingual public-domain texts, including the Four Great Classical Novels in Chinese.', 'Public-domain text — free to adapt and use commercially.'],
+  haodoo: ['Traditional-Chinese public-domain novel library, classical and modern works.', 'Public domain — free to adapt and use commercially.'],
+  aozora: ["Japan's authoritative public-domain literature library.", 'Japanese copyright expired; free to adapt (recheck the term before commercial use).'],
+  ao3: ['Author-posted original and fan works, mostly CC-licensed, multilingual.', "Check each work's CC terms; most require attribution and forbid commercial use."],
+  royalroad: ['English web-serial and fantasy platform; authors allow free reading.', 'Copyright stays with the author; free reading is not adaptation rights.'],
+  wattpad: ['Global community of free original serials, multilingual.', 'Copyright stays with the author; adaptation needs author or platform permission.'],
+  'douban-free': ['Licensed Chinese original free novels and short stories.', 'Free to read only; adaptation or commercial use needs separate permission.'],
+  weread: ['Licensed public-domain titles and unlimited-card publications, well typeset in Chinese.', 'Public-domain classics are adaptable; in-copyright titles are read-only.'],
+  'wikisource-en': ['Full English public-domain texts, directly quotable for adaptation.', 'Public-domain text — free to adapt and use commercially.'],
+  'wikisource-ko': ['Korean public-domain classical and modern literature.', 'Korean copyright expired (usually 70 years post mortem); recheck before commercial use.'],
+  cervantesvirtual: ['The largest Spanish-language public-domain digital library.', 'Public-domain Spanish classics are free to adapt; open-licensed items follow the page terms.'],
+  zeno: ['German public-domain literature and philosophy in full text.', 'Public-domain German text — free to adapt and use commercially.'],
+  liberliber: ['Italian public-domain literature project with EPUB/PDF downloads.', 'Public-domain Italian classics — free to adapt and use commercially.'],
+  gallica: ["Bibliothèque nationale de France's public-domain library, whole-book downloads.", 'Public-domain French works are free to adapt; in-copyright items are view-only.'],
+  hathitrust: ['North American university digital library; public-domain volumes fully downloadable.', 'Only volumes marked Public Domain may be downloaded and adapted.'],
+  authorama: ['Completely free English public-domain novels with clean, copyable pages.', 'Public domain — free to adapt and use commercially.'],
+  'feb-web': ['Russian literature institute public-domain full texts (Pushkin, Tolstoy, Dostoevsky).', 'Works with expired Russian copyright are free to adapt; recheck the term before commercial use.'],
+  dominiopublico: ["Brazilian Ministry of Education's official public-domain program.", 'Government-marked public-domain items are free to adapt and use commercially.'],
+  'wikisource-ar': ['Arabic public-domain literature and classical tales, RTL text.', 'Public-domain Arabic text is free to adapt; respect religious and cultural sensitivities.'],
+  'ndl-dl': ["Japan's National Diet Library digitized classical and modern works.", 'Copyright-expired materials are free to adapt; signed-in users get broader downloads.'],
+  gongu: ["Korea Copyright Commission's official sharing platform with free licensed literature.", 'Check each item: public domain is free; shared-license works need attribution or non-commercial compliance.'],
+  ctext: ['One of the largest Chinese classical text archives, from pre-Qin to Ming and Qing.', 'Chinese classical public-domain texts are free to adapt and use commercially.'],
+  shuge: ['Non-profit Chinese rare-book scan library; visual reference and public-domain story texts.', "Public-domain content is free to adapt; reuse of scan images follows the site's terms."],
+  'bne-bdh': ["Spain's National Library public-domain digitized collection.", 'Public-domain (dominio público) items are free to adapt; in-copyright works are view-only.'],
+};
+/* v2.688 英文界面站名：此前 24 张卡片标题仍是「Project Gutenberg 古登堡计划」这类中英混排，
+   英文用户看到半截中文。专有名词保留原文，只把中文修饰语替换成英文。 */
+const NAME_EN: Record<string, string> = {
+  gutenberg: 'Project Gutenberg',
+  'internet-archive': 'Internet Archive',
+  'open-library': 'Open Library',
+  'feedbooks-pd': 'Feedbooks Public Domain',
+  'wikisource-zh': 'Wikisource (Chinese)',
+  haodoo: 'Haodoo',
+  aozora: 'Aozora Bunko',
+  'douban-free': 'Douban Read · Free',
+  weread: 'WeRead (public domain / free card)',
+  'wikisource-en': 'Wikisource (English)',
+  'wikisource-ko': 'Wikisource (Korean)',
+  cervantesvirtual: 'Biblioteca Virtual Miguel de Cervantes',
+  zeno: 'Zeno.org (German public domain)',
+  liberliber: 'Liber Liber (Italian free library)',
+  gallica: 'Gallica — BnF digital library',
+  authorama: 'Authorama (public-domain English books)',
+  'feb-web': 'ФЭБ — Russian literature archive',
+  dominiopublico: 'Domínio Público (Brazil)',
+  'wikisource-ar': 'Wikisource (Arabic)',
+  'ndl-dl': 'National Diet Library Digital Collections (Japan)',
+  gongu: 'Gongu Madang (Korea Copyright Commission)',
+  ctext: 'Chinese Text Project (ctext.org)',
+  shuge: 'Shuge — Chinese rare-book library',
+  'bne-bdh': 'Biblioteca Digital Hispánica (Spain)',
+};
+for (const s of NOVEL_SOURCES) {
+  const e = EN_COPY[s.id];
+  if (e) { s.descEn = e[0]; s.adaptNoteEn = e[1]; }
+  const n = NAME_EN[s.id];
+  if (n) s.nameEn = n;
+}
 
 export function listSources(): NovelSource[] { return NOVEL_SOURCES; }
 export function filterByLang(lang: string): NovelSource[] {

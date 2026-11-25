@@ -45,6 +45,22 @@ test('绝不收录盗版/侵权高风险站点', () => {
   });
 });
 
+test('v2.688 每个来源都有英文对照，英文界面不再整卡中文', () => {
+  F.listSources().forEach((s) => {
+    assert.ok(typeof s.descEn === 'string' && s.descEn.trim(), `${s.id} 缺 descEn`);
+    assert.ok(typeof s.adaptNoteEn === 'string' && s.adaptNoteEn.trim(), `${s.id} 缺 adaptNoteEn`);
+    assert.doesNotMatch(`${s.descEn} ${s.adaptNoteEn}`, /[\u4e00-\u9fa5]/, `${s.id} 英文对照里不应出现中文`);
+  });
+});
+
+test('v2.688 英文站名不再中英混排', () => {
+  F.listSources().forEach((s) => {
+    if (!/[\u4e00-\u9fa5]/.test(s.name)) return; // 本来就纯拉丁/其他语种的站名无需对照
+    assert.ok(typeof s.nameEn === 'string' && s.nameEn.trim(), `${s.id} 站名含中文却没有 nameEn`);
+    assert.doesNotMatch(s.nameEn, /[\u4e00-\u9fa5]/, `${s.id} 的 nameEn 不应含中文`);
+  });
+});
+
 test('v2.42 扩充至30个来源且覆盖法/俄/葡/阿新语种', () => {
   const v = F.validateSources();
   assert.strictEqual(v.ok, true);

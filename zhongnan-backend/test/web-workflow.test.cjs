@@ -63,6 +63,8 @@ function setup(names, extra = {}) {
     lastFiling: null, pendingWarnings: null, activeSessionId: null, genSessions: [],
     // v2.276/v2.277 模块级 let（逐函数 vm 求值需在 context 预置，否则 startGenerate 入口 ReferenceError）
     _genStarting: false, _retryProject: null, _retryBrief: null,
+    // v2.688 切语言显隐守卫：syncModeBrief/syncTagBench 读取模块级 let，逐函数求值需预置
+    _langSyncing: false,
     // v2.329 三维契约：剧本类型 + 输出语种为模块级 let/const，逐函数求值需预置
     selectedScriptType: 'live_action_drama', outputLangValue: () => 'zh', renderScriptTypes() {},
     renderAigcDash() {}, renderLiveProdDash() {}, loadDiagnosis: async () => {}, loadEmotionWave: async () => {}, loadInvestorLens: async () => {},

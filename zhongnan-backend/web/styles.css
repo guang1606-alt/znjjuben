@@ -2950,6 +2950,30 @@ body:has(.ui-dlg-overlay) .toast { --toast-y: 10px; }
   border-radius: 6px;
   margin: 2px 0 4px;
 }
+/* v2.688 今日免费用完 / 余额不足：成本提示升级为警示条，并给一键修正按钮 */
+.gen-cost-hint.warn {
+  color: var(--warn-text);
+  border-left-color: color-mix(in srgb, var(--warn-text) 55%, transparent);
+  background: var(--soft-warn);
+}
+/* v2.688 一键修正按钮：这是额度受阻时唯一可执行的出口，按次级 CTA 处理而不是普通 chip */
+.gen-cost-fix {
+  flex-basis: 100%; align-self: flex-start; margin: 0 0 6px;
+  min-height: 34px; padding: 0 14px; font-weight: 600;
+  color: var(--accent-strong);
+  border-color: color-mix(in srgb, var(--accent) 42%, transparent);
+  background: color-mix(in srgb, var(--accent) 10%, transparent);
+  transition: background var(--motion) var(--ease-out), border-color var(--motion) var(--ease-out);
+}
+.gen-cost-fix:hover { background: color-mix(in srgb, var(--accent) 18%, transparent); }
+.gen-cost-fix[data-mode="vip"] {
+  color: var(--gold-text);
+  border-color: color-mix(in srgb, var(--gold) 46%, transparent);
+  background: color-mix(in srgb, var(--gold) 10%, transparent);
+}
+.gen-cost-fix[data-mode="vip"]:hover { background: color-mix(in srgb, var(--gold) 18%, transparent); }
+/* v2.688 素材库结果计数：筛选后让用户知道「还剩几条 / 原本有几条」 */
+.novel-count { font-size: .74rem; line-height: 1.5; margin: 0 2px 10px; }
 .gen-cost-hint:empty { display: none; }
 
 .mode-detail-body {

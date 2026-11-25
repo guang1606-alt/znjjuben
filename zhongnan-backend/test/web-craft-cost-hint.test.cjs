@@ -84,7 +84,7 @@ test('v2.663 标题短版与完整提示同源同口径', () => {
 });
 
 test('v2.663 接线后标题与按钮上方同时更新（金额随集数变化）', () => {
-  const { context: c, $ } = setup(['syncEpisodeCostHint', 'episodeCostHint', 'episodeCostShort', 'tierZh', 'tierEn', 'myPlan', '_costParams'], {
+  const { context: c, $ } = setup(['syncEpisodeCostHint', 'episodeCostHint', 'episodeCostShort', 'tierZh', 'tierEn', 'myPlan', '_costParams', 'isFreeQuotaBlocked'], {
     Api: { getUser: () => ({ id: 'u1', level: 'ADVANCED' }), isAuthed: () => true },
     meCache: { id: 'u1', quota: { remain: 0 } },
     _plansCache: [FREE, ADV, PRO],
@@ -97,7 +97,7 @@ test('v2.663 接线后标题与按钮上方同时更新（金额随集数变化�
 });
 
 test('v2.663 换号后旧账号额度不得串进新账号估算', () => {
-  const { context: c, $ } = setup(['syncEpisodeCostHint', 'episodeCostHint', 'episodeCostShort', 'tierZh', 'tierEn', 'myPlan', '_costParams'], {
+  const { context: c, $ } = setup(['syncEpisodeCostHint', 'episodeCostHint', 'episodeCostShort', 'tierZh', 'tierEn', 'myPlan', '_costParams', 'isFreeQuotaBlocked'], {
     Api: { getUser: () => ({ id: 'u2', level: 'ADVANCED' }), isAuthed: () => true },
     meCache: { id: 'u1', quota: { remain: 300 } }, // 上一位登录者的额度
     _plansCache: [FREE, ADV, PRO],
@@ -107,6 +107,52 @@ test('v2.663 换号后旧账号额度不得串进新账号估算', () => {
   c.syncEpisodeCostHint();
   assert.doesNotMatch($('genCostHint').textContent, /赠送集/);
   assert.match($('genCostHint').textContent, /经济引擎 8 积分\/集 × 20 集 ≈ 160 积分/);
+});
+
+test('v2.688 免费额度用完：说明已用完与余额，并给出可执行建议', () => {
+  const { context: c } = setup(['episodeCostHint', 'episodeCostShort', 'tierZh', 'tierEn']);
+  const zh = c.episodeCostHint({ episodes: 20, tier: 'ECONOMY', plan: FREE, authed: true, quotaRemain: 0, freeRemain: 0, balance: 0, en: false });
+  assert.match(zh, /今日免费 2 集已用完（每日 0 点重置）/);
+  assert.match(zh, /当前余额 0 积分/);
+  assert.match(zh, /余额不足，建议先改小集数或开通会员/);
+  const en = c.episodeCostHint({ episodes: 20, tier: 'ECONOMY', plan: FREE, authed: true, quotaRemain: 0, freeRemain: 0, balance: 0, en: true });
+  assert.match(en, /Today's 2 free episodes are used up/);
+  assert.match(en, /balance 0 pts/);
+  assert.equal(c.episodeCostShort({ tier: 'ECONOMY', plan: FREE, authed: true, quotaRemain: 0, freeRemain: 0, en: false }), '今日免费已用完 · 12 积分/集');
+});
+
+test('v2.688 免费额度还有剩：按真实剩余算超出集数与金额', () => {
+  const { context: c } = setup(['episodeCostHint', 'episodeCostShort', 'tierZh', 'tierEn']);
+  const over = c.episodeCostHint({ episodes: 20, tier: 'ECONOMY', plan: FREE, authed: true, quotaRemain: 0, freeRemain: 1, balance: 500, en: false });
+  assert.match(over, /今日免费还剩 1 集/);
+  assert.match(over, /超出 19 集约 228 积分/);
+  assert.doesNotMatch(over, /余额不足/, '余额足够时不应恐吓用户');
+  const covered = c.episodeCostHint({ episodes: 2, tier: 'ECONOMY', plan: FREE, authed: true, quotaRemain: 0, freeRemain: 2, balance: 0, en: false });
+  assert.match(covered, /本单全部落在免费额度内/);
+  assert.equal(c.episodeCostShort({ tier: 'ECONOMY', plan: FREE, authed: true, quotaRemain: 0, freeRemain: 1, en: false }), '今日免费剩 1 集 · 超出 12 积分/集');
+});
+
+test('v2.688 一键修正：有免费剩额就给「先写 N 集」，用完且余额不足就给「开通会员」', () => {
+  const { context: c, $ } = setup(
+    ['syncEpisodeCostHint', 'episodeCostHint', 'episodeCostShort', 'tierZh', 'tierEn', 'myPlan', '_costParams', 'isFreeQuotaBlocked'],
+    {
+      Api: { getUser: () => ({ id: 'u1', level: 'FREE' }), isAuthed: () => true },
+      meCache: { id: 'u1', freeToday: { remain: 1 }, points: { balance: 500 } },
+      _plansCache: [FREE],
+    },
+  );
+  $('episodes').value = '20';
+  c.syncEpisodeCostHint();
+  assert.equal($('genCostFix').dataset.mode, 'free');
+  assert.equal($('genCostFix').textContent, '先写 1 集（免费）');
+  // 额度用完 + 余额不足 → 转成会员出口
+  c.meCache = null; // 避免 vm 全局缓存干扰：直接从共享上下文改写
+  vm.runInContext("meCache = { id: 'u1', freeToday: { remain: 0 }, points: { balance: 0 } };", c);
+  c.syncEpisodeCostHint();
+  assert.equal($('genCostFix').dataset.mode, 'vip');
+  assert.equal($('genCostFix').textContent, '开通会员继续创作');
+  assert.ok(source.includes("$('genCostFix').onclick"), '一键修正按钮必须接线');
+  assert.ok(source.includes("if (remain > 0) applyEpisodePreset(remain);"), '免费剩额按钮应把集数改成剩余集数');
 });
 
 test('v2.663 静态契约：目录下发单集价、按钮上方有成本位、集数/引擎有委派监听', () => {

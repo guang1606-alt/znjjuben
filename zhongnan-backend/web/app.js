@@ -248,6 +248,10 @@
     _applyToolboxHints(); // A3 工具箱卡片分层：静态卡注入方法论一句话提示行（随语言刷新）
     // v2.188 初始化同步守卫：applyLang 期间 syncTagBench/syncModeBrief 不主动调 openWorkbench（避免 layer 自动展开覆盖模式主页）
     _initSyncing = true;
+    // v2.688 切语言不得偷换工作台：把"只刷新文案、不改显隐"的窗口单独标出来，
+    // 与 _initSyncing 区分——_initSyncing 只拦 openWorkbench，这里还要拦住 classList.toggle('hidden')，
+    // 否则用户正开着素材库时切语言，会因 syncTagBench/syncModeBrief 把标签台/简报打开而整块面板被换掉。
+    _langSyncing = true;
     // 语言切换时同步标签工作台（维度下拉与已选标签的显示语言）
     // v2.266 快照防双发：syncTagBench→initTagBench 首次取数并置 tagDimInited=true，活读标志会当轮再取一次；改用调用前快照
     if (typeof syncTagBench === 'function') { const _tagDimWasInited = tagDimInited; syncTagBench(); if (_tagDimWasInited) Api.request('/api/tags/dimensions').then((r) => r.json()).then(fillTagDimSel).catch(() => {}); }
@@ -266,7 +270,10 @@
     if (typeof renderBoardStatus === 'function') renderBoardStatus();
     if (typeof syncFailQuotaHelp === 'function') syncFailQuotaHelp(); // v2.687 失败面板额度指引随语言重刷
     if (typeof syncModeBrief === 'function') syncModeBrief();
+    _langSyncing = false;
     _initSyncing = false;
+    // v2.688 工作台标题随语言刷新：守卫期间不改显隐，这里只补标题，否则英文界面仍显示中文标题
+    if (typeof syncWorkbenchTitle === 'function') syncWorkbenchTitle();
     if (typeof renderNovelLangRow === 'function' && novelAll) { renderNovelLangRow(); renderNovelGrid(); }
     // 语言切换时重渲染管理后台动态内容（tab/表头/按钮均为动态生成）
     const adm = $('view-admin');
@@ -819,7 +826,9 @@
     if (draftProject && !draftProjectMatchesMode(draftProject, selectedMode)) clearDraftProject();
     const panel = $('modeBriefPanel'); if (!panel) return;
     const show = selectedMode !== 'tag';
-    panel.classList.toggle('hidden', !show);
+    // v2.688 切语言期间不动显隐：否则用户正开着别的工作台面板时，简报/子简报会把当前面板顶掉
+    const _toggle = (el, hide) => { if (el && !_langSyncing) el.classList.toggle('hidden', hide); };
+    _toggle(panel, !show);
     if (!show) return;
     const cfg = MODE_BRIEF[selectedMode] || MODE_BRIEF.default;
     const [label, tip] = lang === 'en' ? cfg.en : cfg.zh;
@@ -830,7 +839,7 @@
     const trackBox = $('hitLabTracks');
     if (trackBox) {
       const showTracks = selectedMode === 'spark';
-      trackBox.classList.toggle('hidden', !showTracks);
+      _toggle(trackBox, !showTracks);
       if (showTracks) {
         const RANK = _RANK;
         const myRank = acctRank();
@@ -855,42 +864,42 @@
     }
     // 仅灵感式·素材改编轨道显示文件上传（原作/小说并入此轨道）
     const up = $('briefUpload');
-    if (up) up.classList.toggle('hidden', !(selectedMode === 'spark' && selectedTrack === 'material_rewrite'));
+    if (up) _toggle(up, !(selectedMode === 'spark' && selectedTrack === 'material_rewrite'));
     initBriefUpload();
     // v2.92 采访式创作：选中该模式时展示采访会话面板
     const ivp = $('interviewPanel');
     if (ivp) {
-      ivp.classList.toggle('hidden', selectedMode !== 'interview');
+      _toggle(ivp, selectedMode !== 'interview');
       if (selectedMode === 'interview') initInterviewPanel();
     }
     // v2.329 品牌简报按剧本类型显示（广告/软广脚本），不再绑定模式
     const bbp = $('brandPanel');
     if (bbp) {
       const showBrand = selectedScriptType === 'ad_script';
-      bbp.classList.toggle('hidden', !showBrand);
+      _toggle(bbp, !showBrand);
       if (showBrand) renderBrandPanel();
     }
     // v2.94 热点追更：选中该模式时展示结构化热点简报面板
     const tbp = $('trendPanel');
     if (tbp) {
-      tbp.classList.toggle('hidden', selectedMode !== 'hot');
+      _toggle(tbp, selectedMode !== 'hot');
       if (selectedMode === 'hot') renderTrendPanel();
     }
     // v2.329 互动分支简报按剧本类型显示（互动剧）；v2.332 互动影游共用同一面板
     const brp = $('branchBriefPanel');
     if (brp) {
-      brp.classList.toggle('hidden', !isInteractiveType(selectedScriptType));
+      _toggle(brp, !isInteractiveType(selectedScriptType));
       if (isInteractiveType(selectedScriptType)) renderBranchPanel();
     }
     // v2.329 原作/原文参考：灵感式展示原文输入框（用于 n-gram 重合度侵权检测）
     const stp = $('sourceTextPanel');
     if (stp) {
       const showSource = selectedMode === 'spark';
-      stp.classList.toggle('hidden', !showSource);
+      _toggle(stp, !showSource);
       if (showSource) renderSourceTextPanel();
     }
     // v2.188 主动调 openWorkbench：避免"panel 已是非 hidden 但 layer 未展开"边界（用户重复选当前 mode 时 Observer 不触发）
-    if (typeof openWorkbench === 'function' && !_initSyncing) {
+    if (typeof openWorkbench === 'function' && !_initSyncing && !_langSyncing) {
       const _target = selectedMode === 'interview' ? 'interviewPanel'
         : selectedMode === 'hot' ? 'trendPanel'
         : selectedScriptType === 'ad_script' ? 'brandPanel'
@@ -1539,13 +1548,14 @@
   function syncTagBench() {
     const bench = $('tagBench'); if (!bench) return;
     const show = selectedMode === 'tag';
-    bench.classList.toggle('hidden', !show);
+    // v2.688 切语言期间只刷新文案，不改显隐、不打开面板（否则会把用户正开着的素材库等面板顶掉）
+    if (!_langSyncing) bench.classList.toggle('hidden', !show);
     if (!show) return;
     if (!tagDimInited) { initTagBench(); tagDimInited = true; }
     renderTagChosen();
     if (!tagChosen.length) smartRandomTags(true); // 进入标签模式自动给一组，做到1分钟上手
     // v2.188 主动调 openWorkbench：避免"tagBench 已是非 hidden 但 layer 未展开"边界（用户重复选 tags 模式时 Observer 不触发）
-    if (typeof openWorkbench === 'function' && !_initSyncing) openWorkbench('tagBench');
+    if (typeof openWorkbench === 'function' && !_initSyncing && !_langSyncing) openWorkbench('tagBench');
   }
   function fillTagDimSel(j) {
     const sel = $('tagDim'); if (!sel) return;
@@ -1747,7 +1757,9 @@
       // v2.267 [P2-2b] xiaonanLines 语言跟随"剧本输出语言"(#outLang)，与界面语言相互独立；
       // EN 界面+中文输出时原文行（如"小南提醒：国庆…"）会突兀弹进英文 UI。
       // 双语言一致才弹原文；否则弹界面语言中性就绪提示，推荐理由原文仍完整展示在 tagWhy 区。
-      if (lines[0]) xnSay(lang === outLocale() ? lines[0]
+      // v2.688 自动补一组（silent）不再 toast：进标签模式/切语言时连弹「组合已就绪」＋递招两条，
+      // 在 390px 下会盖住用户正在看的工作台内容；理由仍完整展示在 tagWhy 区，手动换一组仍会提示。
+      if (!silent && lines[0]) xnSay(lang === outLocale() ? lines[0]
         : (lang === 'en' ? 'Fresh tag combo is ready — see why these tags were picked below.'
           : '新的标签组合已就绪，下方可查看推荐理由。'));
       if (typeof craftGo === 'function') craftGo().catch(() => {}); // 随机标签后自动递招，形成“懂市场→给手法”闭环
@@ -2004,7 +2016,13 @@
     const useTagContext = $('tagBench') && !$('tagBench').classList.contains('hidden');
     const ideaEl = useTagContext ? $('tagIdea') : $('craftIdea');
     const idea = (ideaEl?.value || '').trim();
-    if (!useTagContext && !idea) { xnSay(t('craftNeedIdea')); $('craftIdea')?.focus(); return; }
+    if (!useTagContext && !idea) {
+      // v2.688 只在递招台可见时提示：自动补标签会程序化调 craftGo，若用户正开着素材库等别的面板，
+      // 这条「先写一句灵感」toast 既不在上下文里、又会在 390px 下盖住内容。
+      const craftVisible = $('craftBench') && !$('craftBench').classList.contains('hidden');
+      if (craftVisible) { xnSay(t('craftNeedIdea')); $('craftIdea')?.focus(); }
+      return;
+    }
     _craftGoing = true;
     const loading = $('craftLoading'); loading.classList.remove('hidden');
     loading.textContent = lang === 'en' ? 'Matching craft to your idea…' : '小南正在匹配最贴的钩子与方法…';
@@ -2052,6 +2070,9 @@
   // ═══ MODULE: misc (88行, 1fn) ═══ 免费合法小说素材库（多语言，只读外链）
   /* ---------- 免费合法小说素材库（多语言，只读外链） ---------- */
   const NOVEL_LANG_LABEL = { zh: '中文', en: 'English', ja: '日本語', ko: '한국어', es: 'Español', de: 'Deutsch', fr: 'Français', it: 'Italiano', ru: 'Русский', pt: 'Português', ar: 'العربية', multi: '多语' };
+  // v2.688 英文界面的语种名：此前筛选条与卡片都复用中文标签，整条「中文 / 日文 / 俄语」混在英文卡片里
+  const NOVEL_LANG_LABEL_EN = { zh: 'Chinese', en: 'English', ja: 'Japanese', ko: 'Korean', es: 'Spanish', de: 'German', fr: 'French', it: 'Italian', ru: 'Russian', pt: 'Portuguese', ar: 'Arabic', multi: 'Multi' };
+  const novelLangLabel = (l) => (lang === 'en' ? NOVEL_LANG_LABEL_EN[l] : NOVEL_LANG_LABEL[l]) || l;
   const NOVEL_LIC_LABEL = (typeof window !== 'undefined' && window.ZN_DATA && window.ZN_DATA.NOVEL_LIC_LABEL) || {
     public_domain: { zh: '公版', en: 'Public domain' },
     cc: { zh: 'CC授权·遵协议', en: 'CC · per license' },
@@ -2082,7 +2103,7 @@
     all.forEach(({ lang: l }) => {
       const b = document.createElement('button');
       b.type = 'button'; b.className = 'chip novel-lang-chip' + (novelCurLang === l ? ' on' : '');
-      b.textContent = l === '' ? (lang === 'en' ? 'All' : '全部') : (l === 'multi' ? (lang === 'en' ? 'Multi' : '多语') : (NOVEL_LANG_LABEL[l] || l));
+      b.textContent = l === '' ? (lang === 'en' ? 'All' : '全部') : (l === 'multi' ? (lang === 'en' ? 'Multi' : '多语') : novelLangLabel(l));
       b.onclick = () => { novelCurLang = l; renderNovelLangRow(); renderNovelGrid(); };
       row.appendChild(b);
     });
@@ -2095,7 +2116,12 @@
     let list = novelAll.slice();
     if (novelCurLang) list = list.filter((s) => s.langs.includes(novelCurLang) || s.langs.includes('multi'));
     if (adaptOnly) list = list.filter((s) => s.adapt);
-    if (q) list = list.filter((s) => [s.name, s.desc, s.adaptNote, s.id].join(' ').toLowerCase().includes(q));
+    if (q) list = list.filter((s) => [s.name, s.nameEn, s.desc, s.descEn, s.adaptNote, s.adaptNoteEn, s.id].join(' ').toLowerCase().includes(q));
+    // v2.688 结果计数：筛选/搜索后用户看不出「还剩几条」；空态前也要给出总数，避免以为库空了
+    const count = $('novelCount');
+    if (count) count.textContent = lang === 'en'
+      ? `${novelAll.length} sources collected · ${list.length} shown`
+      : `已收录 ${novelAll.length} 个来源 · 当前显示 ${list.length} 个`;
     if (!list.length) {
       const filtered = !!(q || adaptOnly || novelCurLang);
       grid.innerHTML = `<div class="novel-empty"><span class="muted">${lang === 'en' ? 'No source matches.' : '没有匹配的来源'}</span>`
@@ -2113,15 +2139,19 @@
       const lic = NOVEL_LIC_LABEL[s.license] || { zh: s.license, en: s.license };
       const licCls = s.license === 'public_domain' ? 'lic-pd' : (s.license === 'cc' ? 'lic-cc' : 'lic-pf');
       const fmt = s.formats.map((f) => `<span class="novel-fmt">${escapeHtml(f)}</span>`).join('');
-      const langs = s.langs.filter((x) => x !== 'multi').map((x) => NOVEL_LANG_LABEL[x] || x).join(' / ') || (lang === 'en' ? 'Multilingual' : '多语言');
+      const langs = s.langs.filter((x) => x !== 'multi').map((x) => novelLangLabel(x)).join(' / ') || (lang === 'en' ? 'Multilingual' : '多语言');
+      // v2.688 英文界面此前整卡中文：desc/adaptNote 走英文对照，缺对照时回退中文原文
+      const desc = lang === 'en' ? (s.descEn || s.desc) : s.desc;
+      const note = lang === 'en' ? (s.adaptNoteEn || s.adaptNote) : s.adaptNote;
+      const name = lang === 'en' ? (s.nameEn || s.name) : s.name;
       return `<div class="novel-card">
         <div class="novel-card-head">
-          <b>${escapeHtml(s.name)}</b>
+          <b>${escapeHtml(name)}</b>
           <span class="novel-lic ${licCls}">${lang === 'en' ? lic.en : lic.zh}${s.adapt ? ' · ' + (lang === 'en' ? 'adaptable' : '可改编') : ''}</span>
         </div>
-        <div class="muted novel-desc">${escapeHtml(s.desc)}</div>
+        <div class="muted novel-desc"${lang === 'en' ? '' : ' lang="zh"'}>${escapeHtml(desc)}</div>
         <div class="novel-meta"><span>${escapeHtml(langs)}</span>${fmt}</div>
-        <div class="novel-note">${escapeHtml(s.adaptNote)}</div>
+        <div class="novel-note"${lang === 'en' ? '' : ' lang="zh"'}>${escapeHtml(note)}</div>
         <a class="btn-primary novel-go" href="${escapeHtml(s.url)}" target="_blank" rel="noopener noreferrer nofollow">${lang === 'en' ? 'Open site' : '前往下载 / 阅读'} ↗</a>
       </div>`;
     }).join('');
@@ -2855,6 +2885,7 @@
   };
   let _workbenchInited = false;
   let _initSyncing = false; // v2.188 初始化同步守卫：applyLang 期间为 true，syncTagBench/syncModeBrief 不主动调 openWorkbench（避免 layer 自动展开覆盖模式主页）
+  let _langSyncing = false; // v2.688 切语言显隐守卫：applyLang 期间为 true，syncTagBench/syncModeBrief 只刷新文案、不 toggle hidden（避免偷换用户当前打开的工作台面板）
   let _workbenchHideTimer = null; // v2.188 _hideWorkbenchLayer 的 setTimeout id，_showWorkbenchLayer 内 clearTimeout，避免切换 panel 时旧 timer 异步关闭 layer
   const _workbenchPrevHidden = {}; // 记录上次 hidden 状态，只在变化时行动（避免 view-in 等无关类变化触发死循环）
   let _workbenchOpenToken = ''; // v2.266 用户显式打开令牌：openWorkbench 设令牌，Observer 消费一次即放行 view-studio 守卫（后台直达 classList 无令牌仍被拦）
@@ -3030,6 +3061,17 @@
     // v2.243 焦点移入面板：键盘/读屏用户打开后立即可操作；焦点已在 layer 内（如面板重显）不偷焦
     try { if (!layer.contains(document.activeElement)) $('workbenchBack')?.focus(); } catch {}
   }
+  // v2.688 工作台标题按当前语言重刷（切语言时只改标题，不动任何面板显隐）
+  function syncWorkbenchTitle() {
+    const layer = $('workbenchLayer');
+    const id = layer && layer.dataset.current;
+    if (!layer || !id || layer.classList.contains('hidden')) return;
+    const t = WORKBENCH_TITLES[id] || {};
+    const el = $(id);
+    const h = (lang === 'en' ? t.en : t.zh) || (el && el.querySelector('h2,h3,.room-tabs b, [data-i="tbBrTitle"]')?.textContent) || id;
+    const titleEl = $('workbenchTitle');
+    if (titleEl) titleEl.textContent = h;
+  }
   // v2.191 顶部留白统一同步：topbar 换行后高度不定，同步更新 toast 的顶部偏移，
   // 避免 toast 压在导航上
   // v2.462 模态框不再参与：遮罩 z-index(60) 本就高于 topbar(40)，卡片天然盖在浮岛之上，
@@ -3109,8 +3151,9 @@
     if (!detail || !body || !mode) return;
     if (!_modeDetailOpen) _studioGridScrollY = window.scrollY || 0;
 
-    // 1. 隐藏 studio 主区
-    document.querySelectorAll('#view-studio > .section-title, #view-studio > .grid#modeGrid, #view-studio > #scriptTypeBar')
+    // 1. 隐藏 studio 主区（含品牌 hero：否则二级界面落位时 hero 标题被吸顶导航切掉半截，
+    //    在顶栏玻璃背板上透出一条放大的残字，桌面端尤其明显）
+    document.querySelectorAll('#view-studio > .section-title, #view-studio > .grid#modeGrid, #view-studio > #scriptTypeBar, #view-studio > .hero')
       .forEach(el => el.classList.add('hidden'));
 
     // 2. 关掉 workbenchLayer（panel 还在 workbenchBody）
@@ -3200,8 +3243,8 @@
       // v2.344 出本配置还原到一级界面原位置并保持隐藏（一级界面 = 纯模式选择）
       _restoreLevel2Config();
 
-      // 恢复 studio 主区
-      document.querySelectorAll('#view-studio > .section-title, #view-studio > .grid#modeGrid')
+      // 恢复 studio 主区（hero 与网格/标题一起还回来，返回一级界面保持原样）
+      document.querySelectorAll('#view-studio > .section-title, #view-studio > .grid#modeGrid, #view-studio > .hero')
         .forEach(el => el.classList.remove('hidden'));
 
       detail.classList.add('hidden');
@@ -5060,9 +5103,27 @@
       ? 'Cost is settled by the selected engine and your plan; nothing is charged until you start.'
       : '按所选引擎与会员档位结算，生成前不扣费';
     const total = per * eps;
-    if (plan.level === 'FREE' && plan.freeEpsPerDay > 0) return en
-      ? `First ${plan.freeEpsPerDay} eps/day are free; beyond that ${per} pts/ep — this run ${eps} eps ≈ ${total} pts (final at settlement).`
-      : `每日前 ${plan.freeEpsPerDay} 集免积分；超出按 ${per} 积分/集；本单 ${eps} 集约 ${total} 积分（以结算为准）`;
+    if (plan.level === 'FREE' && plan.freeEpsPerDay > 0) {
+      // v2.688 FREE 用户的真实处境：静态文案永远说「每日前 2 集免费」，但今天额度用完时
+      // 用户仍会按这句话规划 20 集，点下去才发现被拦。这里把「今日剩余」和余额一并说清，
+      // 余额不足时直接给出可执行的下一步（改小集数 / 开通会员）。
+      const free = plan.freeEpsPerDay;
+      const freeRemain = (p.freeRemain === null || p.freeRemain === undefined) ? null : Math.max(0, Math.min(free, parseInt(p.freeRemain, 10) || 0));
+      const bal = (p.balance === null || p.balance === undefined) ? null : Math.max(0, parseInt(p.balance, 10) || 0);
+      if (freeRemain === 0) {
+        if (en) return `Today's ${free} free episodes are used up (resets at midnight); this run of ${eps} eps ≈ ${total} pts${bal === null ? '' : `, balance ${bal} pts`}${bal !== null && bal < total ? ' — not enough; reduce the episode count or upgrade to continue' : ''}.`;
+        return `今日免费 ${free} 集已用完（每日 0 点重置）；本单 ${eps} 集约 ${total} 积分${bal === null ? '' : `，当前余额 ${bal} 积分`}${bal !== null && bal < total ? '，余额不足，建议先改小集数或开通会员' : ''}`;
+      }
+      if (freeRemain !== null) {
+        const over = Math.max(0, eps - freeRemain);
+        const overCost = over * per;
+        if (en) return `Today's free episodes left: ${freeRemain} (resets at midnight); ${over ? `${over} overage eps ≈ ${overCost} pts` : 'this run is fully covered by the free quota'}.`;
+        return `今日免费还剩 ${freeRemain} 集（每日 0 点重置）；${over ? `超出 ${over} 集约 ${overCost} 积分` : '本单全部落在免费额度内'}。`;
+      }
+      return en
+        ? `First ${free} eps/day are free; beyond that ${per} pts/ep — this run ${eps} eps ≈ ${total} pts (final at settlement).`
+        : `每日前 ${free} 集免积分；超出按 ${per} 积分/集；本单 ${eps} 集约 ${total} 积分（以结算为准）`;
+    }
     const remain = Math.max(0, parseInt(p.quotaRemain, 10) || 0);
     if (tier === 'ECONOMY' && remain > 0) return en
       ? `Gift episodes are used first (${remain} left); overage ${per} pts/ep.`
@@ -5078,9 +5139,13 @@
     const plan = p.plan, tier = p.tier || 'ECONOMY';
     const per = plan && plan.epPrice ? plan.epPrice[tier] : 0;
     if (!plan || !per) return en ? 'Final at settlement' : '以结算为准';
-    if (plan.level === 'FREE' && plan.freeEpsPerDay > 0) return en
-      ? `${plan.freeEpsPerDay} free eps/day · then ${per} pts/ep`
-      : `每日 ${plan.freeEpsPerDay} 集免费 · 超出 ${per} 积分/集`;
+    if (plan.level === 'FREE' && plan.freeEpsPerDay > 0) {
+      const free = plan.freeEpsPerDay;
+      const freeRemain = (p.freeRemain === null || p.freeRemain === undefined) ? null : Math.max(0, Math.min(free, parseInt(p.freeRemain, 10) || 0));
+      if (freeRemain === 0) return en ? `Today's free quota used · ${per} pts/ep` : `今日免费已用完 · ${per} 积分/集`;
+      if (freeRemain !== null) return en ? `${freeRemain} free eps left today · then ${per} pts/ep` : `今日免费剩 ${freeRemain} 集 · 超出 ${per} 积分/集`;
+      return en ? `${free} free eps/day · then ${per} pts/ep` : `每日 ${free} 集免费 · 超出 ${per} 积分/集`;
+    }
     const remain = Math.max(0, parseInt(p.quotaRemain, 10) || 0);
     if (tier === 'ECONOMY' && remain > 0) return en ? `Gift eps first · then ${per} pts/ep` : `赠送集优先 · 超出 ${per} 积分/集`;
     return en ? `${per} pts/ep` : `${per} 积分/集`;
@@ -5095,12 +5160,40 @@
       plan: myPlan(), en: lang === 'en',
       authed: !!(Api.isAuthed && Api.isAuthed()),
       quotaRemain: sameAcct && me.quota ? me.quota.remain : 0,
+      // v2.688 今日免费剩余/积分余额：只有同一账号才注入，换号后旧数据不得进入新账号估算
+      freeRemain: sameAcct && me.freeToday ? me.freeToday.remain : null,
+      balance: sameAcct && me.points ? me.points.balance : null,
     };
   }
   function syncEpisodeCostHint() {
     const p = _costParams();
     const head = $('modeDetailCost'); if (head) head.textContent = episodeCostShort(p);
-    const bar = $('genCostHint'); if (bar) bar.textContent = episodeCostHint(p);
+    const bar = $('genCostHint'); if (bar) { bar.textContent = episodeCostHint(p); bar.classList.toggle('warn', isFreeQuotaBlocked(p)); }
+    // v2.688 一键修正：今日免费还剩 N 集且本次超过 N → 直接改成 N 集；今日已用完 → 去会员页。
+    // 不让用户读完一段解释后还要自己去猜该点哪个数字。
+    const fix = $('genCostFix');
+    if (fix) {
+      const plan = p.plan;
+      const free = plan && plan.freeEpsPerDay ? plan.freeEpsPerDay : 0;
+      const eps = normalizeEpisodeCount(p.episodes);
+      const remain = (p.freeRemain === null || p.freeRemain === undefined) ? null : Math.max(0, Math.min(free, parseInt(p.freeRemain, 10) || 0));
+      const showFreeFix = plan && plan.level === 'FREE' && free > 0 && remain !== null && remain > 0 && eps > remain;
+      const showVipFix = isFreeQuotaBlocked(p);
+      fix.classList.toggle('hidden', !(showFreeFix || showVipFix));
+      fix.dataset.mode = showVipFix ? 'vip' : 'free';
+      fix.textContent = showVipFix
+        ? (p.en ? 'Upgrade to keep writing' : '开通会员继续创作')
+        : (p.en ? `Write ${remain} free ep${remain > 1 ? 's' : ''} first` : `先写 ${remain} 集（免费）`);
+    }
+  }
+  function isFreeQuotaBlocked(p) {
+    const plan = p.plan;
+    if (!plan || plan.level !== 'FREE') return false;
+    if (p.freeRemain === null || p.freeRemain === undefined) return false;
+    if (Math.max(0, parseInt(p.freeRemain, 10) || 0) > 0) return false;
+    if (p.balance === null || p.balance === undefined) return false;
+    const per = plan.epPrice ? plan.epPrice[p.tier || 'ECONOMY'] : 0;
+    return Math.max(0, parseInt(p.balance, 10) || 0) < per * normalizeEpisodeCount(p.episodes);
   }
   // 目录首次到达前先给「登录可见 / 以结算为准」，到达后重算一次，不让成本栏留白
   function primeEpisodeCostHint() {
@@ -11719,6 +11812,18 @@
   // v2.687 失败面板的额度出口：会员页补充积分 / 免费工具箱先打磨，都是可继续的一步
   $('failQuotaVip').onclick = () => { $('failPanel').classList.add('hidden'); switchView('vip'); };
   $('failQuotaFree').onclick = () => { $('failPanel').classList.add('hidden'); switchView('toolbox'); };
+  // v2.688 成本提示旁的一键修正：免费额度内先写、或额度用完直接去会员页
+  if ($('genCostFix')) $('genCostFix').onclick = () => {
+    const fix = $('genCostFix');
+    if (fix.dataset.mode === 'vip') { switchView('vip'); return; }
+    const plan = myPlan();
+    const free = plan && plan.freeEpsPerDay ? plan.freeEpsPerDay : 0;
+    const me = (typeof meCache !== 'undefined') ? meCache : null;
+    const u = Api.getUser && Api.getUser();
+    const sameAcct = !!(me && u && me.id === u.id);
+    const remain = sameAcct && me.freeToday ? Math.max(0, Math.min(free, parseInt(me.freeToday.remain, 10) || 0)) : 0;
+    if (remain > 0) applyEpisodePreset(remain);
+  };
   // v2.233 取消生成：调后端取消端点（abort 流水线 + 退冻结积分），随后等 cancelled 帧统一走失败态
   $('genCancelBtn').onclick = async () => {
     const as = genSessions.find((s) => s.id === activeSessionId);
