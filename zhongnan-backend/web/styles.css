@@ -1227,6 +1227,16 @@ textarea { box-sizing: border-box; max-width: 100%; resize: vertical; background
 
 /* ================= 资方视角体检 ================= */
 .investor-panel{margin:14px 0;padding:17px;border:1px solid var(--line);border-radius:14px;background:var(--panel-2)}
+/* v2.693 存量作品「投稿体检」：结果页临时进入仅体检模式，只留作品交代条 + 资方体检 + 投稿渠道，
+   避免把不属于这部旧作品的分集/评分空块一起露出来。 */
+#resultPanel[data-mode="investor"] > :not(#investorWorksHead):not(#investorPanel):not(#submissionPanel){display:none}
+.investor-works-head{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:12px;padding:10px 13px;border:1px solid var(--line);border-left:3px solid var(--gold);border-radius:10px;background:var(--panel-2);animation:investor-head-in var(--motion-slow) var(--ease-out)}
+@keyframes investor-head-in{from{opacity:0;transform:translateY(-6px)}to{opacity:1;transform:none}}
+@media (prefers-reduced-motion:reduce){.investor-works-head{animation:none}}
+.investor-works-head b{font-family:var(--serif);font-size:15px}
+/* v2.693 资方体检的维度名（赛道确定性/内容合格线）比质量诊断长，沿用 52px 定宽会在窄屏被逐字折断 */
+.investor-panel .diag-k{width:auto;flex:0 0 auto;min-width:0;white-space:nowrap}
+.investor-panel .diag-track{min-width:60px}
 .investor-head{display:flex;align-items:center;gap:10px;margin-bottom:10px}
 .investor-head b{font-family:var(--serif);font-size:15px}
 .investor-head .spacer{flex:1}

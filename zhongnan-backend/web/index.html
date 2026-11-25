@@ -719,6 +719,13 @@
       </section>
 
       <section class="panel hidden" id="resultPanel">
+        <!-- v2.693 存量作品回看「投稿体检」：进入结果页的仅体检模式，顶部交代在看哪部作品并可退回作品库 -->
+        <div class="investor-works-head hidden" id="investorWorksHead">
+          <b id="investorWorksTitle"></b>
+          <span class="muted" data-i="invWorksSub"></span>
+          <span class="spacer"></span>
+          <button type="button" class="chip" id="investorWorksBack" data-i="invWorksBack"></button>
+        </div>
         <div class="section-title" style="margin-top:0"><h2 data-i="scoreTitle"></h2></div>
         <div class="score-grid" id="scoreGrid"></div>
         <div class="diag-panel hidden" id="diagPanel">
@@ -938,6 +945,7 @@
           <button type="button" class="btn-ghost" id="worksValueBtn" data-i="worksValue"></button>
           <button type="button" class="btn-ghost" id="worksDpBtn" data-i="worksDp"></button>
           <button type="button" class="btn-ghost" id="worksMatBtn" data-i="worksMat"></button>
+          <button type="button" class="btn-ghost" id="worksLensBtn" data-i="worksLens"></button>
         </div>
         <div id="epsList"></div>
       </section>

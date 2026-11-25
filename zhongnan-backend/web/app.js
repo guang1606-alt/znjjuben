@@ -3033,6 +3033,13 @@
     if (bar) bar.querySelectorAll('.mode-hidden').forEach(f => f.classList.remove('mode-hidden'));
   }
 
+  // v2.693 工作台标题真源：仅体检模式下结果页承担的是「投稿体检」，不能再顶着「创作结果」
+  function workbenchTitleOf(id, el) {
+    const titles = WORKBENCH_TITLES[id] || {};
+    if (id === 'resultPanel' && el && typeof el.getAttribute === 'function' && el.getAttribute('data-mode') === 'investor') return t('worksLens');
+    return (lang === 'en' ? titles.en : titles.zh) || (el && el.querySelector('h2,h3,.room-tabs b, [data-i="tbBrTitle"]')?.textContent) || id;
+  }
+
   function _showWorkbenchLayer(id) {
     // v2.343 守卫：modeDetail 打开期间不允许 Observer 重开 workbenchLayer；
     // 用 typeof 防御 vm 测试环境（测试不注入 _modeDetailOpen → ReferenceError 被 Observer 吞）
@@ -3056,12 +3063,8 @@
     // v2.191 动态顶部留白：必须在移除 hidden 后调用（_syncTopbarOffset 内有 !hidden 守卫）
     _syncTopbarOffset();
     // 标题
-    const t = WORKBENCH_TITLES[id] || {};
     const titleEl = $('workbenchTitle');
-    if (titleEl) {
-      const h = (lang === 'en' ? t.en : t.zh) || el.querySelector('h2,h3,.room-tabs b, [data-i="tbBrTitle"]')?.textContent || id;
-      titleEl.textContent = h;
-    }
+    if (titleEl) titleEl.textContent = workbenchTitleOf(id, el);
     // 动画
     layer.classList.remove('view-out'); void layer.offsetWidth;
     // v2.189 生成类工作台显示"生成剧本"按钮（举一反三：所有"配置完即出本"的工作台都提供入口，避免用户返回主页找按钮）
@@ -3079,11 +3082,9 @@
     const layer = $('workbenchLayer');
     const id = layer && layer.dataset.current;
     if (!layer || !id || layer.classList.contains('hidden')) return;
-    const t = WORKBENCH_TITLES[id] || {};
     const el = $(id);
-    const h = (lang === 'en' ? t.en : t.zh) || (el && el.querySelector('h2,h3,.room-tabs b, [data-i="tbBrTitle"]')?.textContent) || id;
     const titleEl = $('workbenchTitle');
-    if (titleEl) titleEl.textContent = h;
+    if (titleEl) titleEl.textContent = workbenchTitleOf(id, el);
   }
   // v2.191 顶部留白统一同步：topbar 换行后高度不定，同步更新 toast 的顶部偏移，
   // 避免 toast 压在导航上
@@ -6402,7 +6403,13 @@
   }
     // @module generate
   const PV = () => window.ProgressView;
-  function resetPanels() { ['progressPanel', 'resultPanel', 'failPanel', 'diagPanel', 'investorPanel'].forEach((id) => $(id).classList.add('hidden')); lastDiagnosis = null; }
+  function resetPanels() {
+    ['progressPanel', 'resultPanel', 'failPanel', 'diagPanel', 'investorPanel'].forEach((id) => $(id).classList.add('hidden'));
+    // v2.693 仅体检模式是临时状态：生成/恢复会话时必须摘掉，否则新结果会只露出体检两块
+    const rp = $('resultPanel'); if (rp) rp.removeAttribute('data-mode');
+    const head = $('investorWorksHead'); if (head) head.classList.add('hidden');
+    lastDiagnosis = null;
+  }
   let waitTipTimer = null; let waitTipIdx = 0;
   /* B2 v2.200：等待期小南课堂——tips 轮播时同步渲染对应工具的方法论卡片（费曼式：SVG 图 + 白话讲解） */
   function renderWaitLesson(idx) {
@@ -10977,6 +10984,44 @@
   const invRefreshBtn = $('invRefreshBtn');
   if (invRefreshBtn) invRefreshBtn.onclick = () => { if (currentProjectId) loadInvestorLens(currentProjectId); };
 
+  // v2.693 存量作品回看「投稿体检」：资方体检与投稿渠道此前只在当次生成后出现，
+  // 从作品库打开旧项目完全走不到「最后一公里」。这里复用同一套面板与接口，
+  // 以仅体检模式进入结果页（CSS 只保留体检/渠道两块），退出时还原项目上下文。
+  let _lensPrevProjectId = null;
+  let _lensProject = null;
+  function openInvestorFromWorks(p) {
+    if (!p || !p.id) return;
+    const panel = $('resultPanel'); if (!panel) return;
+    _lensPrevProjectId = currentProjectId;
+    _lensProject = p;
+    const title = $('investorWorksTitle'); if (title) title.textContent = p.title || '';
+    const head = $('investorWorksHead'); if (head) head.classList.remove('hidden');
+    panel.setAttribute('data-mode', 'investor');
+    panel.classList.remove('hidden');
+    currentProjectId = p.id;
+    switchView('studio');
+    loadInvestorLens(p.id).catch(() => {});
+  }
+  function closeInvestorFromWorks(backToWorks) {
+    const panel = $('resultPanel');
+    if (panel) { panel.removeAttribute('data-mode'); panel.classList.add('hidden'); }
+    ['investorPanel', 'submissionPanel', 'investorWorksHead'].forEach((id) => {
+      const el = $(id); if (el) el.classList.add('hidden');
+    });
+    const from = _lensProject;
+    _lensProject = null;
+    currentProjectId = _lensPrevProjectId;
+    _lensPrevProjectId = null;
+    if (backToWorks) {
+      switchView('works');
+      // 作品库默认回列表（v2.267 会收起详情），但用户是从这部作品进来的：
+      // 还原同一部作品的详情，省得在列表里重新翻找。
+      if (from) openProject(from).catch(() => {});
+    }
+  }
+  const investorWorksBack = $('investorWorksBack');
+  if (investorWorksBack) investorWorksBack.onclick = () => closeInvestorFromWorks(true);
+
   // ═══ MODULE: tags (79行, 2fn) ═══ 投稿渠道推荐（按标签匹配适配平台，商业闭环）
   /* ---------- 投稿渠道推荐（按标签匹配适配平台，商业闭环） ---------- */
   async function loadSubmissionMatch(tags) {
@@ -11647,6 +11692,8 @@
   if ($('worksValueBtn')) $('worksValueBtn').onclick = withWorksProject(openValueCard);
   if ($('worksDpBtn')) $('worksDpBtn').onclick = withWorksProject(openDirectorPack);
   if ($('worksMatBtn')) $('worksMatBtn').onclick = withWorksProject(openMaterials);
+  // v2.693 存量作品投稿体检：物证同上（先锁定 currentProjectId），体检与渠道由结果页面板承接
+  if ($('worksLensBtn')) $('worksLensBtn').onclick = () => { if (currentWorksProject) openInvestorFromWorks(currentWorksProject); };
   // 成熟题材授权管理：授权后此前无查看/撤回入口（合规缺口），studio 常驻入口接 openXMature
   if ($('matureManageBtn')) $('matureManageBtn').onclick = () => openXMature();
 

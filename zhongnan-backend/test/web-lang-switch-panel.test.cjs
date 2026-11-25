@@ -112,6 +112,8 @@ test('v2.688 切语言后工作台标题跟着换：只改标题，不改显隐'
     document: { getElementById: () => null, querySelector: () => null, querySelectorAll: () => [] },
   };
   vm.createContext(context);
+  // v2.693 标题真源抽成 workbenchTitleOf（仅体检模式要改标题），同步注入真实实现
+  vm.runInContext(functions.get('workbenchTitleOf'), context);
   vm.runInContext(functions.get('syncWorkbenchTitle'), context);
   $('workbenchLayer').dataset.current = 'novelSrcBench';
   context.syncWorkbenchTitle();
