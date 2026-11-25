@@ -100,6 +100,71 @@ test('静态契约：窄屏隐藏占位 spacer，标题吃剩余宽度、主按�
   assert.ok(btn && /white-space:\s*nowrap/.test(btn), '窄屏主按钮文字不得换行');
 });
 
+// v2.691 消息内容防御：历史/迁移数据可能把 content 存成对象（旧 schema 或序列化残留），
+// msgHtml 不能直接 String(obj) → "[object Object]"。抽 msgHtml 出来单测。
+let msgHtmlSource = '';
+let msgContentAsTextSource = '';
+(function findMsgFns(node) {
+  if (ts.isFunctionDeclaration(node)) {
+    if (node.name?.text === 'msgHtml') msgHtmlSource = node.getText(roomAst);
+    if (node.name?.text === '_msgContentAsText') msgContentAsTextSource = node.getText(roomAst);
+  }
+  ts.forEachChild(node, findMsgFns);
+})(roomAst);
+
+function msgHarness() {
+  const context = {
+    esc: (s) => String(s == null ? '' : s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])),
+  };
+  context.T = () => ({ me: '我', xn: '小南' });
+  vm.createContext(context);
+  if (msgContentAsTextSource) vm.runInContext(msgContentAsTextSource, context);
+  vm.runInContext(msgHtmlSource, context);
+  return context;
+}
+
+test('msgHtml：content 为对象时不渲染 [object Object]，降级为可读 JSON', () => {
+  assert.ok(msgHtmlSource, '必须能加载真实 msgHtml 实现');
+  const ctx = msgHarness();
+  const html = ctx.msgHtml({ speakerType: 'USER', content: { message: '你好', role: 'USER' } }, { me: '我', xn: '小南' });
+  assert.ok(!html.includes('[object Object]'), `不得出现 [object Object]，实际：${html}`);
+  assert.ok(html.includes('你好') || html.includes('USER'), `对象内容应被降级为可读字符串，实际：${html}`);
+});
+
+test('msgHtml：content 为数组时降级为 JSON 数组，不炸 UI', () => {
+  const ctx = msgHarness();
+  const html = ctx.msgHtml({ speakerType: 'AI', content: ['要点一', '要点二'] }, { me: '我', xn: '小南' });
+  assert.ok(!html.includes('[object Object]'), '数组 content 不得渲染 [object Object]');
+});
+
+test('msgHtml：content 为 null/undefined 时渲染空串，不炸 UI', () => {
+  const ctx = msgHarness();
+  assert.doesNotThrow(() => ctx.msgHtml({ speakerType: 'AI', content: null }, { me: '我', xn: '小南' }));
+  assert.doesNotThrow(() => ctx.msgHtml({ speakerType: 'AI', content: undefined }, { me: '我', xn: '小南' }));
+  const h1 = ctx.msgHtml({ speakerType: 'AI', content: null }, { me: '我', xn: '小南' });
+  const h2 = ctx.msgHtml({ speakerType: 'AI', content: undefined }, { me: '我', xn: '小南' });
+  assert.ok(!h1.includes('[object Object]'));
+  assert.ok(!h2.includes('[object Object]'));
+});
+
+// v2.691 工作台关闭过渡态禁用 pointer-events：_hideWorkbenchLayer 先加 .view-out（220ms 动画）
+// 再加 .hidden。动画期间 layer 仍在 DOM 上有 position:fixed + inset:0 + z-index:60，
+// pointer-events 默认为 auto → 这 220ms 内所有点击都被它吃掉（实测退出登录按钮被拦）。
+test('CSS：工作台 view-out 过渡态禁用 pointer-events，避免拦截顶栏点击', () => {
+  const at = css.indexOf('.workbench-layer.view-out');
+  assert.ok(at > 0, '缺少 .workbench-layer.view-out 规则');
+  // 允许两种等价写法：view-out 本身写 pointer-events:none，或在同一 rule 里声明
+  const windowLen = '.workbench-layer.view-out'.length;
+  const window = css.slice(at, at + 200);
+  assert.match(window, /pointer-events\s*:\s*none/, 'view-out 期间必须禁用 pointer-events');
+});
+
+test('msgHtml：content 为正常字符串时换行仍正确转 <br>', () => {
+  const ctx = msgHarness();
+  const html = ctx.msgHtml({ speakerType: 'USER', content: '第一行\n第二行' }, { me: '我', xn: '小南' });
+  assert.ok(html.includes('<br>'), '字符串换行应正确转为 <br>');
+});
+
 function resumeHarness(kind) {
   const nodes = new Map();
   const calls = { get: [], stream: [], verdict: [], readActions: [] };

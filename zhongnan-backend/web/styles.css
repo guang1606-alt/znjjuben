@@ -1080,7 +1080,9 @@ textarea { box-sizing: border-box; max-width: 100%; resize: vertical; background
 .rm-xn{align-self:flex-start}
 .rm-me{align-self:flex-end;align-items:flex-end}
 .rm-who{font-size:.72rem;color:var(--text-2);margin-bottom:3px;padding:0 4px}
-.rm-bubble{padding:9px 13px;border-radius:12px;font-size:.88rem;line-height:1.6;white-space:normal}
+.rm-bubble{padding:9px 13px;border-radius:12px;font-size:.88rem;line-height:1.6;white-space:normal;animation:zn-bubble-in .26s var(--ease-out, cubic-bezier(.22,.61,.36,1)) both;transform-origin:center bottom}
+@keyframes zn-bubble-in{from{opacity:0;transform:translateY(6px) scale(.96)}to{opacity:1;transform:translateY(0) scale(1)}}
+@media (prefers-reduced-motion: reduce){.rm-bubble{animation:none}}
 .rm-xn .rm-bubble{background:var(--panel);border:1px solid var(--line);border-top-left-radius:3px}
 .rm-me .rm-bubble{background:linear-gradient(150deg,var(--accent),var(--accent-strong));color:var(--on-accent);border-top-right-radius:3px}
 .read-modes{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:8px}
@@ -2304,7 +2306,7 @@ body:has(.ui-dlg-overlay) .toast { --toast-y: 10px; }
   animation: workbench-in var(--motion-slow, .32s) var(--ease-out, cubic-bezier(.22,.61,.36,1)) both;
 }
 .workbench-layer.hidden { display: none; }
-.workbench-layer.view-out { animation: workbench-out var(--motion, .2s) var(--ease-out, cubic-bezier(.22,.61,.36,1)) both; }
+.workbench-layer.view-out { animation: workbench-out var(--motion, .2s) var(--ease-out, cubic-bezier(.22,.61,.36,1)) both; pointer-events: none; }
 .workbench-shell {
   width: 100%; max-width: 1180px;
   background: var(--panel, #fff); border: 1px solid var(--line, #e0d6c0);

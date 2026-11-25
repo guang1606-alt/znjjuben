@@ -154,10 +154,21 @@
     $('rtab-read').classList.toggle('hidden', tab !== 'read');
   }
   // —— 消息流渲染 ——
+  // v2.691：旧数据/迁移可能把 content 存成对象（旧 schema 或 JSON 序列化残留），
+  // 直接 esc(String(obj)) 会渲染 "[object Object]"。统一先规范成字符串：
+  // ① null/undefined → ''；② 对象/数组 → JSON.stringify（压缩，避免消息球太长）；③ 数字 → String。
+  // 消息是单行短文本，复杂对象一般只包含 message/role 等少量字段，JSON 压缩后仍可读。
+  function _msgContentAsText(c) {
+    if (c == null) return '';
+    if (typeof c === 'string') return c;
+    if (typeof c === 'number' || typeof c === 'boolean') return String(c);
+    try { return JSON.stringify(c); } catch { return ''; }
+  }
   function msgHtml(m, t) {
     const mine = m.speakerType === 'USER';
     const name = esc(m.speakerName || (mine ? t.me : t.xn));
-    return `<div class="rm ${mine ? 'rm-me' : 'rm-xn'}"><div class="rm-who">${name}${m.seat && !mine ? ` · ${esc(m.seat)}` : ''}</div><div class="rm-bubble">${esc(m.content).replace(/\n/g, '<br>')}</div></div>`;
+    const body = esc(_msgContentAsText(m.content)).replace(/\n/g, '<br>');
+    return `<div class="rm ${mine ? 'rm-me' : 'rm-xn'}"><div class="rm-who">${name}${m.seat && !mine ? ` · ${esc(m.seat)}` : ''}</div><div class="rm-bubble">${body}</div></div>`;
   }
   // v2.587：发言流只取最近 500 条；hasMore 时顶部给「加载更早」，回看时保持视口锚定（不跳到底部）
   function stream(elId, msgs, opt) {
