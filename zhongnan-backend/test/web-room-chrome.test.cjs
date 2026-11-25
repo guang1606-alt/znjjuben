@@ -8,11 +8,20 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
+const vm = require('node:vm');
+const ts = require('typescript');
 
 const read = (f) => fs.readFileSync(path.join(__dirname, '..', f), 'utf8');
 const html = read('web/index.html');
 const css = read('web/styles.css');
 const i18n = read('web/i18n.js');
+const roomSource = read('web/room-view.js');
+const roomAst = ts.createSourceFile('room-view.js', roomSource, ts.ScriptTarget.Latest, true, ts.ScriptKind.JS);
+let resumeRoomSource = '';
+(function findResumeRoom(node) {
+  if (ts.isFunctionDeclaration(node) && node.name?.text === 'resumeRoom') resumeRoomSource = node.getText(roomAst);
+  ts.forEachChild(node, findResumeRoom);
+})(roomAst);
 
 test('静态契约：历史入口独占 auto 外边距，收起不再参与空白分配', () => {
   assert.match(html, /<button class="chip room-history-chip" id="roomHistoryBtn"[^>]*>/, '历史入口应带 room-history-chip 类');
@@ -89,4 +98,64 @@ test('静态契约：窄屏隐藏占位 spacer，标题吃剩余宽度、主按�
   assert.ok(h2 && /flex:\s*1 1 auto/.test(h2), '窄屏标题应 flex:1 1 auto 吃剩余宽度');
   const btn = ruleBody('.workbench-head #workbenchActions .btn-primary', mediaAt);
   assert.ok(btn && /white-space:\s*nowrap/.test(btn), '窄屏主按钮文字不得换行');
+});
+
+function resumeHarness(kind) {
+  const nodes = new Map();
+  const calls = { get: [], stream: [], verdict: [], readActions: [] };
+  const errors = [];
+  const $ = (id) => {
+    if (!nodes.has(id)) {
+      const classes = new Set();
+      nodes.set(id, {
+        value: '', innerHTML: '', textContent: '',
+        classList: { add: (name) => classes.add(name), remove: (name) => classes.delete(name), contains: (name) => classes.has(name) },
+      });
+    }
+    return nodes.get(id);
+  };
+  const pitch = kind === 'PITCH';
+  const verdict = { decision: 'GO' };
+  const lastRead = { overall: 8 };
+  const room = {
+    id: 'room-1', kind, readMode: 'me_xn', inviteCode: 'ABC123',
+    scriptText: pitch ? '被平台辞退的女骑手重建站点' : '第一场：女骑手雨夜回到旧站点',
+    payload: pitch
+      ? { audience: '25-40岁城市女性', medium: '真人', verdict }
+      : { scriptMode: 'AIGC', lastRead },
+  };
+  const state = { pitchRoom: null, readRoom: null, readMode: 'me_xn', lastVerdict: null, lastRead: null, lastRoomMeta: null };
+  const context = {
+    $, state, console, needAuth: () => true,
+    get: async (url) => { calls.get.push(url); return { room, messages: [{ id: 'm1' }], hasMore: false }; },
+    switchTab: () => {}, stream: (...args) => calls.stream.push(args),
+    renderVerdict: (value) => calls.verdict.push(value), renderReadModes: () => {}, renderReadInfo: () => {},
+    renderReadActions: (value) => calls.readActions.push(value),
+    xnErr: (error) => errors.push(error), errMsg: (error) => error?.message || 'error',
+  };
+  vm.createContext(context);
+  vm.runInContext(resumeRoomSource, context);
+  return { context, $, state, calls, errors };
+}
+
+test('恢复选题会历史时，原始创意、受众与载体随消息和决议一起回填', async () => {
+  assert.ok(resumeRoomSource, '必须能加载真实 resumeRoom 实现');
+  const h = resumeHarness('PITCH');
+  await h.context.resumeRoom({ id: 'room-1', kind: 'PITCH' });
+  assert.deepEqual(h.errors, []);
+  assert.equal(h.$('pitchIdea').value, '被平台辞退的女骑手重建站点');
+  assert.equal(h.$('pitchAud').value, '25-40岁城市女性');
+  assert.equal(h.$('pitchMed').value, '真人');
+  assert.equal(h.state.pitchRoom, 'room-1');
+  assert.equal(h.calls.verdict.length, 1, '既有决议恢复不得回归');
+});
+
+test('恢复围读历史时，原剧本与制式随消息和围读结论一起回填', async () => {
+  const h = resumeHarness('READ');
+  await h.context.resumeRoom({ id: 'room-1', kind: 'READ', readMode: 'me_xn' });
+  assert.deepEqual(h.errors, []);
+  assert.equal(h.$('readScript').value, '第一场：女骑手雨夜回到旧站点');
+  assert.equal(h.$('readFormat').value, 'AIGC');
+  assert.equal(h.state.readRoom, 'room-1');
+  assert.equal(h.calls.readActions.length, 1, '既有围读结论恢复不得回归');
 });

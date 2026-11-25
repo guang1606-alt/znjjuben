@@ -614,6 +614,9 @@
       const j = await get(`/api/room/${rec.id}/messages`);
       if (rec.kind === 'PITCH') {
         state.pitchRoom = rec.id;
+        $('pitchIdea').value = j.room.scriptText || '';
+        $('pitchAud').value = (j.room.payload && j.room.payload.audience) || '';
+        $('pitchMed').value = (j.room.payload && j.room.payload.medium) || '';
         switchTab('pitch');
         stream('pitchStream', j.messages, { roomId: rec.id, hasMore: j.hasMore });
         $('pitchMore').classList.remove('hidden');
@@ -622,6 +625,7 @@
         else $('pitchVerdict').classList.add('hidden');
       } else {
         state.readRoom = rec.id;
+        $('readScript').value = j.room.scriptText || '';
         state.readMode = rec.readMode || j.room.readMode || 'me_xn';
         switchTab('read');
         renderReadModes(state.readMode);
