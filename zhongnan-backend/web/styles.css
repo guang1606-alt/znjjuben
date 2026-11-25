@@ -3253,10 +3253,16 @@ body:has(.ui-dlg-overlay) .toast { --toast-y: 10px; }
 }
 
 @media (max-width: 560px) {
-  .mode-detail-head { padding: 14px 16px 10px; }
+  .mode-detail-head { padding: 12px 16px 10px; gap: 4px 8px; }
   .mode-detail-main { padding: 16px; }
   .mode-detail-side { padding: 14px 16px; }
   .mode-detail-title h3 { font-size: 1rem; }
+  /* v2.695 窄屏二级界面头部重排：返回键与成本徽标共占首行（左右各一），标题与说明独占整行。
+     此前返回键/标题/徽标挤在同一行，390px 下标题列只剩 ~140px，「灵感式创作」被折成竖条。
+     写在这一段而不是前面的断点里：880px 段把徽标 margin 改成 -24px，必须由更靠后的同权重规则覆盖。 */
+  .mode-back { flex: 1 1 auto; margin-top: 0; }
+  .mode-detail-cost { order: 2; margin: 0; }
+  .mode-detail-title { order: 3; flex: 1 1 100%; }
   .persona-card { grid-template-columns: 1fr; }
 }
 

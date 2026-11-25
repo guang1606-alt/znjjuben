@@ -240,6 +240,21 @@ test('openProject：有成稿时显示「继续创作 · 第 N+1 集」，归档
   assert.equal($('worksDetailArchive').textContent, 'worksDetailRestore');
 });
 
+test('v2.695 openProject：列表入口 reveal 时滚到详情头，普通重渲染不抢滚动', async () => {
+  const eps = [{ epNo: 1, version: 1, title: '一', content: '第一集正文', wordCount: 5 }];
+  const scrolls = [];
+  const { context: c, $ } = setup(['openProject', 'renderWorksDetailHead', 'worksDetailMetaHtml', 'workModeLabel', 'nextEpisodeNo', 'projectContinuationMode'], {
+    Api: { request: async () => ({}), jsonOrThrow: async () => eps },
+  });
+  $('worksDetail').scrollIntoView = (arg) => { scrolls.push(arg); };
+  const project = { id: 'p1', title: '有成稿', mode: 'tag', totalEps: 1, engineTier: 'STANDARD', format: 'LIVE_ACTION', status: 'active' };
+  await c.openProject(project, { reveal: true });
+  assert.equal(scrolls.length, 1, '列表入口打开必须滚动一次');
+  assert.equal(scrolls[0].block, 'start');
+  await c.openProject(project);
+  assert.equal(scrolls.length, 1, '刷新/重写后的重渲染不得再次滚动抢位');
+});
+
 test('closeWorksDetail：详情里改过标题/归档态时回列表自动重载，否则只滚回网格', () => {
   let loads = 0;
   const { context: c, $ } = setup(['closeWorksDetail'], { loadWorks: () => { loads++; } });

@@ -375,8 +375,12 @@
     return (allowed[allowed.length - 1] || ENGINE_TIERS[0]).id;
   }
   // v2.330 多方评议（Council）理由缓存：登录后拉取一次（v2.332 起 48 项），锁定项以 title 展示「为什么是这个档」
+  // v2.695 评议摘要是内部席位投票的审计口径（「评议建议…共识 67%」），编导看不懂也不需要看；
+  // 过去它被直接挂到模式卡/引擎/剧本类型的 title 上，普通用户悬停就露出一串内部黑话。
+  // 现改为仅内部账户可见，普通用户侧的锁定项由 renderModes 给出「需 X 会员」的直白提示。
   let councilHints = {};
   function councilText(id) {
+    if (!isStaffAcct()) return '';
     const hints = typeof councilHints === 'undefined' ? null : councilHints;
     const h = hints && hints[String(id)];
     if (!h) return '';
@@ -454,11 +458,20 @@
     const RANK = _RANK;
     const myRank0 = acctRank();
     const TIER_ZH = { basic: '基础', advanced: '高级', pro: '专业' };
+    const TIER_EN = { basic: 'Basic', advanced: 'Advanced', pro: 'Pro' };
     I18N.MODES.forEach((m) => {
       const tierLocked = !m.lock && (RANK[m.free] ?? 0) > myRank0;
       const card = document.createElement('button');
       card.className = 'mode-card' + (m.id === selectedMode ? ' on' : '') + (m.lock ? ' lock' : '') + (tierLocked ? ' tier-lock' : '');
-      const modeHint = councilText('mode:' + m.id); if (modeHint) card.title = modeHint;
+      // v2.695 悬停提示只给两类人：内部账户看评议摘要；档位不足的普通用户看「需 X 会员」。
+      // 档位够用的普通用户不挂 title——卡片已写清模式能做什么，重复一遍只是噪音。
+      if (isStaffAcct()) {
+        const modeHint = councilText('mode:' + m.id); if (modeHint) card.title = modeHint;
+      } else if (tierLocked) {
+        card.title = lang === 'en'
+          ? `Unlock with ${TIER_EN[m.free] || 'higher'} membership — click to see plans`
+          : `需${TIER_ZH[m.free] || '更高等级'}会员解锁，点击查看会员权益`;
+      }
       card.innerHTML = `<b>${D.mode[m.id] || m.id}</b><span>${D.modeDesc[m.id] || ''}</span>` +
         (m.lock ? `<em class="badge lock-badge">${lang === 'en' ? 'gated, age-verified' : '分级授权'}</em>` : '') +
         (tierLocked ? `<em class="badge tier-badge">${lang === 'en' ? `${m.free}+` : `需${TIER_ZH[m.free] || ''}会员`}</em>` : '') +
@@ -4218,7 +4231,7 @@
         if (!isPrivateSessionCurrent(account)) return;
         // v2.665 批量态下点卡片是勾选/取消，不再直接打开项目（避免误触进详情打断批量操作）
         if (worksBulkMode) { toggleWorksSelected(pid); paintWorkCard(c, pid); return; }
-        openProject(p);
+        openProject(p, { reveal: true });
       };
       const pickBtn = c.querySelector('.work-pick');
       if (pickBtn) pickBtn.onclick = (e) => {
@@ -4463,7 +4476,7 @@
     if (worksListDirty) { worksListDirty = false; loadWorks(); return; }
     const grid = $('worksGrid'); if (grid) grid.scrollIntoView({ behavior: 'smooth', block: 'start' });
   }
-  async function openProject(p) {
+  async function openProject(p, opts = {}) {
     const account = capturePrivateSession();
     if (!isPrivateSessionCurrent(account)) return;
     currentWorksProject = p; currentWorksDiagnosis = null;
@@ -4471,6 +4484,15 @@
     const isCurrentProject = () => isPrivateSessionCurrent(account) && currentWorksProject?.id === p.id;
     const stalePanel = document.getElementById('readRewritePanel'); if (stalePanel) stalePanel.remove(); // c200：切作品即清围读面板，防 A 房意见挂到 B 项目
     const detail = $('worksDetail'); detail.classList.remove('hidden');
+    // v2.695 作品详情展开在列表下方：窄屏或有多个作品时，点卡片后详情落在首屏之外，
+    // 手感等同「点了没反应」。仅列表入口显式传 reveal 才滚动，刷新/重写后的重渲染不抢位置。
+    // 延迟到分集内容渲染后再对齐：先滚会按旧页高算落点，内容撑高后详情又落回首屏外。
+    const revealDetail = () => {
+      if (!opts.reveal) return;
+      const reduce = typeof _prefersReducedMotion === 'function' ? _prefersReducedMotion() : false;
+      try { detail.scrollIntoView({ behavior: reduce ? 'auto' : 'smooth', block: 'start' }); }
+      catch { try { detail.scrollIntoView(); } catch { /* 无滚动环境忽略 */ } }
+    };
     const worksBackBtn = $('worksBackBtn'); if (worksBackBtn) worksBackBtn.onclick = () => closeWorksDetail();
     $('worksDetailTitle').textContent = p.title;
     // v2.667 详情头：项目概况 + 就地重命名/归档 + 有成稿即可续写下一集
@@ -4538,6 +4560,7 @@
         + `<div class="zn-retry-row"><button type="button" class="btn-ghost eps-retry">${lang === 'en' ? 'Retry' : '重试'}</button></div>`;
       const retryBtn = $('epsList').querySelector('.eps-retry');
       if (retryBtn) retryBtn.onclick = () => { openProject(p).catch(() => {}); };
+      revealDetail();
       return;
     }
     if (!isCurrentProject()) return;
@@ -4560,6 +4583,7 @@
           .then((full) => resumeAdaptationProject({ ...p, ...full }))
           .catch((e) => toastInfo((e && e.message) || (lang === 'en' ? 'Failed to load project. Please retry.' : '项目详情加载失败，请重试。')));
       };
+      revealDetail();
       return;
     }
     // c202 版本分组：/fix 每改一次新增一行版本，旧逻辑把每一行都渲染成独立 EP 块，改出 v2 后页面出现两个“EP1”。
@@ -4604,6 +4628,7 @@
          <div class="diag-panel hidden" id="propHarvestNote" style="margin-top:10px"></div>
          <div class="diag-panel hidden" id="sceneHarvestNote" style="margin-top:10px"></div>
          <div class="diag-panel hidden" id="worksDiag" style="margin-top:10px"></div>`;
+    revealDetail();
     // c206：作品详情每集"听剧本"入口——回访老作品此前只能进创作台重生成才出现听剧本按钮，
     // 现在直接对最新成稿打开多角色有声播放器；权益不足由 openListen 的 403 分支统一弹升级引导
     $('epsList').querySelectorAll('.ep-listen-btn').forEach((b) => {
