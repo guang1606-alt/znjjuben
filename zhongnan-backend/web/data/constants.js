@@ -4,7 +4,7 @@
   'use strict';
   const C = {};
 // v2.498 运行时版本号（首页更新通知用；bump-version.cjs 同步更新）
-C.ZN_VERSION = '2.696.0';
+C.ZN_VERSION = '2.697.0';
 C.HOME_TOOLS = [
     { id: 'toolPitch', key: 'tbCardPitch', desc: 'tbCardPitchP', cost: 'tbCostPitch' },
     { id: 'toolRead', key: 'tbCardRead', desc: 'tbCardReadP', cost: 'tbCostRead' },
@@ -25,7 +25,7 @@ C.MODE_BRIEF = {
     interview: { zh: ['把你零散的想法先倒在这里', '可以想到哪写到哪：核心创意、世界观、人物、想要的冲突都行；小南会在出本时把它们结构化，也可随时回来补充。'], en: ['Dump your scattered ideas here', 'Write freely: core idea, world, characters, conflicts. Xiaonan structures them at generation; you can come back anytime.'] },
     tag: { zh: ['标签就是你的创作基因', '在下方标签工作台选题材、人设、冲突等维度，系统按组合定向出本；想更准可在这里补一句故事方向。'], en: ['Tags are your creative DNA', 'Pick genre / persona / conflict dimensions in the tag bench below; the system drafts by combination. Add one line of direction here to sharpen it.'] },
     diary: { zh: ['把今天想写的日记写在这里（仅你可见）', '写真实感受即可。落稿前必须由你授权：摘要 / 指定段落 / 全部 三档任选，随时可撤回；未经授权不会进入剧本。'], en: ['Write today’s diary here (visible only to you)', 'Just write what you really feel. Nothing becomes a script until you authorize it: summary / selected passages / full, revocable anytime.'] },
-    spark: { zh: ['写一句话灵感，或粘贴已有素材', '点「AI 提案」让小南先给方向，多轮对话聊到满意；只有你点确认后才落稿。素材改编可在下方切换轨道（素材改编/名场面/爆款逆向）。'], en: ['One-line spark, or paste existing material', 'Tap “AI pitch” for directions, talk it out over turns, and nothing is written until you confirm. Switch tracks below (material rewrite / signature scene / hit reverse).'] },
+    spark: { zh: ['写一句话灵感，或粘贴已有素材', '三条轨道选你当前需要的：素材改编（基础）/ 名场面拓展（高级）/ 爆款逆向批量（专业）；下方切换即可。'], en: ['One-line spark, or paste existing material', 'Three tracks — pick what you need now: material rewrite (Basic) / signature-scene expansion (Advanced) / hit reverse-engineering at scale (Pro). Switch below.'] },
     persona: { zh: ['先定这个「我」是谁', '写清第一人称叙述者的身份、想要什么、最怕什么，以及他/她可能对自己撒的谎；系统用不可靠叙述在前半埋线、后半反转。'], en: ['Define who “I” is first', 'Give the first-person narrator’s identity, want, deepest fear and the lie they may tell themselves; the unreliable narration plants seeds early and pays off as a twist.'] },
     duel: { zh: ['写清对撞的两个人与各自不可退让的立场', 'A 要什么、B 要什么、为什么谁都不能退；系统让两人轮流出招逐轮加码，直到一方无法再退或被迫掀底牌。'], en: ['Describe the two opponents and their non-negotiable stances', 'What A wants, what B wants, why neither can retreat; they trade moves round by round, escalating until one cannot retreat or must show their card.'] },
     multiverse: { zh: ['写清那个「关键选择」', '同一个选择分出 2-4 条世界线：每条线写清路线与代价，最后合并回主线（或明确留白）；系统保证各线自洽、代价可回溯。'], en: ['Describe the pivotal choice', 'One choice forks 2–4 worldlines; state each route and its cost, then merge back to the main line (or leave it open). Every branch stays coherent and its cost traceable.'] },

@@ -127,3 +127,25 @@ test('v2.696 窄屏生成决策区固定到拇指区，避让键盘/悬浮按钮
   assert.match(mobile, /\.mode-detail-side > #genConfigBar[\s\S]*?animation: none/, '配置栏祖先的 transform 动画须关闭');
   assert.match(CSS, /@media \(prefers-reduced-motion: reduce\) \{ \.gen-action-dock \{ animation: none; \} \}/, '行动区入场动效须尊重降动效');
 });
+
+// v2.697 灵感式创作 tip 文案曾承诺「点 AI 提案 → 多轮对话 → 你确认才落稿」，
+// 但详情页根本没有 AI 提案按钮，真实 pitch 流程在编剧室（room-panel）。
+// 文案只能写真实存在的三条轨道；chip 跳转走既有编剧室入口，不造第二套逻辑。
+const APP_TEXT = fs.readFileSync(path.join(ROOT, 'web/app.js'), 'utf8');
+const CONST_TEXT = fs.readFileSync(path.join(ROOT, 'web/data/constants.js'), 'utf8');
+const HTML_TEXT = fs.readFileSync(path.join(ROOT, 'web/index.html'), 'utf8');
+
+test('v2.697 灵感式创作 tip 文案不得承诺不存在的「AI 提案」路径', () => {
+  const zhTip = /spark:\s*\{\s*zh:\s*\[.*?点.*?AI.*?提案/.test(CONST_TEXT) || /spark.*AI\s*提案/.test(APP_TEXT);
+  const enTip = /spark.*AI\s*pitch/.test(APP_TEXT) || /spark.*AI\s*pitch/.test(CONST_TEXT);
+  assert.equal(zhTip, false, '中文 spark tip 不得再出现「AI 提案」这类不存在的入口承诺');
+  assert.equal(enTip, false, '英文 spark tip 不得再出现「AI pitch」这类不存在的入口承诺');
+});
+
+test('v2.697 灵感式创作 chip 存在且复用编剧室入口（不造第二套 pitch 逻辑）', () => {
+  // chip 入口在 HTML 里，走 data-open="roomPanel" 复用既有编剧室
+  assert.ok(/data-open="roomPanel"/.test(HTML_TEXT) || /openRoomPanel/.test(APP_TEXT),
+    'chip 必须复用编剧室入口');
+  // index.html 里有编剧室 panel 本身
+  assert.ok(/id="roomPanel"/.test(HTML_TEXT), '真实编剧室入口 panel 必须存在，供 chip 跳转复用');
+});
