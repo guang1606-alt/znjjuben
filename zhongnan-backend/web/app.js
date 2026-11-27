@@ -8863,7 +8863,7 @@
     const sourcePayload = useCraftBench ? {} : sourceTextPayload();
     const modePayload = useCraftBench ? {} : modeInputPayload();
     // v2.132 多任务并行：每单注册独立会话卡片，genBtn 不再被单任务独占（生成期间可再开新单）
-    const session = { id: 'S' + Date.now() + Math.random().toString(36).slice(2, 6), account, title: projTitle, projectId: null, progress: null, abortCtrl: null, status: 'running', doneData: null, pendingWarnings: null, error: null };
+    const session = { id: 'S' + Date.now() + Math.random().toString(36).slice(2, 6), account, title: projTitle, mode: generationMode, projectId: null, progress: null, abortCtrl: null, status: 'running', doneData: null, pendingWarnings: null, error: null };
     _genStarting = false; // v2.276 建卡前瞬时释放（与下一行 unshift 同同步执行段，二次点击事件无法插入）；卡后即恢复 v2.132 并行
     genSessions.unshift(session); activeSessionId = session.id; renderTaskQueue();
     resetPanels(); $('progressPanel').classList.remove('hidden');
@@ -9017,7 +9017,7 @@
     }
     if (data.stage === 'done') {
       session.status = 'done'; session.doneData = data; renderTaskQueue();
-      if (session.id === activeSessionId) { lastDone = data; renderResult(data, session.projectId); }
+      if (session.id === activeSessionId) { lastDone = data; renderResult(data, session.projectId, session); }
     }
     if (data.stage === 'failed_refunded') {
       session.status = 'failed'; session.error = data.error || 'failed'; renderTaskQueue();
@@ -9142,7 +9142,41 @@
       : '';
     return `<ul class="craft-hard-list">${head}</ul>${more}`;
   }
-  async function renderResult(done, projectId) {
+  // v2.701 创作回执：标签/自动匹配/结构化三模式（角色自述·双人对撞·世界线推演）都会把输入
+  // 合成为一份最终简报交给模型，但这份文字此前对用户全程不可见。结果不符合预期时，作者无法
+  // 判断是「简报被理解偏」还是「生成跑偏」，只能盲目重开（白耗积分）。这里把会话留存的原简报
+  // 与真实模式交还给用户核对；正文走 textContent，自由文本不当 HTML 解析。
+  // 哪些模式的简报由系统合成（用户没亲手写这句话）：标签组合 / 角色自述 / 双人对撞 / 世界线推演
+  const SYNTH_RECEIPT_MODES = ['tag', 'persona', 'duel', 'multiverse'];
+  function setReceiptExpanded(open) {
+    const box = $('briefReceipt'); if (box) box.classList.toggle('expanded', !!open);
+    const body = $('briefReceiptBody'); if (body) body.classList.toggle('collapsed', !open);
+    const btn = $('briefReceiptToggle');
+    if (btn) {
+      btn.setAttribute('aria-expanded', open ? 'true' : 'false');
+      btn.textContent = open ? t('briefReceiptCollapse') : t('briefReceiptExpand');
+    }
+  }
+  function renderBriefReceipt(briefText, mode) {
+    const box = $('briefReceipt');
+    if (!box) return;
+    const text = String(briefText || '').trim();
+    box.classList.toggle('hidden', !text);
+    if (!text) return;
+    const dict = window.I18N && (I18N.DICT[lang] || I18N.DICT.zh);
+    const modeEl = $('briefReceiptMode');
+    if (modeEl) modeEl.textContent = (dict && dict.mode && dict.mode[mode]) || mode || '';
+    const body = $('briefReceiptBody');
+    if (body) body.textContent = text;
+    const sync = $('briefReceiptSync');
+    if (sync) sync.classList.toggle('hidden', SYNTH_RECEIPT_MODES.indexOf(mode) < 0);
+    setReceiptExpanded(false);
+    const toggle = $('briefReceiptToggle');
+    if (toggle) toggle.onclick = () => setReceiptExpanded(toggle.getAttribute('aria-expanded') !== 'true');
+    const cp = $('briefReceiptCopy');
+    if (cp) cp.onclick = () => { copy(text); flashCopied(cp, true); };
+  }
+  async function renderResult(done, projectId, session) {
     currentProjectId = projectId;
     $('progressPanel').classList.add('hidden'); $('resultPanel').classList.remove('hidden'); $('failPanel').classList.add('hidden');
     const sg = done.antiAi || {}, mk = done.market || {};
@@ -9152,6 +9186,7 @@
       [lang === 'en' ? 'Audience' : '受众精准', done.audience?.cravingScore ?? (typeof done.audience === 'number' ? done.audience : '-')],
     ];
     $('scoreGrid').innerHTML = rows.map(([k, v], i) => `<div class="score-cell" style="--score-i:${i}"><b>${escapeHtml(PV().formatDisplayValue(v))}</b><span>${k}</span></div>`).join('');
+    renderBriefReceipt(session && session.briefText, session && session.mode);
     $('sandboxTip').classList.toggle('hidden', !done.sandbox);
     if (done.sandbox) $('sandboxTip').textContent = t('sandboxTip');
     // 受限题材改写法建议（9·1《微短剧发展管理办法》对接，WARN 级不阻断创作）

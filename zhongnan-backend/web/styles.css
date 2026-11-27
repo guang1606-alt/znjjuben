@@ -822,6 +822,50 @@ textarea { box-sizing: border-box; max-width: 100%; resize: vertical; background
   .craft-hard-advice { flex: 1 0 100%; }
 }
 
+/* v2.701 创作回执：结果页顶部交代「这次到底把哪段创意交给模型」。
+   过去合成简报对用户不可见，出本跑偏时只能盲猜。折叠态限 3 行，不抢评分卡的首屏位置。 */
+.brief-receipt {
+  margin: 0 0 12px; padding: 12px 14px; border-radius: var(--radius-sm);
+  background: var(--panel-2); border: 1px solid var(--line);
+  box-shadow: inset 3px 0 0 var(--gold);
+}
+.br-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.br-eyebrow { font-family: var(--serif); font-size: 13px; letter-spacing: .08em; color: var(--gold-text); }
+.br-mode {
+  font-size: 12px; padding: 1px 7px; border-radius: 999px; color: var(--accent-strong);
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+  border: 1px solid color-mix(in srgb, var(--accent) 34%, transparent);
+}
+.br-sync {
+  font-size: 11px; padding: 1px 6px; border-radius: 5px; color: var(--info-text);
+  background: var(--soft-info); border: 1px solid color-mix(in srgb, var(--info-text) 30%, transparent);
+}
+.br-body {
+  margin: 8px 0 0; font-size: 13px; line-height: 1.7; color: var(--text-2);
+  white-space: pre-wrap; word-break: break-word; overflow-wrap: anywhere;
+}
+.br-body.collapsed {
+  display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3; line-clamp: 3;
+  overflow: hidden; position: relative;
+}
+.brief-receipt.expanded .br-body {
+  max-height: 46vh; overflow-y: auto; padding-right: 4px;
+}
+.br-hint { margin: 8px 0 0; font-size: 12px; line-height: 1.6; color: var(--text-2); opacity: .86; }
+.br-toggle { font-variant-numeric: tabular-nums; }
+.brief-receipt.expanded .br-toggle { border-color: var(--accent); color: var(--accent-strong); }
+@media (prefers-reduced-motion: no-preference) {
+  .br-body { transition: max-height var(--motion-slow) var(--ease-out); }
+  .brief-receipt.expanded { animation: brReveal .22s var(--ease-out) both; }
+}
+@keyframes brReveal { from { opacity: .6; transform: translateY(-2px); } to { opacity: 1; transform: none; } }
+@media (max-width: 560px) {
+  /* 窄屏首行放不下「回执 + 模式 + 合成标记 + 两枚按钮」：让操作独立成行，避免挤压成竖排单字 */
+  .br-head { gap: 6px; }
+  .br-head .spacer { flex-basis: 100%; height: 0; }
+  .br-body { font-size: 12.5px; }
+}
+
 /* ================= 登录 / 模态 ================= */
 .modal-mask{position:fixed;inset:0;background:rgba(38,32,18,.42);backdrop-filter:blur(4px);display:flex;align-items:center;justify-content:center;z-index:60;padding:20px}
 /* v2.493 弹窗层级修复：全站 17 个 .modal-mask 都嵌在 <main class="wrap"> 内，而 .wrap 的

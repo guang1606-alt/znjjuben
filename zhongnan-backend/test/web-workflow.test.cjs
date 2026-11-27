@@ -75,6 +75,8 @@ function setup(names, extra = {}) {
   vm.createContext(context);
   // v2.221 加载/空态统一：被抽取函数（openProject/switchSession 等）依赖 znSkeleton/znEmpty*，先注入真实实现
   for (const name of ['_znEsc', 'znSkeletonHtml', 'znSkeleton', 'znEmptyHtml', 'znEmpty', 'clampEngineTier', 'acctRank', 'engineLabel',
+    // v2.701 结果页创作回执：renderResult 现在会调 renderBriefReceipt（无会话简报时提前返回，不碰 I18N）
+    'renderBriefReceipt', 'setReceiptExpanded',
     // v2.689 会员单价/年卡省文案 helper：loadCatalog→renderPlans 调用，逐函数求值需预置
     '_fmtYuanFromPoints', 'formatPerEpPerk', 'formatYearSave',
     // v2.668 集数口径单一真源

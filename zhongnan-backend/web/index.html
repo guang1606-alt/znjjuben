@@ -728,6 +728,21 @@
           <span class="spacer"></span>
           <button type="button" class="chip" id="investorWorksBack" data-i="invWorksBack"></button>
         </div>
+        <!-- v2.701 创作回执：标签/自动匹配/结构化三模式都会把用户输入「合成」成一份最终简报交给模型，
+             但这份文字此前对用户全程不可见——出本不符合预期时，作者无法区分「简报被理解偏」还是
+             「生成跑偏」，只能盲目重开（白耗积分）。这里把真正提交的简报原文交还给用户核对。 -->
+        <div class="brief-receipt hidden" id="briefReceipt">
+          <div class="br-head">
+            <span class="br-eyebrow" data-i="briefReceiptEyebrow">创作回执</span>
+            <span class="br-mode" id="briefReceiptMode"></span>
+            <span class="br-sync hidden" id="briefReceiptSync" data-i="briefReceiptSync">系统合成</span>
+            <span class="spacer"></span>
+            <button type="button" class="chip" id="briefReceiptCopy" data-i="briefReceiptCopy">复制</button>
+            <button type="button" class="chip br-toggle" id="briefReceiptToggle" aria-expanded="false" aria-controls="briefReceiptBody" data-i="briefReceiptExpand">展开核对</button>
+          </div>
+          <p class="br-body collapsed" id="briefReceiptBody"></p>
+          <p class="br-hint" data-i="briefReceiptHint">如果这段创意被理解偏了，复制后改一版重新出本，比反复重试更省积分。</p>
+        </div>
         <div class="section-title" style="margin-top:0"><h2 data-i="scoreTitle"></h2></div>
         <div class="score-grid" id="scoreGrid"></div>
         <div class="diag-panel hidden" id="diagPanel">
