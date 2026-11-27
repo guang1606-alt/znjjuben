@@ -4,7 +4,7 @@
   'use strict';
   const C = {};
 // v2.498 运行时版本号（首页更新通知用；bump-version.cjs 同步更新）
-C.ZN_VERSION = '2.698.0';
+C.ZN_VERSION = '2.699.0';
 C.HOME_TOOLS = [
     { id: 'toolPitch', key: 'tbCardPitch', desc: 'tbCardPitchP', cost: 'tbCostPitch' },
     { id: 'toolRead', key: 'tbCardRead', desc: 'tbCardReadP', cost: 'tbCostRead' },
@@ -22,6 +22,10 @@ C.X_REGIONS = [
   ];
 
 C.MODE_BRIEF = {
+    // v2.699 补齐 auto：v2.328 加自动模式时只往 app.js 兜底字面量加了这一条，本唯一真源漏加，
+    // 真机 auto 详情页一直落 default「谁、遇到什么麻烦、准备怎么反击」——把支持改编/拆解/口播的
+    // 自动路由说成只能写故事，削弱能力承诺（guard-mode-wiring 常驻设卡）。
+    auto: { zh: ['直接写你想做什么，系统自动匹配模式', '例如「做个30秒抖音带货口播，前三秒要抓人」「把这部小说改成竖屏短剧」「拆解这部剧的爆款结构，批量出新本」——不用自己选模式，生成前会告诉你匹配到了什么，可随时改。'], en: ['Just describe what you want — mode is auto-picked', 'e.g. "a 30s TikTok voiceover with a 3-second hook", "adapt this novel into a vertical drama", "deconstruct this hit and batch out safe new drafts". No mode picking needed; we tell you what we matched before generating, and you can change it.'] },
     interview: { zh: ['把你零散的想法先倒在这里', '可以想到哪写到哪：核心创意、世界观、人物、想要的冲突都行；小南会在出本时把它们结构化，也可随时回来补充。'], en: ['Dump your scattered ideas here', 'Write freely: core idea, world, characters, conflicts. Xiaonan structures them at generation; you can come back anytime.'] },
     tag: { zh: ['标签就是你的创作基因', '在下方标签工作台选题材、人设、冲突等维度，系统按组合定向出本；想更准可在这里补一句故事方向。'], en: ['Tags are your creative DNA', 'Pick genre / persona / conflict dimensions in the tag bench below; the system drafts by combination. Add one line of direction here to sharpen it.'] },
     diary: { zh: ['把今天想写的日记写在这里（仅你可见）', '写真实感受即可。落稿前必须由你授权：摘要 / 指定段落 / 全部 三档任选，随时可撤回；未经授权不会进入剧本。'], en: ['Write today’s diary here (visible only to you)', 'Just write what you really feel. Nothing becomes a script until you authorize it: summary / selected passages / full, revocable anytime.'] },

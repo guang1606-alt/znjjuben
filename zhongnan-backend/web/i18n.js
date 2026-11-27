@@ -235,7 +235,7 @@
       tbTdBoom: '为什么好 · 为什么爆', tbTdTech: '可取技法（已同步进创作技能）', tbTdTagsL: '勾选要保留的标签（可增删，决定改编基因）',
       tbTdDirsL: '改编方向（只借底层逻辑，不抄表达）', tbTdOutline: '生成改编大纲（基础20/高级16/专业12积分）',
       mode: {
-        auto: '自动匹配', tag: '标签创建', interview: '采访式创作', diary: '日记式创作', spark: '灵感式创作',
+        auto: '自动匹配', tag: '标签创建', tags: '标签创建', interview: '采访式创作', diary: '日记式创作', spark: '灵感式创作',
         hot: '实时热点', persona: '角色自述式', duel: '双人对撞式', multiverse: '世界线推演式',
         // 历史 wire-id 仅保留展示名（老项目卡片/详情仍可能回传旧 mode）
         adapt: '创意改编', interactive: '互动短剧', hit_lab: '爆款拆解·名场面', shortvideo: '爆款短视频脚本',
