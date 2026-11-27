@@ -3542,6 +3542,18 @@
     const run = $('lintRunBtn');
     if (run) run.click();
   });
+  // v2.700 结果页硬伤折叠展开：卡内前 3 条直接可读，其余由按钮切换（触屏可用，不依赖 hover）
+  document.addEventListener('click', (e) => {
+    const btn = e.target && e.target.closest && e.target.closest('[data-craft-more]');
+    if (!btn) return;
+    const box = btn.parentNode && btn.parentNode.querySelector('.craft-more');
+    if (!box) return;
+    const willOpen = box.hasAttribute('hidden');
+    if (willOpen) box.removeAttribute('hidden'); else box.setAttribute('hidden', '');
+    btn.textContent = willOpen ? (btn.getAttribute('data-less-label') || '') : (btn.getAttribute('data-more-label') || '');
+    btn.classList.toggle('open', willOpen);
+    btn.setAttribute('aria-expanded', willOpen ? 'true' : 'false');
+  });
   // 首次 DOM 就绪后初始化（含静态转移）
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', () => { _initWorkbenchLayer(); _syncTopbarOffset(); });
   else { _initWorkbenchLayer(); _syncTopbarOffset(); }
@@ -9097,6 +9109,39 @@
         : `<div class="ad-ok">${en ? 'No production risk detected — this episode can be scheduled as written.' : '未发现制片风险，这一集可直接排通告。'}</div>`}`;
   }
 
+  // v2.700 结果页硬伤改法「卡内可见」：此前 20 张诊断卡把「哪几处硬伤、怎么改」全塞进
+  // 元素 title 悬停属性——触屏没有 hover，390px 手机上用户只看到「76/100 · 3 处硬伤」，
+  // 具体改法一个字都读不到，而改稿建议正是这个工具最核心的价值。
+  // 这里按 P0 → P1 → P2、同级低分优先排序，前 3 条直接展开在卡里，其余折叠进 .craft-more，
+  // 由可点按钮展开；title 保留作桌面端补充，不再是唯一入口。
+  function craftIssueRowsHtml(issues) {
+    const order = { P0: 0, P1: 1, P2: 2 };
+    const list = Array.isArray(issues) ? issues.filter(Boolean) : [];
+    if (!list.length) return '';
+    const en = lang === 'en';
+    const sorted = list.slice().sort((a, b) => {
+      const d = (order[String(a.level || '').toUpperCase()] ?? 9) - (order[String(b.level || '').toUpperCase()] ?? 9);
+      if (d) return d;
+      return (Number(a.score) || 0) - (Number(b.score) || 0);
+    });
+    const LIMIT = 3;
+    const row = (it) => {
+      const lv = String(it.level || '').toUpperCase();
+      return `<li class="craft-hard-row" data-level="${escapeHtml(lv)}">`
+        + `<b class="craft-hard-lv">${escapeHtml(lv || '·')}</b>`
+        + `<span class="craft-hard-dim">${escapeHtml(it.dim || '')}</span>`
+        + `<span class="craft-hard-advice">${escapeHtml(it.advice || '')}</span></li>`;
+    };
+    const head = sorted.slice(0, LIMIT).map(row).join('');
+    const rest = sorted.slice(LIMIT);
+    const moreLabel = en ? `Show all ${rest.length} more` : `展开全部 ${rest.length} 条`;
+    const lessLabel = en ? 'Show less' : '收起';
+    const more = rest.length
+      ? `<ul class="craft-hard-rest craft-more" hidden>${rest.map(row).join('')}</ul>`
+        + `<button type="button" class="chip craft-more-btn" data-craft-more data-more-label="${escapeHtml(moreLabel)}" data-less-label="${escapeHtml(lessLabel)}">${escapeHtml(moreLabel)}</button>`
+      : '';
+    return `<ul class="craft-hard-list">${head}</ul>${more}`;
+  }
   async function renderResult(done, projectId) {
     currentProjectId = projectId;
     $('progressPanel').classList.add('hidden'); $('resultPanel').classList.remove('hidden'); $('failPanel').classList.add('hidden');
@@ -9186,15 +9231,16 @@
         const hard = [...(cl.p0 || []), ...(cl.p1 || [])];
         const avg = typeof cl.avg === 'number' ? cl.avg : 0;
         const color = avg >= 80 ? 'var(--grade-good)' : avg >= 60 ? 'var(--grade-warn)' : 'var(--danger-text)';
+        const hardRows = craftIssueRowsHtml(hard.length ? hard : cl.issues);
         if (hard.length) {
-          clTip.innerHTML = (lang === 'en'
+          clTip.innerHTML = `<div class="craft-hard-head">${lang === 'en'
             ? `<b style="color:${color}">Craft score ${avg}/100</b> · ${hard.length} hard issue(s): ${hard.map((i) => i.dim).join(', ')}`
-            : `<b style="color:${color}">编剧改稿尺子 ${avg}/100</b> · ${hard.length} 处硬伤：${hard.map((i) => i.dim).join('、')}`);
+            : `<b style="color:${color}">编剧改稿尺子 ${avg}/100</b> · ${hard.length} 处硬伤：${hard.map((i) => i.dim).join('、')}`}</div>${hardRows}`;
           clTip.title = hard.map((i) => `[${i.level}] ${i.dim}: ${i.advice}`).join('\n');
         } else {
-          clTip.innerHTML = (lang === 'en'
+          clTip.innerHTML = `<div class="craft-hard-head">${lang === 'en'
             ? `<b style="color:${color}">Craft score ${avg}/100</b> · no hard issues, ${cl.issues.length} advisory note(s).`
-            : `<b style="color:${color}">编剧改稿尺子 ${avg}/100</b> · 无硬伤，${cl.issues.length} 条优化建议`);
+            : `<b style="color:${color}">编剧改稿尺子 ${avg}/100</b> · 无硬伤，${cl.issues.length} 条优化建议`}</div>${hardRows}`;
           clTip.title = cl.issues.map((i) => `[${i.level}] ${i.dim}(${i.score}): ${i.advice}`).join('\n');
         }
         // v2.511 生成后 → 完整体检闭环：抽检卡只给汇总，要看逐条硬伤与改法就一键送进剧本体检
@@ -9211,9 +9257,11 @@
         const avg = typeof cd.avg === 'number' ? cd.avg : 0;
         const color = avg >= 80 ? 'var(--grade-mid)' : avg >= 60 ? 'var(--grade-warn)' : 'var(--danger-text)';
         const subs = [cd.emotion, cd.webnovel, cd.archetype, cd.narrative].filter(Boolean);
-        cdTip.innerHTML = (lang === 'en'
+        // v2.700 与「改稿尺子」同源：四套进阶尺子的硬伤也必须卡内可读，不能只塞 title
+        const cdRows = craftIssueRowsHtml([...(cd.p1 || []), ...(cd.p2 || [])]);
+        cdTip.innerHTML = `<div class="craft-hard-head">${lang === 'en'
           ? `<b style="color:${color}">Craft depth ${avg}/100</b> · ${subs.map((s) => `${s.avg}`).join('/')} across emotion/webnovel/archetype/narrative${hard ? ` · ${hard} hard issue(s)` : ''}`
-          : `<b style="color:${color}">创作深度 ${avg}/100</b> · 情绪/网文/原型/叙事 ${subs.map((s) => s.avg).join('/')}${hard ? ` · ${hard} 处硬伤` : ''}`);
+          : `<b style="color:${color}">创作深度 ${avg}/100</b> · 情绪/网文/原型/叙事 ${subs.map((s) => s.avg).join('/')}${hard ? ` · ${hard} 处硬伤` : ''}`}</div>${cdRows}`;
         cdTip.title = [...(cd.p1 || []), ...(cd.p2 || [])].map((i) => `[${i.level}] ${i.dim}: ${i.advice}`).join('\n') || '';
       } else cdTip.classList.add('hidden');
     }

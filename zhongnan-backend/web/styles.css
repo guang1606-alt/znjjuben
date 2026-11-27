@@ -790,6 +790,38 @@ textarea { box-sizing: border-box; max-width: 100%; resize: vertical; background
  * 不再是同一种灰底糊成一片；颜色仍全部来自主题令牌，四套主题各自达标。 */
 #resultPanel .notice[style*="--tone"] { background: color-mix(in srgb, var(--panel) 90%, var(--tone) 10%); }
 
+/* v2.700 结果页硬伤改法卡内可见：此前「怎么改」只活在元素 title 里，触屏无 hover 等于不存在。
+ * 卡内前 3 条直接列出（级别徽标 + 维度 + 改法），其余折叠；级别色沿用主题令牌，
+ * P0 用危险色、P1 用警示色、P2 用中性色，一眼分得出轻重。 */
+.craft-hard-head { margin-bottom: 6px; }
+.craft-hard-list, .craft-hard-rest { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; }
+.craft-hard-rest { margin-top: 4px; }
+.craft-hard-row { display: flex; align-items: baseline; gap: 8px; font-size: 13px; line-height: 1.55; }
+.craft-hard-lv {
+  flex: 0 0 auto; min-width: 26px; text-align: center; font-size: 11px; font-weight: 700;
+  letter-spacing: .02em; padding: 1px 5px; border-radius: 5px;
+  border: 1px solid color-mix(in srgb, var(--craft-lv-tone, var(--line)) 55%, transparent);
+  color: var(--craft-lv-tone, var(--text-2));
+  background: color-mix(in srgb, var(--craft-lv-tone, var(--line)) 10%, transparent);
+}
+.craft-hard-row[data-level="P0"] { --craft-lv-tone: var(--danger-text); }
+.craft-hard-row[data-level="P1"] { --craft-lv-tone: var(--grade-warn); }
+.craft-hard-row[data-level="P2"] { --craft-lv-tone: var(--text-2); }
+.craft-hard-dim { flex: 0 0 auto; font-weight: 600; color: var(--text); }
+.craft-hard-advice { flex: 1 1 auto; min-width: 0; color: var(--text-2); }
+.craft-more-btn { margin-top: 6px; }
+.craft-more-btn.open { border-color: var(--accent); color: var(--accent-strong); }
+@media (prefers-reduced-motion: no-preference) {
+  .craft-hard-rest { animation: craftFoldIn .18s ease-out both; }
+}
+@keyframes craftFoldIn { from { opacity: 0; transform: translateY(-3px); } to { opacity: 1; transform: none; } }
+@media (max-width: 560px) {
+  /* 窄屏把「维度」单独一行，避免级别+维度+改法挤成三段断句 */
+  .craft-hard-row { flex-wrap: wrap; gap: 4px 8px; }
+  .craft-hard-dim { flex: 1 0 auto; }
+  .craft-hard-advice { flex: 1 0 100%; }
+}
+
 /* ================= 登录 / 模态 ================= */
 .modal-mask{position:fixed;inset:0;background:rgba(38,32,18,.42);backdrop-filter:blur(4px);display:flex;align-items:center;justify-content:center;z-index:60;padding:20px}
 /* v2.493 弹窗层级修复：全站 17 个 .modal-mask 都嵌在 <main class="wrap"> 内，而 .wrap 的
