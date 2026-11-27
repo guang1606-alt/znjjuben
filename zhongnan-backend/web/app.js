@@ -3423,7 +3423,7 @@
       const card = document.createElement('div');
       card.className = 'dyn-mode-block mode-section persona-card';
       card.innerHTML = `
-        <div class="mode-section-title"><span>${en ? 'First-person narrator' : '第一人称叙述者'}</span><em class="muted">${en ? 'Fill four fields; the system plants clues through unreliable narration' : '填四个字段，系统用不可靠叙述在线索'}</em></div>
+        <div class="mode-section-title"><span>${en ? 'First-person narrator' : '第一人称叙述者'}</span><em class="muted">${en ? 'Fill four fields; the system plants clues through unreliable narration' : '填四个字段，系统用不可靠叙述埋线索'}</em></div>
         <label><span>${en ? 'Who they are (identity / job / situation)' : '他 / 她是谁（身份 / 职业 / 处境）'}</span><textarea id="personaIdentity" rows="2" placeholder="${en ? 'A 32-year-old ER doctor just made attending, marriage on the edge of existing in name only' : '32 岁急诊医生，刚升主治，婚姻在名存实亡边缘'}"></textarea></label>
         <label><span>${en ? 'What they want most (worth risking their life for)' : '他 / 她最想要什么（可以拿命换的）'}</span><textarea id="personaWant" rows="2" placeholder="${en ? 'To uncover the truth behind that surgery three years ago, even if it costs them their career' : '把三年前那场手术的真相查出来，哪怕砸掉自己的饭碗'}"></textarea></label>
         <label><span>${en ? 'What they fear most (cannot face)' : '他 / 她最怕什么（不敢面对的）'}</span><textarea id="personaFear" rows="2" placeholder="${en ? 'That they already knew the truth and simply refused to admit it' : '害怕自己其实早就知道真相，只是不敢承认'}"></textarea></label>
@@ -7521,6 +7521,47 @@
     }
     return {};
   }
+  // v2.698 角色自述 / 双人对撞 / 世界线推演：详情页只挂结构化字段卡片，modeBriefPanel 留在
+  // 隐藏的 workbenchBody 里（用户看不到、高度 0），而出本流程此前只认 #modeBrief 文本——
+  // 用户把字段填满仍被「先在上方输入框写清你的创意」拦死。字段就是这三个模式的全部创作事实源，
+  // 这里把字段合成为创意简报；全空返回空串，由调用方给可见表单引导。
+  function structuredModeBrief() {
+    const v = (id) => { const el = $(id); return el ? String(el.value || '').trim() : ''; };
+    const en = lang === 'en';
+    const TBD = en ? 'TBD' : '（待定）';
+    if (selectedMode === 'persona') {
+      const p = { identity: v('personaIdentity'), want: v('personaWant'), fear: v('personaFear'), lie: v('personaLie') };
+      if (!Object.values(p).some(Boolean)) return '';
+      return en
+        ? `First-person narrator — who: ${p.identity || TBD}; deepest want: ${p.want || TBD}; deepest fear: ${p.fear || TBD}; the lie told to themselves: ${p.lie || TBD}. Tell it in first person with unreliable narration: plant the lie early, tear it open late.`
+        : `第一人称自述：我是${p.identity || TBD}；最想要${p.want || TBD}；最怕${p.fear || TBD}；对自己撒的谎是${p.lie || TBD}。用第一人称不可靠叙述推进：前半埋谎，后半撕开。`;
+    }
+    if (selectedMode === 'duel') {
+      const a = { identity: v('duelAIdentity'), want: v('duelAWant'), line: v('duelALine') };
+      const b = { identity: v('duelBIdentity'), want: v('duelBWant'), line: v('duelBLine') };
+      if (!Object.values(a).some(Boolean) && !Object.values(b).some(Boolean)) return '';
+      return en
+        ? `Head-to-head duel — A: ${a.identity || TBD} wants ${a.want || TBD}, cannot retreat because ${a.line || TBD}; B: ${b.identity || TBD} wants ${b.want || TBD}, cannot retreat because ${b.line || TBD}. They trade moves round by round, escalating until one shows their final card or is forced to yield.`
+        : `双人对撞：A 是${a.identity || TBD}，要${a.want || TBD}，不能退因为${a.line || TBD}；B 是${b.identity || TBD}，要${b.want || TBD}，不能退因为${b.line || TBD}。两人轮流出招、逐轮加码，直到一方掀底牌或被迫妥协。`;
+    }
+    if (selectedMode === 'multiverse') {
+      const choice = v('mvChoice');
+      const box = $('mvChoices');
+      const lines = box ? [...box.querySelectorAll('.multiverse-choice')].map((row, i) => ({
+        no: String.fromCharCode(65 + i),
+        route: String((row.querySelector('.mv-line-route') || {}).value || '').trim(),
+        cost: String((row.querySelector('.mv-line-cost') || {}).value || '').trim(),
+      }).filter((l) => l.route)) : [];
+      if (!choice && !lines.length) return '';
+      const lineTxt = lines.length
+        ? lines.map((l) => (en ? `${l.no}: ${l.route} (cost: ${l.cost || TBD})` : `${l.no} 线走「${l.route}」，代价是${l.cost || TBD}`)).join(en ? '; ' : '；')
+        : (en ? 'No worldline filled yet.' : '世界线暂未填写。');
+      return en
+        ? `Pivotal choice: ${choice || TBD}. Worldlines — ${lineTxt}. Keep every line self-consistent, then merge their lessons back into the main ending (or leave it explicitly open).`
+        : `关键选择：${choice || TBD}。世界线：${lineTxt}。每条线保持自洽，最后把各线的教训合并回主线结局（或明确留白）。`;
+    }
+    return '';
+  }
   // —— v2.167 资产看板：跨族热度榜 + 空壳补全优先级队列（L3 运营决策面，三族共用入口） ——
   // 痛点：编导沉淀一堆资产后，不知道"哪些是明星资产/哪些待激活/空壳该先补哪个"。
   // dashboard 端点聚合三族：热度榜 top10（按 usedCount 降序）+ 空壳补全队列（score<55，缺失维度越少越优先）。
@@ -8770,15 +8811,26 @@
           ivIdeaValue = fromIv;
         }
       }
+      // v2.698 结构化三模式：简报框留在隐藏工作台里不可见，字段才是事实源 → 由字段合成简报
+      if (!brief && (selectedMode === 'persona' || selectedMode === 'duel' || selectedMode === 'multiverse')) {
+        brief = structuredModeBrief();
+      }
       if (!brief) {
-        xnSay(selectedMode === 'interview'
-          ? ivT().needIdea
-          : (lang === 'en' ? 'Please fill in your idea above first.' : '先在上方输入框写清你的创意，小南才能开工～'));
-        if (selectedMode === 'interview') { $('interviewPanel')?.classList.remove('hidden'); $('ivAnswer')?.focus(); }
-        else { $('modeBrief')?.focus(); $('modeBriefPanel')?.classList.remove('hidden'); }
+        if (selectedMode === 'interview') {
+          xnSay(ivT().needIdea);
+          $('interviewPanel')?.classList.remove('hidden'); $('ivAnswer')?.focus();
+        } else if (selectedMode === 'persona' || selectedMode === 'duel' || selectedMode === 'multiverse') {
+          // 提示必须指回详情页上真正可见的字段，而不是用户根本看不到的 #modeBrief
+          xnSay(t(selectedMode === 'persona' ? 'personaNeedFill' : (selectedMode === 'duel' ? 'duelNeedFill' : 'mvNeedFill')));
+          $(selectedMode === 'persona' ? 'personaIdentity' : (selectedMode === 'duel' ? 'duelAIdentity' : 'mvChoice'))?.focus();
+        } else {
+          xnSay(lang === 'en' ? 'Please fill in your idea above first.' : '先在上方输入框写清你的创意，小南才能开工～');
+          $('modeBrief')?.focus(); $('modeBriefPanel')?.classList.remove('hidden');
+        }
         return;
       }
-      projTitle = generationDraft?.title || brief.slice(0, 40);
+      // v2.698 标题按首句切：结构化三模式合成简报较长，硬截 40 字会停在「最怕」这类半个从句上
+      projTitle = generationDraft?.title || (brief.split(/[。；;\n]/)[0] || brief).trim().slice(0, 40);
     }
     // v2.661 递招全模式生效：非标签模式下所选手法此前只留在内存、从不进出本创意，
     // 面板「将自动注入出本创意」的承诺形同虚设。这里统一追加一次，简报里已含同串时不重复。

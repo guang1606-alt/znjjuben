@@ -264,6 +264,67 @@ for (const error of ['BRANCH_VALIDATION_FAILED', 'TREND_PII_BLOCKED', 'AD_CLAIM_
   });
 }
 
+// v2.698 结构化三模式（角色自述 / 双人对撞 / 世界线推演）出本断链：
+// 这三个模式的二级界面只挂结构化字段卡片，modeBriefPanel 留在隐藏的 workbenchBody 里（不可见、高度 0），
+// startGenerate 却只认 modeBrief 文本 → 用户把四字段填满仍被拦在「先在上方输入框写清你的创意」，
+// 而画面上根本没有那个输入框。字段就是这三个模式的全部创作事实源，简报应由字段合成。
+for (const [mode, fields, expectText] of [
+  ['persona', { personaIdentity: '32岁急诊医生', personaWant: '查清当年手术真相' }, '急诊医生'],
+  ['duel', { duelAIdentity: '刚融资的CEO', duelBIdentity: '八年老员工' }, '八年老员工'],
+  ['multiverse', { mvChoice: '保险单受益人不是她' }, '受益人不是她'],
+]) {
+  test(`v2.698 ${mode} 填满结构化字段即可出本（简报由字段合成，不再被不可见的输入框拦住）`, async () => {
+    const posts = [];
+    const { context: c, $ } = setup(['startGenerate', 'failGenerationSession', 'modeInputPayload', 'structuredModeBrief'], {
+      selectedMode: mode, selectedTrack: 'material_rewrite', draftProject: null,
+      loadCastAssets: async () => {}, loadPropAssets: async () => {}, loadSceneAssets: async () => {},
+      brandBriefPayload: () => ({}), trendBriefPayload: () => ({}), branchBriefPayload: () => ({}),
+      hookPayload: () => ({}), beatPayload: () => ({}), scenesPayload: () => ({}), platformPayload: () => ({}),
+      castAssetPayload: () => ({}), propAssetPayload: () => ({}), sceneAssetPayload: () => ({}), aigcPayload: () => ({}),
+      sourceTextPayload: () => ({}), outLocale: () => 'zh', xnSay: () => {},
+      PV: () => ({ createProgress: () => ({}) }), showBranchError() {}, showTrendError() {}, showBrandError() {},
+      showFail() {}, closeWorkbench() {}, BRANCH_UI_DICT: () => ({}), TREND_UI_DICT: () => ({}),
+      Api: {
+        isAuthed: () => true,
+        request: async (url, opts) => {
+          posts.push({ url, body: opts && opts.body ? JSON.parse(opts.body) : null });
+          return url.endsWith('/projects')
+            ? { ok: true, json: async () => ({ id: 'p1', title: '测试', mode }) }
+            : { ok: false, status: 400, text: async () => JSON.stringify({ error: 'TEST_STOP' }) };
+        },
+      },
+    });
+    for (const [id, v] of Object.entries(fields)) $(id).value = v;
+    $('mvChoices').querySelectorAll = () => [];
+    $('episodes').value = '20'; $('engine').value = 'STANDARD';
+    await c.startGenerate();
+    assert.equal(posts.length, 2, '填了结构化字段就必须真的发起立项与出本，而不是在建单前被拦下');
+    assert.equal(posts[0].url, '/api/generate/projects');
+    assert.equal(posts[1].url, '/api/generate/episodes');
+    assert.ok(posts[1].body.brief && posts[1].body.brief.includes(expectText), '出本简报应包含用户填写的关键事实：' + posts[1].body.brief);
+    assert.ok(posts[0].body.modeInput && posts[0].body.modeInput[mode], '结构化字段仍随立项落库（事实源不丢）');
+    assert.ok(!/[；;]/.test(c.genSessions[0].title), '项目标题应停在完整首句，不得跨进第二个从句：' + c.genSessions[0].title);
+  });
+
+  test(`v2.698 ${mode} 字段全空时给出「先填上面的字段」而不是指向看不见的输入框`, async () => {
+    const said = [];
+    const { context: c, $ } = setup(['startGenerate', 'failGenerationSession', 'modeInputPayload', 'structuredModeBrief'], {
+      selectedMode: mode, selectedTrack: 'material_rewrite', draftProject: null,
+      loadCastAssets: async () => {}, loadPropAssets: async () => {}, loadSceneAssets: async () => {},
+      xnSay: (m) => said.push(m),
+      t: (k) => require('../web/i18n.js').t('zh', k),
+      Api: { isAuthed: () => true, request: async () => { throw new Error('不应发起任何请求'); } },
+    });
+    $('mvChoices').querySelectorAll = () => [];
+    $('episodes').value = '20'; $('engine').value = 'STANDARD';
+    await c.startGenerate();
+    assert.equal(said.length, 1, '空态应且仅应给出一条提示');
+    assert.doesNotMatch(said[0], /上方输入框|type your idea above/i,
+      '这三个模式的详情页没有可见的简报输入框，不能再把用户指向它');
+    assert.match(said[0], /上面|above/i, '提示要指回详情页上方的可见字段区');
+  });
+}
+
 test('expired authentication opens the real login modal', () => {
   const { context: c, $ } = setup(['openAuth'], { authMode: '', syncAuthTabs() {}, renderAuthButton() {}, switchView() {}, openModal(id) { $(id).classList.remove('hidden'); } });
   c.window = {};
