@@ -67,7 +67,8 @@ function setup(names, extra = {}) {
     _langSyncing: false,
     // v2.329 三维契约：剧本类型 + 输出语种为模块级 let/const，逐函数求值需预置
     selectedScriptType: 'live_action_drama', outputLangValue: () => 'zh', renderScriptTypes() {},
-    renderAigcDash() {}, renderLiveProdDash() {}, loadDiagnosis: async () => {}, loadEmotionWave: async () => {}, loadInvestorLens: async () => {},
+    // v2.702 renderResult 末尾对诊断条做分层；分层本身由 web-result-diag-triage 覆盖，这里只需可调用
+    renderAigcDash() {}, renderLiveProdDash() {}, arrangeResultDiag() {}, loadDiagnosis: async () => {}, loadEmotionWave: async () => {}, loadInvestorLens: async () => {},
     _uiLangEn: () => ((typeof extra.lang === 'string' ? extra.lang : 'zh') === 'en'),
     // v2.501 onAuthRequired 回调内调用 currentView() 判断是否在首页；沙箱预置非 home 视图
     currentView: () => 'studio',

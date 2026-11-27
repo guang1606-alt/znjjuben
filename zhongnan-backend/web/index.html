@@ -791,6 +791,21 @@
           <div style="margin-top:6px"><button class="btn-ghost" id="subAllBtn" style="font-size:12px"></button></div>
           <div class="submission-list hidden" id="submissionAllList" style="margin-top:6px"></div>
         </div>
+        <!-- v2.702 结果页诊断分层：合规/抽检/改稿尺子/评分卡/伏笔/弧光等最多 19 条诊断
+             此前同级平铺，视觉权重相同、按代码书写顺序排，标红的那张可能排在第 8 屏——
+             用户第一眼不知道该先看哪张。渲染完把「需要动手」的提到最前（最多 3 张），
+             其余折进「其余 N 项参考」默认收起；一张红的都没有就只留一行结论。 -->
+        <div class="diag-triage hidden" id="diagTriage">
+          <div class="diag-tier diag-tier-core" id="diagTierCore">
+            <div class="diag-tier-head" id="diagCoreHead"></div>
+          </div>
+          <div class="diag-tier diag-tier-rest collapsed" id="diagTierRest">
+            <button type="button" class="diag-rest-toggle" id="diagRestToggle" aria-expanded="false" aria-controls="diagRestList">
+              <span id="diagRestLabel"></span><i class="diag-rest-caret" aria-hidden="true"></i>
+            </button>
+            <div class="diag-rest-list" id="diagRestList"></div>
+          </div>
+        </div>
         <div class="notice warn hidden" id="sandboxTip" data-i="sandboxTip"></div>
         <div class="notice warn hidden" id="complianceTip"></div>
         <div class="notice hidden" id="aiLabelTip" style="--tone:var(--accent);border-left:3px solid var(--tone)"></div>

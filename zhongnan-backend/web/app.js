@@ -9176,6 +9176,83 @@
     const cp = $('briefReceiptCopy');
     if (cp) cp.onclick = () => { copy(text); flashCopied(cp, true); };
   }
+  // ═══ MODULE: resultDiagTriage (79行, 4fn) ═══ 结果页诊断分层
+  /* ---------- 结果页诊断分层：先看几项 + 其余折叠 ---------- */
+  // v2.702 结果页诊断条最多 19 张，同级平铺且按代码书写顺序排列——标红的那张可能在第 8 屏，
+  // 用户第一眼分不出先改哪张。这里只做「分层」不做「判断」：严重度从卡片已经渲染出的颜色/符号
+  // 反推（各渲染器的判断逻辑保持单一真源），再把需要动手的提到最前，其余折进可展开的参考区。
+  const RESULT_DIAG_IDS = [
+    'sandboxTip', 'complianceTip', 'aiLabelTip', 'filingTip', 'postScanTip', 'modeGateTip',
+    'craftLintTip', 'craftDepthTip', 'trackTip', 'titlePitchTip', 'epThreeQTip', 'openingCheckTip',
+    'scorecardTip', 'genresTip', 'investorTip', 'aigcBeatTip', 'foreshadowTip', 'arcTrackTip', 'hitTeardownTip',
+  ];
+  // 标题/标签常年着色、颜色与「有没有问题」无关的卡：不因配色抢首屏
+  const DIAG_DECOR_IDS = ['trackTip', 'genresTip', 'aigcBeatTip', 'hitTeardownTip'];
+  // 无论配色如何都必须先看的卡：沙盘（文本不可用）、合规/标注/备案（法定显著位置）
+  const DIAG_FLOOR = { sandboxTip: 3, complianceTip: 2, aiLabelTip: 2, filingTip: 2 };
+  // 能直接动手改的卡排在说明类之前：同为标红时先给「改哪里」，再给「发生了什么」
+  const DIAG_ACTION_IDS = ['craftLintTip', 'craftDepthTip', 'scorecardTip', 'epThreeQTip', 'openingCheckTip', 'modeGateTip', 'complianceTip', 'sandboxTip'];
+  function diagCardSeverity(html) {
+    const s = String(html || '');
+    if (!s.trim()) return 0;
+    if (/var\(--danger-text\)|var\(--cinnabar\)|✗/.test(s)) return 3;
+    if (/var\(--grade-warn\)|var\(--warn-text\)|⚠/.test(s)) return 2;
+    return 1;
+  }
+  function triageDiagCards(cards, maxCore) {
+    const cap = Math.max(1, Number(maxCore) || 3);
+    const live = (Array.isArray(cards) ? cards : [])
+      .map((c, i) => {
+        const id = String((c && c.id) || '');
+        let sev = diagCardSeverity(c && c.html);
+        if (sev > 0 && DIAG_DECOR_IDS.indexOf(id) >= 0 && sev < 3) sev = 1;
+        if (sev > 0 && DIAG_FLOOR[id] && sev < DIAG_FLOOR[id]) sev = DIAG_FLOOR[id];
+        return { id, sev, order: i };
+      })
+      .filter((c) => c.id && c.sev > 0);
+    const ranked = live.filter((c) => c.sev >= 2).sort((a, b) => (b.sev - a.sev)
+      || ((DIAG_ACTION_IDS.indexOf(b.id) >= 0 ? 1 : 0) - (DIAG_ACTION_IDS.indexOf(a.id) >= 0 ? 1 : 0))
+      || (a.order - b.order));
+    // 首屏按「急→注意、可动手的在前」排序展示，其余按既有书写顺序收进参考区
+    const core = ranked.slice(0, cap).map((c) => ({ id: c.id, sev: c.sev }));
+    const coreIds = new Set(core.map((c) => c.id));
+    const rest = live.filter((c) => !coreIds.has(c.id)).map((c) => ({ id: c.id, sev: c.sev }));
+    return { core, rest, riskCount: live.filter((c) => c.sev >= 3).length, total: live.length };
+  }
+  function setDiagRestOpen(open, count) {
+    const restEl = $('diagTierRest'), btn = $('diagRestToggle'), label = $('diagRestLabel'), listEl = $('diagRestList');
+    if (restEl) restEl.classList.toggle('collapsed', !open);
+    if (btn) {
+      btn.setAttribute('aria-expanded', open ? 'true' : 'false');
+      btn.setAttribute('aria-label', t('diagTriageToggleAria'));
+    }
+    if (label) {
+      const n = typeof count === 'number' ? count : (listEl && listEl.children ? listEl.children.length : 0);
+      label.textContent = open ? t('diagTriageCollapse') : t('diagTriageRest', { n });
+    }
+  }
+  function arrangeResultDiag() {
+    const box = $('diagTriage'), coreEl = $('diagTierCore'), headEl = $('diagCoreHead');
+    const restEl = $('diagTierRest'), listEl = $('diagRestList'), toggle = $('diagRestToggle');
+    if (!box || !coreEl || !headEl || !restEl || !listEl) return;
+    const cards = [];
+    RESULT_DIAG_IDS.forEach((id) => {
+      const el = $(id);
+      if (!el || el.classList.contains('hidden')) return;
+      cards.push({ id, el, html: el.innerHTML || '' });
+    });
+    const { core, rest, riskCount, total } = triageDiagCards(cards.map(({ id, html }) => ({ id, html })), 3);
+    if (!total) { box.classList.add('hidden'); return; }
+    const byId = new Map(cards.map((c) => [c.id, c.el]));
+    core.forEach((c) => { const el = byId.get(c.id); if (el) { el.setAttribute('data-diag-top', '1'); coreEl.appendChild(el); } });
+    rest.forEach((c) => { const el = byId.get(c.id); if (el) listEl.appendChild(el); });
+    box.classList.remove('hidden');
+    headEl.className = 'diag-tier-head ' + (core.length ? (riskCount ? 'is-risk' : 'is-watch') : 'is-ok');
+    headEl.textContent = core.length ? t('diagTriageCore', { n: core.length }) : t('diagTriageOk');
+    restEl.classList.toggle('hidden', !rest.length);
+    setDiagRestOpen(false, rest.length);
+    if (toggle) toggle.onclick = () => setDiagRestOpen(restEl.classList.contains('collapsed'), rest.length);
+  }
   async function renderResult(done, projectId, session) {
     currentProjectId = projectId;
     $('progressPanel').classList.add('hidden'); $('resultPanel').classList.remove('hidden'); $('failPanel').classList.add('hidden');
@@ -9484,6 +9561,8 @@
         htTip.title = `${en ? 'Why it works' : '为什么爆'}${sep}${reasons}\n${en ? 'Reusable techniques' : '可取技法'}${sep}${tech}\n${en ? 'Tension curve' : '张力曲线'}${sep}${JSON.stringify(ht.tensionCurve)}`;
       } else htTip.classList.add('hidden');
     }
+    // v2.702 诊断分层：所有诊断条都已按各自逻辑渲染完，最后统一分层（先看几项 + 其余折叠）
+    arrangeResultDiag();
     renderAigcDash(done);
     renderLiveProdDash(done);
     const eps = await refreshResultScripts(projectId);

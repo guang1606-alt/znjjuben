@@ -822,6 +822,54 @@ textarea { box-sizing: border-box; max-width: 100%; resize: vertical; background
   .craft-hard-advice { flex: 1 0 100%; }
 }
 
+/* v2.702 结果页诊断分层：一次出本最多 19 条诊断同级平铺，视觉权重相同、按代码顺序排列，
+ * 标红的那张可能在第 8 屏——用户第一眼不知道该先改哪张。分层后首屏只留「需要动手」的
+ * 至多 3 张，其余收进一处可展开的参考区；一张红的都没有时只留一行结论。
+ * 颜色全部走主题令牌；卡片搬进分层后清掉 .notice 的 12px 上边距，层间间距由 gap 统一给。 */
+.diag-triage { display: grid; gap: 10px; margin-top: 14px; }
+.diag-tier { display: grid; gap: 8px; }
+.diag-tier-core > .notice, .diag-rest-list > .notice { margin-top: 0; }
+.diag-tier-head {
+  font-size: .84rem; font-weight: 600; letter-spacing: .02em;
+  display: flex; align-items: center; gap: 8px; color: var(--text-2);
+}
+.diag-tier-head::before {
+  content: ''; width: 7px; height: 7px; border-radius: 50%;
+  background: var(--text-2); box-shadow: 0 0 0 3px color-mix(in srgb, var(--text-2) 18%, transparent);
+}
+.diag-tier-head.is-risk { color: var(--danger-text); }
+.diag-tier-head.is-risk::before { background: var(--danger-text); box-shadow: 0 0 0 3px color-mix(in srgb, var(--cinnabar) 22%, transparent); }
+.diag-tier-head.is-watch { color: var(--grade-warn); }
+.diag-tier-head.is-watch::before { background: var(--grade-warn); box-shadow: 0 0 0 3px color-mix(in srgb, var(--gold) 22%, transparent); }
+.diag-tier-head.is-ok { color: var(--grade-good); }
+.diag-tier-head.is-ok::before { background: var(--grade-good); box-shadow: 0 0 0 3px color-mix(in srgb, var(--ok) 18%, transparent); }
+.diag-rest-toggle {
+  display: flex; align-items: center; justify-content: space-between; gap: 10px; width: 100%;
+  min-height: 44px; padding: 10px 14px; cursor: pointer; text-align: left;
+  font-size: .84rem; font-weight: 600; color: var(--text-2);
+  background: transparent; border: 1px dashed var(--line); border-radius: var(--radius-sm);
+  transition: border-color .16s var(--ease-out), color .16s var(--ease-out);
+}
+.diag-rest-toggle:hover, .diag-rest-toggle:focus-visible { border-color: var(--accent); color: var(--accent-strong); }
+.diag-rest-caret {
+  flex: none; width: 8px; height: 8px; border-right: 2px solid currentColor; border-bottom: 2px solid currentColor;
+  transform: rotate(45deg); transition: transform .2s var(--ease-out); margin-top: -2px;
+}
+.diag-tier-rest.collapsed .diag-rest-caret { transform: rotate(-45deg); margin-top: 2px; }
+.diag-tier-rest.collapsed .diag-rest-list { display: none; }
+.diag-rest-list { display: grid; gap: 8px; }
+@media (prefers-reduced-motion: no-preference) {
+  .diag-rest-list { animation: diagRestIn .2s ease-out both; }
+  .diag-triage .diag-tier-core > .notice[data-diag-top] { animation: diagTopIn .24s ease-out both; }
+}
+@keyframes diagRestIn { from { opacity: 0; transform: translateY(-3px); } to { opacity: 1; transform: none; } }
+@keyframes diagTopIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+@media (max-width: 560px) {
+  .diag-triage { gap: 8px; margin-top: 10px; }
+  .diag-rest-toggle { padding: 9px 12px; font-size: .8rem; }
+}
+
+
 /* v2.701 创作回执：结果页顶部交代「这次到底把哪段创意交给模型」。
    过去合成简报对用户不可见，出本跑偏时只能盲猜。折叠态限 3 行，不抢评分卡的首屏位置。 */
 .brief-receipt {
